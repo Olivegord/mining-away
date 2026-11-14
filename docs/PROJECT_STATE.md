@@ -6,6 +6,8 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 
 ## November 14 — distinct minerals and recessed ore channels
 
+Gameplay/source/native revision **3b1f622** on codex/restore-feel-prestige.
+
 The five loose minerals now have different faceted shapes and palettes, stronger gradients, and 30 visible fixed white grains in a separate opaque interior mesh. Couriers carry those same gems. Raw drops retain their own mineral color instead of being forced red; Quartz is cyan/mint. Mineable rocks use mineral-specific pairs of the existing silhouettes. Each cached shape receives two narrow CSG-carved channels with smaller glowing cores inset inside, faint light rays and slow round motes. Mineable modifier silhouette/ground outlines are removed; the white aiming preview remains.
 
 Studio was already open in shared **Edit**, place **124078027733625**, universe **10774898335**. All three Script Sync roots remained connected, and all seven installed Source SHA-256 hashes match the canonical file. The Studio log records **Saved new changes in DRONEREVOLUTION to Roblox** at **2:08:51 PM Pacific, November 14** (Save to Roblox, publishType=2). This is a shared Edit save, not a player release. Canonical SHA-256 is **38ccd76d3102c50941c8b8e741a2a7cdbd10ff40822e1d2ce4a29ca9fb4854a4**. Temporary component samples were removed and their absence verified before handoff. Studio remains open; no agent-started Play. Next Play loads this mineral/vein revision.
