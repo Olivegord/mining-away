@@ -39,6 +39,7 @@ pin(-34.5);assert(not p.miningSquare,'off-field point snapped back into the fiel
 pin(-9.4);assert(p.miningSquare and p.miningSquare.center.X==-10 and p.miningSquare.half==15)
 assert(pl:GetAttribute('MA_SelectorStatus')=='Waiting','initial status must publish with the pin')
 status('Waiting')
+assert(pl:GetAttribute('MA_SelectorField')==f.id and pl:GetAttribute('MA_SelectorCleared')==false)
 d.carrierId='carrier-test';status('NoMiners');d.carrierId=nil
 local pinned=p.miningSquare
 pin(-10.6);assert(p.miningSquare==pinned,'same grid cell restarted the order')
@@ -69,6 +70,7 @@ while not d.target and approachSteps<30 do step(1);approachSteps+=1 end
 assert(d.target==b and not scene.committedWork(d))
 scene.publishSquareStatus(p)
 assert(pl:GetAttribute('MA_SelectorPrevious')==pinned.center and pl:GetAttribute('MA_SelectorTransition')=='Moving')
+assert(pl:GetAttribute('MA_SelectorPreviousCleared')==true and pl:GetAttribute('MA_SelectorCleared')==false)
 step(80-approachSteps);assert(d.target==b,'the crew did not keep working at the moved square after the player left')
 assert(scene.rockInSquare(p.miningSquare,edge),'a center on the line counts')
 assert(not scene.rockInSquare(p.miningSquare,a))
@@ -257,6 +259,7 @@ do
   local mineral=Mining.fieldCrystal(100,1,10,3)
   local old=makeResource(field,Vector3.new(x,surface.Position.Y,180),'Crystal',mineral.work+10,mineral.ore,mineral.size,mineral.stages)
   old.readyAt=now
+  scene.publishSquareStatus(team)
   assert(assignOre(team,worker,old));worker.squareJob=team.miningSquare;worker.pos=committedStation(worker,old)
   assert(hitResource(worker,old,1000) and old.paid)
   assert(old.part:GetAttribute('CrystalSplitAt')==now,'large crystals must split on the finishing hit clock')
@@ -290,7 +293,8 @@ do
  assert(scene.idleSquareStatus(team,square)=='Refilling')
  tester.Character:PivotTo(CFrame.new(Vector3.new(0,8,65)))
  advance(.15)
- assert(team.miningSquare==square,'the walk along the return lane dropped the pin')
+ assert(team.miningSquare==square and tester:GetAttribute('MA_SelectorCleared')==true,
+  'the cleared pin must stay green while the owner walks to the depot')
  tester.Character:PivotTo(CFrame.new(Vector3.new(-38,8,32)))
  local cargo=Workshop.cargoKey('Quartz',10)
  local soldBefore=data(team).run.quartzEarnings
@@ -303,6 +307,7 @@ do
  assert(scene.rockInSquare(square,replacement),
   'replacement left the depleted mining pin')
  assert(replacement.readyAt-replacement.spawnAt==2 and not next(replacement.slots) and scene.idleSquareStatus(team,square)=='Growing')
+ assert(tester:GetAttribute('MA_SelectorCleared')==false,'regrowth must return the pin to orange')
  advance(2.25)
  local returning
  for _,drone in ipairs(team.drones) do if drone.target==replacement then returning=drone;break end end

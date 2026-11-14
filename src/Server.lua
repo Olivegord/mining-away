@@ -1924,12 +1924,15 @@ function scene.clearSquare(p)
  p.previousSquare=nil
  p.shiftSquare=nil;p.shiftUntil=nil
  p.player:SetAttribute('MA_Selector',nil)
+ p.player:SetAttribute('MA_SelectorField',nil)
  p.player:SetAttribute('MA_SelectorWidth',nil)
  p.player:SetAttribute('MA_SelectorWorking',nil)
  p.player:SetAttribute('MA_SelectorStatus',nil)
  p.player:SetAttribute('MA_SelectorFocus',nil)
  p.player:SetAttribute('MA_SelectorPrevious',nil)
  p.player:SetAttribute('MA_SelectorPreviousWidth',nil)
+ p.player:SetAttribute('MA_SelectorCleared',nil)
+ p.player:SetAttribute('MA_SelectorPreviousCleared',nil)
  p.player:SetAttribute('MA_SelectorTransition',nil)
 end
 function scene.squareInRange(position,square)
@@ -1989,6 +1992,15 @@ function scene.idleSquareStatus(p,square)
  end
  return 'NoCrystals'
 end
+function scene.squareCleared(square)
+ for _,r in ipairs(square.field.resources) do
+  if not r.paid and r.hp>0 and r.part.Parent and scene.rockInSquare(square,r) then
+   square.hadRocks=true
+   return false
+  end
+ end
+ return square.hadRocks==true
+end
 -- Project the current jobs onto one player-facing status. This never grants
 -- work or takes a reservation, and bag capacity is only a pickup concern.
 function scene.publishSquareStatus(p)
@@ -2025,8 +2037,12 @@ function scene.publishSquareStatus(p)
  p.previousSquare=previous
  local previousCenter=previous and previous.center
  local previousWidth=previous and previous.half*2
+ local cleared=scene.squareCleared(square)
+ local previousCleared=if previous then scene.squareCleared(previous) else nil
  if p.player:GetAttribute('MA_SelectorPreviousWidth')~=previousWidth then p.player:SetAttribute('MA_SelectorPreviousWidth',previousWidth) end
  if p.player:GetAttribute('MA_SelectorPrevious')~=previousCenter then p.player:SetAttribute('MA_SelectorPrevious',previousCenter) end
+ if p.player:GetAttribute('MA_SelectorCleared')~=cleared then p.player:SetAttribute('MA_SelectorCleared',cleared) end
+ if p.player:GetAttribute('MA_SelectorPreviousCleared')~=previousCleared then p.player:SetAttribute('MA_SelectorPreviousCleared',previousCleared) end
  if p.player:GetAttribute('MA_SelectorTransition')~=transition then p.player:SetAttribute('MA_SelectorTransition',transition) end
  local status=if not healthy(p) or not characterRoot(p) then 'Paused'
   elseif Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) and Workshop.starLevel(data(p),'autosell')==0 then 'BagFull'
@@ -3747,6 +3763,7 @@ function scene.buyStarUpgrade(p,payload)
    local width=Workshop.selectorWidth(data(p))
    -- Keep the pin object so active cuts, deliveries and press jobs stay attached.
    p.miningSquare.half=width*.5
+   scene.publishSquareStatus(p)
    p.player:SetAttribute('MA_SelectorWidth',width)
   end
   scene.applyWalkSpeed(p);notice(p,result.title..' · '..result.level..'×');p.publishDirty=true
@@ -3873,6 +3890,7 @@ function scene.placeSquare(p,payload)
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
  scene.prioritizeSquareApproach(p,square)
  scene.publishSquareStatus(p)
+ p.player:SetAttribute('MA_SelectorField',field.id)
  p.player:SetAttribute('MA_SelectorWidth',square.half*2)
  p.player:SetAttribute('MA_Selector',center)
 end

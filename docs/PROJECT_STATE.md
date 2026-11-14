@@ -11,18 +11,24 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | b938531df3cdea4324f637258b2f5e5eefdbdfa07aa1a994880766836b407782 | Stackable rock modifiers and minimal ore labels installed. |
-| Shared Studio Sources | Team Create save **292**, November 14 at 12:10 PM Pacific | All seven Sources match the canonical file from `461bfe21eac52b73924d950e0284cc5aaf826353`. |
+| Native-file SHA-256 | 43d4bc083add0a919542c395ae12ab7b4ad540baaadc82cb9416c34c76208557 | Force-field walls, flat aim outline and white wash on selected rocks installed. |
+| Shared Studio Sources | Team Create save **293**, November 14 at 12:26 PM Pacific | All seven Sources match the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the saved rock modifiers and ore labels. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the saved field walls and selection tint. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 14 — full-width field walls and completion color
+
+The aim preview is a flat white outline with flush corners. Four translucent wall faces span the selected square and rise to 19 studs with quintic-out easing. Each wall fades toward the top and becomes easier to see as the camera approaches it. Rocks centered inside the selected field get a slight white wash. The walls stay orange while a rock remains and turn green when the last rock is mined. Regrowth returns them to orange. Gray is reserved for a new destination while the old square is still shown during a transfer.
+
+Studio was already open in Edit at place **124078027733625**, universe **10774898335**. Team Create save **293** succeeded at **12:26:25 PM Pacific**. All three Script Sync roots were connected, and all seven Sources matched the canonical file after saving. No player publication. Detached Studio Edit checks verified wall geometry, growth, fade values and aim outline. Crystal Run and resource renderer checks passed with API doubles. The gadget suite reaches the existing courier-delay fixture failure. Live motion, touch and multiplayer still need an owner Play check. Reproduce using `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit ffafce5` on the prior canonical snapshot.
 
 ## November 14 — stackable rock modifiers and drop labels
 

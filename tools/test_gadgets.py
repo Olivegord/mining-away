@@ -16,7 +16,8 @@ subprocess.run([str(luau / 'luau'), str(ROOT / 'tests/ore-drops.spec.lua')], che
 mock = (ROOT / 'tests/mock-roblox.lua').read_text()
 client = (ROOT / 'src/Client.lua').read_text()
 render = client[client.index('local function renderDrone(d,dt,now)'):client.index('-- Every observer draws repair beams', client.index('local function renderDrone(d,dt,now)'))]
-resource_render = client[client.index('local function renderResource(r,now)'):client.index('local function resolveRenderedTarget', client.index('local function renderResource(r,now)'))]
+resource_start = client.index('local function renderResource(')
+resource_render = client[resource_start:client.index('local function resolveRenderedTarget', resource_start)]
 crystal_frame = client[client.index(' for _,r in pairs(resources) do\n  if impactFreeze:holds(r)'):client.index(' selectorView:updateHealing(now)')]
 crystal_clock_setup = """
 local BeamVFX={near=function() return true end,reduced=function() return false end}
@@ -42,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
         'contact-render': mock + '\n' + (ROOT / 'tests/mining-contact.integration.lua').read_text() + '\n' + module_bundle(('BeamVFX','Mining','WorkEffects')) + '\n' + (ROOT / 'tests/mining-contact.assert.lua').read_text(),
         'crystal-clock': mock + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + crystal_clock_setup +
         module_bundle(('Feel', 'Feedback', 'PickupMotion', 'ImpactFreeze', 'RockFinish', 'CrystalImpactView', 'DroneCatalog', 'PlaneBurst', 'RoleEffectView', 'Mining', 'RockModifierView')) + '\n' + resource_render +
-        '\nlocal impactFreeze=ImpactFreeze.new({})\nlocal function crystalFrame(resources,now)\n local lowFlash=false\n' + crystal_frame + '\nend\n' +
+        '\nlocal impactFreeze=ImpactFreeze.new({})\nlocal function crystalFrame(resources,now)\n local lowFlash=false\n local pin,width,field\n' + crystal_frame + '\nend\n' +
         (ROOT / 'tests/crystal-contact-clock.integration.lua').read_text(),
         'prism-server': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/prism-server.integration.lua').read_text(),
         'nomad-view': mock + '\n' + (ROOT / 'tests/nomad-view.setup.lua').read_text() + '\n' + module_bundle(('Feel','EnergyDisc','NomadView')) + '\n' + (ROOT / 'tests/nomad-view.integration.lua').read_text(),

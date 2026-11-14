@@ -1077,12 +1077,18 @@ connect(world.DescendantRemoving,function(source)
  hiddenParts[source]=nil
 end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
-local function renderResource(r,now)
+local function renderResource(r,now,pin,width,field)
+ local s=r.source;local view=r.view
+ if r.dirty or r.pin~=pin or r.pinWidth~=width or r.pinField~=field then
+  r.pin=pin;r.pinWidth=width;r.pinField=field
+  local selected=pin~=nil and width~=nil and field~=nil and s:GetAttribute('FieldId')==field
+   and Mining.selectorContains(pin,width*.5,s:GetAttribute('FullPosition') or s.Position)
+  if r.selected~=selected then r.selected=selected;r.dirty=true end
+ end
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
  -- geometry writes. Spawn growth is animated; mining size changes are snaps.
  if r.settled and not r.dirty then return end
  r.dirty=false
- local s=r.source;local view=r.view
  -- Locked fields remain visible destinations; the server still gates mining.
  local full=s:GetAttribute('FullSize') or s.Size
  if type(full)=='number' then full=Vector3.one*full end
@@ -1154,6 +1160,7 @@ local function renderResource(r,now)
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
   local modifierTint=RockModifierView.tint(s:GetAttribute('RockModifiers'))
   if modifierTint then color=color:Lerp(modifierTint,.13) end
+  if r.selected then color=color:Lerp(Color3.new(1,1,1),.20) end
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
   else
@@ -1585,10 +1592,13 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  presentation:beginFrame()
  chargerView:update(dt)
  local lowFlash=player:GetAttribute('ReducedFlashing')==true
+ local pin=player:GetAttribute('MA_Selector')
+ local width=player:GetAttribute('MA_SelectorWidth')
+ local field=player:GetAttribute('MA_SelectorField')
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
-  local fracture=renderResource(r,now)
+  local fracture=renderResource(r,now,pin,width,field)
   if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)

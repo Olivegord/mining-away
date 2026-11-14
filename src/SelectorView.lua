@@ -1,92 +1,112 @@
 -- Local aiming, pinned command feedback and bounded crystal healing cues.
 local V={}
 V.__index=V
-local function tint(r,g,b) return ColorSequence.new(Color3.fromRGB(r,g,b)) end
-local preview=tint(228,248,255)
-local pending=tint(158,166,176)
-local cutting=tint(85,245,173)
-local idle=tint(112,207,255)
-local caution=tint(255,190,99)
-local depleted=tint(177,165,231)
-local statusColors={
- BagFull=caution,LooseOre=caution,Claimed=caution,
- Growing=depleted,Refilling=depleted,NoCrystals=depleted,
- Surge=tint(255,219,103),SurgeReady=tint(255,219,103),
- Paused=pending,NoMiners=pending,Recharging=tint(190,147,255),
-}
-local riseTime=.68
-local pillarHeight=19
-local railFade=NumberSequence.new(.14)
-local pillarFade=NumberSequence.new({NumberSequenceKeypoint.new(0,.04),
- NumberSequenceKeypoint.new(.72,.2),NumberSequenceKeypoint.new(1,1)})
+local previewColor=Color3.fromRGB(234,245,255)
+local pendingColor=Color3.fromRGB(155,162,174)
+local activeColor=Color3.fromRGB(255,147,61)
+local clearColor=Color3.fromRGB(85,243,148)
+local riseTime,wallHeight=.68,19
+local wallFade=NumberSequence.new({
+ NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.30,.84),
+ NumberSequenceKeypoint.new(.80,.49),NumberSequenceKeypoint.new(1,0),
+})
 
-local function beam(anchor,from,to,width,endWidth,transparency)
- local line=Instance.new('Beam')
- line.Attachment0=from;line.Attachment1=to
- line.FaceCamera=true;line.Segments=8;line.LightEmission=.22;line.LightInfluence=0
- line.Width0=width;line.Width1=endWidth;line.Transparency=transparency;line.Enabled=false
- line.Parent=anchor
- return line
+local function part(parent,name)
+ local p=Instance.new('Part')
+ p.Name=name;p.Anchored=true;p.Transparency=1;p.CastShadow=false
+ p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Parent=parent
+ return p
+end
+local function surface(part,face,canvas)
+ local gui=Instance.new('SurfaceGui')
+ gui.Face=face;gui.CanvasSize=canvas;gui.SizingMode=Enum.SurfaceGuiSizingMode.FixedSize
+ gui.LightInfluence=0;gui.AlwaysOnTop=false;gui.Enabled=false;gui.Parent=part
+ return gui
+end
+local function frame(parent)
+ local f=Instance.new('Frame')
+ f.BorderSizePixel=0;f.Size=UDim2.fromScale(1,1);f.Parent=parent
+ return f
 end
 
-local function marker(parent,name,isPreview)
- local anchor=Instance.new('Part')
- anchor.Name=name;anchor.Size=Vector3.one;anchor.Anchored=true;anchor.Transparency=1
- anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.CastShadow=false;anchor.Parent=parent
- local mark={anchor=anchor,feet={},tips={},beams={}}
+local function outline(parent)
+ local base=part(parent,'SelectorPreview');base.Size=Vector3.one
+ local gui=surface(base,Enum.NormalId.Top,Vector2.new(512,512))
+ local edges={}
  for i=1,4 do
-  local foot=Instance.new('Attachment');foot.Parent=anchor;mark.feet[i]=foot
-  if not isPreview then
-   local tip=Instance.new('Attachment');tip.Parent=anchor;mark.tips[i]=tip
-   table.insert(mark.beams,beam(anchor,foot,tip,1.05,.32,pillarFade))
+  local edge=frame(gui);edge.BackgroundColor3=previewColor
+  edges[i]=edge
+ end
+ return {base=base,gui=gui,edges=edges}
+end
+local function showOutline(mark,point,width)
+ mark.gui.Enabled=point~=nil
+ if not point then return end
+ if mark.point~=point then mark.base.Position=point+Vector3.yAxis*.055;mark.point=point end
+ if mark.width~=width then
+  mark.base.Size=Vector3.new(width,.02,width);mark.width=width
+  local t=.55/width
+  -- Two full edges and two inset edges meet flush without double-bright corners.
+  mark.edges[1].Size=UDim2.fromScale(1,t)
+  mark.edges[2].Position=UDim2.fromScale(0,1-t);mark.edges[2].Size=UDim2.fromScale(1,t)
+  mark.edges[3].Position=UDim2.fromScale(0,t);mark.edges[3].Size=UDim2.fromScale(t,1-2*t)
+  mark.edges[4].Position=UDim2.fromScale(1-t,t);mark.edges[4].Size=UDim2.fromScale(t,1-2*t)
+ end
+end
+
+local function walls(parent,name)
+ local folder=Instance.new('Folder');folder.Name=name;folder.Parent=parent
+ local mark={folder=folder,sides={}}
+ for i=1,4 do
+  local plane=part(folder,'ForcefieldWall')
+  local faces={}
+  for _,normal in ipairs({Enum.NormalId.Front,Enum.NormalId.Back}) do
+   local f=frame(surface(plane,normal,Vector2.new(256,192)))
+   local gradient=Instance.new('UIGradient')
+   gradient.Rotation=90;gradient.Transparency=wallFade;gradient.Parent=f
+   table.insert(faces,f)
   end
- end
- local width=isPreview and .85 or .42
- for i,foot in ipairs(mark.feet) do
-  table.insert(mark.beams,beam(anchor,foot,mark.feet[i%4+1],width,width,railFade))
- end
- if isPreview then
-  local fill=Instance.new('Part')
-  fill.Name='AimFootprint';fill.Color=preview.Keypoints[1].Value;fill.Material=Enum.Material.Neon
-  fill.Transparency=1;fill.Anchored=true;fill.CanCollide=false;fill.CanTouch=false;fill.CanQuery=false;fill.CastShadow=false
-  fill.Parent=anchor;mark.fill=fill
+  mark.sides[i]={part=plane,faces=faces}
  end
  return mark
 end
-
-local function show(mark,point,width,color,dt,instant)
- local visible=point~=nil
- local moved=visible and point~=mark.point
- local resized=visible and width~=mark.width
- if moved then
-  mark.anchor.Position=point
-  mark.age=if instant then math.huge else 0
+local function setVisibility(side,opacity)
+ if side.opacity==opacity then return end
+ side.opacity=opacity
+ for _,f in ipairs(side.faces) do
+  f.BackgroundTransparency=1-opacity
+  f.Parent.Enabled=opacity>0
  end
- if resized then
-  local h=width*.5
-  for i,foot in ipairs(mark.feet) do
-   foot.Position=Vector3.new((i==1 or i==4) and -h or h,.12,i<=2 and -h or h)
+end
+local function showWalls(mark,point,width,color,dt,instant,eye)
+ if not point then
+  for _,side in ipairs(mark.sides) do setVisibility(side,0) end
+  mark.point=nil
+  return
+ end
+ local moved=point~=mark.point
+ if moved then mark.age=0 end
+ if instant then mark.age=riseTime elseif not moved then mark.age=math.min(riseTime,mark.age+dt) end
+ local height=.08+(wallHeight-.08)*(1-(1-mark.age/riseTime)^5)
+ local sizeChanged=height~=mark.height or width~=mark.width
+ for i,side in ipairs(mark.sides) do
+  local plane=side.part
+  if moved or sizeChanged then
+   local sideFrame=CFrame.new(point+Vector3.yAxis*(height*.5+.03))*CFrame.Angles(0,(i-1)*math.pi*.5,0)
+   plane.Size=Vector3.new(width,height,.02)
+   plane.CFrame=sideFrame*CFrame.new(0,0,-width*.5)
   end
-  if mark.fill then mark.fill.Size=Vector3.new(width,.03,width) end
-  mark.width=width
- end
- if visible and mark.fill and moved then mark.fill.Position=point+Vector3.yAxis*.045 end
- if visible and #mark.tips>0 and (moved or resized or mark.age<riseTime+.09) then
-  if instant then mark.age=math.huge elseif not moved then mark.age+=dt end
-  for i,tip in ipairs(mark.tips) do
-   local t=math.clamp((mark.age-(i-1)*.03)/riseTime,0,1)
-   local rise=1-(1-t)^5
-   tip.Position=mark.feet[i].Position+Vector3.yAxis*(.25+(pillarHeight-.25)*rise)
+  if color~=mark.color then for _,f in ipairs(side.faces) do f.BackgroundColor3=color end end
+  local opacity=0
+  if eye then
+   local p=plane.CFrame:PointToObjectSpace(eye)
+   local nearest=Vector3.new(math.clamp(p.X,-width*.5,width*.5),math.clamp(p.Y,-height*.5,height*.5),0)
+   local proximity=math.clamp((46-(p-nearest).Magnitude)/38,0,1)
+   opacity=math.round(.44*proximity^2*64)/64
   end
+  setVisibility(side,opacity)
  end
- if visible~=mark.visible or visible and color~=mark.color then
-  for _,line in ipairs(mark.beams) do
-   line.Enabled=visible
-   if visible then line.Color=color end
-  end
-  if mark.fill then mark.fill.Transparency=visible and .86 or 1 end
- end
- mark.visible=visible;mark.point=point;mark.color=color
+ mark.point=point;mark.width=width;mark.height=height;mark.color=color
 end
 
 function V.new(options)
@@ -154,9 +174,9 @@ function V:showAim(dt,ray)
  local pin=visible and o.player:GetAttribute('MA_Selector') or nil
  local old=pin and o.player:GetAttribute('MA_SelectorPrevious') or nil
  if not self.pinned and profile and o.world.Map:FindFirstChild('CrystalRun') then
-  self.pinned=marker(o.parent,'MiningSelector',false)
-  self.previous=marker(o.parent,'PreviousMiningSelector',false)
-  self.preview=marker(o.parent,'SelectorPreview',true)
+  self.pinned=walls(o.parent,'MiningSelector')
+  self.previous=walls(o.parent,'PreviousMiningSelector')
+  self.preview=outline(o.parent)
  end
  if not self.pinned then return end
  local width=profile and Workshop.selectorWidth(profile) or 0
@@ -165,17 +185,17 @@ function V:showAim(dt,ray)
  elseif self.clock>=.033 then self.clock=0;self.aimPoint=self:aim(ray) end
  local point=self.aimPoint
  if point and (point==pin or point==old) then point=nil end
- local transition=o.player:GetAttribute('MA_SelectorTransition')
- local status=o.player:GetAttribute('MA_SelectorStatus')
- local working=o.player:GetAttribute('MA_SelectorWorking')
- local color=transition and pending or statusColors[status] or (working and cutting or idle)
- -- Carry the existing beams over intact when that field becomes the previous one.
+ local transfer=old and o.player:GetAttribute('MA_SelectorTransition')
+ local color=transfer and pendingColor or (o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor)
+ -- Keep the already extended walls when the current pin becomes the old one.
  if old and old~=pin and self.pinned.point==old then self.pinned,self.previous=self.previous,self.pinned end
  local instant=o.reducedMotion()
- show(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant)
- show(self.previous,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
-  transition=='Finishing' and cutting or idle,dt,instant or self.previous.point~=old)
- show(self.preview,point,width,preview,dt,true)
+ local camera=workspace.CurrentCamera
+ local eye=camera and camera.CFrame.Position
+ showWalls(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant,eye)
+ showWalls(self.previous,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
+  o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor,dt,instant or self.previous.point~=old,eye)
+ showOutline(self.preview,point,width)
 end
 
 function V:heal(view,now)
@@ -213,7 +233,7 @@ function V:updateHealing(now)
  end
 end
 function V:destroy()
- if self.pinned then self.pinned.anchor:Destroy();self.previous.anchor:Destroy();self.preview.anchor:Destroy() end
+ if self.pinned then self.pinned.folder:Destroy();self.previous.folder:Destroy();self.preview.base:Destroy() end
  for _,cue in ipairs(self.cues) do cue.gui:Destroy() end
 end
 return V
