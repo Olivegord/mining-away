@@ -372,9 +372,9 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  dust.Acceleration=Vector3.new(0,1.1,0)
  dust.Parent=root;dust:Emit(dustCount)
  if crystal and stoneColor then
-  local fine=Instance.new('ParticleEmitter');fine.Name='LingeringRedDust'
+  local fine=Instance.new('ParticleEmitter');fine.Name='LingeringOreDust'
   EnergyDisc.configure(fine,math.clamp(diameter*.20,.13,.24),.34,.68,1.25,.28)
-  RockFinish.configureDust(fine,stoneColor,true)
+  RockFinish.configureDust(fine,color,true)
   fine.Enabled=false;fine.Rate=0;fine.EmissionDirection=Enum.NormalId.Top;fine.SpreadAngle=Vector2.new(65,65)
   fine.Lifetime=NumberRange.new(1.24,2.18);fine.Speed=NumberRange.new(1,3);fine.Drag=2.5
   fine.Acceleration=Vector3.new(0,.65,0);fine.Parent=root;fine:Emit(10)

@@ -3,7 +3,6 @@ local Finish={}
 local STONE=Color3.fromRGB(117,115,112)
 local SHADE=Color3.fromRGB(15,13,14)
 Finish.StoneLight=Color3.fromRGB(188,177,164)
-local DUST_RED=Color3.fromRGB(232,23,39)
 local GRADIENT='rbxassetid://117998501972844'
 local FACES={Enum.NormalId.Front,Enum.NormalId.Right,Enum.NormalId.Back,Enum.NormalId.Left}
 
@@ -43,10 +42,9 @@ function Finish.configureDust(emitter,color,fine)
  emitter.Brightness=1
  emitter.Rotation=NumberRange.new(-180,180)
  emitter.RotSpeed=NumberRange.new(-42,42)
- emitter.Color=fine and ColorSequence.new(DUST_RED,Color3.fromRGB(161,13,32))
+ emitter.Color=fine and ColorSequence.new(color,color:Lerp(Color3.new(0,0,0),.30))
   or ColorSequence.new(color:Lerp(Finish.StoneLight,.38),color)
 end
 
-Finish.DustRed=DUST_RED
 
 return Finish

@@ -49,7 +49,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
   end
  end
- local function releaseSparks(point,ground,color,strength,now)
+ local function releaseSparks(point,ground,oreColor,strength,now)
   local player=Players.LocalPlayer
   local lowFlash=player and player:GetAttribute('ReducedFlashing')==true
   local heading=variation:NextNumber(0,2*math.pi)
@@ -59,8 +59,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local angle=heading+i*2.39996+variation:NextNumber(-.70,.70)
    local direction=Vector3.new(math.cos(angle),0,math.sin(angle))
    local drift=Vector3.new(-direction.Z,0,direction.X)
-   local tint=streak and color:Lerp(STONE_LIGHT,variation:NextNumber(.35,.78)) or RockFinish.DustRed
-   local spark=part(parent,'Part',streak and 'CrystalFireworkStreak' or 'CrystalDriftingEmber',tint)
+   local spark=part(parent,'Part',streak and 'CrystalFireworkStreak' or 'CrystalDriftingEmber',oreColor)
    if streak then spark.Material=Enum.Material.Concrete
    elseif not lowFlash then spark.Material=Enum.Material.Neon end
    if not streak then spark.Shape=Enum.PartType.Ball end
@@ -200,14 +199,14 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
   openHalves(r,frame,size,now,reduced)
   if not reduced then
-   if not prism and not nomad then releaseSparks(point,ground,stone,strength,now) end
+   if not prism and not nomad then releaseSparks(point,ground,r.baseColor,strength,now) end
    if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     if not prismReceipt then
      RoleVisuals.Pulse(floor,prism and EMBER or stone:Lerp(STONE_LIGHT,.36),strength*.55,strength*(prism and 8.6 or 6.6),.58)
      if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     end
-    RoleVisuals.ImpactParticles(point,prism and EMBER or stone,strength*.83,prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
+    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*.83,prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
    end
    for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end

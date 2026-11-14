@@ -2,7 +2,7 @@
 
 ## November 14 — stone debris and red dust
 
-Take the tint and material for physical shavings from the rendered stone. Use soft, muted dust at contact and in the initial break burst. Keep the smallest lingering motes saturated red. Begin darkening steadily as health falls, and cap the reduction at 38% through the split so the faces stay readable.
+Take the tint and material for physical shavings from the rendered stone. Use soft, muted dust at contact and in the initial break burst. Tint the small flying rectangles and the lingering motes to the rock’s ore color. Begin darkening steadily as health falls, and cap the reduction at 38% through the split so the faces stay readable.
 
 ## November 13 — colored fracture and polished red drops
 

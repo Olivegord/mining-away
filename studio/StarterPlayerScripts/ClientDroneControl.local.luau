@@ -2741,7 +2741,6 @@ local Finish={}
 local STONE=Color3.fromRGB(117,115,112)
 local SHADE=Color3.fromRGB(15,13,14)
 Finish.StoneLight=Color3.fromRGB(188,177,164)
-local DUST_RED=Color3.fromRGB(232,23,39)
 local GRADIENT='rbxassetid://117998501972844'
 local FACES={Enum.NormalId.Front,Enum.NormalId.Right,Enum.NormalId.Back,Enum.NormalId.Left}
 
@@ -2781,11 +2780,10 @@ function Finish.configureDust(emitter,color,fine)
  emitter.Brightness=1
  emitter.Rotation=NumberRange.new(-180,180)
  emitter.RotSpeed=NumberRange.new(-42,42)
- emitter.Color=fine and ColorSequence.new(DUST_RED,Color3.fromRGB(161,13,32))
+ emitter.Color=fine and ColorSequence.new(color,color:Lerp(Color3.new(0,0,0),.30))
   or ColorSequence.new(color:Lerp(Finish.StoneLight,.38),color)
 end
 
-Finish.DustRed=DUST_RED
 
 return Finish
 
@@ -6305,9 +6303,9 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  dust.Acceleration=Vector3.new(0,1.1,0)
  dust.Parent=root;dust:Emit(dustCount)
  if crystal and stoneColor then
-  local fine=Instance.new('ParticleEmitter');fine.Name='LingeringRedDust'
+  local fine=Instance.new('ParticleEmitter');fine.Name='LingeringOreDust'
   EnergyDisc.configure(fine,math.clamp(diameter*.20,.13,.24),.34,.68,1.25,.28)
-  RockFinish.configureDust(fine,stoneColor,true)
+  RockFinish.configureDust(fine,color,true)
   fine.Enabled=false;fine.Rate=0;fine.EmissionDirection=Enum.NormalId.Top;fine.SpreadAngle=Vector2.new(65,65)
   fine.Lifetime=NumberRange.new(1.24,2.18);fine.Speed=NumberRange.new(1,3);fine.Drag=2.5
   fine.Acceleration=Vector3.new(0,.65,0);fine.Parent=root;fine:Emit(10)
@@ -7983,7 +7981,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
   end
  end
- local function releaseSparks(point,ground,color,strength,now)
+ local function releaseSparks(point,ground,oreColor,strength,now)
   local player=Players.LocalPlayer
   local lowFlash=player and player:GetAttribute('ReducedFlashing')==true
   local heading=variation:NextNumber(0,2*math.pi)
@@ -7993,8 +7991,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local angle=heading+i*2.39996+variation:NextNumber(-.70,.70)
    local direction=Vector3.new(math.cos(angle),0,math.sin(angle))
    local drift=Vector3.new(-direction.Z,0,direction.X)
-   local tint=streak and color:Lerp(STONE_LIGHT,variation:NextNumber(.35,.78)) or RockFinish.DustRed
-   local spark=part(parent,'Part',streak and 'CrystalFireworkStreak' or 'CrystalDriftingEmber',tint)
+   local spark=part(parent,'Part',streak and 'CrystalFireworkStreak' or 'CrystalDriftingEmber',oreColor)
    if streak then spark.Material=Enum.Material.Concrete
    elseif not lowFlash then spark.Material=Enum.Material.Neon end
    if not streak then spark.Shape=Enum.PartType.Ball end
@@ -8134,14 +8131,14 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
   openHalves(r,frame,size,now,reduced)
   if not reduced then
-   if not prism and not nomad then releaseSparks(point,ground,stone,strength,now) end
+   if not prism and not nomad then releaseSparks(point,ground,r.baseColor,strength,now) end
    if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     if not prismReceipt then
      RoleVisuals.Pulse(floor,prism and EMBER or stone:Lerp(STONE_LIGHT,.36),strength*.55,strength*(prism and 8.6 or 6.6),.58)
      if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     end
-    RoleVisuals.ImpactParticles(point,prism and EMBER or stone,strength*.83,prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
+    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*.83,prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
    end
    for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end

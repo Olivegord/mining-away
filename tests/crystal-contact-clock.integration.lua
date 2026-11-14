@@ -19,13 +19,14 @@ rockDamage.feedback=CrystalImpactView.new(fx,{play=function(_,name) table.insert
  table.insert(cameraKicks,at)
 end,nil,function(name) if name=='Original' then return halves end end)
 local source=Instance.new('UnionOperation');source.Parent=workspace
+source.Color=Color3.fromRGB(89,150,234)
 for k,v in pairs({Kind='Crystal',ZoneName='Ruby',FullSize=Vector3.one*3,FullPosition=Vector3.new(0,1.5,0),
  ReferenceCrystal=true,CrystalCut='Original',QuarryCrystal=true,StageSeed=4,SpawnAt=95,ReadyAt=97,
  MaxHP=300,HP=300,Stage=0,StageCount=3,GroundY=0}) do source:SetAttribute(k,v) end
 local r={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,100,3)}
 r.view.Parent=fx
-r.stoneColor,r.stoneGradient=RockFinish.apply(r.view,Color3.fromRGB(255,0,0))
+r.stoneColor,r.stoneGradient=RockFinish.apply(r.view,source.Color)
 assert(r.view.Material==Enum.Material.Concrete and r.view.Reflectance==0 and #r.stoneGradient==4 and r.stoneColor.R<.65)
 local resources={r}
 crystalFrame(resources,100)
@@ -78,6 +79,14 @@ for _,gradient in ipairs(r.stoneGradient) do
  assert(gradient.LocalTransparencyModifier==1,'a rock gradient remained visible after the split')
 end
 local split=rockDamage.feedback.fractures
+local streaks=0
+for _,entry in ipairs(rockDamage.feedback.sparks) do
+ if entry.p.Name=='CrystalFireworkStreak' then
+  streaks+=1
+  assert(entry.p.Color==source.Color,'the flying rectangles lost their ore tint')
+ end
+end
+assert(streaks==5,'the split lost its flying rectangles')
 assert(#split==2 and math.abs(split[1].p.Size.Y-2.1775)<.001 and split[1].p.Material==Enum.Material.Concrete
  and split[1].p.Color.R>.18 and split[2].p.Color.R>.18,
  'a shot that skipped stages failed to open the visible final-stage stone model')
@@ -97,7 +106,7 @@ assert(#audio==11 and audio[10]=='crystal_fall_tink' and audio[11]=='crystal_fal
 assert(#rockDamage.feedback.sparks==3,'only the slow ember layer should remain after two seconds')
 for _,spark in ipairs(rockDamage.feedback.sparks) do
  assert(spark.p.Name=='CrystalDriftingEmber' and spark.p.Transparency<1)
- assert(spark.p.Color.R>.8 and spark.p.Color.G<.15 and spark.p.Size.X<.15,'lingering dust lost its tiny red appearance')
+ assert(spark.p.Color==source.Color and spark.p.Size.X<.15,'lingering dust lost its small size or ore tint')
 end
 rockDamage.feedback:step(107)
 assert(#rockDamage.feedback.sparks==0,'long sparks did not clean up')

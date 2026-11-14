@@ -11,18 +11,24 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | f230cceb98a72fcffdec97d8915d47f2bfc4ddd785aa269075cdf5d5e4e18e99 | Matte shavings, lingering red dust, and a gentler damage shade installed. |
-| Shared Studio Sources | Save 289 | All seven Sources verified against the canonical file. |
+| Native-file SHA-256 | c456c1e825d9d710ea58167d857f4fb555cd64bc84217e46da225ac29b39a2aa | Ore-colored break rectangles and lingering dust installed. |
+| Shared Studio Sources | Save 290 | All seven Sources verified against the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads matching matte rock shavings, tiny red dust and gentler rock darkening. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads break rectangles and fine dust tinted to the rock’s ore. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 14 — ore-colored break rectangles and fine dust
+
+The small flying rectangles and the lingering dust use each rock’s undimmed ore tint. The early dust and physical shavings use the matte stone palette. Both fracture timing and a non-red ore tint were exercised in the focused timing and beam checks with API doubles.
+
+DRONEREVOLUTION was already open in Edit at place **124078027733625**, universe **10774898335**. All three Script Sync roots were connected. Team Create save **290** succeeded and all seven Sources matched the canonical `build/DRONE_GAME.rbxl` after saving. No player publication or new native Play session. Run `python3 tools/script_sync.py` to reproduce the Sources and `python3 tools/build.py` to verify the canonical file.
 
 ## November 14 — matte shavings and lingering red dust
 
