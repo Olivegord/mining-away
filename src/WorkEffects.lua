@@ -142,8 +142,12 @@ end
 function W:cutAccent(position,normal,color,now)
  if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,76) then return end
  local anchor=part(self.parent,'MiningContactAccent');anchor.CFrame=facing(position+normal*.11,normal)
- EnergyDisc.accent(anchor,'FacetStreaks',color:Lerp(WHITE,.52),.50,'streak',Enum.NormalId.Front,52):Emit(3)
- table.insert(self.bursts,{part=anchor,untilAt=now+.28})
+ local dust=particle(anchor,'ContactStoneDust',color)
+ EnergyDisc.configure(dust,.58,.37,.58,1.18)
+ RockFinish.configureDust(dust,color,false)
+ dust.Speed=NumberRange.new(4,8);dust.Lifetime=NumberRange.new(.18,.38);dust.Drag=4
+ dust:Emit(4)
+ table.insert(self.bursts,{part=anchor,untilAt=now+.39})
 end
 function W:destroyMining(beam)
  local fx=beam.work
@@ -231,8 +235,14 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.sparks.Rate=2;fx.sparks.Enabled=working
  fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=working
  local resonance=sample.style=='Resonance'
- local impactColor=sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
- if fx.impactColor~=impactColor then fx.impactColor=impactColor;fx.impact.Color=ColorSequence.new(impactColor) end
+ local stoneColor=sample.stoneColor
+ local impactColor=stoneColor or sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
+ if fx.impactColor~=impactColor or fx.stoneContact~=(stoneColor~=nil) then
+  fx.impactColor=impactColor;fx.stoneContact=stoneColor~=nil
+  EnergyDisc.configure(fx.impact,stoneColor and .75 or .94,stoneColor and .37 or .47,.56,stoneColor and 1.16 or .63,.48)
+  if stoneColor then RockFinish.configureDust(fx.impact,stoneColor,false)
+  else fx.impact.Color=ColorSequence.new(impactColor) end
+ end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
  fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-3,0)

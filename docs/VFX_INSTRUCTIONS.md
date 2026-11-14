@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — stone debris and red dust
+
+Take the tint and material for physical shavings from the rendered stone. Use soft, muted dust at contact and in the initial break burst. Keep the smallest lingering motes saturated red. Begin darkening steadily as health falls, and cap the reduction at 38% through the split so the faces stay readable.
+
 ## November 13 — colored fracture and polished red drops
 
 Keep the rock’s stone color visible through damage, Ramiel’s cluster contact, and the split. The matte sides and darker base remain readable as the rock shrinks. Raw crystal drops are glossy red with timed landing and idle glints. Preserve the separate chips and sparks on impact.

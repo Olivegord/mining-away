@@ -1,6 +1,6 @@
 # Shared project context
 
-Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
+Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
 **Current implementation:** New Crystal Run players start with two Laser Miners, Inkbeam, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly, carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
@@ -11,18 +11,26 @@ Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | a0c67c5421484208ca70e0f3fb328f56cc6c1d880cb4c2645c2f05d4bbca531a | Visible damage tint and polished red ore installed. |
-| Shared Studio Sources | Save 287 | All seven Sources verified against the canonical file. |
+| Native-file SHA-256 | f230cceb98a72fcffdec97d8915d47f2bfc4ddd785aa269075cdf5d5e4e18e99 | Matte shavings, lingering red dust, and a gentler damage shade installed. |
+| Shared Studio Sources | Save 289 | All seven Sources verified against the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads matte rocks that retain color through the split, and polished red ore drops with glints. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads matching matte rock shavings, tiny red dust and gentler rock darkening. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 14 — matte shavings and lingering red dust
+
+Laser and projectile shavings copy the rendered rock’s material and use subdued stone tints. Break chunks use the same finish, including the material thrown by Ramiel. Quick dust uses a soft smoke texture and the stone palette. A separate layer of tiny, saturated red motes remains for roughly one to three seconds after the ordinary split. Damage shades the rock earlier and more gradually, with a 38% maximum color reduction through the split. The gradient, polished red pickups and their glints remain visible.
+
+Studio was open in Edit at DRONEREVOLUTION place **124078027733625**, universe **10774898335**. All three Script Sync roots reported `SyncedAsRoot`. Team Create save **289** succeeded and all seven Sources matched `build/DRONE_GAME.rbxl` after saving. The canonical refresh preserved authored scenery and backup scripts. No player publication.
+
+Focused rock rendering, contact, split and 28 beam/VFX checks passed with API doubles. The broader gadget suite stops at the existing courier-delay fixture. No native Play or multiplayer visual check was run. Reproduce the seven Sources with `python3 tools/script_sync.py` and verify the committed canonical file with `python3 tools/build.py`.
 
 ## November 13 — visible fracture color and polished red ore
 

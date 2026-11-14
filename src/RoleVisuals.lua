@@ -309,7 +309,7 @@ local impactStyles={
  Touchdown={speed=NumberRange.new(5,10),spread=79,lift=-16,count=4,dust=3},
  Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
 }
-function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?)
+function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?)
  local prism=kind=='PrismBlast'
  if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
@@ -330,6 +330,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50,crystal and .62 or .30)
  sparks.Enabled=false;sparks.Rate=0
  sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),crystal and .10 or .22),color)
+ if crystal and stoneColor then RockFinish.configureDust(sparks,stoneColor,false) end
  local spread=style and style.spread or 63
  sparks.EmissionDirection=normal and Enum.NormalId.Front or Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(spread,spread)
  sparks.Lifetime=crystal and NumberRange.new(.16,.48) or residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
@@ -342,9 +343,11 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  local dark=prism or kind=='NomadBlast' or kind=='Touchdown' or kind=='Singularity'
  local mode=residual and 'mote' or dark and 'ink' or fast and 'streak' or 'glint'
  local accentColor=dark and color:Lerp(Color3.fromRGB(12,8,25),.89) or color:Lerp(Color3.fromRGB(255,249,213),.55)
- local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
-  mode,sparks.EmissionDirection,fast and spread*.66 or spread)
- accent:Emit(prism and 4 or dark and 5 or 3)
+ if not crystal then
+  local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
+   mode,sparks.EmissionDirection,fast and spread*.66 or spread)
+  accent:Emit(prism and 4 or dark and 5 or 3)
+ end
  if heavy and impactCount+prismImpactCount<=8 then
   local white=Color3.fromRGB(255,244,197)
   local streak=EnergyDisc.accent(root,'FastImpactStreaks',color:Lerp(white,.46),diameter*.78,
@@ -356,17 +359,26 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
   glints.Drag=2.8;glints:Emit(7)
  end
  local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
- Debris:AddItem(root,residual and 2.7 or 1.4)
+ Debris:AddItem(root,stoneColor and crystal and 2.35 or residual and 2.7 or 1.4)
  if dustCount==0 then return end
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
  EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20,crystal and .55 or .32)
  dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
  dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),crystal and .08 or .22))
+ if stoneColor then RockFinish.configureDust(dust,stoneColor,false) end
  dust.EmissionDirection=sparks.EmissionDirection;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=crystal and NumberRange.new(.32,.78) or NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
  dust.Acceleration=Vector3.new(0,1.1,0)
  dust.Parent=root;dust:Emit(dustCount)
+ if crystal and stoneColor then
+  local fine=Instance.new('ParticleEmitter');fine.Name='LingeringRedDust'
+  EnergyDisc.configure(fine,math.clamp(diameter*.20,.13,.24),.34,.68,1.25,.28)
+  RockFinish.configureDust(fine,stoneColor,true)
+  fine.Enabled=false;fine.Rate=0;fine.EmissionDirection=Enum.NormalId.Top;fine.SpreadAngle=Vector2.new(65,65)
+  fine.Lifetime=NumberRange.new(1.24,2.18);fine.Speed=NumberRange.new(1,3);fine.Drag=2.5
+  fine.Acceleration=Vector3.new(0,.65,0);fine.Parent=root;fine:Emit(10)
+ end
 end
 
 local specialistHits={

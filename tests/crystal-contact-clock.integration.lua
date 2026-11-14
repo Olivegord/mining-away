@@ -40,6 +40,9 @@ assert(not r.dirty and r.lastContactAt==0 and r.nextContactAt==101.01 and #audio
 crystalFrame(resources,101.02)
 assert(r.lastContactAt==101.01 and r.flashAt==101.02 and #audio==2,'settled rock lost the scheduled shot')
 assert(audio[1]=='crystal_snap' and audio[2]=='crystal_electric')
+local shaving=rockDamage.feedback.pieces[1].p
+assert(shaving.Material==r.view.Material and shaving.Reflectance==0 and shaving.Color.R<.65,
+ 'impact shavings still used the replicated rock finish')
 crystalFrame(resources,101.075)
 assert(audio[3]=='crystal_chip')
 crystalFrame(resources,101.25)
@@ -94,6 +97,7 @@ assert(#audio==11 and audio[10]=='crystal_fall_tink' and audio[11]=='crystal_fal
 assert(#rockDamage.feedback.sparks==3,'only the slow ember layer should remain after two seconds')
 for _,spark in ipairs(rockDamage.feedback.sparks) do
  assert(spark.p.Name=='CrystalDriftingEmber' and spark.p.Transparency<1)
+ assert(spark.p.Color.R>.8 and spark.p.Color.G<.15 and spark.p.Size.X<.15,'lingering dust lost its tiny red appearance')
 end
 rockDamage.feedback:step(107)
 assert(#rockDamage.feedback.sparks==0,'long sparks did not clean up')
@@ -398,10 +402,9 @@ sustained:Destroy();cutting.view:Destroy()
 -- Test dense cuts and several display rates without changing damage or drops.
 for _,fps in ipairs({30,60,144}) do
  local debris=CrystalImpactView.new(fx,nil)
- local mineral=Instance.new('Part');mineral.Material=Enum.Material.Glass
- mineral.MaterialVariant='';mineral.Reflectance=.35
- local tint=Color3.fromRGB(205,26,63)
- debris:chips(200,Vector3.new(0,8,0),Vector3.zAxis,tint,6,false,nil,0,mineral)
+ local mineral=Instance.new('Part')
+ RockFinish.apply(mineral,Color3.fromRGB(205,26,63))
+ debris:chips(200,Vector3.new(0,8,0),Vector3.zAxis,mineral,6,0)
  local chips=table.clone(debris.pieces)
  local sizes={}
  assert(#chips==6)
@@ -411,7 +414,7 @@ for _,fps in ipairs({30,60,144}) do
   for _,piece in ipairs(chips) do
    if piece.p.Parent then
     assert(piece.p.Material==mineral.Material and piece.p.Reflectance==mineral.Reflectance)
-    assert(piece.p.Color.R>piece.p.Color.G*2,'chips lost the mineral hue')
+    assert(piece.p.Color.R>piece.p.Color.G and piece.p.Color.R-piece.p.Color.G<.22,'chips lost their muted stone tint')
     local magnitude=piece.p.Size.Magnitude
     assert(not sizes[piece] or magnitude<sizes[piece],'chip stopped shrinking before cleanup')
     assert(piece.p.Transparency<.21,'chip faded instead of shrinking')
@@ -420,7 +423,7 @@ for _,fps in ipairs({30,60,144}) do
   end
  end
  for _,piece in ipairs(chips) do assert(piece.landedAt and not piece.p.Parent,'chip did not land and clean up') end
- for n=1,20 do debris:chips(203,Vector3.new(0,2,0),Vector3.yAxis,tint,6,false,nil,0,mineral) end
+ for n=1,20 do debris:chips(203,Vector3.new(0,2,0),Vector3.yAxis,mineral,6,0) end
  assert(#debris.pieces<=28,'ordinary chips consumed the fracture reserve')
  debris:destroy();mineral:Destroy()
 end

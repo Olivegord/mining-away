@@ -14,6 +14,13 @@ assert(b.work.impact.Texture=='rbxasset://textures/ui/VR/circleWhite.png' and no
 assert(b.work.impact.Size[1].Value>=.8 and b.work.impact.Size[2].Value==0 and b.work.impact.Transparency[2].Value>=.4)
 assert(b.work.impact.LightEmission<.5 and b.work.impact.Brightness>=1 and b.work.impact.Brightness<=2 and b.work.impact.TimeScale==1)
 assert(b.work.impact.Lifetime.Max>=.7 and b.work.impact.Acceleration.Y<0)
+sample.stoneColor=Color3.fromRGB(133,95,93)
+w:mining(b,sample,Vector3.zero,Vector3.yAxis,1,0,10.02)
+assert(b.work.impact.Texture=='rbxasset://textures/particles/smoke_main.dds' and b.work.impact.LightEmission==0,
+ 'rock dust inherited the glowing contact particle finish')
+sample.stoneColor=nil
+w:mining(b,sample,Vector3.zero,Vector3.yAxis,1,0,10.04)
+assert(b.work.impact.Texture=='rbxasset://textures/ui/VR/circleWhite.png','ordinary work particles retained the stone dust texture')
 local tip=b.work.tip;local clears=b.work.impact.cleared
 sample.paused=true;w:mining(b,sample,nil,nil,0,0,10.1)
 assert(not b.work.impact.Enabled and b.work.impact.cleared==clears,'pause clipped existing particles instead of stopping emission')

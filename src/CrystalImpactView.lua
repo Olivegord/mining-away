@@ -1,10 +1,10 @@
 -- Local-only feedback. Rest poses and reward objects belong to other systems.
 local V={}
-local WARM=Color3.fromRGB(255,218,139)
 local HOT=Color3.fromRGB(255,249,216)
 local CHAR=Color3.new(0,0,0)
 local EMBER=Color3.fromRGB(255,27,59)
 local RED_HIGHLIGHT=Color3.fromRGB(255,119,145)
+local STONE_LIGHT=RockFinish.StoneLight
 local Players=game:GetService('Players')
 local GuiService=game:GetService('GuiService')
 function V.reducedMotion()
@@ -25,9 +25,9 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=flight+groundTail,
    ground=ground,spin=spin,weight=weight,tink=tink,size=p.Size}
  end
- function self:chips(at,point,normal,tint,count,large,scale,ground,source)
-  if not BeamVFX.near(point,large and 92 or 60) then return end
-  if BeamVFX.reduced() then count=math.min(count,large and 2 or 1) end
+ function self:chips(at,point,normal,surface,count,ground)
+  if not BeamVFX.near(point,60) then return end
+  if BeamVFX.reduced() then count=1 end
   local sideways=normal:Cross(Vector3.yAxis)
   sideways=sideways.Magnitude>.01 and sideways.Unit or Vector3.xAxis
   local up=normal:Cross(sideways).Unit
@@ -35,17 +35,15 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    -- Ordinary contact chips cannot consume the final fracture's fragment budget.
    if #self.pieces>=28 then break end
    local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
-   local direction=normal*.7+spread*(large and 1.25 or .66)
-   local size=large and scale*variation:NextNumber(.38,1.05) or variation:NextNumber(.23,.65)
-   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,variation:NextNumber(.02,.21)))
-   if source then
-    p.Material=source.Material;p.MaterialVariant=source.MaterialVariant;p.Reflectance=source.Reflectance
-   end
+   local direction=normal*.7+spread*.66
+   local size=variation:NextNumber(.23,.65)
+   local p=part(parent,'WedgePart','CrystalChip',surface.Color:Lerp(STONE_LIGHT,variation:NextNumber(.06,.24)))
+   p.Material=surface.Material;p.MaterialVariant=surface.MaterialVariant;p.Reflectance=surface.Reflectance
    p.Size=Vector3.new(size*variation:NextNumber(.56,.92),size*variation:NextNumber(1.12,1.78),size)
    p.CFrame=CFrame.new(point)
    local origin=point+normal*(size*.85+.025)
    p.Position=origin
-   local velocity=direction*8+Vector3.yAxis*(large and 4 or 4.5)
+   local velocity=direction*8+Vector3.yAxis*4.5
    local floor=ground or point.Y-4
    -- The chip's flight ends at the floor, not at an arbitrary particle timeout.
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
@@ -61,8 +59,10 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local angle=heading+i*2.39996+variation:NextNumber(-.70,.70)
    local direction=Vector3.new(math.cos(angle),0,math.sin(angle))
    local drift=Vector3.new(-direction.Z,0,direction.X)
-   local spark=part(parent,'Part',streak and 'CrystalFireworkStreak' or 'CrystalDriftingEmber',color:Lerp(HOT,variation:NextNumber(.35,.88)))
-   if not lowFlash then spark.Material=Enum.Material.Neon end
+   local tint=streak and color:Lerp(STONE_LIGHT,variation:NextNumber(.35,.78)) or RockFinish.DustRed
+   local spark=part(parent,'Part',streak and 'CrystalFireworkStreak' or 'CrystalDriftingEmber',tint)
+   if streak then spark.Material=Enum.Material.Concrete
+   elseif not lowFlash then spark.Material=Enum.Material.Neon end
    if not streak then spark.Shape=Enum.PartType.Ball end
    spark.Transparency=1;spark.Size=Vector3.one*.045;spark.Position=point
    self.sparks[#self.sparks+1]={
@@ -71,7 +71,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
     v=direction*variation:NextNumber(streak and 8 or 2.5,streak and 19 or 6),
     lift=variation:NextNumber(streak and 5.5 or 7.5,streak and 14 or 12),
     drift=drift*variation:NextNumber(.32,.88),phase=variation:NextNumber(0,2*math.pi),frequency=variation:NextNumber(3.8,9.5),
-    size=math.sqrt(strength)*variation:NextNumber(.085,.19),lowFlash=lowFlash,
+    size=math.sqrt(strength)*variation:NextNumber(streak and .085 or .045,streak and .19 or .085),lowFlash=lowFlash,
    }
   end
  end
@@ -168,7 +168,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local side=index==1 and -1 or 1
    local center=original:GetAttribute('CenterRatio')*size
    half.Material=Enum.Material.Concrete
-   half.Color=(r.stoneColor or r.baseColor):Lerp(CHAR,.54)
+   half.Color=(r.stoneColor or r.baseColor):Lerp(CHAR,Feel.MaxCrystalDarkness)
    half.Size=original:GetAttribute('SizeRatio')*size
    half.CFrame=frame*CFrame.new(center);half.Parent=parent
    self.fractures[#self.fractures+1]={p=half,at=reduced and now-.24 or now,hinge=hinge,side=side,reduced=reduced,
@@ -177,6 +177,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
  end
  local function split(self,r,now,prism,nomad)
   local v,s=r.view,r.source
+  local stone=r.stoneColor or v.Color
   local frame=r.splitPose or r.restPose
   local size=r.splitSize or v.Size
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-size.Y*.5
@@ -199,25 +200,24 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
   openHalves(r,frame,size,now,reduced)
   if not reduced then
-   if not prism and not nomad then releaseSparks(point,ground,r.baseColor,strength,now) end
+   if not prism and not nomad then releaseSparks(point,ground,stone,strength,now) end
    if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     if not prismReceipt then
-     RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
+     RoleVisuals.Pulse(floor,prism and EMBER or stone:Lerp(STONE_LIGHT,.36),strength*.55,strength*(prism and 8.6 or 6.6),.58)
      if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     end
-    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
+    RoleVisuals.ImpactParticles(point,prism and EMBER or stone,strength*.83,prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
    end
    for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,variation:NextNumber(.03,.27))
+    local chipColor=stone:Lerp(STONE_LIGHT,variation:NextNumber(.05,.30))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
     local size=strength*(prism and (.11+.052*(i%4)) or variation:NextNumber(.20,.48))
     chip.Size=Vector3.new(size*.55,size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
-    chip.Material=prism and (i%3==0 and Enum.Material.Neon or Enum.Material.Glass) or v.Material
-    if not prism then chip.MaterialVariant=v.MaterialVariant;chip.Reflectance=v.Reflectance end
+    chip.Material=v.Material;chip.MaterialVariant=v.MaterialVariant;chip.Reflectance=v.Reflectance
     local origin=point+direction*.22
     chip.Position=origin
    track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
@@ -225,8 +225,8 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
      (i==2 or i==7) and (owned and .64 or .39) or nil,.99)
    end
    if #self.pieces<48 and clusterSize<=5 then
-    local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or r.baseColor:Lerp(WARM,.77))
-    spark.Shape=Enum.PartType.Ball;spark.Material=Enum.Material.Neon
+    local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or stone:Lerp(STONE_LIGHT,.40))
+    spark.Shape=Enum.PartType.Ball;spark.Material=prism and Enum.Material.Neon or Enum.Material.Concrete
     spark.Size=Vector3.one*.10;spark.Position=point
     self.pieces[#self.pieces+1]={p=spark,at=now,duration=.19,burst=true,size=strength}
    end
@@ -329,7 +329,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
     if (shot or fractured) and not s:GetAttribute('SteadyCrystal') then
      r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
     end
-    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'),s)
+    self:chips(now,point,normal,v,heavy and 6 or fractured and 5 or 3,s:GetAttribute('GroundY'))
     if onCameraBeat and not V.reducedMotion() then
      if fractured and not shot then
       onCameraBeat('Fracture',point,now)
@@ -338,7 +338,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
      end
     end
     if fractured and not shot then
-     RoleVisuals.Pulse(point+normal*.10,r.baseColor:Lerp(HOT,.55),.19,1.65,.18,normal,.78)
+     RoleVisuals.Pulse(point+normal*.10,(r.stoneColor or v.Color):Lerp(STONE_LIGHT,.38),.19,1.65,.18,normal,.78)
     end
     if shot and not s:GetAttribute('CutProjectileFX') then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)

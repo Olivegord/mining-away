@@ -1449,6 +1449,7 @@ local function renderDrone(d,dt,now)
   contact=active,
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
+  stoneColor=resource and resource.stoneColor,
   style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=s:GetAttribute('BeamVariant'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,

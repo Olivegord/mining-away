@@ -810,10 +810,10 @@ function F.crystalStageShape(stage,count,fullSize)
  local progress=math.clamp(stage/math.max(1,count or 3),0,1)
  return fullSize and shape+Vector3.yAxis*progress/fullSize or shape
 end
-F.MaxCrystalDarkness=.42
+F.MaxCrystalDarkness=.38
 function F.crystalDarkness(hp,maxHP)
  local spent=1-math.clamp((hp-10)/math.max(1,maxHP-10),0,1)
- return F.MaxCrystalDarkness*(1-(1-spent^1.28)^1.25)
+ return F.MaxCrystalDarkness*spent^.88
 end
 function F.junkDarkness(hp,maxHP,stage,count)
  local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
@@ -2735,6 +2735,61 @@ end
 return B
 
 end)()
+local RockFinish = (function()
+-- Box-mapped side faces keep the gradient attached as the rock shrinks.
+local Finish={}
+local STONE=Color3.fromRGB(117,115,112)
+local SHADE=Color3.fromRGB(15,13,14)
+Finish.StoneLight=Color3.fromRGB(188,177,164)
+local DUST_RED=Color3.fromRGB(232,23,39)
+local GRADIENT='rbxassetid://117998501972844'
+local FACES={Enum.NormalId.Front,Enum.NormalId.Right,Enum.NormalId.Back,Enum.NormalId.Left}
+
+function Finish.apply(view,mineral)
+ local tint=STONE:Lerp(mineral,.22)
+ view.Material=Enum.Material.Concrete
+ view.MaterialVariant=''
+ view.Reflectance=0
+ view.Color=tint
+ local gradient={}
+ for _,face in ipairs(FACES) do
+  local shadow=Instance.new('Decal')
+  shadow.Name='StoneBaseGradient'
+  shadow.Face=face
+  shadow.ColorMap=GRADIENT
+  shadow.Color3=SHADE
+  shadow.LocalTransparencyModifier=view.Transparency
+  shadow.Parent=view
+  gradient[#gradient+1]=shadow
+ end
+ return tint,gradient
+end
+
+function Finish.setVisibility(gradient,transparency)
+ for _,shadow in ipairs(gradient) do shadow.LocalTransparencyModifier=transparency end
+end
+
+function Finish.setDarkness(gradient,darkness)
+ local tint=SHADE:Lerp(Color3.new(0,0,0),darkness)
+ for _,shadow in ipairs(gradient) do shadow.Color3=tint end
+end
+
+function Finish.configureDust(emitter,color,fine)
+ emitter.Texture='rbxasset://textures/particles/smoke_main.dds'
+ emitter.LightInfluence=fine and .30 or .85
+ emitter.LightEmission=fine and .20 or 0
+ emitter.Brightness=1
+ emitter.Rotation=NumberRange.new(-180,180)
+ emitter.RotSpeed=NumberRange.new(-42,42)
+ emitter.Color=fine and ColorSequence.new(DUST_RED,Color3.fromRGB(161,13,32))
+  or ColorSequence.new(color:Lerp(Finish.StoneLight,.38),color)
+end
+
+Finish.DustRed=DUST_RED
+
+return Finish
+
+end)()
 local WorkEffects = (function()
 -- Attached, bounded work choreography. Server timestamps drive every phase;
 -- these visuals never remove ore, credit a sale, heal, or advance mining.
@@ -2880,8 +2935,12 @@ end
 function W:cutAccent(position,normal,color,now)
  if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,76) then return end
  local anchor=part(self.parent,'MiningContactAccent');anchor.CFrame=facing(position+normal*.11,normal)
- EnergyDisc.accent(anchor,'FacetStreaks',color:Lerp(WHITE,.52),.50,'streak',Enum.NormalId.Front,52):Emit(3)
- table.insert(self.bursts,{part=anchor,untilAt=now+.28})
+ local dust=particle(anchor,'ContactStoneDust',color)
+ EnergyDisc.configure(dust,.58,.37,.58,1.18)
+ RockFinish.configureDust(dust,color,false)
+ dust.Speed=NumberRange.new(4,8);dust.Lifetime=NumberRange.new(.18,.38);dust.Drag=4
+ dust:Emit(4)
+ table.insert(self.bursts,{part=anchor,untilAt=now+.39})
 end
 function W:destroyMining(beam)
  local fx=beam.work
@@ -2969,8 +3028,14 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.sparks.Rate=2;fx.sparks.Enabled=working
  fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=working
  local resonance=sample.style=='Resonance'
- local impactColor=sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
- if fx.impactColor~=impactColor then fx.impactColor=impactColor;fx.impact.Color=ColorSequence.new(impactColor) end
+ local stoneColor=sample.stoneColor
+ local impactColor=stoneColor or sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
+ if fx.impactColor~=impactColor or fx.stoneContact~=(stoneColor~=nil) then
+  fx.impactColor=impactColor;fx.stoneContact=stoneColor~=nil
+  EnergyDisc.configure(fx.impact,stoneColor and .75 or .94,stoneColor and .37 or .47,.56,stoneColor and 1.16 or .63,.48)
+  if stoneColor then RockFinish.configureDust(fx.impact,stoneColor,false)
+  else fx.impact.Color=ColorSequence.new(impactColor) end
+ end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
  fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-3,0)
@@ -6177,7 +6242,7 @@ local impactStyles={
  Touchdown={speed=NumberRange.new(5,10),spread=79,lift=-16,count=4,dust=3},
  Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
 }
-function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?)
+function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?)
  local prism=kind=='PrismBlast'
  if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
@@ -6198,6 +6263,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50,crystal and .62 or .30)
  sparks.Enabled=false;sparks.Rate=0
  sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),crystal and .10 or .22),color)
+ if crystal and stoneColor then RockFinish.configureDust(sparks,stoneColor,false) end
  local spread=style and style.spread or 63
  sparks.EmissionDirection=normal and Enum.NormalId.Front or Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(spread,spread)
  sparks.Lifetime=crystal and NumberRange.new(.16,.48) or residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
@@ -6210,9 +6276,11 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  local dark=prism or kind=='NomadBlast' or kind=='Touchdown' or kind=='Singularity'
  local mode=residual and 'mote' or dark and 'ink' or fast and 'streak' or 'glint'
  local accentColor=dark and color:Lerp(Color3.fromRGB(12,8,25),.89) or color:Lerp(Color3.fromRGB(255,249,213),.55)
- local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
-  mode,sparks.EmissionDirection,fast and spread*.66 or spread)
- accent:Emit(prism and 4 or dark and 5 or 3)
+ if not crystal then
+  local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
+   mode,sparks.EmissionDirection,fast and spread*.66 or spread)
+  accent:Emit(prism and 4 or dark and 5 or 3)
+ end
  if heavy and impactCount+prismImpactCount<=8 then
   local white=Color3.fromRGB(255,244,197)
   local streak=EnergyDisc.accent(root,'FastImpactStreaks',color:Lerp(white,.46),diameter*.78,
@@ -6224,17 +6292,26 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
   glints.Drag=2.8;glints:Emit(7)
  end
  local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
- Debris:AddItem(root,residual and 2.7 or 1.4)
+ Debris:AddItem(root,stoneColor and crystal and 2.35 or residual and 2.7 or 1.4)
  if dustCount==0 then return end
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
  EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20,crystal and .55 or .32)
  dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
  dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),crystal and .08 or .22))
+ if stoneColor then RockFinish.configureDust(dust,stoneColor,false) end
  dust.EmissionDirection=sparks.EmissionDirection;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=crystal and NumberRange.new(.32,.78) or NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
  dust.Acceleration=Vector3.new(0,1.1,0)
  dust.Parent=root;dust:Emit(dustCount)
+ if crystal and stoneColor then
+  local fine=Instance.new('ParticleEmitter');fine.Name='LingeringRedDust'
+  EnergyDisc.configure(fine,math.clamp(diameter*.20,.13,.24),.34,.68,1.25,.28)
+  RockFinish.configureDust(fine,stoneColor,true)
+  fine.Enabled=false;fine.Rate=0;fine.EmissionDirection=Enum.NormalId.Top;fine.SpreadAngle=Vector2.new(65,65)
+  fine.Lifetime=NumberRange.new(1.24,2.18);fine.Speed=NumberRange.new(1,3);fine.Drag=2.5
+  fine.Acceleration=Vector3.new(0,.65,0);fine.Parent=root;fine:Emit(10)
+ end
 end
 
 local specialistHits={
@@ -7854,54 +7931,14 @@ end
 return M
 
 end)()
-local RockFinish = (function()
--- Box-mapped side faces keep the gradient attached as the rock shrinks.
-local Finish={}
-local STONE=Color3.fromRGB(117,115,112)
-local SHADE=Color3.fromRGB(15,13,14)
-local GRADIENT='rbxassetid://117998501972844'
-local FACES={Enum.NormalId.Front,Enum.NormalId.Right,Enum.NormalId.Back,Enum.NormalId.Left}
-
-function Finish.apply(view,mineral)
- local tint=STONE:Lerp(mineral,.22)
- view.Material=Enum.Material.Concrete
- view.MaterialVariant=''
- view.Reflectance=0
- view.Color=tint
- local gradient={}
- for _,face in ipairs(FACES) do
-  local shadow=Instance.new('Decal')
-  shadow.Name='StoneBaseGradient'
-  shadow.Face=face
-  shadow.ColorMap=GRADIENT
-  shadow.Color3=SHADE
-  shadow.LocalTransparencyModifier=view.Transparency
-  shadow.Parent=view
-  gradient[#gradient+1]=shadow
- end
- return tint,gradient
-end
-
-function Finish.setVisibility(gradient,transparency)
- for _,shadow in ipairs(gradient) do shadow.LocalTransparencyModifier=transparency end
-end
-
-function Finish.setDarkness(gradient,darkness)
- local tint=SHADE:Lerp(Color3.new(0,0,0),darkness)
- for _,shadow in ipairs(gradient) do shadow.Color3=tint end
-end
-
-return Finish
-
-end)()
 local CrystalImpactView = (function()
 -- Local-only feedback. Rest poses and reward objects belong to other systems.
 local V={}
-local WARM=Color3.fromRGB(255,218,139)
 local HOT=Color3.fromRGB(255,249,216)
 local CHAR=Color3.new(0,0,0)
 local EMBER=Color3.fromRGB(255,27,59)
 local RED_HIGHLIGHT=Color3.fromRGB(255,119,145)
+local STONE_LIGHT=RockFinish.StoneLight
 local Players=game:GetService('Players')
 local GuiService=game:GetService('GuiService')
 function V.reducedMotion()
@@ -7922,9 +7959,9 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=flight+groundTail,
    ground=ground,spin=spin,weight=weight,tink=tink,size=p.Size}
  end
- function self:chips(at,point,normal,tint,count,large,scale,ground,source)
-  if not BeamVFX.near(point,large and 92 or 60) then return end
-  if BeamVFX.reduced() then count=math.min(count,large and 2 or 1) end
+ function self:chips(at,point,normal,surface,count,ground)
+  if not BeamVFX.near(point,60) then return end
+  if BeamVFX.reduced() then count=1 end
   local sideways=normal:Cross(Vector3.yAxis)
   sideways=sideways.Magnitude>.01 and sideways.Unit or Vector3.xAxis
   local up=normal:Cross(sideways).Unit
@@ -7932,17 +7969,15 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    -- Ordinary contact chips cannot consume the final fracture's fragment budget.
    if #self.pieces>=28 then break end
    local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
-   local direction=normal*.7+spread*(large and 1.25 or .66)
-   local size=large and scale*variation:NextNumber(.38,1.05) or variation:NextNumber(.23,.65)
-   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,variation:NextNumber(.02,.21)))
-   if source then
-    p.Material=source.Material;p.MaterialVariant=source.MaterialVariant;p.Reflectance=source.Reflectance
-   end
+   local direction=normal*.7+spread*.66
+   local size=variation:NextNumber(.23,.65)
+   local p=part(parent,'WedgePart','CrystalChip',surface.Color:Lerp(STONE_LIGHT,variation:NextNumber(.06,.24)))
+   p.Material=surface.Material;p.MaterialVariant=surface.MaterialVariant;p.Reflectance=surface.Reflectance
    p.Size=Vector3.new(size*variation:NextNumber(.56,.92),size*variation:NextNumber(1.12,1.78),size)
    p.CFrame=CFrame.new(point)
    local origin=point+normal*(size*.85+.025)
    p.Position=origin
-   local velocity=direction*8+Vector3.yAxis*(large and 4 or 4.5)
+   local velocity=direction*8+Vector3.yAxis*4.5
    local floor=ground or point.Y-4
    -- The chip's flight ends at the floor, not at an arbitrary particle timeout.
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
@@ -7958,8 +7993,10 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local angle=heading+i*2.39996+variation:NextNumber(-.70,.70)
    local direction=Vector3.new(math.cos(angle),0,math.sin(angle))
    local drift=Vector3.new(-direction.Z,0,direction.X)
-   local spark=part(parent,'Part',streak and 'CrystalFireworkStreak' or 'CrystalDriftingEmber',color:Lerp(HOT,variation:NextNumber(.35,.88)))
-   if not lowFlash then spark.Material=Enum.Material.Neon end
+   local tint=streak and color:Lerp(STONE_LIGHT,variation:NextNumber(.35,.78)) or RockFinish.DustRed
+   local spark=part(parent,'Part',streak and 'CrystalFireworkStreak' or 'CrystalDriftingEmber',tint)
+   if streak then spark.Material=Enum.Material.Concrete
+   elseif not lowFlash then spark.Material=Enum.Material.Neon end
    if not streak then spark.Shape=Enum.PartType.Ball end
    spark.Transparency=1;spark.Size=Vector3.one*.045;spark.Position=point
    self.sparks[#self.sparks+1]={
@@ -7968,7 +8005,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
     v=direction*variation:NextNumber(streak and 8 or 2.5,streak and 19 or 6),
     lift=variation:NextNumber(streak and 5.5 or 7.5,streak and 14 or 12),
     drift=drift*variation:NextNumber(.32,.88),phase=variation:NextNumber(0,2*math.pi),frequency=variation:NextNumber(3.8,9.5),
-    size=math.sqrt(strength)*variation:NextNumber(.085,.19),lowFlash=lowFlash,
+    size=math.sqrt(strength)*variation:NextNumber(streak and .085 or .045,streak and .19 or .085),lowFlash=lowFlash,
    }
   end
  end
@@ -8065,7 +8102,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local side=index==1 and -1 or 1
    local center=original:GetAttribute('CenterRatio')*size
    half.Material=Enum.Material.Concrete
-   half.Color=(r.stoneColor or r.baseColor):Lerp(CHAR,.54)
+   half.Color=(r.stoneColor or r.baseColor):Lerp(CHAR,Feel.MaxCrystalDarkness)
    half.Size=original:GetAttribute('SizeRatio')*size
    half.CFrame=frame*CFrame.new(center);half.Parent=parent
    self.fractures[#self.fractures+1]={p=half,at=reduced and now-.24 or now,hinge=hinge,side=side,reduced=reduced,
@@ -8074,6 +8111,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
  end
  local function split(self,r,now,prism,nomad)
   local v,s=r.view,r.source
+  local stone=r.stoneColor or v.Color
   local frame=r.splitPose or r.restPose
   local size=r.splitSize or v.Size
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-size.Y*.5
@@ -8096,25 +8134,24 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
   openHalves(r,frame,size,now,reduced)
   if not reduced then
-   if not prism and not nomad then releaseSparks(point,ground,r.baseColor,strength,now) end
+   if not prism and not nomad then releaseSparks(point,ground,stone,strength,now) end
    if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     if not prismReceipt then
-     RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
+     RoleVisuals.Pulse(floor,prism and EMBER or stone:Lerp(STONE_LIGHT,.36),strength*.55,strength*(prism and 8.6 or 6.6),.58)
      if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     end
-    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
+    RoleVisuals.ImpactParticles(point,prism and EMBER or stone,strength*.83,prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
    end
    for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,variation:NextNumber(.03,.27))
+    local chipColor=stone:Lerp(STONE_LIGHT,variation:NextNumber(.05,.30))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
     local size=strength*(prism and (.11+.052*(i%4)) or variation:NextNumber(.20,.48))
     chip.Size=Vector3.new(size*.55,size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
-    chip.Material=prism and (i%3==0 and Enum.Material.Neon or Enum.Material.Glass) or v.Material
-    if not prism then chip.MaterialVariant=v.MaterialVariant;chip.Reflectance=v.Reflectance end
+    chip.Material=v.Material;chip.MaterialVariant=v.MaterialVariant;chip.Reflectance=v.Reflectance
     local origin=point+direction*.22
     chip.Position=origin
    track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
@@ -8122,8 +8159,8 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
      (i==2 or i==7) and (owned and .64 or .39) or nil,.99)
    end
    if #self.pieces<48 and clusterSize<=5 then
-    local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or r.baseColor:Lerp(WARM,.77))
-    spark.Shape=Enum.PartType.Ball;spark.Material=Enum.Material.Neon
+    local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or stone:Lerp(STONE_LIGHT,.40))
+    spark.Shape=Enum.PartType.Ball;spark.Material=prism and Enum.Material.Neon or Enum.Material.Concrete
     spark.Size=Vector3.one*.10;spark.Position=point
     self.pieces[#self.pieces+1]={p=spark,at=now,duration=.19,burst=true,size=strength}
    end
@@ -8226,7 +8263,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
     if (shot or fractured) and not s:GetAttribute('SteadyCrystal') then
      r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
     end
-    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'),s)
+    self:chips(now,point,normal,v,heavy and 6 or fractured and 5 or 3,s:GetAttribute('GroundY'))
     if onCameraBeat and not V.reducedMotion() then
      if fractured and not shot then
       onCameraBeat('Fracture',point,now)
@@ -8235,7 +8272,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
      end
     end
     if fractured and not shot then
-     RoleVisuals.Pulse(point+normal*.10,r.baseColor:Lerp(HOT,.55),.19,1.65,.18,normal,.78)
+     RoleVisuals.Pulse(point+normal*.10,(r.stoneColor or v.Color):Lerp(STONE_LIGHT,.38),.19,1.65,.18,normal,.78)
     end
     if shot and not s:GetAttribute('CutProjectileFX') then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
@@ -8871,11 +8908,11 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if not ink and beam.contactAccentAt~=sample.since then
    beam.contactAccentAt=sample.since
    local age=now-(sample.since or -100)
-   if age>=0 and age<.15 then self.work:cutAccent(point,normal,sample.resource.baseColor,now) end
+   if age>=0 and age<.15 then self.work:cutAccent(point,normal,sample.resource.stoneColor or sample.resource.view.Color,now) end
   end
   if now>=(beam.nextCrystalChip or 0) then
    beam.nextCrystalChip=now+.23+(now%.07)
-   sample.resource.cutFeedback:chips(now,point,normal,sample.resource.baseColor,1,false,nil,sample.serverSource:GetAttribute('GroundY'))
+   sample.resource.cutFeedback:chips(now,point,normal,sample.resource.view,1,sample.serverSource:GetAttribute('GroundY'))
   end
  end
  if self.audio and self.audio.setLoop then
@@ -15863,6 +15900,7 @@ local function renderDrone(d,dt,now)
   contact=active,
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
+  stoneColor=resource and resource.stoneColor,
   style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=s:GetAttribute('BeamVariant'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,

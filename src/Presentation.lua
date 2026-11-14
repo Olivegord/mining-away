@@ -455,11 +455,11 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if not ink and beam.contactAccentAt~=sample.since then
    beam.contactAccentAt=sample.since
    local age=now-(sample.since or -100)
-   if age>=0 and age<.15 then self.work:cutAccent(point,normal,sample.resource.baseColor,now) end
+   if age>=0 and age<.15 then self.work:cutAccent(point,normal,sample.resource.stoneColor or sample.resource.view.Color,now) end
   end
   if now>=(beam.nextCrystalChip or 0) then
    beam.nextCrystalChip=now+.23+(now%.07)
-   sample.resource.cutFeedback:chips(now,point,normal,sample.resource.baseColor,1,false,nil,sample.serverSource:GetAttribute('GroundY'))
+   sample.resource.cutFeedback:chips(now,point,normal,sample.resource.view,1,sample.serverSource:GetAttribute('GroundY'))
   end
  end
  if self.audio and self.audio.setLoop then
