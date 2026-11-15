@@ -99,3 +99,7 @@ The current row uses `tools/studio_rock_variety.lua` and `tools/refresh_rock_var
 ### Reference rework after owner rejection
 
 The replacement row uses `tools/studio_gem_reference_rework.lua` and `tools/refresh_gem_reference_rework.py`, archiving the preceding row in `ServerStorage.GemReferenceReworkArchive`. Its checked pre-edit native SHA is recorded in PROJECT_STATE. GemRefinement supplies irregular cut planes and the deterministic optical texture function. GemAppearance creates and caches two small EditableImages during preparation; the native Edit bake samples their colors into persistent unions. Runtime sample/drop comparison still uses PickupView. Do not serialize an object-backed TextureContent into a saved native mesh or claim the coarse Edit texture approximation is pixel-identical to Play.
+
+### Compact gem comparison row
+
+Bundle RockFinish and tools/studio_bake_gem.lua before tools/studio_gem_cut_rows.lua. This replaces only MineralLineup and preserves its predecessor in ServerStorage.GemCutRowsArchive. Export shared.GemCutRowsStage.snapshot.scenery and .archive. Check tools/refresh_gem_cut_rows.py against the exact baseline SHA, call the stage apply function, then write the checked export. The secondary row sits behind the pads along negative DisplayPad.LookVector; the row itself runs along world Z, so a Z-only shift would overlap specimens. Native component checks in tools/studio_mineral_preview_checks.lua now cover both sets. Close shared.MineralPreviewCheck before saving.

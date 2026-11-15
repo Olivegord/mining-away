@@ -3,11 +3,14 @@ assert(not game:GetService('RunService'):IsRunning())
 local fx=Instance.new('Folder');fx.Name='TemporaryMineralPreview';fx.Parent=workspace
 local sources=Instance.new('Folder');sources.Parent=fx
 local camera=workspace.CurrentCamera;local before=camera.CFrame
-camera.CFrame=CFrame.new(0,10,8)
+camera.CFrame=CFrame.new(16,10,0)
 local view=PickupView.new(sources,fx,nil,function() return false end)
 local report={}
 local now=workspace:GetServerTimeNow()
-for i,key in ipairs(RockFinish.Gems.geometry.order) do
+for row=1,2 do
+for index,key in ipairs(RockFinish.Gems.geometry.order) do
+ now+=2
+ local i=index+(row-1)*5
  local sample=assert(view.byId[-i]);assert(sample.faceted,'sample mesh fallback '..key)
  local source=view.lineup.sources[i]
  local actual=source:Clone();actual:SetAttribute('PickupId',i+100);actual.Parent=sources
@@ -18,34 +21,38 @@ for i,key in ipairs(RockFinish.Gems.geometry.order) do
  assert(drop.view.Material==sample.view.Material and drop.view.Transparency==sample.view.Transparency,'different specimen material '..key)
  assert(sample.displayRig and drop.displayRig and sample.hoverAlpha==1 and drop.hoverAlpha==1,'missing shared pickup effects '..key)
  actual:Destroy();view:update(1/60,now+1)
- report[key]={sameMesh=true,sameMaterial=true,sameEffects=true}
+ report[key..(row==2 and "Compact" or "")]={sameMesh=true,sameMaterial=true,sameEffects=true}
+end
 end
 camera.CFrame=before
 shared.MineralPreviewCheck={view=view,root=fx,report=report,update=function() view:update(1/60,workspace:GetServerTimeNow()) end,
  close=function() view:destroy();fx:Destroy();shared.MineralPreviewCheck=nil end}
 local diamond=view.byId[-5]
-assert(not diamond.view:FindFirstChild('MineralClouds'))
-assert(diamond.view:GetAttribute('RefractionLayers')==2)
-assert(diamond.view:GetAttribute('RefractionPatterns')==8)
-local gem=diamond.view;local pose=gem.CFrame
-local eye=pose:PointToWorldSpace(Vector3.new(0,0,15))
-RockFinish.Gems.update(gem,1,eye)
-local initial=gem:GetAttribute('RefractionPattern')
-for i=1,20 do
- RockFinish.Gems.update(gem,1,pose:PointToWorldSpace(Vector3.new(math.sin(i)*.05,0,15)))
- assert(gem:GetAttribute('RefractionPattern')==initial,'pattern flickers under tiny camera motion')
+assert(#view.lineup.sources==10 and #view.lineup.records==10)
+assert(diamond.view.Material==Enum.Material.SmoothPlastic)
+assert(diamond.view:GetAttribute('RefractionPatterns')==0)
+assert(diamond.view.MineralClouds.Material==Enum.Material.Glass)
+assert(math.abs(diamond.view.MineralClouds.Transparency-.12)<.001)
+assert(not diamond.view.MineralClouds.DoubleSided)
+local geometry=RockFinish.Gems.geometry
+local compact=geometry.describe('Ruby',true)
+for _,key in ipairs(geometry.order) do
+ local data=geometry.describe(key,true)
+ assert(#data.faces==#compact.faces)
+ for i,f in ipairs(data.faces) do for j=1,3 do assert((f[j]-compact.faces[i][j]).Magnitude<.00001) end end
+ local faces={};for _,f in ipairs(data.faces) do faces[f.facet]=true end
+ local count=0;for _ in pairs(faces) do count+=1 end
+ assert(count==12,'compact cut should have 12 broad faces')
 end
-RockFinish.Gems.update(gem,1,pose:PointToWorldSpace(Vector3.new(15,0,0)))
-assert(gem:GetAttribute('RefractionPattern')~=initial,'camera motion must change pattern')
-RockFinish.Gems.update(gem,1,eye)
-assert(gem:GetAttribute('RefractionPattern')==initial,'same view must restore same pattern')
-gem.CFrame=pose*CFrame.Angles(0,math.pi/2,0)
-RockFinish.Gems.update(gem,1,eye)
-assert(gem:GetAttribute('RefractionPattern')~=initial,'gem rotation must change pattern')
-gem.CFrame=pose;RockFinish.Gems.update(gem,1,eye)
-local low,high=1,0
-for y=0,24 do for x=0,24 do local _,a=RockFinish.Gems.geometry.spectrum(x/24,y/24);low=math.min(low,a);high=math.max(high,a) end end
-assert(low<.32 and high>.9,'clear dark zones must differ from bright reflections')
+local gem=diamond.view;local pose=gem.CFrame
+for step=1,120 do
+ gem.CFrame=pose*CFrame.Angles(step*.05,step*.12,0)
+ RockFinish.Gems.update(gem,1)
+ local inner=gem.MineralClouds
+ assert((inner.CFrame.Position-(gem.CFrame*CFrame.new(gem.Size*inner:GetAttribute('CenterRatio'))).Position).Magnitude<.001)
+ assert(gem:GetAttribute('RefractionPattern')==nil,'no discrete texture swapping')
+end
+gem.CFrame=pose;RockFinish.Gems.update(gem,1)
 assert(diamond.view:FindFirstChild('PrismaticEdges'))
 assert(diamond.view.PrismaticEdges.Transparency==0,'rims must write opaque depth')
 assert(not diamond.view.DoubleSided)
@@ -53,7 +60,7 @@ assert(not diamond.displayRig.outline.Enabled,'Diamond does not stack a white ou
 assert(diamond.displayRig.light and diamond.displayRig.light.Enabled)
 assert(not view.byId[-1].displayRig.light)
 for i=1,3 do assert(typeof(diamond.view:GetAttribute('GemFlare'..i))=='Vector3') end
-assert(diamond.view:GetAttribute('OpticalTexture'))
+assert(diamond.view.MineralClouds.TextureContent~=Content.none)
 assert(view.byId[-3].view:GetAttribute('OpticalTexture'))
 assert(diamond.displayRig.rays[1].beam.Enabled)
 PickupDisplay.draw(diamond.displayRig,diamond,diamond.view.Position-Vector3.yAxis*2,now,1,true,true)

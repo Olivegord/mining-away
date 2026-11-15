@@ -10,8 +10,10 @@ function L.new(parent,add,finish)
  local self={sources={},records={},hidden={},finish=finish}
  if not root then return self end
  local born=workspace:GetServerTimeNow()-10
- for i,key in ipairs(finish.Gems.geometry.order) do
-  local model=root:FindFirstChild(key)
+ for row=1,2 do
+ for index,key in ipairs(finish.Gems.geometry.order) do
+  local i=index+(row-1)*#finish.Gems.geometry.order
+  local model=root:FindFirstChild(key..(row==2 and 'Compact' or ''))
   local anchor=model and model:FindFirstChild('SpecimenAnchor')
   if anchor then
    -- Feed inert local samples through PickupView.add and its entire update
@@ -39,6 +41,7 @@ function L.new(parent,add,finish)
     if p:IsA('BasePart') then p.LocalTransparencyModifier=1;self.hidden[#self.hidden+1]=p end
    end
   end
+ end
  end
  local specimen=root:FindFirstChild('CoreSpecimen')
  local shell=specimen and specimen:FindFirstChild('Shell')

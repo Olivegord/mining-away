@@ -1,18 +1,15 @@
 -- Shared per-mineral shells and opaque, fixed interior grains.
 local Gem={}
 local templates,meshes,textures,attempted={},{},{},false
-local patterns={}
-local opticalState=setmetatable({},{__mode='k'})
 local Geometry=require('./GemGeometry')
 Gem.geometry=Geometry
 Gem.key=Geometry.key
 function Gem.tint(value) local key=Geometry.key(value);local spec=Geometry.definitions[key];return spec.colors[key=='Emerald' and 3 or 2] end
-local function build(key)
- local data=Geometry.describe(key)
+local function build(key,compact)
+ local data=Geometry.describe(key,compact)
  local assets=game:GetService('AssetService')
  local texture
- if data.texture and key~='Amber' then
-  for variant=0,(key=='Diamond' and 7 or 0) do
+ if (data.texture and key~='Amber') or key=='Diamond' then
   local ok,result=pcall(function()
    local width=key=='Diamond' and 256 or 128
    local bitmap=assert(assets:CreateEditableImage({Size=Vector2.new(width,width)}))
@@ -21,7 +18,7 @@ local function build(key)
     for x=0,width-1 do
      local value,alpha=Geometry.texture(x/width,y/width,key)
      local color=Color3.new(value,value,value)
-     if key=='Diamond' then color,alpha=Geometry.spectrum(x/width,y/width,variant) end
+     if key=='Diamond' then color,alpha=Geometry.spectrum(x/width,y/width) end
      local offset=(y*width+x)*4
      buffer.writeu8(pixels,offset,math.floor(color.R*255+.5));buffer.writeu8(pixels,offset+1,math.floor(color.G*255+.5));buffer.writeu8(pixels,offset+2,math.floor(color.B*255+.5))
      buffer.writeu8(pixels,offset+3,math.floor(alpha*255+.5))
@@ -33,21 +30,17 @@ local function build(key)
   end)
   if ok then
    textures[#textures+1]=result;texture=texture or result
-   if key=='Diamond' then patterns[#patterns+1]=Content.fromObject(result) end
-  else warn('Gem texture fallback '..key..': '..tostring(result));break end
-  end
+  else warn('Gem texture fallback '..key..': '..tostring(result)) end
  end
- -- Keep the dark/spectral fallback if an image budget is exhausted.
  if key=='Diamond' and not texture then
-  for _,group in ipairs({data.faces,data.clouds}) do for _,f in ipairs(group) do for i=1,3 do
-   local uv=f[6+i];local c=Geometry.spectrum(uv.X%1,uv.Y%1)
-   f[3+i]=Color3.new(f[3+i].R*c.R,f[3+i].G*c.G,f[3+i].B*c.B)
-  end end end
+  for _,f in ipairs(data.clouds) do for i=1,3 do
+   local uv=f[6+i];f[3+i]=Geometry.spectrum(uv.X%1,uv.Y%1)
+  end end
  end
  local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
- -- One draw object holds the outer and inset faces. Separate translucent
- -- parts with nearly the same center can exchange sort order as they turn.
- local layers=key=='Diamond' and {data.clouds,data.faces} or {data.faces}
+ -- Convex shell uses outward normals and back-face culling. The inset
+ -- reflective cut is separated from the shell, with no coplanar layers.
+ local layers={data.faces}
  for layer,faces in ipairs(layers) do
  for _,f in ipairs(faces) do
   local ids={}
@@ -56,7 +49,7 @@ local function build(key)
   local n=mesh:AddNormal((f[2]-f[1]):Cross(f[3]-f[1]).Unit)
   mesh:SetFaceNormals(face,{n,n,n})
   if f[7] then mesh:SetFaceUVs(face,{mesh:AddUV(f[7]),mesh:AddUV(f[8]),mesh:AddUV(f[9])}) end
-  local alpha=key=='Diamond' and layer==1 and .60 or data.vertexAlpha
+  local alpha=data.vertexAlpha
   mesh:SetFaceColors(face,{mesh:AddColor(f[4],alpha),mesh:AddColor(f[5],alpha),mesh:AddColor(f[6],alpha)})
  end
  end
@@ -71,8 +64,9 @@ local function build(key)
   return p
  end
  local shell=part(mesh,'Faceted'..key)
- if key=='Diamond' then shell:SetAttribute('RefractionLayers',2);shell:SetAttribute('RefractionPatterns',#patterns) end
- if texture then shell.TextureContent=Content.fromObject(texture);shell:SetAttribute('OpticalTexture',true) end
+ if key=='Diamond' then shell:SetAttribute('RefractionLayers',2);shell:SetAttribute('RefractionPatterns',0) end
+ if compact then shell:SetAttribute('GemCut','Compact') end
+ if texture and key~='Diamond' then shell.TextureContent=Content.fromObject(texture);shell:SetAttribute('OpticalTexture',true) end
  if #data.grains>0 then
   local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
@@ -96,17 +90,20 @@ local function build(key)
   grains:SetAttribute('CenterRatio',((coreMin+coreMax)*.5-data.center)/data.extents)
   grains.Parent=shell
  end
- if #data.clouds>0 and key~="Diamond" then
+ if #data.clouds>0 then
   local cloud=assert(assets:CreateEditableMesh());meshes[#meshes+1]=cloud
   local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
   for _,f in ipairs(data.clouds) do
    local ids={}
    for i=1,3 do ids[i]=cloud:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
    local face=cloud:AddTriangle(ids[1],ids[2],ids[3])
+   local normal=cloud:AddNormal((f[2]-f[1]):Cross(f[3]-f[1]).Unit)
+   cloud:SetFaceNormals(face,{normal,normal,normal})
    if f[7] then cloud:SetFaceUVs(face,{cloud:AddUV(f[7]),cloud:AddUV(f[8]),cloud:AddUV(f[9])}) end
    cloud:SetFaceColors(face,{cloud:AddColor(f[4],1),cloud:AddColor(f[5],1),cloud:AddColor(f[6],1)})
   end
-  local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.Neon
+  local inside=part(cloud,'MineralClouds');inside.Material=key=='Diamond' and Enum.Material.Glass or Enum.Material.Neon
+  inside.Reflectance=key=='Diamond' and .45 or 0
   -- Shifted spectrum on the inset cut supplies refracted depth.
   if texture then inside.TextureContent=Content.fromObject(texture) end
   inside:SetAttribute('SizeRatio',(hi-lo)/data.extents)
@@ -129,7 +126,7 @@ local function build(key)
   for i,position in ipairs(data.flares) do shell:SetAttribute('GemFlare'..i,position) end
  end
  shell.Material=Enum.Material[data.material]
- shell.Reflectance=key=='Cobalt' and .18 or key=='Diamond' and .12 or key=='Quartz' and .04 or 0
+ shell.Reflectance=key=='Cobalt' and .18 or key=='Diamond' and .30 or key=='Quartz' and .04 or 0
  shell:SetAttribute('GemKind',key)
  shell:SetAttribute('GemAspect',data.aspect)
  shell:SetAttribute('GemOpacity',data.opacity)
@@ -147,9 +144,17 @@ function Gem.prepare()
    if warn then warn('GemAppearance '..key..': '..tostring(result)) end
   end
  end
+ for _,key in ipairs(Geometry.order) do
+  local first=#meshes
+  local ok,result=pcall(build,key,true)
+  if ok then templates[key..'Compact']=result else
+   for i=#meshes,first+1,-1 do meshes[i]:Destroy();meshes[i]=nil end
+   if warn then warn('Compact gem '..key..': '..tostring(result)) end
+  end
+ end
 end
 function Gem.clone(source)
- local template=templates[Gem.key(source:GetAttribute('Mineral'))]
+ local template=templates[Gem.key(source:GetAttribute('Mineral'))..(source:GetAttribute('GemCut')=='Compact' and 'Compact' or '')]
  if not template or source.Name=='PressedCargo' then return source:Clone(),false end
  local p=template:Clone();p.Size=source.Size*template:GetAttribute('GemAspect');p.CFrame=source.CFrame
  for k,v in pairs(source:GetAttributes()) do p:SetAttribute(k,v) end
@@ -157,33 +162,13 @@ function Gem.clone(source)
  return p,true
 end
 function Gem.update(part,opacity,cameraPosition)
- if part:GetAttribute('GemKind')=='Diamond' and #patterns>1 and opacity>.01 then
-  local camera=workspace.CurrentCamera
-  local eye=cameraPosition or (camera and camera.CFrame.Position)
-  if eye then
-   local direction=part.CFrame:PointToObjectSpace(eye)
-   if direction.Magnitude>.01 then
-    local phase=math.atan2(direction.X,direction.Z)+.65*math.atan2(direction.Y,math.sqrt(direction.X^2+direction.Z^2))
-    local step=math.pi*2/#patterns
-    local state=opticalState[part]
-    local delta=state and math.atan2(math.sin(phase-state*step),math.cos(phase-state*step)) or math.pi
-    if not state or math.abs(delta)>step*.5+.10 then
-     local index=math.floor(phase/step+.5)%#patterns
-     if index~=state then
-      part.TextureContent=patterns[index+1];part:SetAttribute('RefractionPattern',index)
-      opticalState[part]=index
-     end
-    end
-   end
-  end
- end
  for _,name in ipairs({'FixedInclusions','MineralClouds','PrismaticEdges'}) do
  local core=part:FindFirstChild(name)
  if core then
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
-  -- Diamond layers share the shell mesh; the separate rim mesh stays opaque.
-  core.Transparency=1-opacity
+  -- The clear inset fades with the pickup; edge ribbons remain opaque at rest.
+  core.Transparency=1-opacity*(name=='MineralClouds' and part:GetAttribute('GemKind')=='Diamond' and .88 or 1)
  end
  end
 end

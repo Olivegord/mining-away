@@ -20,9 +20,9 @@ function G.key(value)
  value=value:gsub('^Run','')
  return G.definitions[value] and value or 'Amber'
 end
-function G.describe(key)
+function G.describe(key,compact)
  key=G.key(key)
- local refined=Refinement.describe(key);if refined then return refined end
+ local refined=Refinement.describe(key,compact);if refined then return refined end
  local spec=G.definitions[key]
  local ruby=spec.kind=='ruby' -- The Ruby cut and finish from 3b1f622.
  local data={faces={},grains={},clouds={},boxes={},aspect=spec.aspect,key=key,tint=spec.colors[2],
@@ -30,7 +30,7 @@ function G.describe(key)
   vertexAlpha=spec.vertexAlpha or .88,material=spec.material or (key=='Cobalt' and 'Metal' or 'Neon')}
  if key=='Emerald' then data.tint=spec.colors[3] end
  local function gradient(p,sector)
-  local t=math.clamp(p.Y+.5,0,1)
+  local t=math.clamp(.5+p.Y*1.15+p.X*.52-p.Z*.30,0,1)
   if spec.kind=='dark' then
    -- Most of the body remains near-black; concentrated green/gold light rises
    -- only a short distance from the bottom point.

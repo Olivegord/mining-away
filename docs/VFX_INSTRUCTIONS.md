@@ -1,5 +1,13 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — broad Diamond and compact comparison cuts
+
+Diamond now uses twelve broad unequal cutting planes, a wider aspect, a thin SmoothPlastic outer surface and a separated reflective Glass inset with outward face normals. Native component inspection showed a Glass outer surface hiding the Glass inset, so the outer surface deliberately uses SmoothPlastic. The spectrum is a fixed straight-edged color field with clear dark windows, not noisy patches or eight abruptly swapped camera-angle patterns. Rims remain opaque and back faces culled. This is a stylized approximation, not physically simulated dispersion; the latest render still has a graphic geometric appearance and is not owner-approved as a photo match.
+
+Amber, Quartz, Ruby and Violet receive stronger diagonal gradients while keeping their existing geometry. The second row has five 12-face rhombic compact cuts with each mineral's palette, placed seven studs behind the original row along the pad facing direction. GemCut=Compact selects their shared cached mesh templates. Both rows use the real PickupView launch/land/hover path, private negative IDs and no rewards. Production drops retain their usual cuts. The same description supplies durable Edit unions, which remain a coarse color approximation rather than exact runtime textures.
+
+Native checks cover ten specimen/drop matches, equal compact geometry with twelve broad planes, child alignment over 120 poses, fixed texture selection, depth/material settings and reduced effects. No new Play/device test; temporal flicker, low graphics and multiplayer remain unverified.
+
 ## November 14 — angle-driven layered refraction
 
 The owner rejected the opaque inner cut as painted on. Diamond restores the earlier spectrum structure with restrained fine noise, smoked transparent gaps and bright colored reflections. Texture alpha ranges from .30 in dark zones to .94 in saturated windows; the mesh opacity is .90. Inner and outer cut faces now share one MeshPart, so there are no two separate translucent body objects to exchange draw order. The inner faces retain offset UVs and lower vertex alpha. Opaque separated rims, back-face culling and removal of the extra white outline remain.

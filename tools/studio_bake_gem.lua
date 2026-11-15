@@ -30,7 +30,7 @@ local function bakeGemPreview(key,data,frame,size)
  local function point(p) return frame:PointToWorldSpace((p-data.center)/data.extents*size) end
  -- Bake the same transformed triangles and interpolated facet colors used
  -- by GemAppearance. Box scaling before rotation distorted the old bismuth.
- local alpha=key=='Diamond' and .30 or 1-data.opacity*data.vertexAlpha
+ local alpha=key=='Diamond' and .88 or 1-data.opacity*data.vertexAlpha
  local function texturedTriangle(vertices,colors,uvs,depth,parent,transparency)
   if depth>0 then
    local ab,bc,ca=(vertices[1]+vertices[2])*.5,(vertices[2]+vertices[3])*.5,(vertices[3]+vertices[1])*.5
@@ -43,7 +43,7 @@ local function bakeGemPreview(key,data,frame,size)
    return
   end
   local c=colors[1]:Lerp(colors[2],.5):Lerp(colors[3],1/3)
-  if data.texture then
+  if data.texture or (key=='Diamond' and transparency==.12) then
    local uv=(uvs[1]+uvs[2]+uvs[3])/3
    local shade=RockFinish.Gems.geometry.texture(uv.X%1,uv.Y%1,key)
    if key=='Diamond' then
@@ -75,7 +75,7 @@ local function bakeGemPreview(key,data,frame,size)
  end
  local clouds=Instance.new('Folder');clouds.Name='MineralClouds'
  for _,f in ipairs(data.clouds or {}) do
-  texturedTriangle({point(f[1]),point(f[2]),point(f[3])},{f[4],f[5],f[6]},{f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero},1,clouds,key=='Diamond' and .55 or .78)
+  texturedTriangle({point(f[1]),point(f[2]),point(f[3])},{f[4],f[5],f[6]},{f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero},1,clouds,key=='Diamond' and .12 or .78)
  end
  -- Consolidate the durable Edit approximation into one shell and one grain
  -- object. Thousands of temporary wedges must not remain in the live map.
@@ -90,7 +90,7 @@ local function bakeGemPreview(key,data,frame,size)
    assert(#result==1,'specimen consolidation failed')
    local combined=result[1];combined.Name=index==1 and 'FacetShell' or index==2 and 'FixedInclusions' or index==3 and 'MineralClouds' or 'PrismaticEdges'
    combined.UsePartColor=false;combined.Anchored=true;combined.CanCollide=false;combined.CanTouch=false;combined.CanQuery=false;combined.CastShadow=false
-   combined.Material=key=='Diamond' and index~=4 and Enum.Material.SmoothPlastic or first.Material;combined.Reflectance=first.Reflectance;combined.Transparency=first.Transparency
+   combined.Material=key=='Diamond' and (index==1 and Enum.Material.SmoothPlastic or index==3 and Enum.Material.Glass or Enum.Material.Neon) or first.Material;combined.Reflectance=first.Reflectance;combined.Transparency=first.Transparency
    combined.Parent=preview;first:Destroy();for _,p in ipairs(pieces) do p:Destroy() end
    task.wait()
   end

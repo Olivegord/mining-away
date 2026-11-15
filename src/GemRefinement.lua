@@ -16,42 +16,26 @@ function R.texture(u,v,key)
  local veil=math.clamp((cloud-.08)*.70,0,.10)
  return math.clamp(.99-veil+fine*.08+fracture*.035,.88,1),.92+muddy*.08
 end
--- A fixed diffraction field: broad spectral windows separated by deep indigo,
--- fine fracture lines and cloudy interference within each band.
-function R.spectrum(u,v,variant)
- variant=variant or 0
- if variant~=0 then
-  local x,y=u-.5,v-.5
-  local angle=variant*.79;local c,s=math.cos(angle),math.sin(angle)
-  u=(x*c-y*s+.5+variant*.137)%1;v=(x*s+y*c+.5+variant*.219)%1
- end
- local warp=math.noise(u*6.4,v*7.1,15)*.13
- local region=math.noise(u*4.8+warp,v*5.3,31)+math.noise(u*11,v*9,8)*.18
- local window=math.clamp((region+.10)*4.7,0,1)
- window=window*window*(3-2*window)
- local hue=(.70+u*.83-v*1.48+warp+math.noise(u*18,v*15,3)*.045)%1
- local rainbow=Color3.fromHSV(hue,.88,.95)
- local dark=rgb(29,33,53):Lerp(rgb(48,29,66),math.clamp(.48+math.noise(u*7,v*5,2),0,1))
- local c=dark:Lerp(rainbow,window)
- local fine=math.noise(u*156,v*173,4)
- c=c:Lerp(rgb(173,197,231),math.clamp((fine-.18)*.075,0,.025))
- -- Sparse hairline fractures; no even white fleck blanket.
- local fracture=math.abs(math.noise(u*12+warp,v*10,27))
- local hair=math.clamp((.006-fracture)*130,0,.42)
- c=c:Lerp(rgb(199,220,255),hair*(.12+window*.22))
- local slash=math.min(math.abs(u*.86+v*.51-.53),math.abs(u*.32-v*.94+.26),math.abs(u*.91-v*.41-.24),math.abs(u*.65+v*.76-.91))
- local scratched=math.clamp((.0025-slash)*280,0,.48)*math.clamp(.7+math.noise(u*21,v*19,6),0,1)
- c=c:Lerp(rgb(219,235,255),scratched)
- return c,.30+window*.64
+-- Broad straight-sided virtual reflections; no noise, scratches or texture swaps.
+function R.spectrum(u,v)
+ local x,y=u*3,v*3
+ local ix,iy=math.floor(x),math.floor(y)
+ local a,b=x-ix,y-iy
+ local side=a+b>1 and 1 or 0
+ local palette={rgb(29,50,79),rgb(18,231,239),rgb(255,65,151),rgb(255,182,30),rgb(114,85,239),rgb(137,242,161),rgb(185,218,240)}
+ local index=(ix*3+iy*5+side*2)%#palette+1
+ local c=palette[index]
+ local t=math.clamp(a*.60+b*.40,0,1)
+ return c:Lerp(t>.58 and rgb(235,252,255) or rgb(14,25,51),t>.58 and (t-.58)*.8 or (.58-t)*.6),index==1 and .18 or .85
 end
 local function colors(key,p,index)
  if key=='Amber' then
-  local t=math.clamp(.49+p.Y*.8+p.X*.48-p.Z*.21,0,1)
+  local t=math.clamp(.48+p.Y*1.18+p.X*.72-p.Z*.32,0,1)
   local c=t<.57 and rgb(241,50,0):Lerp(rgb(255,133,0),t/.57) or rgb(255,133,0):Lerp(rgb(255,222,102),(t-.57)/.43)
   -- Broad pale side facets and a deep orange body, not one yellow stripe.
   return c:Lerp(index%5==0 and rgb(255,227,139) or rgb(255,83,0),index%5==0 and .30 or .08)
  elseif key=='Quartz' then
-  local t=math.clamp((p.Y+.49)/.96,0,1)
+  local t=math.clamp(.48+p.Y*1.18+p.X*.46-p.Z*.25,0,1)
   local c=t<.42 and rgb(235,196,103):Lerp(rgb(210,228,218),t/.42) or rgb(210,228,218):Lerp(rgb(62,155,216),(t-.42)/.58)
   return c:Lerp(rgb(179,221,237),index%4==0 and .28 or .02)
  end
@@ -60,16 +44,27 @@ local function colors(key,p,index)
  local shade=({.92,.78,.95,.76,.91,.58,.98,.83,.72,.87,.66,.93,.81,.70,.96,.74})[index] or .9
  return Color3.new(shade,shade,shade)
 end
-function R.describe(key)
- if key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
+function R.describe(key,compact)
+ if not compact and key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
  local data={key=key,faces={},grains={},clouds={},rims={},boxes={},texture=key,
-  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .90,
+  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .12,
   vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or 1,
-  material=key=='Amber' and 'SmoothPlastic' or 'Neon',
-  aspect=key=='Amber' and V(1.10,1.42,.73) or key=='Quartz' and V(.96,2.05,.78) or V(.99,2.22,.69)}
+  material=key=='Amber' and 'SmoothPlastic' or key=='Diamond' and 'SmoothPlastic' or 'Neon',
+  aspect=key=='Amber' and V(1.10,1.42,.73) or key=='Quartz' and V(.96,2.05,.78) or V(1.28,1.48,1.08)}
+ if key=='Diamond' then data.texture=nil end
+ if compact then data.texture=nil;data.aspect=V(1.25,1.35,1.12) end
+ local palettes={Ruby={rgb(62,3,51),rgb(234,17,87),rgb(255,183,138)},Violet={rgb(32,5,85),rgb(137,42,242),rgb(255,176,244)}}
  local function face(a,b,c,index,center)
   if (b-a):Cross(c-a):Dot((a+b+c)/3-center)<0 then b,c=c,b end
-  local f={a,b,c,colors(key,a,index),colors(key,b,index),colors(key,c,index)}
+  local function shade(p)
+   if key=='Diamond' then return rgb(213,234,250) end
+   local palette=palettes[key]
+   if not palette then return colors(key,p,index) end
+   local t=math.clamp(.5+p.Y*.95+p.X*.70-p.Z*.38,0,1)
+   return (t<.5 and palette[1]:Lerp(palette[2],t*2) or palette[2]:Lerp(palette[3],t*2-1)):Lerp(rgb(62,21,101),index%3==0 and .25 or 0)
+  end
+  local f={a,b,c,shade(a),shade(b),shade(c)}
+  f.facet=index
   -- One fixed projected coordinate system per plane keeps the texture continuous
   -- across the triangle fan. Adjacent planes refract different parts of it.
   local n=(b-a):Cross(c-a).Unit
@@ -143,7 +138,13 @@ function R.describe(key)
   plane(1,.54,.12,.37),plane(-1,.85,-.06,.49),plane(.16,.59,1,.35),plane(-.09,.73,-1,.44),
   plane(.81,-.78,.08,.45),plane(-1,-.69,.09,.43),plane(.15,-.61,1,.36),plane(-.12,-.69,-1,.42),
   plane(.86,.06,1,.51),plane(-.82,-.08,-1,.48),plane(-.80,.05,1,.47),plane(.95,-.04,-1,.51)}
- if key=='Amber' then
+ local compactPlanes={}
+ for _,axis in ipairs({1,2,3}) do for _,a in ipairs({-1,1}) do for _,b in ipairs({-1,1}) do
+  compactPlanes[#compactPlanes+1]=axis==1 and plane(a,b,0,.66) or axis==2 and plane(a,0,b,.66) or plane(0,a,b,.66)
+ end end end
+ if compact then
+  cut(compactPlanes,CFrame.Angles(.12,.23,.10),Vector3.one)
+ elseif key=='Amber' then
   cut(amber,CFrame.Angles(0,.11,-.24),Vector3.one)
  elseif key=='Quartz' then
   cut(quartz,CFrame.Angles(.03,.1,.08),Vector3.one)
@@ -167,13 +168,18 @@ function R.describe(key)
    if inside then data.grains[#data.grains+1]={p,random:NextNumber(top and .0016 or .0015,top and .0045 or .0032),top and rgb(141,205,239) or rgb(240,212,142)} end
   end
  else
-  cut(diamond,CFrame.Angles(.04,-.08,-.12),Vector3.one)
+  local broad={plane(1,0,0,.48),plane(-1,0,0,.43),plane(0,0,1,.40),plane(0,0,-1,.36),
+   plane(.12,1,.06,.46),plane(-.08,-1,.12,.46),plane(1,.75,.8,.73),plane(-1,.83,.7,.69),
+   plane(.8,.65,-1,.70),plane(-.8,.72,-1,.69),plane(1,-.8,.7,.72),plane(-.9,-.8,-1,.73)}
+  cut(broad,CFrame.Angles(.04,-.08,-.12),Vector3.one)
+ end
+ if key=='Diamond' then
   -- A complete inset cut carries a displaced optical field. Occlusion and
   -- parallax make this read through the outer faces rather than as confetti.
   for _,f in ipairs(data.faces) do
    local g={}
    for n=1,3 do
-    g[n]=f[n]*.76+V(.018,-.025,.006)
+    g[n]=f[n]*.94
     g[n+3]=white
     g[n+6]=f[n+6]+Vector2.new(.19,.27)
    end

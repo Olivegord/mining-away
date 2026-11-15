@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — broader Diamond, stronger gradients and a second cut row
+
+The owner reports Diamond rendering problems and a painted appearance. Use the broad, low-face-count crystals at the top of the newly supplied photograph as the direction; avoid the many small facets of its lower crystals. The follow-up asks for MORE gradients across all five displayed gems and a second row behind the original, using one compact faceted shape from the second image. Keep the existing distinct shapes as well. The second row is a comparison set, not a replacement for the production mineral silhouettes or progression. These latest requests supersede earlier requests to freeze Amber's gradient and to shuffle Diamond textures.
+
 ## November 14 — restore layered Diamond; angle-driven refraction and clearer dark zones
 
 The owner rejected the smooth/opaque-inner revision as painted on and prefers the earlier layered spectral appearance. Restore that depth. Try shuffling the refraction textures as the gem rotates or the player changes viewing angle, and make uncolored/dark regions more transparent instead of fully black. Preserve approved Amber. This supersedes the opaque-inner solution below.
