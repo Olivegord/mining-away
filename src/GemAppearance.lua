@@ -66,7 +66,7 @@ local function build(key,compact)
  local shell=part(mesh,'Faceted'..key)
  if key=='Diamond' then shell:SetAttribute('RefractionLayers',2);shell:SetAttribute('RefractionPatterns',0) end
  if compact then shell:SetAttribute('GemCut','Compact') end
- if texture and key~='Diamond' then shell.TextureContent=Content.fromObject(texture);shell:SetAttribute('OpticalTexture',true) end
+ if texture then shell.TextureContent=Content.fromObject(texture);shell:SetAttribute('OpticalTexture',true) end
  if #data.grains>0 then
   local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
@@ -102,7 +102,7 @@ local function build(key,compact)
    if f[7] then cloud:SetFaceUVs(face,{cloud:AddUV(f[7]),cloud:AddUV(f[8]),cloud:AddUV(f[9])}) end
    cloud:SetFaceColors(face,{cloud:AddColor(f[4],1),cloud:AddColor(f[5],1),cloud:AddColor(f[6],1)})
   end
-  local inside=part(cloud,'MineralClouds');inside.Material=key=='Diamond' and Enum.Material.Glass or Enum.Material.Neon
+  local inside=part(cloud,'MineralClouds');inside.Material=key=='Diamond' and Enum.Material.Neon or Enum.Material.Neon
   inside.Reflectance=key=='Diamond' and .45 or 0
   -- Shifted spectrum on the inset cut supplies refracted depth.
   if texture then inside.TextureContent=Content.fromObject(texture) end
@@ -110,7 +110,7 @@ local function build(key,compact)
   inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   inside.Parent=shell
  end
- if data.rims and #data.rims>0 then
+ if data.rims and #data.rims>0 and key~='Diamond' then
   local rim=assert(assets:CreateEditableMesh());meshes[#meshes+1]=rim
   local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
   for _,f in ipairs(data.rims) do
@@ -123,8 +123,8 @@ local function build(key,compact)
   edges:SetAttribute('SizeRatio',(hi-lo)/data.extents)
   edges:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   edges.Parent=shell
-  for i,position in ipairs(data.flares) do shell:SetAttribute('GemFlare'..i,position) end
  end
+ for i,position in ipairs(data.flares or {}) do shell:SetAttribute('GemFlare'..i,position) end
  shell.Material=Enum.Material[data.material]
  shell.Reflectance=key=='Cobalt' and .18 or key=='Diamond' and .30 or key=='Quartz' and .04 or 0
  shell:SetAttribute('GemKind',key)
@@ -168,7 +168,7 @@ function Gem.update(part,opacity,cameraPosition)
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
   -- The clear inset fades with the pickup; edge ribbons remain opaque at rest.
-  core.Transparency=1-opacity*(name=='MineralClouds' and part:GetAttribute('GemKind')=='Diamond' and .88 or 1)
+  core.Transparency=1-opacity*(name=='MineralClouds' and part:GetAttribute('GemKind')=='Diamond' and .56 or 1)
  end
  end
 end

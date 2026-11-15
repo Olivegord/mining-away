@@ -103,3 +103,7 @@ The replacement row uses `tools/studio_gem_reference_rework.lua` and `tools/refr
 ### Compact gem comparison row
 
 Bundle RockFinish and tools/studio_bake_gem.lua before tools/studio_gem_cut_rows.lua. This replaces only MineralLineup and preserves its predecessor in ServerStorage.GemCutRowsArchive. Export shared.GemCutRowsStage.snapshot.scenery and .archive. Check tools/refresh_gem_cut_rows.py against the exact baseline SHA, call the stage apply function, then write the checked export. The secondary row sits behind the pads along negative DisplayPad.LookVector; the row itself runs along world Z, so a Z-only shift would overlap specimens. Native component checks in tools/studio_mineral_preview_checks.lua now cover both sets. Close shared.MineralPreviewCheck before saving.
+
+### Gem finish correction
+
+The follow-up stage is tools/studio_gem_finish_match.lua with tools/refresh_gem_finish_match.py; export shared.GemFinishMatchStage.snapshot.scenery and .archive. It updates the existing ten specimens without duplicating or moving the compact row and archives the predecessor as GemFinishMatchArchive. Use the same checked stage/apply/write sequence. The native check now verifies cross-cut appearance inheritance as well as sample/drop equality.

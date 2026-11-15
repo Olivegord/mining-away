@@ -16,17 +16,19 @@ function R.texture(u,v,key)
  local veil=math.clamp((cloud-.08)*.70,0,.10)
  return math.clamp(.99-veil+fine*.08+fracture*.035,.88,1),.92+muddy*.08
 end
--- Broad straight-sided virtual reflections; no noise, scratches or texture swaps.
+-- Continuous spectral reflections with broad highlights and no polygon cutouts.
 function R.spectrum(u,v)
- local x,y=u*3,v*3
- local ix,iy=math.floor(x),math.floor(y)
- local a,b=x-ix,y-iy
- local side=a+b>1 and 1 or 0
- local palette={rgb(29,50,79),rgb(18,231,239),rgb(255,65,151),rgb(255,182,30),rgb(114,85,239),rgb(137,242,161),rgb(185,218,240)}
- local index=(ix*3+iy*5+side*2)%#palette+1
- local c=palette[index]
- local t=math.clamp(a*.60+b*.40,0,1)
- return c:Lerp(t>.58 and rgb(235,252,255) or rgb(14,25,51),t>.58 and (t-.58)*.8 or (.58-t)*.6),index==1 and .18 or .85
+ local warp=math.noise(u*3.2,v*3.7,15)*.12
+ local region=math.noise(u*4.8+warp,v*5.3,31)
+ local window=math.clamp((region+.12)*4.3,0,1)
+ window=window*window*(3-2*window)
+ local hue=(.70+u*.83-v*1.48+warp)%1
+ local rainbow=Color3.fromHSV(hue,.80,.98)
+ local dark=rgb(38,48,69):Lerp(rgb(66,49,83),math.clamp(.48+math.noise(u*4,v*3,2),0,1))
+ local color=dark:Lerp(rainbow,window)
+ local reflection=math.exp(-((u*.84+v*.54-.69)/.055)^2)
+ color=color:Lerp(rgb(232,249,255),reflection*.72)
+ return color,.94
 end
 local function colors(key,p,index)
  if key=='Amber' then
@@ -47,22 +49,23 @@ end
 function R.describe(key,compact)
  if not compact and key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
  local data={key=key,faces={},grains={},clouds={},rims={},boxes={},texture=key,
-  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .12,
+  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .72,
   vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or 1,
-  material=key=='Amber' and 'SmoothPlastic' or key=='Diamond' and 'SmoothPlastic' or 'Neon',
+  material=key=='Amber' and 'SmoothPlastic' or key=='Diamond' and 'Neon' or 'Neon',
   aspect=key=='Amber' and V(1.10,1.42,.73) or key=='Quartz' and V(.96,2.05,.78) or V(1.28,1.48,1.08)}
- if key=='Diamond' then data.texture=nil end
+ if key=='Diamond' then data.texture='Diamond' end
  if compact then data.texture=nil;data.aspect=V(1.25,1.35,1.12) end
  local palettes={Ruby={rgb(62,3,51),rgb(234,17,87),rgb(255,183,138)},Violet={rgb(32,5,85),rgb(137,42,242),rgb(255,176,244)}}
  local function face(a,b,c,index,center)
   if (b-a):Cross(c-a):Dot((a+b+c)/3-center)<0 then b,c=c,b end
   local function shade(p)
-   if key=='Diamond' then return rgb(213,234,250) end
+   if key=='Diamond' then return colors(key,p,index) end
    local palette=palettes[key]
    if not palette then return colors(key,p,index) end
    local t=math.clamp(.5+p.Y*.95+p.X*.70-p.Z*.38,0,1)
    return (t<.5 and palette[1]:Lerp(palette[2],t*2) or palette[2]:Lerp(palette[3],t*2-1)):Lerp(rgb(62,21,101),index%3==0 and .25 or 0)
   end
+  data.colorAt=function(p,sector) return colors(key,p,sector) end
   local f={a,b,c,shade(a),shade(b),shade(c)}
   f.facet=index
   -- One fixed projected coordinate system per plane keeps the texture continuous
@@ -179,7 +182,7 @@ function R.describe(key,compact)
   for _,f in ipairs(data.faces) do
    local g={}
    for n=1,3 do
-    g[n]=f[n]*.94
+    g[n]=f[n]*.78
     g[n+3]=white
     g[n+6]=f[n+6]+Vector2.new(.19,.27)
    end

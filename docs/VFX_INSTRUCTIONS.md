@@ -1,5 +1,13 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — correct compact finish inheritance and reject polygon spectrum
+
+Owner screenshots reject the previous comparison and Diamond. Compact gems now take opacity, vertex alpha, material, texture, palette function and inclusion count/colors/sizes from their original description. Inclusions are remapped into the compact volume. Ruby's accidental .12 opacity is corrected to the original .72, with its 30 fixed specks restored. Violet's original .76 opacity and inclusions are restored; Quartz keeps its optical texture and blue/gold grains. Original non-Diamond cuts and appearances are unchanged by this correction.
+
+The flat triangle spectrum and transparent cutouts are removed. Diamond retains broad external cutting planes but uses continuous spectral gradients, smoked body color, broad pale highlights and a deeper inset layer. Texture alpha is uniformly .94 so dark regions no longer appear as triangular holes. Both textured layers are Neon for the luminous spectral style, at .72 outer and .56 inset opacity. Detached rim ribbons are removed in both runtime and authored previews; localized flares remain. This is a stylized layered render, not physically simulated optics or a claimed photo match. Owner approval is pending.
+
+Native checks now compare compact finishes directly to originals in addition to comparing each sample with its own drop template. This catches the material/opacity/palette/inclusion mismatch missed by the previous tests. Runtime screenshots show both Ruby cuts with the same red/peach body and white specks. No new Play session was started.
+
 ## November 14 — broad Diamond and compact comparison cuts
 
 Diamond now uses twelve broad unequal cutting planes, a wider aspect, a thin SmoothPlastic outer surface and a separated reflective Glass inset with outward face normals. Native component inspection showed a Glass outer surface hiding the Glass inset, so the outer surface deliberately uses SmoothPlastic. The spectrum is a fixed straight-edged color field with clear dark windows, not noisy patches or eight abruptly swapped camera-angle patterns. Rims remain opaque and back faces culled. This is a stylized approximation, not physically simulated dispersion; the latest render still has a graphic geometric appearance and is not owner-approved as a photo match.

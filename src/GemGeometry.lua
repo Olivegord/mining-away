@@ -22,7 +22,22 @@ function G.key(value)
 end
 function G.describe(key,compact)
  key=G.key(key)
- local refined=Refinement.describe(key,compact);if refined then return refined end
+ if compact then
+  local original=G.describe(key,false)
+  local data=Refinement.describe(key,true)
+  for _,name in ipairs({'opacity','vertexAlpha','material','texture','tint'}) do data[name]=original[name] end
+  for _,f in ipairs(data.faces) do for i=1,3 do
+   local p=(f[i]-data.center)/data.extents*original.extents+original.center
+   f[i+3]=original.colorAt(p,f.facet)
+  end end
+  data.grains={}
+  for _,grain in ipairs(original.grains) do
+   local p=(grain[1]-original.center)/original.extents*data.extents*.70+data.center
+   data.grains[#data.grains+1]={p,grain[2],grain[3]}
+  end
+  return data
+ end
+ local refined=Refinement.describe(key,false);if refined then return refined end
  local spec=G.definitions[key]
  local ruby=spec.kind=='ruby' -- The Ruby cut and finish from 3b1f622.
  local data={faces={},grains={},clouds={},boxes={},aspect=spec.aspect,key=key,tint=spec.colors[2],
@@ -46,6 +61,10 @@ function G.describe(key,compact)
   local c=t<midpoint and spec.colors[1]:Lerp(spec.colors[2],t/midpoint)
    or spec.colors[2]:Lerp(spec.colors[3],(t-midpoint)/(ruby and .48 or .44))
   return c:Lerp(spec.colors[4],sector%3==0 and (ruby and .45 or .28) or (ruby and .08 or .04))
+ end
+ data.colorAt=function(p,sector)
+  local shade=sector%2==0 and .12 or (ruby and .38 or .28)
+  return gradient(p,sector):Lerp(Color3.new(0,0,0),shade)
  end
  local function face(a,b,c,sector,center,fixed)
   local n=(b-a):Cross(c-a)

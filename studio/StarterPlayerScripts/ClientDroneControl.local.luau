@@ -2763,17 +2763,19 @@ function R.texture(u,v,key)
  local veil=math.clamp((cloud-.08)*.70,0,.10)
  return math.clamp(.99-veil+fine*.08+fracture*.035,.88,1),.92+muddy*.08
 end
--- Broad straight-sided virtual reflections; no noise, scratches or texture swaps.
+-- Continuous spectral reflections with broad highlights and no polygon cutouts.
 function R.spectrum(u,v)
- local x,y=u*3,v*3
- local ix,iy=math.floor(x),math.floor(y)
- local a,b=x-ix,y-iy
- local side=a+b>1 and 1 or 0
- local palette={rgb(29,50,79),rgb(18,231,239),rgb(255,65,151),rgb(255,182,30),rgb(114,85,239),rgb(137,242,161),rgb(185,218,240)}
- local index=(ix*3+iy*5+side*2)%#palette+1
- local c=palette[index]
- local t=math.clamp(a*.60+b*.40,0,1)
- return c:Lerp(t>.58 and rgb(235,252,255) or rgb(14,25,51),t>.58 and (t-.58)*.8 or (.58-t)*.6),index==1 and .18 or .85
+ local warp=math.noise(u*3.2,v*3.7,15)*.12
+ local region=math.noise(u*4.8+warp,v*5.3,31)
+ local window=math.clamp((region+.12)*4.3,0,1)
+ window=window*window*(3-2*window)
+ local hue=(.70+u*.83-v*1.48+warp)%1
+ local rainbow=Color3.fromHSV(hue,.80,.98)
+ local dark=rgb(38,48,69):Lerp(rgb(66,49,83),math.clamp(.48+math.noise(u*4,v*3,2),0,1))
+ local color=dark:Lerp(rainbow,window)
+ local reflection=math.exp(-((u*.84+v*.54-.69)/.055)^2)
+ color=color:Lerp(rgb(232,249,255),reflection*.72)
+ return color,.94
 end
 local function colors(key,p,index)
  if key=='Amber' then
@@ -2794,22 +2796,23 @@ end
 function R.describe(key,compact)
  if not compact and key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
  local data={key=key,faces={},grains={},clouds={},rims={},boxes={},texture=key,
-  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .12,
+  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .72,
   vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or 1,
-  material=key=='Amber' and 'SmoothPlastic' or key=='Diamond' and 'SmoothPlastic' or 'Neon',
+  material=key=='Amber' and 'SmoothPlastic' or key=='Diamond' and 'Neon' or 'Neon',
   aspect=key=='Amber' and V(1.10,1.42,.73) or key=='Quartz' and V(.96,2.05,.78) or V(1.28,1.48,1.08)}
- if key=='Diamond' then data.texture=nil end
+ if key=='Diamond' then data.texture='Diamond' end
  if compact then data.texture=nil;data.aspect=V(1.25,1.35,1.12) end
  local palettes={Ruby={rgb(62,3,51),rgb(234,17,87),rgb(255,183,138)},Violet={rgb(32,5,85),rgb(137,42,242),rgb(255,176,244)}}
  local function face(a,b,c,index,center)
   if (b-a):Cross(c-a):Dot((a+b+c)/3-center)<0 then b,c=c,b end
   local function shade(p)
-   if key=='Diamond' then return rgb(213,234,250) end
+   if key=='Diamond' then return colors(key,p,index) end
    local palette=palettes[key]
    if not palette then return colors(key,p,index) end
    local t=math.clamp(.5+p.Y*.95+p.X*.70-p.Z*.38,0,1)
    return (t<.5 and palette[1]:Lerp(palette[2],t*2) or palette[2]:Lerp(palette[3],t*2-1)):Lerp(rgb(62,21,101),index%3==0 and .25 or 0)
   end
+  data.colorAt=function(p,sector) return colors(key,p,sector) end
   local f={a,b,c,shade(a),shade(b),shade(c)}
   f.facet=index
   -- One fixed projected coordinate system per plane keeps the texture continuous
@@ -2926,7 +2929,7 @@ function R.describe(key,compact)
   for _,f in ipairs(data.faces) do
    local g={}
    for n=1,3 do
-    g[n]=f[n]*.94
+    g[n]=f[n]*.78
     g[n+3]=white
     g[n+6]=f[n+6]+Vector2.new(.19,.27)
    end
@@ -2973,7 +2976,22 @@ function G.key(value)
 end
 function G.describe(key,compact)
  key=G.key(key)
- local refined=Refinement.describe(key,compact);if refined then return refined end
+ if compact then
+  local original=G.describe(key,false)
+  local data=Refinement.describe(key,true)
+  for _,name in ipairs({'opacity','vertexAlpha','material','texture','tint'}) do data[name]=original[name] end
+  for _,f in ipairs(data.faces) do for i=1,3 do
+   local p=(f[i]-data.center)/data.extents*original.extents+original.center
+   f[i+3]=original.colorAt(p,f.facet)
+  end end
+  data.grains={}
+  for _,grain in ipairs(original.grains) do
+   local p=(grain[1]-original.center)/original.extents*data.extents*.70+data.center
+   data.grains[#data.grains+1]={p,grain[2],grain[3]}
+  end
+  return data
+ end
+ local refined=Refinement.describe(key,false);if refined then return refined end
  local spec=G.definitions[key]
  local ruby=spec.kind=='ruby' -- The Ruby cut and finish from 3b1f622.
  local data={faces={},grains={},clouds={},boxes={},aspect=spec.aspect,key=key,tint=spec.colors[2],
@@ -2997,6 +3015,10 @@ function G.describe(key,compact)
   local c=t<midpoint and spec.colors[1]:Lerp(spec.colors[2],t/midpoint)
    or spec.colors[2]:Lerp(spec.colors[3],(t-midpoint)/(ruby and .48 or .44))
   return c:Lerp(spec.colors[4],sector%3==0 and (ruby and .45 or .28) or (ruby and .08 or .04))
+ end
+ data.colorAt=function(p,sector)
+  local shade=sector%2==0 and .12 or (ruby and .38 or .28)
+  return gradient(p,sector):Lerp(Color3.new(0,0,0),shade)
  end
  local function face(a,b,c,sector,center,fixed)
   local n=(b-a):Cross(c-a)
@@ -3150,7 +3172,7 @@ local function build(key,compact)
  local shell=part(mesh,'Faceted'..key)
  if key=='Diamond' then shell:SetAttribute('RefractionLayers',2);shell:SetAttribute('RefractionPatterns',0) end
  if compact then shell:SetAttribute('GemCut','Compact') end
- if texture and key~='Diamond' then shell.TextureContent=Content.fromObject(texture);shell:SetAttribute('OpticalTexture',true) end
+ if texture then shell.TextureContent=Content.fromObject(texture);shell:SetAttribute('OpticalTexture',true) end
  if #data.grains>0 then
   local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
@@ -3186,7 +3208,7 @@ local function build(key,compact)
    if f[7] then cloud:SetFaceUVs(face,{cloud:AddUV(f[7]),cloud:AddUV(f[8]),cloud:AddUV(f[9])}) end
    cloud:SetFaceColors(face,{cloud:AddColor(f[4],1),cloud:AddColor(f[5],1),cloud:AddColor(f[6],1)})
   end
-  local inside=part(cloud,'MineralClouds');inside.Material=key=='Diamond' and Enum.Material.Glass or Enum.Material.Neon
+  local inside=part(cloud,'MineralClouds');inside.Material=key=='Diamond' and Enum.Material.Neon or Enum.Material.Neon
   inside.Reflectance=key=='Diamond' and .45 or 0
   -- Shifted spectrum on the inset cut supplies refracted depth.
   if texture then inside.TextureContent=Content.fromObject(texture) end
@@ -3194,7 +3216,7 @@ local function build(key,compact)
   inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   inside.Parent=shell
  end
- if data.rims and #data.rims>0 then
+ if data.rims and #data.rims>0 and key~='Diamond' then
   local rim=assert(assets:CreateEditableMesh());meshes[#meshes+1]=rim
   local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
   for _,f in ipairs(data.rims) do
@@ -3207,8 +3229,8 @@ local function build(key,compact)
   edges:SetAttribute('SizeRatio',(hi-lo)/data.extents)
   edges:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   edges.Parent=shell
-  for i,position in ipairs(data.flares) do shell:SetAttribute('GemFlare'..i,position) end
  end
+ for i,position in ipairs(data.flares or {}) do shell:SetAttribute('GemFlare'..i,position) end
  shell.Material=Enum.Material[data.material]
  shell.Reflectance=key=='Cobalt' and .18 or key=='Diamond' and .30 or key=='Quartz' and .04 or 0
  shell:SetAttribute('GemKind',key)
@@ -3252,7 +3274,7 @@ function Gem.update(part,opacity,cameraPosition)
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
   -- The clear inset fades with the pickup; edge ribbons remain opaque at rest.
-  core.Transparency=1-opacity*(name=='MineralClouds' and part:GetAttribute('GemKind')=='Diamond' and .88 or 1)
+  core.Transparency=1-opacity*(name=='MineralClouds' and part:GetAttribute('GemKind')=='Diamond' and .56 or 1)
  end
  end
 end

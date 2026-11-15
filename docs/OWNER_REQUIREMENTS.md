@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — rejected compact finishes and polygon Diamond
+
+The owner rejected revision e113a17/3830888 with screenshots: the compact versions do not look like the originals, particularly Ruby's faint body and missing white inclusions; Diamond looks horrible. Compact variants must inherit their original mineral's appearance, changing only the cut. The hollow, flat rainbow-triangle Diamond is rejected and must not be restored as an approved direction.
+
 ## November 14 — broader Diamond, stronger gradients and a second cut row
 
 The owner reports Diamond rendering problems and a painted appearance. Use the broad, low-face-count crystals at the top of the newly supplied photograph as the direction; avoid the many small facets of its lower crystals. The follow-up asks for MORE gradients across all five displayed gems and a second row behind the original, using one compact faceted shape from the second image. Keep the existing distinct shapes as well. The second row is a comparison set, not a replacement for the production mineral silhouettes or progression. These latest requests supersede earlier requests to freeze Amber's gradient and to shuffle Diamond textures.

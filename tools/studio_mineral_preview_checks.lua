@@ -29,15 +29,22 @@ shared.MineralPreviewCheck={view=view,root=fx,report=report,update=function() vi
  close=function() view:destroy();fx:Destroy();shared.MineralPreviewCheck=nil end}
 local diamond=view.byId[-5]
 assert(#view.lineup.sources==10 and #view.lineup.records==10)
-assert(diamond.view.Material==Enum.Material.SmoothPlastic)
+assert(diamond.view.Material==Enum.Material.Neon)
 assert(diamond.view:GetAttribute('RefractionPatterns')==0)
-assert(diamond.view.MineralClouds.Material==Enum.Material.Glass)
-assert(math.abs(diamond.view.MineralClouds.Transparency-.12)<.001)
+assert(diamond.view.MineralClouds.Material==Enum.Material.Neon)
+assert(math.abs(diamond.view.MineralClouds.Transparency-.44)<.001)
 assert(not diamond.view.MineralClouds.DoubleSided)
 local geometry=RockFinish.Gems.geometry
 local compact=geometry.describe('Ruby',true)
 for _,key in ipairs(geometry.order) do
  local data=geometry.describe(key,true)
+ local original=geometry.describe(key,false)
+ assert(data.material==original.material and data.opacity==original.opacity and data.vertexAlpha==original.vertexAlpha,'finish mismatch '..key)
+ assert(data.texture==original.texture and #data.grains==#original.grains,'texture/inclusion mismatch '..key)
+ for _,f in ipairs(data.faces) do for j=1,3 do
+  local p=(f[j]-data.center)/data.extents*original.extents+original.center
+  assert((Vector3.new(f[j+3].R,f[j+3].G,f[j+3].B)-Vector3.new(original.colorAt(p,f.facet).R,original.colorAt(p,f.facet).G,original.colorAt(p,f.facet).B)).Magnitude<.0001,'palette mismatch '..key)
+ end end
  assert(#data.faces==#compact.faces)
  for i,f in ipairs(data.faces) do for j=1,3 do assert((f[j]-compact.faces[i][j]).Magnitude<.00001) end end
  local faces={};for _,f in ipairs(data.faces) do faces[f.facet]=true end
@@ -53,8 +60,7 @@ for step=1,120 do
  assert(gem:GetAttribute('RefractionPattern')==nil,'no discrete texture swapping')
 end
 gem.CFrame=pose;RockFinish.Gems.update(gem,1)
-assert(diamond.view:FindFirstChild('PrismaticEdges'))
-assert(diamond.view.PrismaticEdges.Transparency==0,'rims must write opaque depth')
+assert(not diamond.view:FindFirstChild('PrismaticEdges'),'detached rim ribbons removed')
 assert(not diamond.view.DoubleSided)
 assert(not diamond.displayRig.outline.Enabled,'Diamond does not stack a white outline over its rims')
 assert(diamond.displayRig.light and diamond.displayRig.light.Enabled)
