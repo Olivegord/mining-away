@@ -85,4 +85,27 @@ renderResource(fixedRecord,85)
 RockModifierView.attackOutlines(records,camera,85,false)
 assert(not fixedRecord.rockOutline,'a modifier restored the removed silhouette outline')
 assert(fixedRecord.view.Color.R==rockColor.R and fixedRecord.view.Color.G==rockColor.G and fixedRecord.view.Material==material,'Frosted changed the red mineral')
-print('PASS production resource renderer: size snaps, stage turns, idle fast path and pulsing attack outline')
+
+-- Real Crystal Run breaks reconstruct a posed cut from the same seed used
+-- while alive. Selection and damage can overlap on the last visible frame.
+fixed:SetAttribute('FieldId',1);fixed:SetAttribute('CrystalCut','Original')
+fixed:SetAttribute('VariedRockPose',true);fixed:SetAttribute('QuarryCrystal',true)
+local offset=Vector3.new(.08,.06,-.02);fixed:SetAttribute('CrystalCutOffset',offset)
+local click={field=1,point=fixed.Position,width=24}
+fixed:SetAttribute('HP',12);fixedRecord.dirty=true
+renderResource(fixedRecord,86)
+local shaded=fixedRecord.view.Color
+local facing=fixedRecord.restPose.LookVector
+RockModifierView.attackOutlines(records,camera,86,false,click,.90)
+assert(fixedRecord.view.Color.R>.9 and fixedRecord.view.Color.G>.89 and fixedRecord.rockOutline.FillTransparency==1,
+ 'selected surface should flash white independently of the active attack outline')
+RockModifierView.clearSelectionFlash(fixedRecord)
+assert(fixedRecord.view.Color==shaded,'selection left a permanent tint')
+fixed:SetAttribute('HP',0);fixed:SetAttribute('BreakSerial',1);fixedRecord.dirty=true
+assert(renderResource(fixedRecord,87)=='break')
+local split=assert(fixedRecord.splitPose,'final cut did not supply a split frame')
+assert((split.LookVector-facing).Magnitude<1e-6 and fixedRecord.view.Transparency==1,
+ 'the whole rock did not give way to the same-facing split')
+RockModifierView.attackOutlines(records,camera,87,false,click,.90)
+assert(not fixedRecord.selectionColor and not fixedRecord.rockOutline,'hidden rock still flashed')
+print('PASS production resource renderer: stage turns, idle fast path, attack outline, selection flash and tilted split')

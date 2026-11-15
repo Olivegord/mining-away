@@ -22,6 +22,15 @@ function V.glow(mask)
  end
 end
 
+-- Selection is a surface flash. Leave the limited Highlight slots for attack
+-- outlines, and let the underlying damage and rock finish continue updating.
+function V.clearSelectionFlash(r)
+ local previous=r.selectionColor
+ if not previous then return end
+ r.view.Color=previous;r.selectionColor=nil
+ if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,r.view.Transparency) end
+end
+
 function V.attackOutlines(records,_camera,now,steady,click,flash)
  for _,r in pairs(records) do
   local outline=r.rockOutline
@@ -30,7 +39,12 @@ function V.attackOutlines(records,_camera,now,steady,click,flash)
   local attacked=visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
   local selected=visible and click and r.source:GetAttribute('FieldId')==click.field
    and Mining.selectorContains(click.point,click.width*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
-  if not attacked and not selected then
+  if selected and flash>0 then
+   r.selectionColor=r.view.Color
+   r.view.Color=r.selectionColor:Lerp(Color3.new(1,1,1),flash)
+   if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,math.max(r.view.Transparency,flash)) end
+  end
+  if not attacked then
    if outline then outline:Destroy();r.rockOutline=nil end
   else
    if not outline then
@@ -39,10 +53,10 @@ function V.attackOutlines(records,_camera,now,steady,click,flash)
     outline.OutlineColor=r.baseColor:Lerp(white,.66);outline.FillColor=Color3.new(1,1,1)
     outline.Parent=r.view;r.rockOutline=outline
    end
-   if attacked then r.outlineStart=r.outlineStart or now else r.outlineStart=nil end
-   local wave=attacked and (steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)) or 0
-   outline.OutlineTransparency=attacked and .50-.43*wave or 1
-   outline.FillTransparency=selected and 1-flash or 1
+   r.outlineStart=r.outlineStart or now
+   local wave=steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)
+   outline.OutlineTransparency=.50-.43*wave
+   outline.FillTransparency=1
   end
   if not attacked then r.outlineStart=nil end
  end

@@ -248,7 +248,7 @@ function V:flashState()
  if not click or self.options.hidden() then return nil,0 end
  local age=os.clock()-click.at
  if age>=flashTime then return nil,0 end
- local peak=self.options.player:GetAttribute('ReducedFlashing')==true and .34 or .78
+ local peak=self.options.player:GetAttribute('ReducedFlashing')==true and .34 or .90
  return click,peak*(1-math.clamp((age-.045)/(flashTime-.045),0,1))
 end
 function V:showAim(dt,ray)

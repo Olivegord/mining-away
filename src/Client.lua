@@ -1140,6 +1140,8 @@ local function renderResource(r,now)
  local cut=s:GetAttribute('CrystalCut')
  local quarry=s:GetAttribute('QuarryCrystal')
  local cutOffset=cut and s:GetAttribute('CrystalCutOffset') or Vector3.zero
+ local seed=s:GetAttribute('StageSeed') or 0
+ local ground=s:GetAttribute('GroundY')
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
@@ -1149,8 +1151,6 @@ local function renderResource(r,now)
   view.Size=displaySize*(r.damageScale or Vector3.one)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
   local pos=start:Lerp(final,growth)
-  local seed=s:GetAttribute('StageSeed') or 0
-  local ground=s:GetAttribute('GroundY')
   local frame
   if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false,reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
@@ -1177,8 +1177,7 @@ local function renderResource(r,now)
  else
   if event=='break' and cut then
    r.splitSize=full*Feel.crystalStageShape(stageCount,stageCount,quarry and full or nil)*Feel.rockShape(s:GetAttribute('SliceScale'),s:GetAttribute('MeltBand'))
-   local ground=s:GetAttribute('GroundY')
-   local rest=Feel.groundedRockFrame(final,r.splitSize,ground,stage,seed,s:GetAttribute('CubicRock')==false,
+   local rest=Feel.groundedRockFrame(final,r.splitSize,ground or final.Y-full.Y*.5+.06,stage,seed,s:GetAttribute('CubicRock')==false,
     reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
    r.splitPose=CFrame.new(rest.Position)*(r.restPose and r.restPose.Rotation or rest.Rotation)*CFrame.new(-r.splitSize*cutOffset)
   end
@@ -1648,6 +1647,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  local lowFlash=player:GetAttribute('ReducedFlashing')==true
  local reducedVeins,stillVeins=BeamVFX.reduced(),CrystalImpactView.reducedMotion()
  for _,r in pairs(resources) do
+  RockModifierView.clearSelectionFlash(r)
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
   local fracture=renderResource(r,now)
@@ -1681,13 +1681,13 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
     and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5)) or 0 end
   end
  end
- local click,flash=selectorView:flashState()
- RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,click,flash)
  pickupView:update(dt,now)
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
  rockDamage.feedback:applyTints(now)
+ local click,flash=selectorView:flashState()
+ RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,click,flash)
  presentation:update(dt,now)
  laserShowcase:step(now,dt)
  if logisticsView then logisticsView:step(now,dt) end

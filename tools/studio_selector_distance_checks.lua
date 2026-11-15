@@ -55,6 +55,7 @@ local ok,err=xpcall(function()
  view:showAim(.016,shallow)
  assert(view.flash.gui.Enabled and view.pinned.point==center,'click did not flash or prematurely moved the pin')
  local rendered=rock:Clone();rendered.Parent=fx
+ rendered.Color=Color3.fromRGB(81,76,72);local stone=rendered.Color
  local neighbor=rock:Clone();neighbor.Position+=Vector3.xAxis*20;neighbor:SetAttribute('FullPosition',neighbor.Position);neighbor.Parent=zone
  local neighborView=neighbor:Clone();neighborView.Parent=fx
  local records={
@@ -62,11 +63,12 @@ local ok,err=xpcall(function()
   {source=neighbor,view=neighborView,baseColor=neighbor.Color,visual={},lastBeamAt=100},
  }
  RockModifierView.attackOutlines(records,nil,100,false,click,strength)
- assert(records[1].rockOutline.FillTransparency<.3 and records[1].rockOutline.OutlineTransparency==1,'chosen rock did not flash white')
+ assert(rendered.Color.R>.9 and rendered.Color.G>.9 and not records[1].rockOutline,'chosen rock did not flash white without a Highlight')
  assert(records[2].rockOutline.FillTransparency==1 and records[2].rockOutline.OutlineTransparency<.1,'rock outside the zone lost its attack outline')
  records[1].lastBeamAt=100
+ RockModifierView.clearSelectionFlash(records[1])
  RockModifierView.attackOutlines(records,nil,100.3,false)
- assert(records[1].rockOutline.FillTransparency==1 and records[1].rockOutline.OutlineTransparency<1,'selection and attack feedback did not share a silhouette')
+ assert(rendered.Color==stone and records[1].rockOutline.FillTransparency==1 and records[1].rockOutline.OutlineTransparency<1,'selection failed to restore the rock or interrupted its attack outline')
  player:SetAttribute('MA_Selector',point)
  view:showAim(.016,shallow)
  assert(view.pinned.point==point and view.activeEdge.point==point,'accepted pin did not move')

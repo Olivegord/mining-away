@@ -179,6 +179,22 @@ serviceDeliveries(p)
 assert(data(p).run.wallet.Quartz==7,'sale was credited twice')
 print('PASS Studio test crew, plot queue, moving grip, repin during swoop, and one-ore sale')
 
+do
+ local press=assert(p.compactor)
+ local first,firstId=loose(center);local second,secondId=loose(center+Vector3.xAxis)
+ local tint=Color3.fromRGB(255,153,20)
+ first.part.Color=tint;second.part.Color=tint
+ first.pressCarrier=press;first.pressSocket=1;second.pressCarrier=press;second.pressSocket=2
+ press.pressInputs={firstId,secondId};press.pressInputValue=first.value+second.value
+ scene.finishPress(press)
+ assert(not pickups[firstId] and not pickups[secondId] and not press.pressInputs,'Amber blocked press completion')
+ now+=Workshop.PRESS_EJECT+C.Tick;pickupStep(C.Tick)
+ local packed=pickups[pickupSerial]
+ local key,value,isBlock=Workshop.crystalCargo(packed.material)
+ assert(key=='Amber' and value==14 and isBlock and packed.part.Color==tint,'press lost Amber color or input value')
+ packed.part:Destroy();pickups[pickupSerial]=nil
+end
+
 field.center=bed.Position;field.model=zone;field.color=bed.Color
 field.cfg.AlwaysUnlocked=true;field.cfg.Key='Quartz'
 field.cfg.Value=1;field.cfg.Hardness=1;field.cfg.Turrets=0;field.cfg.ReferenceCrystals=true

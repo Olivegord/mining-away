@@ -1086,7 +1086,8 @@ function scene.finishPress(press)
  local output={owner=first.owner,runId=first.runId,nodeId=first.nodeId,tierMaterial=tier.material,
   material=Workshop.cargoKey(tier.material,value,true),value=value,units=1,raw=true,compacted=true,
   floor=first.floor,fieldPart=first.fieldPart,modifiers=modifiers}
- local tint=Color3.fromRGB(table.unpack(Shops.COLORS[tier.name]))
+ -- Carry the source ore's field tint through packing, including newer minerals.
+ local tint=first.part.Color
  table.insert(scene.pressOutputs,{at=now+Workshop.PRESS_EJECT,template=Instance.new('Part'),drop=output,
   position=intake+outlet.RightVector*2.25,outlet=outlet,color=tint})
  press.pressUntil=now+Workshop.PRESS_RESET
