@@ -43,6 +43,10 @@ W.COURIER_LIFT=.59
 W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
+W.COURIER_SWEEP_IN=7.5
+W.COURIER_SWEEP_SPEED=11
+W.COURIER_SWEEP_OUT=7
+W.COURIER_SWEEP_RISE=5.4
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
@@ -65,6 +69,35 @@ function W.courierStroke(age)
  local lowerSpeed=clawSpeed(descent,W.COURIER_LOWER)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower,
   W.COURIER_CLEARANCE*(clawSpeed(ascent,W.COURIER_LIFT)-lowerSpeed),-lowerSpeed
+end
+local function courierSegment(a,b,va,vb,age,duration)
+ local t=math.clamp(age/duration,0,1);local t2=t*t;local t3=t2*t
+ local delta=b-a
+ return a+delta*(3*t2-2*t3)+duration*(va*(t3-2*t2+t)+vb*(t3-t2)),
+  delta*((6*t-6*t2)/duration)+va*(3*t2-4*t+1)+vb*(3*t2-2*t)
+end
+function W.courierSwoop(dock,yaw,offset,entryVelocity,age)
+ local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
+ local through=forward*W.COURIER_SWEEP_SPEED
+ if age<W.COURIER_CONTACT then
+  return courierSegment(dock+offset,dock,entryVelocity,through,age,W.COURIER_CONTACT)
+ end
+ local finish=dock+forward*W.COURIER_SWEEP_OUT+Vector3.yAxis*W.COURIER_SWEEP_RISE
+ local exit=forward*9+Vector3.yAxis*3.8
+ local after=age-W.COURIER_CONTACT
+ if after>W.COURIER_LIFT then return finish+exit*math.min(after-W.COURIER_LIFT,W.COURIER_RENDER_DELAY),exit end
+ return courierSegment(dock,finish,through,exit,after,W.COURIER_LIFT)
+end
+function W.clawSuspension(angles,spin,acceleration,loaded,dt)
+ local elapsed=math.clamp(dt,0,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
+ local inertia=loaded and 1.45 or 1
+ local drive=Vector3.new(math.clamp(acceleration.Z,-42,42),0,-math.clamp(acceleration.X,-42,42))*.32
+ for _=1,steps do
+  spin+=(drive-angles*65-spin*8)*(h/inertia)
+  angles+=spin*h
+  if angles.Magnitude>.42 then angles=angles.Unit*.42 end
+ end
+ return angles,spin
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30

@@ -6,6 +6,16 @@ local function close(a,b,e) assert((a-b).Magnitude<(e or 1e-8),tostring((a-b).Ma
 local function record(id,x,z,gx,gz)
  return {id=id,pos=Vector3.new(x,0,z),goal=gx and Vector3.new(gx,0,gz or 0) or nil,maxStep60=.35,hp=80}
 end
+check('dropping from formation spends the first half of the descent mostly going down',function()
+ local origin=Vector3.new(0,22,0);local target=Vector3.new(36,10,0)
+ local pose,vel=origin,Vector3.zero
+ for _=1,600 do
+  local aim=Feel.descentGoal(origin,pose,target)
+  pose,vel=Feel.inertialApproach(pose,aim,vel,.35,1/60,true,nil,1,1.4)
+  if pose.Y<16 and pose.Y>15.85 then assert(pose.X<8,'formation exit cut across the diagonal') end
+ end
+ close(pose,target,.14)
+end)
 check('isolated drones have zero avoidance and preserve original capped travel',function()
  local d=record('a',0,0,30,0);local grid=Feel.swarmGrid({d});close(Feel.swarmOffset(d.pos,d.id,grid),Vector3.zero)
  local actual,original=Vector3.zero,0

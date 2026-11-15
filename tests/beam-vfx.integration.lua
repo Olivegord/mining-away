@@ -605,9 +605,11 @@ check('courier draws a dotted guide overhead, then closes the claw at contact',f
  assert(not work:courier(drone,record,720+Workshop.COURIER_CONTACT+.01))
  assert(slot.cargo.Transparency==1 and not drone.cargoMount,'early cargo receipt jumped ahead of the animated fingers')
  drone.pickupAge=Workshop.COURIER_CONTACT+.01
- assert(work:courier(drone,record,720+Workshop.COURIER_CONTACT+.01))
+ drone.velocity=Vector3.new(0,0,-Workshop.COURIER_SWEEP_SPEED)
+ assert(work:courier(drone,record,720+Workshop.COURIER_CONTACT+.025))
  assert(slot.cargo.Transparency==0 and drone.cargoMount.id==19)
- assert(not work:courier(drone,record,720+Workshop.COURIER_CONTACT+.02))
+ assert(slot.spin.X<0 and slot.angles.X<0,'the captured ore should kick the claw rearward')
+ assert(not work:courier(drone,record,720+Workshop.COURIER_CONTACT+.04))
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)
 check('crystal break dust follows the stone and keeps small ore-colored motes alive',function()

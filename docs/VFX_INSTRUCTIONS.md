@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — swooping claw contact
+
+The dotted pickup cue now tracks a moving approach. The claw closes as the drone passes the rock; a damped suspension reacts to capture and flight acceleration, swinging the grasped mineral with the same claw. The previous stationary scan and vertical grab are superseded.
+
 ## November 14 — gun recoil comes from flight
 
 Needler and Ballcaster keep their loading motion, projectile timing and effects. The server pushes their actual hulls opposite the shot at release, with a stronger impulse for Ballcaster. Motion after release comes from momentum and the station controller. Do not restore the previous animated recoil of the hull and guns.

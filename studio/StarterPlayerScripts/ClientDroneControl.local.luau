@@ -133,6 +133,10 @@ W.COURIER_LIFT=.59
 W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
+W.COURIER_SWEEP_IN=7.5
+W.COURIER_SWEEP_SPEED=11
+W.COURIER_SWEEP_OUT=7
+W.COURIER_SWEEP_RISE=5.4
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
@@ -155,6 +159,35 @@ function W.courierStroke(age)
  local lowerSpeed=clawSpeed(descent,W.COURIER_LOWER)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower,
   W.COURIER_CLEARANCE*(clawSpeed(ascent,W.COURIER_LIFT)-lowerSpeed),-lowerSpeed
+end
+local function courierSegment(a,b,va,vb,age,duration)
+ local t=math.clamp(age/duration,0,1);local t2=t*t;local t3=t2*t
+ local delta=b-a
+ return a+delta*(3*t2-2*t3)+duration*(va*(t3-2*t2+t)+vb*(t3-t2)),
+  delta*((6*t-6*t2)/duration)+va*(3*t2-4*t+1)+vb*(3*t2-2*t)
+end
+function W.courierSwoop(dock,yaw,offset,entryVelocity,age)
+ local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
+ local through=forward*W.COURIER_SWEEP_SPEED
+ if age<W.COURIER_CONTACT then
+  return courierSegment(dock+offset,dock,entryVelocity,through,age,W.COURIER_CONTACT)
+ end
+ local finish=dock+forward*W.COURIER_SWEEP_OUT+Vector3.yAxis*W.COURIER_SWEEP_RISE
+ local exit=forward*9+Vector3.yAxis*3.8
+ local after=age-W.COURIER_CONTACT
+ if after>W.COURIER_LIFT then return finish+exit*math.min(after-W.COURIER_LIFT,W.COURIER_RENDER_DELAY),exit end
+ return courierSegment(dock,finish,through,exit,after,W.COURIER_LIFT)
+end
+function W.clawSuspension(angles,spin,acceleration,loaded,dt)
+ local elapsed=math.clamp(dt,0,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
+ local inertia=loaded and 1.45 or 1
+ local drive=Vector3.new(math.clamp(acceleration.Z,-42,42),0,-math.clamp(acceleration.X,-42,42))*.32
+ for _=1,steps do
+  spin+=(drive-angles*65-spin*8)*(h/inertia)
+  angles+=spin*h
+  if angles.Magnitude>.42 then angles=angles.Unit*.42 end
+ end
+ return angles,spin
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30
@@ -692,6 +725,14 @@ function F.swarmTraits(id)
   rate=.68+(math.floor(seed/8191)%101)*.0064}
 end
 function F.ringRadius(count) return math.max(12,count*7.5/(2*math.pi)) end
+function F.descentGoal(origin,position,destination)
+ local drop=origin.Y-destination.Y
+ if drop<1 then return destination,1 end
+ local progress=math.clamp((origin.Y-position.Y)/math.max(.1,drop-.55),0,1)
+ local across=progress^2.6
+ return Vector3.new(origin.X+(destination.X-origin.X)*across,destination.Y,
+  origin.Z+(destination.Z-origin.Z)*across),progress
+end
 function F.ringGoals(records,center,previous,heightOf)
  local crew={}
  local _,prior=next(previous or {})
@@ -4076,7 +4117,12 @@ function W:courier(drone,record,now)
   local dockClock=paused and (source:GetAttribute('SnapshotAt') or now) or now
   local pickupAge=drone.pickupAge or dockClock-pickupAt
   local _,grip=Workshop.courierStroke(pickupAge)
-  local speed=drone.velocity and drone.velocity.Magnitude or 0
+  local velocity=drone.velocity or Vector3.zero
+  local speed=velocity.Magnitude
+  local clawDt=math.clamp(now-(fx.clawAt or now-1/60),0,.1)
+  local acceleration=(velocity-(fx.clawVelocity or velocity))/math.max(clawDt,1/144)
+  local localAcceleration=pivot:PointToObjectSpace(pivot.Position+acceleration)
+  fx.clawAt=now;fx.clawVelocity=velocity
   local moving=fx.detailed and not reduced and not paused and not unload and speed>2.4
    and now-(source:GetAttribute('SnapshotAt') or 0)<.5
   if count>4 and not fx.rackExtensions then
@@ -4111,9 +4157,19 @@ function W:courier(drone,record,now)
    local closed=i<=parcelUnits and 1 or .72
    local beforeContact=docking and pickupAge<Workshop.COURIER_CONTACT
    local receiving=docking and i==parcelUnits+1 and not loadingSlot
+   local newlyCaught=i==loadingSlot and not beforeContact and loadAge>=0 and fx.closedOre~=loadedId
+   local springing=not reduced and not unload and (not docking or not beforeContact) and (i<=parcelUnits or receiving)
+   if springing then
+    local spin=slot.spin or Vector3.zero
+    -- The rock was stationary. On capture its inertia first throws the
+    -- suspension rearward, then flight acceleration and damping drive it.
+    if newlyCaught and docking then spin-=Vector3.xAxis*(Workshop.COURIER_SWEEP_SPEED*.29) end
+    slot.angles,slot.spin=Workshop.clawSuspension(slot.angles or Vector3.zero,spin,localAcceleration,i<=parcelUnits,paused and 0 or clawDt)
+    cargoFrame=cargoFrame*CFrame.new(0,.56,0)*CFrame.Angles(slot.angles.X,0,slot.angles.Z)*CFrame.new(0,-.56,0)
+   elseif not paused then slot.angles=nil;slot.spin=nil end
    if i==loadingSlot then
     if beforeContact then closed=grip end
-    if not beforeContact and loadAge>=0 and fx.closedOre~=loadedId then
+    if newlyCaught then
      fx.closedOre=loadedId
      if loadAge<.23 then snapPosition=cargoFrame.Position end
     end
@@ -17235,12 +17291,11 @@ local function renderDrone(d,dt,now)
  local docking=typeof(dock)=='Vector3'
  local dockYaw=role=='Courier' and s:GetAttribute('CourierDockYaw')
  local stroke=docking and s:GetAttribute('CourierPickupAt')
- local loadedAt=docking and (s:GetAttribute('CourierLoadedAt') or 0)
+ local entryVelocity=docking and s:GetAttribute('CourierEntryVelocity')
  local dockClock=now-Workshop.COURIER_RENDER_DELAY
  if docking and s:GetAttribute('WorkPaused') then dockClock=(s:GetAttribute('SnapshotAt') or now)-Workshop.COURIER_RENDER_DELAY end
  local pickupAge=stroke and dockClock-stroke
  if docking and not pickupAge then docking=false end
- if docking and loadedAt<stroke then pickupAge=math.min(pickupAge,Workshop.COURIER_CONTACT) end
  d.pickupAge=docking and pickupAge or nil
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
@@ -17254,8 +17309,14 @@ local function renderDrone(d,dt,now)
  end
  if state=='Destroyed' or state=='Reprinting' or state=='Docked' then d.pos=logical;d.velocity=Vector3.zero;d.flightImpulseAt=impulseAt
  elseif docking then
-  local height,_,entryWeight=Workshop.courierStroke(pickupAge)
-  local desired=dock+Vector3.yAxis*height+(s:GetAttribute('CourierEntryOffset') or Vector3.zero)*entryWeight
+  local swoop=typeof(entryVelocity)=='Vector3' and type(dockYaw)=='number'
+  local entryOffset=s:GetAttribute('CourierEntryOffset') or Vector3.zero
+  local desired
+  if swoop then desired=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge)
+  else
+   local height,_,entryWeight=Workshop.courierStroke(pickupAge)
+   desired=dock+Vector3.yAxis*height+entryOffset*entryWeight
+  end
   if d.lastDock~=dock then
    d.lastDock=dock
    d.dockCorrection=d.pos-desired
@@ -17263,7 +17324,7 @@ local function renderDrone(d,dt,now)
   end
   local correctionTime=math.clamp((pickupAge-d.dockCorrectionAt)/.16,0,1)
   local blend=correctionTime*correctionTime*(3-2*correctionTime)
-  d.pos=desired+d.dockCorrection*(1-blend)*entryWeight
+  d.pos=desired+d.dockCorrection*(1-blend)
   d.velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
   -- A powered fall accelerates all the way into the surface. Evaluate the

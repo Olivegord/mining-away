@@ -1239,12 +1239,11 @@ local function renderDrone(d,dt,now)
  local docking=typeof(dock)=='Vector3'
  local dockYaw=role=='Courier' and s:GetAttribute('CourierDockYaw')
  local stroke=docking and s:GetAttribute('CourierPickupAt')
- local loadedAt=docking and (s:GetAttribute('CourierLoadedAt') or 0)
+ local entryVelocity=docking and s:GetAttribute('CourierEntryVelocity')
  local dockClock=now-Workshop.COURIER_RENDER_DELAY
  if docking and s:GetAttribute('WorkPaused') then dockClock=(s:GetAttribute('SnapshotAt') or now)-Workshop.COURIER_RENDER_DELAY end
  local pickupAge=stroke and dockClock-stroke
  if docking and not pickupAge then docking=false end
- if docking and loadedAt<stroke then pickupAge=math.min(pickupAge,Workshop.COURIER_CONTACT) end
  d.pickupAge=docking and pickupAge or nil
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
@@ -1258,8 +1257,14 @@ local function renderDrone(d,dt,now)
  end
  if state=='Destroyed' or state=='Reprinting' or state=='Docked' then d.pos=logical;d.velocity=Vector3.zero;d.flightImpulseAt=impulseAt
  elseif docking then
-  local height,_,entryWeight=Workshop.courierStroke(pickupAge)
-  local desired=dock+Vector3.yAxis*height+(s:GetAttribute('CourierEntryOffset') or Vector3.zero)*entryWeight
+  local swoop=typeof(entryVelocity)=='Vector3' and type(dockYaw)=='number'
+  local entryOffset=s:GetAttribute('CourierEntryOffset') or Vector3.zero
+  local desired
+  if swoop then desired=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge)
+  else
+   local height,_,entryWeight=Workshop.courierStroke(pickupAge)
+   desired=dock+Vector3.yAxis*height+entryOffset*entryWeight
+  end
   if d.lastDock~=dock then
    d.lastDock=dock
    d.dockCorrection=d.pos-desired
@@ -1267,7 +1272,7 @@ local function renderDrone(d,dt,now)
   end
   local correctionTime=math.clamp((pickupAge-d.dockCorrectionAt)/.16,0,1)
   local blend=correctionTime*correctionTime*(3-2*correctionTime)
-  d.pos=desired+d.dockCorrection*(1-blend)*entryWeight
+  d.pos=desired+d.dockCorrection*(1-blend)
   d.velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
   -- A powered fall accelerates all the way into the surface. Evaluate the

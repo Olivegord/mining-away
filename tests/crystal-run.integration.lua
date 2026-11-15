@@ -535,7 +535,10 @@ print('PASS Star purchases cannot grant drones; saved legacy automation still wo
 
 inStudio=true
 function runService:IsStudio() return true end
+-- This specialist regression needs the mixed live starter crew, including guns.
+inStudio=false
 local tester=player(98704);players.PlayerAdded:Fire(tester)
+inStudio=true
 local testCrew=profiles[tester.UserId]
 tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
 assert(#testCrew.drones==9 and #data(testCrew).fleet==7 and Ca.capacity(data(testCrew),previewPerks(testCrew))==10)

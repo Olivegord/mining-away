@@ -170,6 +170,14 @@ function F.swarmTraits(id)
   rate=.68+(math.floor(seed/8191)%101)*.0064}
 end
 function F.ringRadius(count) return math.max(12,count*7.5/(2*math.pi)) end
+function F.descentGoal(origin,position,destination)
+ local drop=origin.Y-destination.Y
+ if drop<1 then return destination,1 end
+ local progress=math.clamp((origin.Y-position.Y)/math.max(.1,drop-.55),0,1)
+ local across=progress^2.6
+ return Vector3.new(origin.X+(destination.X-origin.X)*across,destination.Y,
+  origin.Z+(destination.Z-origin.Z)*across),progress
+end
 function F.ringGoals(records,center,previous,heightOf)
  local crew={}
  local _,prior=next(previous or {})

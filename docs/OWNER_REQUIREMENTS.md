@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — descent first, fly-through grabs, and laser test crew
+
+Drones leaving formation should lose height before curving across to their job. Emptiers should swoop through the pickup and close their claw while moving, with momentum making the claw and rock swing. The regular Studio starter crew should have lasers and utility drones only; omit the starter guns for testing.
+
 ## November 14 — nearby ring joins and a plot-edge queue
 
 The calmer flight is approved. Make room in the formation only when a returning drone reaches within ten studs of the ring. Line up drones waiting at a plot just outside one edge, with carriers grouped in the same line.

@@ -11,6 +11,11 @@ local d
 for _,worker in ipairs(p.drones) do if worker.role=='Courier' then d=worker;break end end
 assert(d)
 local run=data(p).run
+inStudio=true
+local studioCrew=scene.runtimeFleet(p)
+inStudio=false
+assert(#studioCrew==7 and #data(p).fleet==7,'preview should have five workers plus two Emptiers without mutating profile ownership')
+for _,worker in ipairs(studioCrew) do assert(worker.role~='Needler' and worker.role~='Ballcaster') end
 local zone=Instance.new('Folder');zone.Parent=scene.map
 local bed=World.part(zone,'Field',Vector3.new(0,5,-60),Vector3.new(216,1,64),Color3.new(1,.5,0))
 local field={id=#patches+1,cfg={SelectionOnly=true},part=bed,resources={},respawnQueue={},e=R.newEncounter(C)}
@@ -70,12 +75,13 @@ assert(not pickups[nearId] and Pro.cargoUnits(data(p))==1,'solid mineable rock b
 workspace.Raycast=initialRay
 
 local drop,id=loose(center+Vector3.yAxis*.22)
-local extra,extraId=loose(center+Vector3.new(-5,.22,0))
+local extra,extraId=loose(center+Vector3.new(5,.22,0))
 local gem=Vector3.new(drop.x,drop.floor-.22+drop.part.Size.Y*.5,drop.z)
 local dock=gem+Vector3.yAxis*1.14
-d.pos=dock+Vector3.yAxis*Workshop.COURIER_CLEARANCE;d.velocity=Vector3.zero
+d.pos=dock-Vector3.xAxis*Workshop.COURIER_SWEEP_IN+Vector3.yAxis*Workshop.COURIER_CLEARANCE;d.velocity=Vector3.zero
 scene.assignEmptierPickups(p)
 assert(d.orePickupId==id and drop.courier==d,'nearest ore was not reserved')
+d.oreYaw=-math.pi/2
 scene.collectGroundCargo(d,p,hr,C.Tick)
 local high=d.pos
 assert(d.state=='Pickup' and (high-dock).Magnitude>5.9 and d.oreDock and pickups[id])
@@ -90,16 +96,17 @@ pl.Character:PivotTo(CFrame.new(center+Vector3.new(56,3,0)))
 now+=Workshop.COURIER_SCAN*.75
 scene.assignEmptierPickups(p)
 scene.collectGroundCargo(d,p,hr,C.Tick)
-assert((d.pos-high).Magnitude<.02 and pickups[id],'scan should hold above the reserved ore through a new pin')
-now=d.pickupAt+Workshop.COURIER_SCAN+Workshop.COURIER_LOWER+.05
+assert(d.pos.X>high.X+.15 and d.pos.Y<high.Y and pickups[id],'swoop stopped or lost its reservation through a new pin')
+now=d.pickupAt+Workshop.COURIER_CONTACT-.05
 scene.collectGroundCargo(d,p,hr,C.Tick)
-assert((d.pos-dock).Magnitude<.02 and pickups[id],'ore collected before the claw closed')
+assert(d.pos.X<dock.X and d.velocity.X>8 and pickups[id],'ore attached ahead of contact or the claw stopped')
 now=d.pickupAt+Workshop.COURIER_CONTACT+.01
 scene.collectGroundCargo(d,p,hr,C.Tick)
 assert(not pickups[id] and pickups[extraId] and Pro.droneCargoUnits(data(p),d.id)==1)
+assert(d.pos.X>dock.X and d.velocity.X>8,'cargo contact interrupted forward flight')
 now=d.oreSeatUntil+.01
 scene.collectGroundCargo(d,p,hr,C.Tick)
-assert((d.pos-high).Magnitude<.02 and d.deliveryRequested,'one ore should trigger delivery after climb')
+assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+5 and d.velocity.Magnitude>5 and d.deliveryRequested,'one ore should continue out of the swoop into delivery')
 serviceDeliveries(p)
 assert(Pro.deliveryUnits(data(p),d.id)==1 and Pro.cargoUnits(data(p))==1)
 now+=3;droneStep(d,C.Tick)
@@ -109,7 +116,7 @@ now+=2;droneStep(d,C.Tick);serviceDeliveries(p)
 assert(data(p).run.wallet.Quartz==7 and not data(p).run.deliveries[d.id],'one ore failed to sell')
 serviceDeliveries(p)
 assert(data(p).run.wallet.Quartz==7,'sale was credited twice')
-print('PASS raised bed commands, physical pickup path, overhead scan, repin during pickup, one-ore sale')
+print('PASS Studio test crew, plot queue, moving grip, repin during swoop, and one-ore sale')
 
 field.center=bed.Position;field.model=zone;field.color=bed.Color
 field.cfg.AlwaysUnlocked=true;field.cfg.Key='Quartz'

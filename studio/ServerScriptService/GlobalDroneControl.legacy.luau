@@ -46,6 +46,10 @@ W.COURIER_LIFT=.59
 W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
+W.COURIER_SWEEP_IN=7.5
+W.COURIER_SWEEP_SPEED=11
+W.COURIER_SWEEP_OUT=7
+W.COURIER_SWEEP_RISE=5.4
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
@@ -68,6 +72,35 @@ function W.courierStroke(age)
  local lowerSpeed=clawSpeed(descent,W.COURIER_LOWER)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower,
   W.COURIER_CLEARANCE*(clawSpeed(ascent,W.COURIER_LIFT)-lowerSpeed),-lowerSpeed
+end
+local function courierSegment(a,b,va,vb,age,duration)
+ local t=math.clamp(age/duration,0,1);local t2=t*t;local t3=t2*t
+ local delta=b-a
+ return a+delta*(3*t2-2*t3)+duration*(va*(t3-2*t2+t)+vb*(t3-t2)),
+  delta*((6*t-6*t2)/duration)+va*(3*t2-4*t+1)+vb*(3*t2-2*t)
+end
+function W.courierSwoop(dock,yaw,offset,entryVelocity,age)
+ local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
+ local through=forward*W.COURIER_SWEEP_SPEED
+ if age<W.COURIER_CONTACT then
+  return courierSegment(dock+offset,dock,entryVelocity,through,age,W.COURIER_CONTACT)
+ end
+ local finish=dock+forward*W.COURIER_SWEEP_OUT+Vector3.yAxis*W.COURIER_SWEEP_RISE
+ local exit=forward*9+Vector3.yAxis*3.8
+ local after=age-W.COURIER_CONTACT
+ if after>W.COURIER_LIFT then return finish+exit*math.min(after-W.COURIER_LIFT,W.COURIER_RENDER_DELAY),exit end
+ return courierSegment(dock,finish,through,exit,after,W.COURIER_LIFT)
+end
+function W.clawSuspension(angles,spin,acceleration,loaded,dt)
+ local elapsed=math.clamp(dt,0,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
+ local inertia=loaded and 1.45 or 1
+ local drive=Vector3.new(math.clamp(acceleration.Z,-42,42),0,-math.clamp(acceleration.X,-42,42))*.32
+ for _=1,steps do
+  spin+=(drive-angles*65-spin*8)*(h/inertia)
+  angles+=spin*h
+  if angles.Magnitude>.42 then angles=angles.Unit*.42 end
+ end
+ return angles,spin
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30
@@ -1849,6 +1882,14 @@ function F.swarmTraits(id)
   rate=.68+(math.floor(seed/8191)%101)*.0064}
 end
 function F.ringRadius(count) return math.max(12,count*7.5/(2*math.pi)) end
+function F.descentGoal(origin,position,destination)
+ local drop=origin.Y-destination.Y
+ if drop<1 then return destination,1 end
+ local progress=math.clamp((origin.Y-position.Y)/math.max(.1,drop-.55),0,1)
+ local across=progress^2.6
+ return Vector3.new(origin.X+(destination.X-origin.X)*across,destination.Y,
+  origin.Z+(destination.Z-origin.Z)*across),progress
+end
 function F.ringGoals(records,center,previous,heightOf)
  local crew={}
  local _,prior=next(previous or {})
@@ -9596,6 +9637,14 @@ function scene.runtimeFleet(p: any)
  local base=p.testFleet or profile.fleet
  local fleet=table.clone(base)
  if scene.runStart then
+  -- Studio's regular preview crew hides the two starter guns. Keep their
+  -- permanent records and leave explicit loadouts / earned drones available.
+  if inStudio and not p.testFleet then
+   for i=profile.starterDrones,1,-1 do
+    local owned=fleet[i]
+    if owned and (owned.role=='Needler' or owned.role=='Ballcaster') then table.remove(fleet,i) end
+   end
+  end
   local role=RoleConfig.StudioRoles.Courier
   for slot=1,Workshop.EMPTIERS do
    table.insert(fleet,{id=Workshop.emptierId(profile.run.id,slot),type='Courier',role='Courier',name='Emptier '..slot,flightHeight=role.height,base=role.base})
@@ -11594,13 +11643,22 @@ local function travelSpeed(d)
 end
 local function move(d,goal,dt)
  d.intentGoal=goal
+ local formation=d.state=='Follow' or d.state=='HoldSelector' or d.state=='Waiting'
+ if formation or not scene.runStart then d.descentOrigin=nil
+ elseif d.lastMoveFormation and d.pos.Y-goal.Y>2.5 then d.descentOrigin=d.pos end
+ d.lastMoveFormation=formation
+ local descentProgress=1
+ if d.descentOrigin then
+  goal,descentProgress=Feel.descentGoal(d.descentOrigin,d.pos,goal)
+  if descentProgress>=1 then d.descentOrigin=nil end
+ end
  local settling=d.target~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant' or d.state=='Intake'
   or d.state=='HoldSelector' or d.state=='Waiting' or d.state=='StorageFull' and d.deployedCarrier
  local weight=(d.state=='Recover' or d.state=='Vacuum' and (goal-d.pos).Magnitude<1) and 0
   or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
  -- Calm escort/holding pressure; strong predictive passing is for job travel.
  local escort=d.state=='Follow' or d.state=='HoldSelector' or d.state=='Waiting' or d.state=='StorageFull' and d.deployedCarrier
- local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)*Feel.SwarmForce*(escort and .22 or 1)
+ local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)*Feel.SwarmForce*(escort and .22 or .18+.82*descentProgress)
  d.flightSteering=weight==0 and Vector3.zero or Feel.smoothSwarm(d.flightSteering,desired,dt)
  d.goal=goal
  local work=d.target~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach'
@@ -12175,49 +12233,74 @@ function scene.collectGroundCargo(d,p,hr,dt)
  local id=d.orePickupId
  local drop=id and pickups[id]
  if d.oreSeatUntil then
-  local height,_,_,speed=Workshop.courierStroke(now-d.pickupAt)
-  d.pos=d.oreDock+Vector3.yAxis*height;d.goal=d.pos;d.velocity=Vector3.yAxis*speed
+  d.pos,d.velocity=Workshop.courierSwoop(d.oreDock,d.oreYaw,d.oreEntryOffset,d.oreEntryVelocity,now-d.pickupAt)
+  d.goal=d.pos;d.intentGoal=d.pos
   if now<d.oreSeatUntil then d.state='Pickup';return true end
   d.oreSeatUntil=nil;d.oreDock=nil;d.oreYaw=nil;d.pickupAt=nil
  end
- if d.deliveryRequested or not id or not scene.emptierCanCollect(p,drop,id,hr) then
+ if d.deliveryRequested then
+  -- Keep the climb's momentum while the server seals the sale manifest.
+  d.state='Deliver';move(d,scene.packStation.Position+Vector3.yAxis*d.flightHeight,dt);return true
+ end
+ if not id or not scene.emptierCanCollect(p,drop,id,hr) then
   d.orePickupId=nil;d.pickupAt=nil;d.oreDock=nil;d.oreYaw=nil
   return false
  end
  local position=Vector3.new(drop.x,drop.y,drop.z)
  local claw=Pro.droneCargoUnits(profile,d.id)+1
  local x,y,z,gripYaw=Workshop.courierClawOffset(claw)
- local yaw=d.oreYaw or d.yaw or 0
- d.oreYaw=yaw
- local dock=Vector3.new(position.X,drop.floor-.22+drop.part.Size.Y*.5,position.Z)
-  -CFrame.Angles(0,yaw,0):PointToWorldSpace(Vector3.new(x,y,z))
- local overhead=dock+Vector3.yAxis*Workshop.COURIER_CLEARANCE
+ local yaw=d.oreYaw
+ if not yaw then
+  local delta=position-d.pos
+  local from=delta.X^2+delta.Z^2>1 and d.pos or scene.packStation.Position
+  yaw=Feel.levelYaw(from,position,d.yaw)
+  d.oreYaw=yaw
+ end
+ local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
+ local gem=Vector3.new(position.X,drop.floor-.22+drop.part.Size.Y*.5,position.Z)
+ local dock=d.oreDock or gem-CFrame.Angles(0,yaw,0):PointToWorldSpace(Vector3.new(x,y,z))
+ local entry=dock-forward*Workshop.COURIER_SWEEP_IN+Vector3.yAxis*Workshop.COURIER_CLEARANCE
  if not d.oreDock then
   local before=d.yaw
-  d.state='Collect';move(d,overhead,dt)
+  d.state='Collect';move(d,entry,dt)
   d.yaw=Feel.approachYaw(before,yaw,dt)
- end
- if not d.oreDock then
+  if (d.pos-entry).Magnitude>.95 then return true end
   local ignore={pickupFolder,droneFolder,hr.Parent}
-  if (d.pos-overhead).Magnitude>.22 then return true end
-  if not los(position,overhead,d.model,ignore,true,true) then
-   d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.pickupAt=nil;d.oreDock=nil;d.oreYaw=nil;p.nextEmptierPlan=nil
-   return true
-  end
   local reach=(p.cargoReach or OreDrops.CARGO_REACH)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
   if (hr.Position-position).Magnitude<=reach and Pro.cargoUnits(profile)<Ca.capacity(profile,previewPerks(p))
    and scene.orePullClear(drop,position,hr.Position,hr.Parent) then
    d.orePickupId=nil;d.oreYaw=nil;return false
   end
-  d.oreDock=dock;d.oreEntryOffset=d.pos-overhead;d.pickupAt=now
+  local entryVelocity=d.velocity or Vector3.zero
+  if entryVelocity.Magnitude>12 then entryVelocity=entryVelocity.Unit*12 end
+  local offset=d.pos-dock
+  local previous=d.pos
+  for _,sample in ipairs({.30,.62,Workshop.COURIER_CONTACT,Workshop.COURIER_CONTACT+.30,Workshop.COURIER_CONTACT+Workshop.COURIER_LIFT}) do
+   local nextPosition=Workshop.courierSwoop(dock,yaw,offset,entryVelocity,sample)
+   if not los(previous,nextPosition,d.model,ignore,true,true) then
+    d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.oreYaw=nil;p.nextEmptierPlan=nil
+    return false
+   end
+   previous=nextPosition
+  end
+  if not los(dock,gem,d.model,ignore,true,true) then
+   d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.oreYaw=nil;p.nextEmptierPlan=nil
+   return false
+  end
+  d.oreDock=dock;d.oreEntryOffset=offset;d.oreEntryVelocity=entryVelocity;d.pickupAt=now
   drop.part:SetAttribute('CourierDocking',d.id)
   drop.part:SetAttribute('CourierDockYaw',yaw+gripYaw)
  end
  local age=now-d.pickupAt
- local height,_,entryWeight,speed,entrySpeed=Workshop.courierStroke(age)
  d.state='Pickup';d.yaw=yaw
- d.pos=d.oreDock+Vector3.yAxis*height+d.oreEntryOffset*entryWeight;d.goal=d.pos;d.velocity=Vector3.yAxis*speed+d.oreEntryOffset*entrySpeed
+ d.pos,d.velocity=Workshop.courierSwoop(dock,yaw,d.oreEntryOffset,d.oreEntryVelocity,age)
+ d.goal=d.pos;d.intentGoal=d.pos
  if age<Workshop.COURIER_CONTACT then return true end
+ local clawCenter=dock+CFrame.Angles(0,yaw,0):PointToWorldSpace(Vector3.new(x,y,z))
+ if (clawCenter-gem).Magnitude>.8 or not los(dock,gem,d.model,{pickupFolder,droneFolder,hr.Parent},true,true) then
+  d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.oreDock=nil;d.oreYaw=nil;d.pickupAt=nil
+  p.nextEmptierPlan=nil;return false
+ end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
   d.oreSeatUntil=d.pickupAt+Workshop.COURIER_CONTACT+Workshop.COURIER_LIFT+Workshop.COURIER_RENDER_DELAY
   d.oreLoadedId=id;d.oreLoadedMaterial=drop.material;d.oreLoadedVisualAt=now
@@ -12515,6 +12598,7 @@ local function snapshotDrone(d)
   CourierDock=d.oreDock or false,CourierDockYaw=d.oreYaw or false,
   CourierPickupPoint=d.oreDock and groundCargo and Vector3.new(groundCargo.x,groundCargo.floor-.22+groundCargo.part.Size.Y*.5,groundCargo.z) or false,
   CourierEntryOffset=d.oreDock and d.oreEntryOffset or Vector3.zero,
+  CourierEntryVelocity=d.oreDock and d.oreEntryVelocity or false,
   CourierPacked=groundCargo and groundCargo.compacted==true or false,
   CourierLoadedOre=d.oreLoadedId or 0,CourierLoadedMaterial=d.oreLoadedMaterial or '',CourierLoadedAt=d.oreLoadedVisualAt or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
@@ -12771,7 +12855,9 @@ local function serviceDeliveries(p: any)
      p.nextEmptierPlan=nil
      local worker=drones[id]
      if worker and worker.owner==p.player.UserId then
-      release(worker);worker.deliveryId=result.id;worker.deliveryArrived=false;worker.state='Launch';worker.launchAt=now;worker.unloadAt=nil;worker.deliveryRequested=false
+      release(worker);worker.deliveryId=result.id;worker.deliveryArrived=false
+      worker.state=scene.runStart and 'Deliver' or 'Launch';worker.launchAt=not scene.runStart and now or nil
+      worker.unloadAt=nil;worker.deliveryRequested=false
      end
      p.publishDirty=true
     end)

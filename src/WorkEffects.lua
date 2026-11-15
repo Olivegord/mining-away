@@ -532,7 +532,12 @@ function W:courier(drone,record,now)
   local dockClock=paused and (source:GetAttribute('SnapshotAt') or now) or now
   local pickupAge=drone.pickupAge or dockClock-pickupAt
   local _,grip=Workshop.courierStroke(pickupAge)
-  local speed=drone.velocity and drone.velocity.Magnitude or 0
+  local velocity=drone.velocity or Vector3.zero
+  local speed=velocity.Magnitude
+  local clawDt=math.clamp(now-(fx.clawAt or now-1/60),0,.1)
+  local acceleration=(velocity-(fx.clawVelocity or velocity))/math.max(clawDt,1/144)
+  local localAcceleration=pivot:PointToObjectSpace(pivot.Position+acceleration)
+  fx.clawAt=now;fx.clawVelocity=velocity
   local moving=fx.detailed and not reduced and not paused and not unload and speed>2.4
    and now-(source:GetAttribute('SnapshotAt') or 0)<.5
   if count>4 and not fx.rackExtensions then
@@ -567,9 +572,19 @@ function W:courier(drone,record,now)
    local closed=i<=parcelUnits and 1 or .72
    local beforeContact=docking and pickupAge<Workshop.COURIER_CONTACT
    local receiving=docking and i==parcelUnits+1 and not loadingSlot
+   local newlyCaught=i==loadingSlot and not beforeContact and loadAge>=0 and fx.closedOre~=loadedId
+   local springing=not reduced and not unload and (not docking or not beforeContact) and (i<=parcelUnits or receiving)
+   if springing then
+    local spin=slot.spin or Vector3.zero
+    -- The rock was stationary. On capture its inertia first throws the
+    -- suspension rearward, then flight acceleration and damping drive it.
+    if newlyCaught and docking then spin-=Vector3.xAxis*(Workshop.COURIER_SWEEP_SPEED*.29) end
+    slot.angles,slot.spin=Workshop.clawSuspension(slot.angles or Vector3.zero,spin,localAcceleration,i<=parcelUnits,paused and 0 or clawDt)
+    cargoFrame=cargoFrame*CFrame.new(0,.56,0)*CFrame.Angles(slot.angles.X,0,slot.angles.Z)*CFrame.new(0,-.56,0)
+   elseif not paused then slot.angles=nil;slot.spin=nil end
    if i==loadingSlot then
     if beforeContact then closed=grip end
-    if not beforeContact and loadAge>=0 and fx.closedOre~=loadedId then
+    if newlyCaught then
      fx.closedOre=loadedId
      if loadAge<.23 then snapPosition=cargoFrame.Position end
     end
