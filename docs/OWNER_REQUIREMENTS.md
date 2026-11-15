@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — wider mining beds, stout rocks and higher idle drones
+
+Double the width of all five active Crystal Run beds. Widen field rocks, make them shorter and more stout, and have drones hover higher while idle. The goal is more open space in the field. Drones still descend for their usual work.
+
 ## November 14 — rejected compact finishes and polygon Diamond
 
 The owner rejected revision e113a17/3830888 with screenshots: the compact versions do not look like the originals, particularly Ruby's faint body and missing white inclusions; Diamond looks horrible. Compact variants must inherit their original mineral's appearance, changing only the cut. The hollow, flat rainbow-triangle Diamond is rejected and must not be restored as an approved direction.

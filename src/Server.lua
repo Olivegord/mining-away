@@ -490,6 +490,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local shell=kind=='Geode';local size=visualSize or (reference and 3 or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1))
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  if cut then fullSize*=CrystalCuts.proportions(cut,original) end
+ if field.cfg.ContinuousCrystals and kind=='Crystal' then fullSize=CrystalCuts.fieldSize(fullSize) end
  local steady=field.cfg.ContinuousCrystals==true and (modifiers==Mining.ROCK_MODIFIERS.Massive
   or size>=Mining.FIELD_CRYSTAL_MIN_SIZE+Mining.FIELD_CRYSTAL_SIZE_RANGE*1.80/3.35)
  if steady then part:SetAttribute('SteadyCrystal',true) end
@@ -618,6 +619,8 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  local visualSize=ordinarySize*(massive and Mining.MASSIVE_SCALE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
+ -- The uncut template bounds every cut and reserves room through regrowth.
+ if continuous then dimensions=CrystalCuts.fieldSize(dimensions) end
  local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
  local patch=field.part
  local preferred,bounds
@@ -2273,9 +2276,9 @@ function scene.holdSquare(d,p,dt)
  local limit=math.max(0,square.half-2)
  if offset.Magnitude>limit then offset=offset.Unit*limit end
  local height=(d.flightHeight or Feel.FollowHeight)+(d.role=='Ramiel' and 0 or Feel.hover(now,d.owned.base.maxStep60))
- if d.role=='Striker' and square.field.cfg.SelectionOnly then
-  -- Park at the same low working altitude instead of rising after each cut.
-  height=7
+ if square.field.cfg.SelectionOnly and d.role~='Nomad' then
+  -- The pin is on the bed, three studs below a standing avatar's root.
+  height=Feel.quarryFollowHeight(d.role,now,d.owned.base.maxStep60)+3
  end
  d.mining=false;d.state='HoldSelector';d.holdPin=square
  move(d,square.center+offset+Vector3.new(0,height,0),dt)

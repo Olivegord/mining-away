@@ -142,8 +142,8 @@ function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
  return ownerPosition+Vector3.new(x,altitude or y,z)
 end
 function F.quarryFollowHeight(role,time,maxStep60)
- if role=='Ramiel' then return F.ReferenceFollowHeight end
- return (role=='Courier' and 3.4 or 4.6)+F.hover(time,maxStep60)
+ if role=='Ramiel' then return F.ReferenceFollowHeight+7 end
+ return (role=='Courier' and 10.4 or 11.6)+F.hover(time,maxStep60)
 end
 local function swarmHash(id)
  local value=0

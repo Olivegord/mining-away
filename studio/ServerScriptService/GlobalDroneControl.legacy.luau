@@ -1814,8 +1814,8 @@ function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
  return ownerPosition+Vector3.new(x,altitude or y,z)
 end
 function F.quarryFollowHeight(role,time,maxStep60)
- if role=='Ramiel' then return F.ReferenceFollowHeight end
- return (role=='Courier' and 3.4 or 4.6)+F.hover(time,maxStep60)
+ if role=='Ramiel' then return F.ReferenceFollowHeight+7 end
+ return (role=='Courier' and 10.4 or 11.6)+F.hover(time,maxStep60)
 end
 local function swarmHash(id)
  local value=0
@@ -3537,6 +3537,9 @@ C.mineralCuts={
  Emerald={'Outcrop','Needle'},RunEmerald={'Outcrop','Needle'},
 }
 C.inset=CrystalVeins.carve
+function C.fieldSize(size)
+ return size*Vector3.new(1.25,.70,1.25)
+end
 local clusters={
  Triad={core='Spear',width=.92,height=1, feet={{-.45,.14,.56,-.28},{.49,-.15,.44,.33},{.04,.52,.25,-.21}}},
  Fan={core='Oblique',width=.72,height=.92, feet={{-.54,.05,.79,-.53},{.56,.13,.63,.43},{.17,-.56,.29,.28}}},
@@ -9683,6 +9686,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local shell=kind=='Geode';local size=visualSize or (reference and 3 or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1))
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  if cut then fullSize*=CrystalCuts.proportions(cut,original) end
+ if field.cfg.ContinuousCrystals and kind=='Crystal' then fullSize=CrystalCuts.fieldSize(fullSize) end
  local steady=field.cfg.ContinuousCrystals==true and (modifiers==Mining.ROCK_MODIFIERS.Massive
   or size>=Mining.FIELD_CRYSTAL_MIN_SIZE+Mining.FIELD_CRYSTAL_SIZE_RANGE*1.80/3.35)
  if steady then part:SetAttribute('SteadyCrystal',true) end
@@ -9811,6 +9815,8 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  local visualSize=ordinarySize*(massive and Mining.MASSIVE_SCALE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
+ -- The uncut template bounds every cut and reserves room through regrowth.
+ if continuous then dimensions=CrystalCuts.fieldSize(dimensions) end
  local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
  local patch=field.part
  local preferred,bounds
@@ -11466,9 +11472,9 @@ function scene.holdSquare(d,p,dt)
  local limit=math.max(0,square.half-2)
  if offset.Magnitude>limit then offset=offset.Unit*limit end
  local height=(d.flightHeight or Feel.FollowHeight)+(d.role=='Ramiel' and 0 or Feel.hover(now,d.owned.base.maxStep60))
- if d.role=='Striker' and square.field.cfg.SelectionOnly then
-  -- Park at the same low working altitude instead of rising after each cut.
-  height=7
+ if square.field.cfg.SelectionOnly and d.role~='Nomad' then
+  -- The pin is on the bed, three studs below a standing avatar's root.
+  height=Feel.quarryFollowHeight(d.role,now,d.owned.base.maxStep60)+3
  end
  d.mining=false;d.state='HoldSelector';d.holdPin=square
  move(d,square.center+offset+Vector3.new(0,height,0),dt)

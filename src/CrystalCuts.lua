@@ -10,6 +10,9 @@ C.mineralCuts={
  Emerald={'Outcrop','Needle'},RunEmerald={'Outcrop','Needle'},
 }
 C.inset=CrystalVeins.carve
+function C.fieldSize(size)
+ return size*Vector3.new(1.25,.70,1.25)
+end
 local clusters={
  Triad={core='Spear',width=.92,height=1, feet={{-.45,.14,.56,-.28},{.49,-.15,.44,.33},{.04,.52,.25,-.21}}},
  Fan={core='Oblique',width=.72,height=.92, feet={{-.54,.05,.79,-.53},{.56,.13,.63,.43},{.17,-.56,.29,.28}}},
