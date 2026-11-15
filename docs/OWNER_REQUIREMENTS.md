@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — reject frantic swarm; coordinated, heavy flight
+
+The owner rejects the first swarm pass as constantly jostling, circling and rabid, including in flight. Make the whole movement system coordinated and robotic while organic and smooth. Use nearby available ring positions, letting neighbors yield, rather than fixed drone-to-slot assignments that force crossing. Increase weight and separation. Fix flight and arrivals as well as resting formation.
+
 ## November 14 — physical swarm flight and solid rocks
 
 Drones should ease into a ring when the player stands still. While following a moving player, break the visible formation: let drones spread into different heights and speeds, move through a loose swarm and steer around each other. Make gun recoil push the drone itself so it has to correct its flight. Carriers should feel heavier and move slower with a crystal. Players should collide with field rocks.

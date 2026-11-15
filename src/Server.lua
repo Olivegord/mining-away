@@ -2265,7 +2265,7 @@ local function travelSpeed(d)
   local boost=p and (returning or not fieldCharge) and Workshop.chargeSpeed(data(p)) or 1
   return d.stats.maxStep60*1.5*boost*roleScale
  end
- local variation=d.state=='Follow' and d.swarmTraits and 1+(d.swarmTraits.speed-1)*(d.swarmCruise or 0) or 1
+ local variation=d.state=='Follow' and d.swarmTraits and 1+(d.swarmTraits.speed-1)*.35*(d.swarmCruise or 0) or 1
  return d.stats.maxStep60*roleScale*variation*(d.role=='Medic' and .68 or (d.role=='Courier' and (d.loadSpeed or 1)*(1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
@@ -2273,14 +2273,16 @@ local function move(d,goal,dt)
  local settling=d.target~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant' or d.state=='Intake'
  local weight=(d.state=='Recover' or d.state=='Vacuum' and (goal-d.pos).Magnitude<1) and 0
   or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
- local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight,d.state=='Follow' and d.swarmCruise or nil)*Feel.SwarmForce
+ -- Calm escort/holding pressure; strong predictive passing is for job travel.
+ local escort=d.state=='Follow' or d.state=='HoldSelector' or d.state=='Waiting'
+ local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)*Feel.SwarmForce*(escort and .22 or 1)
  d.flightSteering=weight==0 and Vector3.zero or Feel.smoothSwarm(d.flightSteering,desired,dt)
  d.goal=goal
  local work=d.target~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach'
  local speed=travelSpeed(d)
  local flight=RoleConfig.Prominent[d.role]
  local response=d.orePickupId and d.state=='Collect' and Workshop.COURIER_APPROACH_RESPONSE or flight and flight.response
-  or d.role=='Striker' and 1.35 or 1
+  or 1
  d.flightResponse=response;d.flightWork=work;d.flightSpeed=speed
  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work,nil,response,d.flightMass,d.flightSteering)
  local yaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
@@ -2293,8 +2295,15 @@ function scene.followGoal(d,position,count,velocity,dt)
  if d.role=='Nomad' then return Feel.followGoal(position,d.slot,count,now,maxStep,false,height) end
  local goal
  d.swarmTraits=d.swarmTraits or Feel.swarmTraits(d.id)
+ local p=profiles[d.owner]
+ local ring=p and p.followRing and p.followRing[d.id]
+ if not ring then
+  local delta=d.pos-position
+  ring={angle=delta.X^2+delta.Z^2>.01 and math.atan2(delta.Z,delta.X) or d.swarmTraits.phase,radius=math.max(12,count*7.5/(2*math.pi))}
+ end
  goal,d.swarmCruise=Feel.swarmFollow(position,velocity or Vector3.zero,d.slot,count,now,
-  height or Feel.ReferenceFollowHeight+Feel.hover(now,maxStep),d.swarmTraits,d.swarmCruise,dt or C.Tick)
+  (height and height-(d.role~='Ramiel' and Feel.hover(now,maxStep) or 0)) or Feel.ReferenceFollowHeight,
+  d.swarmTraits,d.swarmCruise,dt or C.Tick,ring)
  return goal
 end
 function scene.holdSquare(d,p,dt)
@@ -2905,7 +2914,7 @@ local function droneStep(d: any,dt: number)
  if d.role=='Courier' then
   d.flightMass,d.loadSpeed=Feel.courierLoad(Pro.droneCargoUnits(data(p),d.id))
  else
-  d.flightMass=d.role=='Ballcaster' and 1.24 or d.role=='Needler' and .94 or 1
+  d.flightMass=d.role=='Ballcaster' and 1.65 or d.role=='Needler' and 1.3 or 1.4
  end
  if logistics then
   local station=logistics:station(d)
@@ -4317,6 +4326,10 @@ RunService.Heartbeat:Connect(function(dt: number)
   if scene.runStart then for _,p in pairs(profiles) do scene.assignEmptierPickups(p) end end
   for _,field in ipairs(patches) do if field.junk then scene.dispatchJunk(field) end end
   swarmGrid=Feel.swarmGrid(drones)
+  for _,p in pairs(profiles) do
+   local hr=characterRoot(p)
+   if hr then p.followRing=Feel.ringGoals(p.drones,hr.Position) end
+  end
   for _,d in pairs(drones) do droneStep(d,C.Tick) end
   if scene.fieldTools then scene.fieldTools:step(C.Tick) end
   for _,d in pairs(drones) do

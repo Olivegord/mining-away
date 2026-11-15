@@ -523,7 +523,7 @@ local Feel = (function()
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
 local F = {FollowHeight=3.2,ReferenceFollowHeight=7,ReferenceCrystalPivot=3,WorkHeight=10,WorkClearance=5,
- SwarmSpacing=3.5,SwarmRadius=22,SwarmNear=6,SwarmMaxOffset=2.2,SwarmForce=36}
+ SwarmSpacing=5,SwarmRadius=22,SwarmNear=7,SwarmMaxOffset=2.2,SwarmForce=36}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -612,7 +612,7 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
   local requested=requestedVelocity
   if requested.Magnitude>speed then requested=requested.Unit*speed end
   if correction then
-   requested+=correction
+   requested+=correction*h
    if requested.Magnitude>cap then requested=requested.Unit*cap end
   end
   -- Neighbor pressure is a lateral thruster force, not a moving station.
@@ -691,24 +691,45 @@ function F.swarmTraits(id)
   height=(math.floor(seed/131)%101)/50-1, speed=.87+(math.floor(seed/1091)%101)*.0026,
   rate=.68+(math.floor(seed/8191)%101)*.0064}
 end
-function F.swarmFollow(center,velocity,slot,count,now,height,traits,cruise,dt)
+function F.ringGoals(records,center)
+ local crew={}
+ for _,d in pairs(records) do
+  if d.hp>0 and d.state=='Follow' and d.role~='Nomad' then
+   local delta=d.pos-center
+   local angle=delta.X^2+delta.Z^2>.01 and math.atan2(delta.Z,delta.X) or F.swarmTraits(d.id).phase
+   crew[#crew+1]={id=d.id,angle=angle}
+  end
+ end
+ table.sort(crew,function(a,b) return a.angle==b.angle and tostring(a.id)<tostring(b.id) or a.angle<b.angle end)
+ local n=#crew;local goals={}
+ if n==0 then return goals end
+ -- Preserve spatial order, not ownership of a slot. Find the least-travel
+ -- rotation of an evenly spaced ring. Neighbors yield along the ring;
+ -- nobody has to cross through the crew to recover an old numbered station.
+ local phase=0;local step=2*math.pi/n
+ for i,d in ipairs(crew) do phase+=d.angle-(i-1)*step end
+ phase/=n
+ local radius=math.max(12,n*7.5/(2*math.pi))
+ for i,d in ipairs(crew) do goals[d.id]={angle=phase+(i-1)*step,radius=radius} end
+ return goals
+end
+function F.swarmFollow(center,velocity,slot,count,now,height,traits,cruise,dt,ring)
  local motion=Vector3.new(velocity.X,0,velocity.Z)
  local moving=math.clamp((motion.Magnitude-.7)/6,0,1)
  cruise=cruise or 0
- cruise+=(moving-cruise)*(1-math.exp(-dt*(moving>cruise and 4.5 or 1.35)))
- local angle=2*math.pi*slot/math.max(1,count)
- local ringRadius=math.max(10,math.min(32,count*.60))
- local t=now*traits.rate+traits.phase
+ cruise+=(moving-cruise)*(1-math.exp(-dt*1.8))
+ local angle=ring and ring.angle or 2*math.pi*slot/math.max(1,count)
+ local ringRadius=ring and ring.radius or math.max(12,count*7.5/(2*math.pi))
  local idle=Vector3.new(math.cos(angle)*ringRadius,traits.height*.9,math.sin(angle)*ringRadius)
- -- Relax the slots into crossing paths at independent heights and periods.
- -- The center follows the player, while each drone has its own drifting lane.
- local air=Vector3.new(8.5*math.sin(t*.61)+3.2*math.sin(t*.93+angle),
-  5.6*traits.height+1.8*math.sin(t*.77),8*traits.lane+5*math.cos(t*.53+angle))
- return center+Vector3.yAxis*height+idle:Lerp(air+motion*.14,cruise),cruise
+ -- Coherent translation with staggered depth/height. No time-driven loops,
+ -- crossing sine paths, or orbit: organic movement comes from inertia.
+ local direction=motion.Magnitude>.1 and motion.Unit or Vector3.zero
+ local air=idle+Vector3.yAxis*(traits.height*2.3)-direction*(3+2*traits.lane)
+ return center+Vector3.yAxis*height+idle:Lerp(air,cruise),cruise
 end
 function F.courierLoad(units)
  local load=math.clamp(units or 0,0,4)
- return 1.22+load*.42,1/(1+.26*load)
+ return 1.65+load*.56,1/(1+.26*load)
 end
 function F.gunImpulse(role,from,to,mass)
  local momentum=role=='Needler' and 7 or role=='Ballcaster' and 15 or 0
@@ -798,11 +819,13 @@ function F.swarmOffset(position,id,grid,weight,flocking)
   -- head-on workers pass on opposite sides instead of stopping nose-to-nose.
   local currentPressure=math.max(0,1-distance/F.SwarmNear)^2
   local futureDistance=math.sqrt(other.futureSquare or other.square)
-  local anticipation=(other.closest or 0)>0 and math.max(0,1-futureDistance/5.5)^2*.8 or 0
+  local closing=(velocity-other.velocity).Magnitude
+  local anticipation=(other.closest or 0)>0 and math.max(0,1-futureDistance/5.5)^2*.8*math.clamp((closing-2)/8,0,1) or 0
   local pressure=math.max(currentPressure,anticipation)
   local tangent=Vector3.new(-normal.Z,0,normal.X)*(pair%2==0 and 1 or -1)
   local lane=distance>.001 and math.clamp(delta.Y/distance,-1,1)*.95 or side*.35
-  force+=normal*(currentPressure*1.9+anticipation*.65)+tangent*(currentPressure*.48+anticipation*4.8)+Vector3.new(0,lane*pressure,0)
+  -- Static separation cannot inject sideways momentum and perpetual orbit.
+  force+=normal*(currentPressure*1.9+anticipation*.65)+tangent*(anticipation*4.8)+Vector3.new(0,lane*pressure,0)
   if flocking and flocking>0 then
    local blend=math.max(0,1-distance/F.SwarmNear)
    alignment+=(other.velocity-velocity)*blend;nearby+=blend

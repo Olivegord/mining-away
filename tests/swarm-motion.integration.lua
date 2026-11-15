@@ -139,9 +139,9 @@ check('moving escort opens into independently seeded lanes and settles back into
   low=math.min(low,point.Y);high=math.max(high,point.Y);minRadius=math.min(minRadius,radius);maxRadius=math.max(maxRadius,radius)
   minSpeed=math.min(minSpeed,traits.speed);maxSpeed=math.max(maxSpeed,traits.speed)
   for n=1,240 do point,cruise=Feel.swarmFollow(Vector3.zero,Vector3.zero,slot,9,20+n/60,19,traits,cruise,1/60) end
-  assert(math.abs(Vector3.new(point.X,0,point.Z).Magnitude-10)<.12)
+  assert(math.abs(Vector3.new(point.X,0,point.Z).Magnitude-12)<.12)
  end
- assert(high-low>6 and maxRadius-minRadius>4 and maxSpeed-minSpeed>.12)
+ assert(high-low>4 and maxRadius-minRadius>4 and maxSpeed-minSpeed>.12)
 end)
 check('loaded courier needs longer to accelerate and cruises slower',function()
  local goal=Vector3.xAxis*80
@@ -152,5 +152,52 @@ check('loaded courier needs longer to accelerate and cruises slower',function()
   loaded,loadV=Feel.inertialApproach(loaded,goal,loadV,.4*heavySpeed,1/60,false,nil,1,heavyMass)
  end
  assert(heavyMass>bareMass and loaded.X<empty.X*.8 and loadV.X<emptyV.X*.81)
+end)
+check('a crowded crew settles without circulating and keeps neighboring space',function()
+ for _,fps in ipairs({30,60,144}) do
+  local crew={}
+  for i=1,9 do
+   local angle=i*.13
+   crew[i]={id='idle:'..i,hp=80,state='Follow',pos=Vector3.new(math.cos(angle)*12,18,math.sin(angle)*12),velocity=Vector3.zero,traits=Feel.swarmTraits('idle:'..i)}
+  end
+  local lateSpeed=0
+  for frame=1,fps*35 do
+   local ring=Feel.ringGoals(crew,Vector3.zero);local grid=Feel.swarmGrid(crew)
+   for i,d in ipairs(crew) do
+    local goal=Feel.swarmFollow(Vector3.zero,Vector3.zero,i,9,frame/fps,18,d.traits,0,1/fps,ring[d.id])
+    d.steer=Feel.smoothSwarm(d.steer,Feel.swarmOffset(d.pos,d.id,grid)*Feel.SwarmForce*.22,1/fps)
+    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,.35,1/fps,false,nil,1,1.4,d.steer)
+    if frame>fps*30 then lateSpeed=math.max(lateSpeed,d.velocity.Magnitude) end
+   end
+  end
+  assert(lateSpeed<.05,'crew never settled: '..lateSpeed)
+  for i=1,#crew do for j=i+1,#crew do assert((crew[i].pos-crew[j].pos).Magnitude>7,'crowded resting hulls') end end
+ end
+end)
+check('moving, turning and stopping do not sustain oscillation',function()
+ local crew={}
+ for i=1,9 do
+  local a=i*2*math.pi/9
+  crew[i]={id='trip:'..i,hp=80,state='Follow',pos=Vector3.new(math.cos(a)*12,18,math.sin(a)*12),velocity=Vector3.zero,traits=Feel.swarmTraits('trip:'..i)}
+ end
+ local center=Vector3.zero;local peak=0
+ for frame=1,60*24 do
+  local ownerVelocity=frame<240 and Vector3.xAxis*16 or frame<480 and Vector3.zAxis*16 or Vector3.zero
+  center+=ownerVelocity/60
+  local goals=Feel.ringGoals(crew,center);local grid=Feel.swarmGrid(crew)
+  for i,d in ipairs(crew) do
+   local goal
+   goal,d.cruise=Feel.swarmFollow(center,ownerVelocity,i,9,frame/60,18,d.traits,d.cruise,1/60,goals[d.id])
+   d.steer=Feel.smoothSwarm(d.steer,Feel.swarmOffset(d.pos,d.id,grid)*Feel.SwarmForce*.22,1/60)
+   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,.35,1/60,false,nil,1,1.4,d.steer)
+   if frame>60*20 then peak=math.max(peak,d.velocity.Magnitude) end
+  end
+ end
+ assert(peak<.1,'sustained motion after stop: '..peak)
+end)
+check('steady transit has no time-driven circling or vertical weaving',function()
+ local traits=Feel.swarmTraits('worker')
+ local a=Feel.swarmFollow(Vector3.zero,Vector3.xAxis*16,1,9,0,18,traits,1,1/60)
+ for t=1,60 do close(a,Feel.swarmFollow(Vector3.zero,Vector3.xAxis*16,1,9,t,18,traits,1,1/60)) end
 end)
 print(checks..' production steering checks passed using Vector API doubles; not a Studio collision/visual playtest')
