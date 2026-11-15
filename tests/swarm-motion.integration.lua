@@ -161,8 +161,9 @@ check('a crowded crew settles without circulating and keeps neighboring space',f
    crew[i]={id='idle:'..i,hp=80,state='Follow',pos=Vector3.new(math.cos(angle)*12,18,math.sin(angle)*12),velocity=Vector3.zero,traits=Feel.swarmTraits('idle:'..i)}
   end
   local lateSpeed=0
+  local ring
   for frame=1,fps*35 do
-   local ring=Feel.ringGoals(crew,Vector3.zero);local grid=Feel.swarmGrid(crew)
+   ring=Feel.ringGoals(crew,Vector3.zero,ring,function() return 18 end);local grid=Feel.swarmGrid(crew)
    for i,d in ipairs(crew) do
     local goal=Feel.swarmFollow(Vector3.zero,Vector3.zero,i,9,frame/fps,18,d.traits,0,1/fps,ring[d.id])
     d.steer=Feel.smoothSwarm(d.steer,Feel.swarmOffset(d.pos,d.id,grid)*Feel.SwarmForce*.22,1/fps)
@@ -181,19 +182,45 @@ check('moving, turning and stopping do not sustain oscillation',function()
   crew[i]={id='trip:'..i,hp=80,state='Follow',pos=Vector3.new(math.cos(a)*12,18,math.sin(a)*12),velocity=Vector3.zero,traits=Feel.swarmTraits('trip:'..i)}
  end
  local center=Vector3.zero;local peak=0
+ local goals
  for frame=1,60*24 do
   local ownerVelocity=frame<240 and Vector3.xAxis*16 or frame<480 and Vector3.zAxis*16 or Vector3.zero
   center+=ownerVelocity/60
-  local goals=Feel.ringGoals(crew,center);local grid=Feel.swarmGrid(crew)
+  goals=Feel.ringGoals(crew,center,goals,function() return 18 end);local grid=Feel.swarmGrid(crew)
   for i,d in ipairs(crew) do
    local goal
-   goal,d.cruise=Feel.swarmFollow(center,ownerVelocity,i,9,frame/60,18,d.traits,d.cruise,1/60,goals[d.id])
+   local delta=d.pos-center
+   local slot=goals[d.id] or {angle=math.atan2(delta.Z,delta.X),radius=12}
+   goal,d.cruise=Feel.swarmFollow(center,ownerVelocity,i,9,frame/60,18,d.traits,d.cruise,1/60,slot)
    d.steer=Feel.smoothSwarm(d.steer,Feel.swarmOffset(d.pos,d.id,grid)*Feel.SwarmForce*.22,1/60)
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,.35,1/60,false,nil,1,1.4,d.steer)
    if frame>60*20 then peak=math.max(peak,d.velocity.Magnitude) end
   end
  end
  assert(peak<.1,'sustained motion after stop: '..peak)
+end)
+check('a returning carrier only makes room in the ring within ten studs of it',function()
+ local height=function() return 16 end
+ local crew={}
+ for i=1,10 do
+  local a=i*2*math.pi/10
+  crew[i]={id=i,hp=80,state='Follow',pos=Vector3.new(math.cos(a)*12,16,math.sin(a)*12)}
+ end
+ local center=Vector3.zero
+ local initial=Feel.ringGoals(crew,center,nil,height)
+ local courier={id=11,role='Courier',hp=80,state='Follow',pos=Vector3.new(22.1,16,0)}
+ crew[11]=courier
+ local waiting=Feel.ringGoals(crew,center,initial,height)
+ assert(not waiting[11])
+ for i=1,10 do assert(initial[i].angle==waiting[i].angle and initial[i].radius==waiting[i].radius) end
+ courier.pos=Vector3.new(12,27,0)
+ assert(not Feel.ringGoals(crew,center,waiting,height)[11],'a high carrier counted as arrived')
+ courier.pos=Vector3.new(21.9,16,0)
+ local joined=Feel.ringGoals(crew,center,waiting,height)
+ assert(joined[11] and joined[1].radius>waiting[1].radius)
+ courier.state='Deliver'
+ local left=Feel.ringGoals(crew,center,joined,height)
+ assert(not left[11] and left[1].radius==initial[1].radius)
 end)
 check('steady transit has no time-driven circling or vertical weaving',function()
  local traits=Feel.swarmTraits('worker')

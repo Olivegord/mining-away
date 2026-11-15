@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — nearby ring joins and a plot-edge queue
+
+The calmer flight is approved. Make room in the formation only when a returning drone reaches within ten studs of the ring. Line up drones waiting at a plot just outside one edge, with carriers grouped in the same line.
+
 ## November 14 — reject frantic swarm; coordinated, heavy flight
 
 The owner rejects the first swarm pass as constantly jostling, circling and rabid, including in flight. Make the whole movement system coordinated and robotic while organic and smooth. Use nearby available ring positions, letting neighbors yield, rather than fixed drone-to-slot assignments that force crossing. Increase weight and separation. Fix flight and arrivals as well as resting formation.

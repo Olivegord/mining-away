@@ -169,11 +169,20 @@ function F.swarmTraits(id)
   height=(math.floor(seed/131)%101)/50-1, speed=.87+(math.floor(seed/1091)%101)*.0026,
   rate=.68+(math.floor(seed/8191)%101)*.0064}
 end
-function F.ringGoals(records,center)
+function F.ringRadius(count) return math.max(12,count*7.5/(2*math.pi)) end
+function F.ringGoals(records,center,previous,heightOf)
  local crew={}
+ local _,prior=next(previous or {})
+ local joinRadius=prior and prior.radius or F.ringRadius(0)
  for _,d in pairs(records) do
-  if d.hp>0 and d.state=='Follow' and d.role~='Nomad' then
+  if d.hp>0 and d.state=='Follow' and d.role~='Nomad' and not d.carrierId then
    local delta=d.pos-center
+   local radialDistance=math.sqrt(delta.X^2+delta.Z^2)-joinRadius
+   local elevation=delta.Y-(heightOf and heightOf(d) or 0)
+   -- Join the current flight-height ring within ten studs of its rim. A
+   -- larger exit band prevents reshuffling when the player starts walking.
+   local reach=previous and previous[d.id] and 16 or 10
+   if radialDistance^2+elevation^2>reach^2 then continue end
    local angle=delta.X^2+delta.Z^2>.01 and math.atan2(delta.Z,delta.X) or F.swarmTraits(d.id).phase
    crew[#crew+1]={id=d.id,angle=angle}
   end
@@ -187,8 +196,33 @@ function F.ringGoals(records,center)
  local phase=0;local step=2*math.pi/n
  for i,d in ipairs(crew) do phase+=d.angle-(i-1)*step end
  phase/=n
- local radius=math.max(12,n*7.5/(2*math.pi))
+ local radius=F.ringRadius(n)
  for i,d in ipairs(crew) do goals[d.id]={angle=phase+(i-1)*step,radius=radius} end
+ return goals
+end
+function F.plotQueueEdge(frame,halfX,halfZ,approach)
+ local point=frame:PointToObjectSpace(approach)
+ local padding=5
+ if math.abs(point.X)-halfX>math.abs(point.Z)-halfZ then
+  local sign=point.X<0 and -1 or 1
+  return frame*CFrame.new(sign*(halfX+padding),0,0),Vector3.zAxis,halfZ*2
+ end
+ local sign=point.Z<0 and -1 or 1
+ return frame*CFrame.new(0,0,sign*(halfZ+padding)),Vector3.xAxis,halfX*2
+end
+function F.plotQueueSlots(records,edge,axis,length,height)
+ table.sort(records,function(a,b)
+  local aCarrier,bCarrier=a.role=='Courier',b.role=='Courier'
+  if aCarrier~=bCarrier then return not aCarrier end
+  return a.slot<b.slot
+ end)
+ -- Use only actual waiters. A busy drone leaves no hole; if a large fleet
+ -- exceeds the edge, extend the line rather than stacking hulls at corners.
+ local spacing=math.clamp((length-4)/math.max(1,#records-1),4.5,6)
+ local goals={}
+ for i,d in ipairs(records) do
+  goals[d.id]=edge:PointToWorldSpace(axis*((i-(#records+1)*.5)*spacing))+Vector3.yAxis*height
+ end
  return goals
 end
 function F.swarmFollow(center,velocity,slot,count,now,height,traits,cruise,dt,ring)
@@ -197,7 +231,7 @@ function F.swarmFollow(center,velocity,slot,count,now,height,traits,cruise,dt,ri
  cruise=cruise or 0
  cruise+=(moving-cruise)*(1-math.exp(-dt*1.8))
  local angle=ring and ring.angle or 2*math.pi*slot/math.max(1,count)
- local ringRadius=ring and ring.radius or math.max(12,count*7.5/(2*math.pi))
+ local ringRadius=ring and ring.radius or F.ringRadius(count)
  local idle=Vector3.new(math.cos(angle)*ringRadius,traits.height*.9,math.sin(angle)*ringRadius)
  -- Coherent translation with staggered depth/height. No time-driven loops,
  -- crossing sine paths, or orbit: organic movement comes from inertia.

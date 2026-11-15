@@ -1848,11 +1848,20 @@ function F.swarmTraits(id)
   height=(math.floor(seed/131)%101)/50-1, speed=.87+(math.floor(seed/1091)%101)*.0026,
   rate=.68+(math.floor(seed/8191)%101)*.0064}
 end
-function F.ringGoals(records,center)
+function F.ringRadius(count) return math.max(12,count*7.5/(2*math.pi)) end
+function F.ringGoals(records,center,previous,heightOf)
  local crew={}
+ local _,prior=next(previous or {})
+ local joinRadius=prior and prior.radius or F.ringRadius(0)
  for _,d in pairs(records) do
-  if d.hp>0 and d.state=='Follow' and d.role~='Nomad' then
+  if d.hp>0 and d.state=='Follow' and d.role~='Nomad' and not d.carrierId then
    local delta=d.pos-center
+   local radialDistance=math.sqrt(delta.X^2+delta.Z^2)-joinRadius
+   local elevation=delta.Y-(heightOf and heightOf(d) or 0)
+   -- Join the current flight-height ring within ten studs of its rim. A
+   -- larger exit band prevents reshuffling when the player starts walking.
+   local reach=previous and previous[d.id] and 16 or 10
+   if radialDistance^2+elevation^2>reach^2 then continue end
    local angle=delta.X^2+delta.Z^2>.01 and math.atan2(delta.Z,delta.X) or F.swarmTraits(d.id).phase
    crew[#crew+1]={id=d.id,angle=angle}
   end
@@ -1866,8 +1875,33 @@ function F.ringGoals(records,center)
  local phase=0;local step=2*math.pi/n
  for i,d in ipairs(crew) do phase+=d.angle-(i-1)*step end
  phase/=n
- local radius=math.max(12,n*7.5/(2*math.pi))
+ local radius=F.ringRadius(n)
  for i,d in ipairs(crew) do goals[d.id]={angle=phase+(i-1)*step,radius=radius} end
+ return goals
+end
+function F.plotQueueEdge(frame,halfX,halfZ,approach)
+ local point=frame:PointToObjectSpace(approach)
+ local padding=5
+ if math.abs(point.X)-halfX>math.abs(point.Z)-halfZ then
+  local sign=point.X<0 and -1 or 1
+  return frame*CFrame.new(sign*(halfX+padding),0,0),Vector3.zAxis,halfZ*2
+ end
+ local sign=point.Z<0 and -1 or 1
+ return frame*CFrame.new(0,0,sign*(halfZ+padding)),Vector3.xAxis,halfX*2
+end
+function F.plotQueueSlots(records,edge,axis,length,height)
+ table.sort(records,function(a,b)
+  local aCarrier,bCarrier=a.role=='Courier',b.role=='Courier'
+  if aCarrier~=bCarrier then return not aCarrier end
+  return a.slot<b.slot
+ end)
+ -- Use only actual waiters. A busy drone leaves no hole; if a large fleet
+ -- exceeds the edge, extend the line rather than stacking hulls at corners.
+ local spacing=math.clamp((length-4)/math.max(1,#records-1),4.5,6)
+ local goals={}
+ for i,d in ipairs(records) do
+  goals[d.id]=edge:PointToWorldSpace(axis*((i-(#records+1)*.5)*spacing))+Vector3.yAxis*height
+ end
  return goals
 end
 function F.swarmFollow(center,velocity,slot,count,now,height,traits,cruise,dt,ring)
@@ -1876,7 +1910,7 @@ function F.swarmFollow(center,velocity,slot,count,now,height,traits,cruise,dt,ri
  cruise=cruise or 0
  cruise+=(moving-cruise)*(1-math.exp(-dt*1.8))
  local angle=ring and ring.angle or 2*math.pi*slot/math.max(1,count)
- local ringRadius=ring and ring.radius or math.max(12,count*7.5/(2*math.pi))
+ local ringRadius=ring and ring.radius or F.ringRadius(count)
  local idle=Vector3.new(math.cos(angle)*ringRadius,traits.height*.9,math.sin(angle)*ringRadius)
  -- Coherent translation with staggered depth/height. No time-driven loops,
  -- crossing sine paths, or orbit: organic movement comes from inertia.
@@ -11561,10 +11595,11 @@ end
 local function move(d,goal,dt)
  d.intentGoal=goal
  local settling=d.target~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant' or d.state=='Intake'
+  or d.state=='HoldSelector' or d.state=='Waiting' or d.state=='StorageFull' and d.deployedCarrier
  local weight=(d.state=='Recover' or d.state=='Vacuum' and (goal-d.pos).Magnitude<1) and 0
   or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
  -- Calm escort/holding pressure; strong predictive passing is for job travel.
- local escort=d.state=='Follow' or d.state=='HoldSelector' or d.state=='Waiting'
+ local escort=d.state=='Follow' or d.state=='HoldSelector' or d.state=='Waiting' or d.state=='StorageFull' and d.deployedCarrier
  local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)*Feel.SwarmForce*(escort and .22 or 1)
  d.flightSteering=weight==0 and Vector3.zero or Feel.smoothSwarm(d.flightSteering,desired,dt)
  d.goal=goal
@@ -11579,36 +11614,68 @@ local function move(d,goal,dt)
  d.yaw=Feel.approachYaw(d.yaw,yaw,dt*(flight and flight.turn or 1))
  -- Fixed-rate logical motion; snapshotDrone publishes its physical proxy.
 end
+function scene.followHeight(d)
+ if scene.runStart then
+  return Feel.quarryFollowHeight(d.role,0,0)
+ end
+ return Feel.ReferenceFollowHeight
+end
 function scene.followGoal(d,position,count,velocity,dt)
- local maxStep=d.owned.base.maxStep60
- local height=d.role=='Nomad' and d.flightHeight or scene.runStart and Feel.quarryFollowHeight(d.role,now,maxStep) or nil
- if d.role=='Nomad' then return Feel.followGoal(position,d.slot,count,now,maxStep,false,height) end
+ if d.role=='Nomad' then return Feel.followGoal(position,d.slot,count,now,d.owned.base.maxStep60,false,d.flightHeight) end
  local goal
  d.swarmTraits=d.swarmTraits or Feel.swarmTraits(d.id)
  local p=profiles[d.owner]
  local ring=p and p.followRing and p.followRing[d.id]
  if not ring then
   local delta=d.pos-position
-  ring={angle=delta.X^2+delta.Z^2>.01 and math.atan2(delta.Z,delta.X) or d.swarmTraits.phase,radius=math.max(12,count*7.5/(2*math.pi))}
+  local _,member=next(p and p.followRing or {})
+  ring={angle=delta.X^2+delta.Z^2>.01 and math.atan2(delta.Z,delta.X) or d.swarmTraits.phase,radius=member and member.radius or Feel.ringRadius(0)}
  end
  goal,d.swarmCruise=Feel.swarmFollow(position,velocity or Vector3.zero,d.slot,count,now,
-  (height and height-(d.role~='Ramiel' and Feel.hover(now,maxStep) or 0)) or Feel.ReferenceFollowHeight,
-  d.swarmTraits,d.swarmCruise,dt or C.Tick,ring)
+  scene.followHeight(d),d.swarmTraits,d.swarmCruise,dt or C.Tick,ring)
  return goal
+end
+function scene.movePlotQueue(queue,dt)
+ local goals=Feel.plotQueueSlots(queue.drones,queue.edge,queue.axis,queue.length,queue.height)
+ for _,worker in ipairs(queue.drones) do move(worker,goals[worker.id],dt) end
+end
+function scene.waitAtPlot(d,p,field,square,dt)
+ local site=square or field
+ p.plotWaitEdges=p.plotWaitEdges or {}
+ local layout=square and square.waitEdge or not square and p.plotWaitEdges[field.id]
+ if not layout then
+  local frame,halfX,halfZ
+  if square then frame=CFrame.new(square.center);halfX,halfZ=square.half,square.half
+  else
+   local size=field.part.Size
+   frame=field.part.CFrame*CFrame.new(0,size.Y*.5,0);halfX,halfZ=size.X*.5,size.Z*.5
+  end
+  local hr=characterRoot(p)
+  local edge,axis,length=Feel.plotQueueEdge(frame,halfX,halfZ,hr and hr.Position or home)
+  layout={edge=edge,axis=axis,length=length,height=square and (scene.runStart and 19.6 or Feel.ReferenceFollowHeight) or 10}
+  if square then square.waitEdge=layout else p.plotWaitEdges[field.id]=layout end
+ end
+ if not scene.plotQueues then
+  scene.movePlotQueue({drones={d},edge=layout.edge,axis=layout.axis,length=layout.length,height=layout.height},dt)
+  return
+ end
+ local bySite=scene.plotQueues[p]
+ if not bySite then bySite={};scene.plotQueues[p]=bySite end
+ local queue=bySite[site]
+ if not queue then queue=table.clone(layout);queue.drones={};bySite[site]=queue end
+ table.insert(queue.drones,d)
+end
+function scene.flushPlotQueues(dt)
+ local queues=scene.plotQueues;scene.plotQueues=nil
+ for _,bySite in pairs(queues) do
+  for _,queue in pairs(bySite) do scene.movePlotQueue(queue,dt) end
+ end
 end
 function scene.holdSquare(d,p,dt)
  local square=p.miningSquare
  if not square or d.carrierId then return false end
- local offset=Feel.formation(d.slot,#p.drones)
- local limit=math.max(0,square.half-2)
- if offset.Magnitude>limit then offset=offset.Unit*limit end
- local height=(d.flightHeight or Feel.FollowHeight)+(d.role=='Ramiel' and 0 or Feel.hover(now,d.owned.base.maxStep60))
- if square.field.cfg.SelectionOnly and d.role~='Nomad' then
-  -- The pin is on the bed, three studs below a standing avatar's root.
-  height=Feel.quarryFollowHeight(d.role,now,d.owned.base.maxStep60)+3
- end
  d.mining=false;d.state='HoldSelector';d.holdPin=square
- move(d,square.center+offset+Vector3.new(0,height,0),dt)
+ scene.waitAtPlot(d,p,square.field,square,dt)
  return true
 end
 local function supportDrone(d: any,p: any,hr: any,dt: number)
@@ -11757,7 +11824,7 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   -- Workers without a current stone regroup with the player. Plot orders may
   -- find another stone later; manual clicks are dispatched next simulation step.
   d.state='Follow';d.mining=false
-  if d.autoField==field.id then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt);return end
+  if d.autoField==field.id then d.state='Waiting';scene.waitAtPlot(d,p,field,nil,dt);return end
   if not d.autoField then local old=d.field;d.field=nil;dropFieldIfEmpty(p,old) end
   local hr=characterRoot(p)
   move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt)
@@ -11974,7 +12041,7 @@ local function breakerDrone(d,p,hr,field,dt)
  end
  local r=d.target
  if not r then
-  if d.autoField==field.id then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt)
+  if d.autoField==field.id then d.state='Waiting';scene.waitAtPlot(d,p,field,nil,dt)
   else followRole(d,p,hr,dt) end
   return
  end
@@ -12287,7 +12354,7 @@ local function droneStep(d: any,dt: number)
  if d.role=='Courier' then
   d.mining=false;d.field=nil
   if scene.runStart then
-   if not scene.collectGroundCargo(d,p,hr,dt) then
+   if not scene.collectGroundCargo(d,p,hr,dt) and not scene.holdSquare(d,p,dt) then
     d.state='Follow'
     move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt)
    end
@@ -12345,7 +12412,7 @@ local function droneStep(d: any,dt: number)
    attackDrone(d,field,dt)
   elseif playerCanMine(p,field) then
    if d.deployedCarrier and logistics:capacity(p)<=0 then
-    release(d);d.state='StorageFull';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt)
+    release(d);d.state='StorageFull';scene.waitAtPlot(d,p,field,nil,dt)
    elseif not d.deployedCarrier and not d.squareJob and not nearMiningField(hr.Position,field) then
     -- Ore goes into a backpack carried by the owner. Leaving the plot brings
     -- the swarm along. The profile-level leash clears the order before work resumes.
@@ -13618,9 +13685,11 @@ RunService.Heartbeat:Connect(function(dt: number)
   swarmGrid=Feel.swarmGrid(drones)
   for _,p in pairs(profiles) do
    local hr=characterRoot(p)
-   if hr then p.followRing=Feel.ringGoals(p.drones,hr.Position) end
+   p.followRing=hr and Feel.ringGoals(p.drones,hr.Position,p.followRing,scene.followHeight) or nil
   end
+  scene.plotQueues={}
   for _,d in pairs(drones) do droneStep(d,C.Tick) end
+  scene.flushPlotQueues(C.Tick)
   if scene.fieldTools then scene.fieldTools:step(C.Tick) end
   for _,d in pairs(drones) do
    if d.hp>0 and d.mining and d.target and not d.target.paid and not d.target.field.cfg.SelectionOnly then scene.hazards:beam(d.pos,d.target.part.Position,4,'laser') end

@@ -25,6 +25,29 @@ scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center-Vector3.xAxis
 assert((p.miningSquare.center-center).Magnitude<.001,'out-of-range command changed the pin')
 workspace.Raycast=initialRay
 
+-- Let production droneStep decide who is waiting. The line uses only those
+-- drones, and remains on the original edge when the player crosses the pin.
+local function queueGoals()
+ scene.plotQueues={}
+ for _,worker in ipairs(p.drones) do droneStep(worker,C.Tick) end
+ scene.flushPlotQueues(C.Tick)
+ local order={}
+ for _,worker in ipairs(p.drones) do if worker.state=='HoldSelector' then table.insert(order,worker) end end
+ table.sort(order,function(a,b) return a.intentGoal.Z<b.intentGoal.Z end)
+ return order
+end
+local order=queueGoals()
+assert(#order==#p.drones and order[#order].role=='Courier' and order[#order-1].role=='Courier','couriers did not queue together')
+local edgeX=center.X+p.miningSquare.half+5
+local altitude=order[1].intentGoal.Y
+for i,worker in ipairs(order) do
+ assert(math.abs(worker.intentGoal.X-edgeX)<.001 and worker.intentGoal.Y==altitude,'waiting drone did not stay on the padded edge line')
+ if i>1 then assert(worker.intentGoal.Z-order[i-1].intentGoal.Z>=4.49,'line stacked neighboring drones') end
+end
+pl.Character:PivotTo(CFrame.new(center+Vector3.new(-20,3,0)))
+assert(queueGoals()[1].intentGoal.X==edgeX,'walking around a plot flipped the queue')
+pl.Character:PivotTo(CFrame.new(center+Vector3.new(20,3,0)))
+
 local material=Workshop.cargoKey('Amber',7)
 local function loose(position)
  scene.spawnOrePickup(bed,{owner=pl.UserId,runId=data(p).run.id,nodeId='test',units=1,raw=true,
@@ -56,6 +79,9 @@ assert(d.orePickupId==id and drop.courier==d,'nearest ore was not reserved')
 scene.collectGroundCargo(d,p,hr,C.Tick)
 local high=d.pos
 assert(d.state=='Pickup' and (high-dock).Magnitude>5.9 and d.oreDock and pickups[id])
+local idle=queueGoals()
+assert(d.state=='Pickup' and #idle>0 and #idle<#p.drones,'active couriers should leave the idle line')
+assert(math.abs((idle[1].intentGoal.Z+idle[#idle].intentGoal.Z)*.5-center.Z)<.001,'working drones left a hole in the line')
 snapshotDrone(d)
 assert((d.model:GetAttribute('CourierPickupPoint')-gem).Magnitude<.01)
 scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center+Vector3.xAxis*36})
