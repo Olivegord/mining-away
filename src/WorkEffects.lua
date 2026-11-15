@@ -394,6 +394,64 @@ function W:repair(drone,record,now)
  drawSpheres(fx,now,charging and .3+.7*q or 1,q,healing and .5 or 0,color)
  fx.sparks.Rate=charging and 3+q*4 or 8;fx.sparks.Enabled=true
 end
+local function destroyGrapple(fx)
+ if fx.grapple then fx.grapple.root:Destroy();fx.grapple=nil end
+end
+local function grappleFrame(fx,pivot,cradle,ground,age,loadedId,paused,reduced,now)
+ if age<.24 and not loadedId then return nil end
+ local hook=fx.grapple
+ if not hook then
+  local root=Instance.new('Folder');root.Name='CourierGrapple';root.Parent=fx.root
+  local anchor=part(root,'WinchOrigin')
+  local payload=part(root,'GrapplePayload');payload.Size=Vector3.one*.56
+  local start=Instance.new('Attachment');start.Parent=anchor
+  local eye=Instance.new('Attachment');eye.Position=Vector3.yAxis*.56;eye.Parent=payload
+  local rope=Instance.new('RopeConstraint');rope.Name='GrappleRope'
+  rope.Attachment0=start;rope.Attachment1=eye
+  rope.Visible=true;rope.Thickness=.075;rope.Restitution=0
+  rope.WinchTarget=.35;rope.WinchSpeed=8;rope.WinchForce=260;rope.WinchResponsiveness=22
+  rope.Parent=root
+  hook={root=root,anchor=anchor,payload=payload,rope=rope}
+  fx.grapple=hook
+ end
+ local anchor,payload,rope=hook.anchor,hook.payload,hook.rope
+ anchor.CFrame=pivot*CFrame.new(0,-.48,0)
+ local reach=progress(age,.24,Workshop.COURIER_CONTACT-.24)
+ local target=CFrame.new(ground)*cradle.Rotation
+ if loadedId and not hook.ore then
+  payload.CFrame=target
+  rope.Length=math.max(.4,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude+.06)
+  hook.ore=loadedId;hook.caughtAt=now
+ end
+ if hook.ore and not hook.seatingAt and not reduced then
+  if paused and not payload.Anchored then
+   hook.pausedVelocity=payload.AssemblyLinearVelocity
+   payload.Anchored=true
+  elseif not paused and payload.Anchored then
+   payload.Anchored=false
+   payload.AssemblyLinearVelocity=hook.pausedVelocity or Vector3.zero
+   hook.pausedVelocity=nil
+  end
+ end
+ if not hook.ore then
+  payload.CFrame=cradle:Lerp(target,reach*reach*(3-2*reach))
+ elseif not hook.seatingAt and not paused then
+  local elapsed=now-hook.caughtAt
+  if reduced or elapsed>1.35 or elapsed>.13 and (payload.Position-cradle.Position).Magnitude<.7 then
+   hook.seatingAt=now;hook.seatingFrom=payload.CFrame;payload.Anchored=true
+  end
+ end
+ if hook.seatingAt then
+  local t=progress(now,hook.seatingAt,.23)
+  payload.CFrame=hook.seatingFrom:Lerp(cradle,t*t*(3-2*t))
+  if t>=1 then fx.grappleDone=hook.ore;destroyGrapple(fx);return cradle end
+ end
+ if payload.Anchored then
+  rope.Length=math.max(.4,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude+.06)
+ end
+ rope.WinchEnabled=hook.ore~=nil and not payload.Anchored and not paused
+ return payload.CFrame
+end
 function W:courier(drone,record,now)
  local source=drone.source;local state=source:GetAttribute('State')
  local snapPosition
@@ -462,8 +520,15 @@ function W:courier(drone,record,now)
  pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
  local ground=source:GetAttribute('CourierPickupPoint')
  local scanAge=drone.pickupAge
+ local grappling=state=='Pickup' and source:GetAttribute('CourierGrappling')==true and typeof(ground)=='Vector3'
+ if grappling then fx.grappleGround=ground
+ elseif state=='Deliver' and fx.grapple and fx.grapple.ore then
+  grappling=true;ground=fx.grappleGround
+ else
+  destroyGrapple(fx);fx.grappleDone=nil;fx.grappleGround=nil
+ end
  local scanning=state=='Pickup' and not paused and typeof(ground)=='Vector3' and scanAge~=nil
-  and scanAge>=0 and scanAge<Workshop.COURIER_SCAN+.17
+  and scanAge>=0 and scanAge<Workshop.COURIER_SCAN+.17 and not grappling
  if scanning and not fx.scanDots then
   fx.scanDots={}
   for i=1,9 do
@@ -523,7 +588,7 @@ function W:courier(drone,record,now)
   local loadedMaterial=source:GetAttribute('CourierLoadedMaterial')
   local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
   local loadingSlot
-  if loadedId and loadedId>0 and loadAge<.55 and not unload then
+  if loadedId and loadedId>0 and (loadAge<.55 or grappling and loadAge<2) and not unload then
    for i=math.min(parcelUnits,6),1,-1 do
     if fx.load[i]==loadedMaterial then loadingSlot=i;break end
    end
@@ -572,8 +637,9 @@ function W:courier(drone,record,now)
    local closed=i<=parcelUnits and 1 or .72
    local beforeContact=docking and pickupAge<Workshop.COURIER_CONTACT
    local receiving=docking and i==parcelUnits+1 and not loadingSlot
+   local hooked=grappling and (receiving or i==loadingSlot) and (not loadingSlot or fx.grappleDone~=loadedId)
    local newlyCaught=i==loadingSlot and not beforeContact and loadAge>=0 and fx.closedOre~=loadedId
-   local springing=not reduced and not unload and (not docking or not beforeContact) and (i<=parcelUnits or receiving)
+   local springing=not hooked and not reduced and not unload and (not docking or not beforeContact) and (i<=parcelUnits or receiving)
    if springing then
     local spin=slot.spin or Vector3.zero
     -- The rock was stationary. On capture its inertia first throws the
@@ -582,6 +648,10 @@ function W:courier(drone,record,now)
     slot.angles,slot.spin=Workshop.clawSuspension(slot.angles or Vector3.zero,spin,localAcceleration,i<=parcelUnits,paused and 0 or clawDt)
     cargoFrame=cargoFrame*CFrame.new(0,.56,0)*CFrame.Angles(slot.angles.X,0,slot.angles.Z)*CFrame.new(0,-.56,0)
    elseif not paused then slot.angles=nil;slot.spin=nil end
+   if hooked then
+    local hookPose=grappleFrame(fx,pivot,cargoFrame,ground,pickupAge,not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,now)
+    if hookPose then cargoFrame=hookPose end
+   end
    if i==loadingSlot then
     if beforeContact then closed=grip end
     if newlyCaught then

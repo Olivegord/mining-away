@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — grappling rope and winch
+
+The fly-through pickup lowers the claw on a visible RopeConstraint. At the confirmed grab, the rock starts stationary on the same payload as the claw. The winch pulls them toward the moving body and the rope allows the payload to swing before it seats in the cradle.
+
 ## November 14 — swooping claw contact
 
 The dotted pickup cue now tracks a moving approach. The claw closes as the drone passes the rock; a damped suspension reacts to capture and flight acceleration, swinging the grasped mineral with the same claw. The previous stationary scan and vertical grab are superseded.

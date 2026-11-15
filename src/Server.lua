@@ -2916,7 +2916,8 @@ function scene.collectGroundCargo(d,p,hr,dt)
   else yaw=Feel.levelYaw(position,scene.packStation.Position,d.yaw) end
  end
  local gem=Vector3.new(position.X,drop.floor-.22+drop.part.Size.Y*.5,position.Z)
- local dock=d.oreDock or gem-CFrame.Angles(0,yaw,0):PointToWorldSpace(Vector3.new(x,y,z))
+ local hookOffset=CFrame.Angles(0,yaw,0):PointToWorldSpace(Vector3.new(x,-Workshop.COURIER_HOOK_DROP,z))
+ local dock=d.oreDock or gem-hookOffset
  if not d.oreDock then
   local ignore={pickupFolder,droneFolder,hr.Parent}
   local reach=(p.cargoReach or OreDrops.CARGO_REACH)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
@@ -2928,7 +2929,7 @@ function scene.collectGroundCargo(d,p,hr,dt)
   local offset=d.pos-dock
   local approachTime=Workshop.courierApproachTime(offset)
   local turn=Workshop.courierReturnTurn(dock,yaw,scene.courierDeliveryGoal(d,p))
-  local duration=approachTime+Workshop.COURIER_LIFT+Workshop.courierTurnTime(turn)
+  local duration=approachTime+Workshop.courierReturnDuration(turn)
   local previous=d.pos
   local samples=math.clamp(math.ceil(duration*5),6,40)
   for i=1,samples do
@@ -2944,7 +2945,7 @@ function scene.collectGroundCargo(d,p,hr,dt)
    return false
   end
   d.oreDock=dock;d.oreYaw=yaw;d.oreEntryOffset=offset;d.oreEntryVelocity=entryVelocity
-  d.oreApproachTime=approachTime;d.oreReturnTurn=turn;d.pickupAt=now
+  d.oreApproachTime=approachTime;d.oreReturnTurn=turn;d.pickupAt=now;d.oreHookPoint=gem
   d.lastMoveFormation=false;d.descentOrigin=nil
   drop.part:SetAttribute('CourierDocking',d.id)
   drop.part:SetAttribute('CourierDockYaw',yaw+gripYaw)
@@ -2953,13 +2954,13 @@ function scene.collectGroundCargo(d,p,hr,dt)
  d.state='Pickup'
  scene.flyCourierPickup(d,dt)
  if age<d.oreApproachTime then return true end
- local clawCenter=dock+CFrame.Angles(0,yaw,0):PointToWorldSpace(Vector3.new(x,y,z))
+ local clawCenter=dock+hookOffset
  if (clawCenter-gem).Magnitude>.8 or not los(dock,gem,d.model,{pickupFolder,droneFolder,hr.Parent},true,true) then
   d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.oreDock=nil;d.oreYaw=nil;d.pickupAt=nil
   p.nextEmptierPlan=nil;return false
  end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
-  d.oreSeatUntil=d.pickupAt+d.oreApproachTime+Workshop.COURIER_LIFT+Workshop.courierTurnTime(d.oreReturnTurn)+Workshop.COURIER_RENDER_DELAY
+  d.oreSeatUntil=d.pickupAt+d.oreApproachTime+Workshop.courierReturnDuration(d.oreReturnTurn)+Workshop.COURIER_RENDER_DELAY
   d.oreLoadedId=id;d.oreLoadedMaterial=drop.material;d.oreLoadedVisualAt=now
   d.deliveryRequested=false
   drop.part:SetAttribute('Units',0)
@@ -3250,7 +3251,7 @@ local function snapshotDrone(d)
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
   DeliveryUnits=units,DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
   CourierDock=d.oreDock or false,CourierDockYaw=d.oreYaw or false,
-  CourierPickupPoint=d.oreDock and groundCargo and Vector3.new(groundCargo.x,groundCargo.floor-.22+groundCargo.part.Size.Y*.5,groundCargo.z) or false,
+  CourierPickupPoint=d.oreDock and d.oreHookPoint or false,CourierGrappling=d.oreDock~=nil,
   CourierEntryOffset=d.oreDock and d.oreEntryOffset or Vector3.zero,
   CourierEntryVelocity=d.oreDock and d.oreEntryVelocity or false,
   CourierApproachTime=d.oreDock and d.oreApproachTime or false,CourierReturnTurn=d.oreDock and d.oreReturnTurn or false,

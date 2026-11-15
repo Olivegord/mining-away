@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — continuous grappling sweep
+
+The courier's climb and turn should read as a single arc. Use a physical Roblox rope for the grappling hook and reel the grabbed rock in while the courier keeps flying.
+
 ## November 14 — one sweep through the pickup and a wide return
 
 Make the descent, moving grab, and climb one continuous motion. The courier should carry through the pickup and turn back in a wide arc. Smaller drones should respond faster and fly lower while following the player.

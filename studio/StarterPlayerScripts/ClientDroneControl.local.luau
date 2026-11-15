@@ -134,9 +134,9 @@ W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
 W.COURIER_SWEEP_SPEED=11
-W.COURIER_SWEEP_OUT=7
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
+W.COURIER_HOOK_DROP=4.8
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
@@ -160,11 +160,22 @@ function W.courierStroke(age)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower,
   W.COURIER_CLEARANCE*(clawSpeed(ascent,W.COURIER_LIFT)-lowerSpeed),-lowerSpeed
 end
-local function courierSegment(a,b,va,vb,age,duration)
- local t=math.clamp(age/duration,0,1);local t2=t*t;local t3=t2*t
- local delta=b-a
- return a+delta*(3*t2-2*t3)+duration*(va*(t3-2*t2+t)+vb*(t3-t2)),
-  delta*((6*t-6*t2)/duration)+va*(3*t2-4*t+1)+vb*(3*t2-2*t)
+local function courierApproach(dock,offset,entryVelocity,contactVelocity,contactAcceleration,age,duration)
+ local t=math.clamp(age/duration,0,1)
+ local startTangent=entryVelocity*duration
+ local remaining=-offset-startTangent
+ local tangentChange=contactVelocity*duration-startTangent
+ local third=10*remaining-4*tangentChange
+ local fourth=-15*remaining+7*tangentChange
+ local fifth=6*remaining-3*tangentChange
+ -- Blend entry into the bend over the last fraction of a second, so a
+ -- distant pickup cannot magnify the contact acceleration across the route.
+ local blendTime=math.min(.4,duration)
+ local u=math.clamp((age-duration+blendTime)/blendTime,0,1)
+ local shape=u^3*(1-u)^2
+ local slope=u^2*(1-u)*(3-5*u)
+ return dock+offset+startTangent*t+((fifth*t+fourth)*t+third)*t^3+contactAcceleration*(.5*blendTime^2*shape),
+  (startTangent+((5*fifth*t+4*fourth)*t+3*third)*t^2)/duration+contactAcceleration*(.5*blendTime*slope)
 end
 function W.courierApproachTime(offset)
  local distance=Vector3.new(offset.X,0,offset.Z).Magnitude
@@ -173,7 +184,7 @@ end
 function W.courierReturnTurn(dock,yaw,depot)
  local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
  local lateral=Vector3.new(-forward.Z,0,forward.X)
- local delta=depot-dock-forward*W.COURIER_SWEEP_OUT
+ local delta=depot-dock
  local radius=W.COURIER_TURN_RADIUS
  local best=nil
  -- Find where the return circle is tangent to the line to the counter.
@@ -193,30 +204,33 @@ end
 function W.courierTurnTime(turn)
  return math.abs(turn)*W.COURIER_TURN_RADIUS/W.COURIER_SWEEP_SPEED
 end
+function W.courierReturnDuration(turn)
+ return math.max(1.1,W.courierTurnTime(turn))
+end
 function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
  approachTime=approachTime or W.COURIER_CONTACT
- local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
- local through=forward*W.COURIER_SWEEP_SPEED
- if age<approachTime then
-  local position,velocity=courierSegment(dock+offset,dock,entryVelocity,through,age,approachTime)
-  local t=math.clamp(age/approachTime,0,1)
-  -- Lead with the descent while preserving both endpoint velocities.
-  local verticalTime=age+approachTime*.72*t*t*(1-t)
-  local vertical,verticalVelocity=courierSegment(dock+offset,dock,entryVelocity,through,verticalTime,approachTime)
-  return Vector3.new(position.X,vertical.Y,position.Z),
-   Vector3.new(velocity.X,verticalVelocity.Y*(1+.72*t*(2-3*t)),velocity.Z)
- end
- local finish=dock+forward*W.COURIER_SWEEP_OUT+Vector3.yAxis*W.COURIER_SWEEP_RISE
- local after=age-approachTime
- if after<W.COURIER_LIFT then return courierSegment(dock,finish,through,through,after,W.COURIER_LIFT) end
  turn=turn or 0
- local travel=after-W.COURIER_LIFT
- local turningTime=W.courierTurnTime(turn)
- local angle=math.min(math.abs(turn),travel*W.COURIER_SWEEP_SPEED/W.COURIER_TURN_RADIUS)
+ local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
  local side=Vector3.new(-forward.Z,0,forward.X)*(turn<0 and -1 or 1)
- local tangent=(forward*math.cos(angle)+side*math.sin(angle))*W.COURIER_SWEEP_SPEED
- local arc=finish+(forward*math.sin(angle)+side*(1-math.cos(angle)))*W.COURIER_TURN_RADIUS
- return arc+tangent*math.clamp(travel-turningTime,0,W.COURIER_RENDER_DELAY),tangent
+ local speed=W.COURIER_SWEEP_SPEED
+ local radius=W.COURIER_TURN_RADIUS
+ local riseTime=.72
+ if age<approachTime then
+  -- Match the return's velocity and acceleration at the grab. The bend
+  -- starts at contact as the ascent begins, so there is no straight climb.
+  local bend=math.abs(turn)>1e-5 and side*(speed^2/radius) or Vector3.zero
+  local lift=Vector3.yAxis*(2*W.COURIER_SWEEP_RISE/riseTime^2)
+  return courierApproach(dock,offset,entryVelocity,forward*speed,bend+lift,age,approachTime)
+ end
+ local turningTime=W.courierTurnTime(turn)
+ local travel=math.min(age-approachTime,W.courierReturnDuration(turn)+W.COURIER_RENDER_DELAY)
+ local angle=math.min(math.abs(turn),travel*speed/radius)
+ local tangent=(forward*math.cos(angle)+side*math.sin(angle))*speed
+ local arc=dock+(forward*math.sin(angle)+side*(1-math.cos(angle)))*radius
+ local rise=math.exp(-(travel/riseTime)^2)
+ local height=W.COURIER_SWEEP_RISE*(1-rise)
+ local climb=2*W.COURIER_SWEEP_RISE*travel*rise/riseTime^2
+ return arc+tangent*math.max(0,travel-turningTime)+Vector3.yAxis*height,tangent+Vector3.yAxis*climb
 end
 function W.clawSuspension(angles,spin,acceleration,loaded,dt)
  local elapsed=math.clamp(dt,0,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
@@ -4019,6 +4033,64 @@ function W:repair(drone,record,now)
  drawSpheres(fx,now,charging and .3+.7*q or 1,q,healing and .5 or 0,color)
  fx.sparks.Rate=charging and 3+q*4 or 8;fx.sparks.Enabled=true
 end
+local function destroyGrapple(fx)
+ if fx.grapple then fx.grapple.root:Destroy();fx.grapple=nil end
+end
+local function grappleFrame(fx,pivot,cradle,ground,age,loadedId,paused,reduced,now)
+ if age<.24 and not loadedId then return nil end
+ local hook=fx.grapple
+ if not hook then
+  local root=Instance.new('Folder');root.Name='CourierGrapple';root.Parent=fx.root
+  local anchor=part(root,'WinchOrigin')
+  local payload=part(root,'GrapplePayload');payload.Size=Vector3.one*.56
+  local start=Instance.new('Attachment');start.Parent=anchor
+  local eye=Instance.new('Attachment');eye.Position=Vector3.yAxis*.56;eye.Parent=payload
+  local rope=Instance.new('RopeConstraint');rope.Name='GrappleRope'
+  rope.Attachment0=start;rope.Attachment1=eye
+  rope.Visible=true;rope.Thickness=.075;rope.Restitution=0
+  rope.WinchTarget=.35;rope.WinchSpeed=8;rope.WinchForce=260;rope.WinchResponsiveness=22
+  rope.Parent=root
+  hook={root=root,anchor=anchor,payload=payload,rope=rope}
+  fx.grapple=hook
+ end
+ local anchor,payload,rope=hook.anchor,hook.payload,hook.rope
+ anchor.CFrame=pivot*CFrame.new(0,-.48,0)
+ local reach=progress(age,.24,Workshop.COURIER_CONTACT-.24)
+ local target=CFrame.new(ground)*cradle.Rotation
+ if loadedId and not hook.ore then
+  payload.CFrame=target
+  rope.Length=math.max(.4,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude+.06)
+  hook.ore=loadedId;hook.caughtAt=now
+ end
+ if hook.ore and not hook.seatingAt and not reduced then
+  if paused and not payload.Anchored then
+   hook.pausedVelocity=payload.AssemblyLinearVelocity
+   payload.Anchored=true
+  elseif not paused and payload.Anchored then
+   payload.Anchored=false
+   payload.AssemblyLinearVelocity=hook.pausedVelocity or Vector3.zero
+   hook.pausedVelocity=nil
+  end
+ end
+ if not hook.ore then
+  payload.CFrame=cradle:Lerp(target,reach*reach*(3-2*reach))
+ elseif not hook.seatingAt and not paused then
+  local elapsed=now-hook.caughtAt
+  if reduced or elapsed>1.35 or elapsed>.13 and (payload.Position-cradle.Position).Magnitude<.7 then
+   hook.seatingAt=now;hook.seatingFrom=payload.CFrame;payload.Anchored=true
+  end
+ end
+ if hook.seatingAt then
+  local t=progress(now,hook.seatingAt,.23)
+  payload.CFrame=hook.seatingFrom:Lerp(cradle,t*t*(3-2*t))
+  if t>=1 then fx.grappleDone=hook.ore;destroyGrapple(fx);return cradle end
+ end
+ if payload.Anchored then
+  rope.Length=math.max(.4,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude+.06)
+ end
+ rope.WinchEnabled=hook.ore~=nil and not payload.Anchored and not paused
+ return payload.CFrame
+end
 function W:courier(drone,record,now)
  local source=drone.source;local state=source:GetAttribute('State')
  local snapPosition
@@ -4087,8 +4159,15 @@ function W:courier(drone,record,now)
  pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
  local ground=source:GetAttribute('CourierPickupPoint')
  local scanAge=drone.pickupAge
+ local grappling=state=='Pickup' and source:GetAttribute('CourierGrappling')==true and typeof(ground)=='Vector3'
+ if grappling then fx.grappleGround=ground
+ elseif state=='Deliver' and fx.grapple and fx.grapple.ore then
+  grappling=true;ground=fx.grappleGround
+ else
+  destroyGrapple(fx);fx.grappleDone=nil;fx.grappleGround=nil
+ end
  local scanning=state=='Pickup' and not paused and typeof(ground)=='Vector3' and scanAge~=nil
-  and scanAge>=0 and scanAge<Workshop.COURIER_SCAN+.17
+  and scanAge>=0 and scanAge<Workshop.COURIER_SCAN+.17 and not grappling
  if scanning and not fx.scanDots then
   fx.scanDots={}
   for i=1,9 do
@@ -4148,7 +4227,7 @@ function W:courier(drone,record,now)
   local loadedMaterial=source:GetAttribute('CourierLoadedMaterial')
   local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
   local loadingSlot
-  if loadedId and loadedId>0 and loadAge<.55 and not unload then
+  if loadedId and loadedId>0 and (loadAge<.55 or grappling and loadAge<2) and not unload then
    for i=math.min(parcelUnits,6),1,-1 do
     if fx.load[i]==loadedMaterial then loadingSlot=i;break end
    end
@@ -4197,8 +4276,9 @@ function W:courier(drone,record,now)
    local closed=i<=parcelUnits and 1 or .72
    local beforeContact=docking and pickupAge<Workshop.COURIER_CONTACT
    local receiving=docking and i==parcelUnits+1 and not loadingSlot
+   local hooked=grappling and (receiving or i==loadingSlot) and (not loadingSlot or fx.grappleDone~=loadedId)
    local newlyCaught=i==loadingSlot and not beforeContact and loadAge>=0 and fx.closedOre~=loadedId
-   local springing=not reduced and not unload and (not docking or not beforeContact) and (i<=parcelUnits or receiving)
+   local springing=not hooked and not reduced and not unload and (not docking or not beforeContact) and (i<=parcelUnits or receiving)
    if springing then
     local spin=slot.spin or Vector3.zero
     -- The rock was stationary. On capture its inertia first throws the
@@ -4207,6 +4287,10 @@ function W:courier(drone,record,now)
     slot.angles,slot.spin=Workshop.clawSuspension(slot.angles or Vector3.zero,spin,localAcceleration,i<=parcelUnits,paused and 0 or clawDt)
     cargoFrame=cargoFrame*CFrame.new(0,.56,0)*CFrame.Angles(slot.angles.X,0,slot.angles.Z)*CFrame.new(0,-.56,0)
    elseif not paused then slot.angles=nil;slot.spin=nil end
+   if hooked then
+    local hookPose=grappleFrame(fx,pivot,cargoFrame,ground,pickupAge,not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,now)
+    if hookPose then cargoFrame=hookPose end
+   end
    if i==loadingSlot then
     if beforeContact then closed=grip end
     if newlyCaught then

@@ -44,9 +44,9 @@ W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
 W.COURIER_SWEEP_SPEED=11
-W.COURIER_SWEEP_OUT=7
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
+W.COURIER_HOOK_DROP=4.8
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
@@ -70,11 +70,22 @@ function W.courierStroke(age)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower,
   W.COURIER_CLEARANCE*(clawSpeed(ascent,W.COURIER_LIFT)-lowerSpeed),-lowerSpeed
 end
-local function courierSegment(a,b,va,vb,age,duration)
- local t=math.clamp(age/duration,0,1);local t2=t*t;local t3=t2*t
- local delta=b-a
- return a+delta*(3*t2-2*t3)+duration*(va*(t3-2*t2+t)+vb*(t3-t2)),
-  delta*((6*t-6*t2)/duration)+va*(3*t2-4*t+1)+vb*(3*t2-2*t)
+local function courierApproach(dock,offset,entryVelocity,contactVelocity,contactAcceleration,age,duration)
+ local t=math.clamp(age/duration,0,1)
+ local startTangent=entryVelocity*duration
+ local remaining=-offset-startTangent
+ local tangentChange=contactVelocity*duration-startTangent
+ local third=10*remaining-4*tangentChange
+ local fourth=-15*remaining+7*tangentChange
+ local fifth=6*remaining-3*tangentChange
+ -- Blend entry into the bend over the last fraction of a second, so a
+ -- distant pickup cannot magnify the contact acceleration across the route.
+ local blendTime=math.min(.4,duration)
+ local u=math.clamp((age-duration+blendTime)/blendTime,0,1)
+ local shape=u^3*(1-u)^2
+ local slope=u^2*(1-u)*(3-5*u)
+ return dock+offset+startTangent*t+((fifth*t+fourth)*t+third)*t^3+contactAcceleration*(.5*blendTime^2*shape),
+  (startTangent+((5*fifth*t+4*fourth)*t+3*third)*t^2)/duration+contactAcceleration*(.5*blendTime*slope)
 end
 function W.courierApproachTime(offset)
  local distance=Vector3.new(offset.X,0,offset.Z).Magnitude
@@ -83,7 +94,7 @@ end
 function W.courierReturnTurn(dock,yaw,depot)
  local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
  local lateral=Vector3.new(-forward.Z,0,forward.X)
- local delta=depot-dock-forward*W.COURIER_SWEEP_OUT
+ local delta=depot-dock
  local radius=W.COURIER_TURN_RADIUS
  local best=nil
  -- Find where the return circle is tangent to the line to the counter.
@@ -103,30 +114,33 @@ end
 function W.courierTurnTime(turn)
  return math.abs(turn)*W.COURIER_TURN_RADIUS/W.COURIER_SWEEP_SPEED
 end
+function W.courierReturnDuration(turn)
+ return math.max(1.1,W.courierTurnTime(turn))
+end
 function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
  approachTime=approachTime or W.COURIER_CONTACT
- local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
- local through=forward*W.COURIER_SWEEP_SPEED
- if age<approachTime then
-  local position,velocity=courierSegment(dock+offset,dock,entryVelocity,through,age,approachTime)
-  local t=math.clamp(age/approachTime,0,1)
-  -- Lead with the descent while preserving both endpoint velocities.
-  local verticalTime=age+approachTime*.72*t*t*(1-t)
-  local vertical,verticalVelocity=courierSegment(dock+offset,dock,entryVelocity,through,verticalTime,approachTime)
-  return Vector3.new(position.X,vertical.Y,position.Z),
-   Vector3.new(velocity.X,verticalVelocity.Y*(1+.72*t*(2-3*t)),velocity.Z)
- end
- local finish=dock+forward*W.COURIER_SWEEP_OUT+Vector3.yAxis*W.COURIER_SWEEP_RISE
- local after=age-approachTime
- if after<W.COURIER_LIFT then return courierSegment(dock,finish,through,through,after,W.COURIER_LIFT) end
  turn=turn or 0
- local travel=after-W.COURIER_LIFT
- local turningTime=W.courierTurnTime(turn)
- local angle=math.min(math.abs(turn),travel*W.COURIER_SWEEP_SPEED/W.COURIER_TURN_RADIUS)
+ local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
  local side=Vector3.new(-forward.Z,0,forward.X)*(turn<0 and -1 or 1)
- local tangent=(forward*math.cos(angle)+side*math.sin(angle))*W.COURIER_SWEEP_SPEED
- local arc=finish+(forward*math.sin(angle)+side*(1-math.cos(angle)))*W.COURIER_TURN_RADIUS
- return arc+tangent*math.clamp(travel-turningTime,0,W.COURIER_RENDER_DELAY),tangent
+ local speed=W.COURIER_SWEEP_SPEED
+ local radius=W.COURIER_TURN_RADIUS
+ local riseTime=.72
+ if age<approachTime then
+  -- Match the return's velocity and acceleration at the grab. The bend
+  -- starts at contact as the ascent begins, so there is no straight climb.
+  local bend=math.abs(turn)>1e-5 and side*(speed^2/radius) or Vector3.zero
+  local lift=Vector3.yAxis*(2*W.COURIER_SWEEP_RISE/riseTime^2)
+  return courierApproach(dock,offset,entryVelocity,forward*speed,bend+lift,age,approachTime)
+ end
+ local turningTime=W.courierTurnTime(turn)
+ local travel=math.min(age-approachTime,W.courierReturnDuration(turn)+W.COURIER_RENDER_DELAY)
+ local angle=math.min(math.abs(turn),travel*speed/radius)
+ local tangent=(forward*math.cos(angle)+side*math.sin(angle))*speed
+ local arc=dock+(forward*math.sin(angle)+side*(1-math.cos(angle)))*radius
+ local rise=math.exp(-(travel/riseTime)^2)
+ local height=W.COURIER_SWEEP_RISE*(1-rise)
+ local climb=2*W.COURIER_SWEEP_RISE*travel*rise/riseTime^2
+ return arc+tangent*math.max(0,travel-turningTime)+Vector3.yAxis*height,tangent+Vector3.yAxis*climb
 end
 function W.clawSuspension(angles,spin,acceleration,loaded,dt)
  local elapsed=math.clamp(dt,0,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps

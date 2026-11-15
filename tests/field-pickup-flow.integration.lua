@@ -65,13 +65,18 @@ do
  local approach=Workshop.courierApproachTime(start)
  local turn=Workshop.courierReturnTurn(Vector3.zero,-math.pi/2,destination)
  assert(math.abs(turn)>math.pi,'a counter behind the grab should get a wide return arc')
- local turnStart=approach+Workshop.COURIER_LIFT
+ local turnStart=approach
+ local _,left=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach-.001,approach,turn)
+ local _,at=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach,approach,turn)
+ local _,right=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach+.001,approach,turn)
+ assert(((at-left)-(right-at)).Magnitude<.001 and math.abs(right.Z)>.005 and right.Y>.015,'the turn and climb must share the contact tangent and acceleration')
  local previous=Vector3.xAxis
  for i=0,120 do
   local time=turnStart+Workshop.courierTurnTime(turn)*i/120
   local pose,velocity=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,time,approach,turn)
-  assert(velocity.Magnitude>10.9 and previous:Dot(velocity.Unit)>.99,'the wide return lost speed or snapped its heading')
-  previous=velocity.Unit
+  local flat=Vector3.new(velocity.X,0,velocity.Z)
+  assert(flat.Magnitude>10.9 and previous:Dot(flat.Unit)>.99,'the wide return lost speed or snapped its heading')
+  previous=flat.Unit
   if i==120 then
    local toCounter=destination-pose
    assert(Vector3.new(toCounter.X,0,toCounter.Z).Unit:Dot(previous)>.999,'the exit tangent missed the counter')
@@ -103,7 +108,7 @@ workspace.Raycast=initialRay
 local drop,id=loose(center+Vector3.yAxis*.22)
 local extra,extraId=loose(center+Vector3.new(5,.22,0))
 local gem=Vector3.new(drop.x,drop.floor-.22+drop.part.Size.Y*.5,drop.z)
-local dock=gem+Vector3.yAxis*1.14
+local dock=gem+Vector3.yAxis*Workshop.COURIER_HOOK_DROP
 d.pos=dock-Vector3.xAxis*18+Vector3.yAxis*15;d.velocity=Vector3.xAxis*4
 scene.assignEmptierPickups(p)
 assert(d.orePickupId==id and drop.courier==d,'nearest ore was not reserved')
@@ -131,9 +136,9 @@ now=d.pickupAt+d.oreApproachTime+.01
 scene.collectGroundCargo(d,p,hr,C.Tick)
 assert(not pickups[id] and pickups[extraId] and Pro.droneCargoUnits(data(p),d.id)==1)
 assert(d.pos.X>dock.X and d.velocity.X>8,'cargo contact interrupted forward flight')
-now=d.pickupAt+d.oreApproachTime+Workshop.COURIER_LIFT+.01
+now=d.pickupAt+d.oreApproachTime+1
 scene.collectGroundCargo(d,p,hr,C.Tick)
-assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+5 and d.velocity.X>8,'climb turned backward before clearing the pickup')
+assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+4 and d.velocity.Magnitude>10,'climb lost its forward momentum before clearing the pickup')
 now=d.oreSeatUntil+.01
 scene.collectGroundCargo(d,p,hr,C.Tick)
 assert(d.pos.Y>dock.Y+5 and d.velocity.Magnitude>5 and d.deliveryRequested,'one ore should continue out of the swoop into delivery')
