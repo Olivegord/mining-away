@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — gun recoil comes from flight
+
+Needler and Ballcaster keep their loading motion, projectile timing and effects. The server pushes their actual hulls opposite the shot at release, with a stronger impulse for Ballcaster. Motion after release comes from momentum and the station controller. Do not restore the previous animated recoil of the hull and guns.
+
 ## November 14 — field click, attack and ore pickup cues
 
 Pending field selection uses a faint surface fill. Click raises the fill immediately, then fades it over 0.27 seconds. The accepted square keeps a separate thin border; tall walls retain their distance fade. The only rock outlines added here indicate real attacks or recent damage, with a soft pulse and a steady reduced-motion/reduced-flashing setting. Emptiers stop about six studs above the claw's grab pose, show a short dotted line aimed at the ore, descend after the scan, close the claw at contact and lift before flying to the counter. The guide fades during descent and shares the existing per-drone cleanup. This leaves the existing mining beam and mineral effects in place.

@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — physical swarm flight and solid rocks
+
+Drones should ease into a ring when the player stands still. While following a moving player, break the visible formation: let drones spread into different heights and speeds, move through a loose swarm and steer around each other. Make gun recoil push the drone itself so it has to correct its flight. Carriers should feel heavier and move slower with a crystal. Players should collide with field rocks.
+
 ## November 14 — reliable field selection, one-ore sellers and clearer drone movement
 
 Fix clicks that fail to place a new mining area and keep the accepted square outlined. Show aiming with a fill, then brighten it immediately on click and fade the flash quickly. Raise idle and attacking drones, and pulse the outline of rocks taking attacks. Make loose ore reliably collectible. A seller should hold one ore and go sell it. When a drone retrieves a rock, it should arrive above it, draw a dotted beam down, descend for the grab and climb back up.

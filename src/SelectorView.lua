@@ -163,9 +163,9 @@ function V:aim(ray)
   filter.RespectCanCollide=true
   hit=workspace:Raycast(ray.Origin,direction,filter)
   part=hit and hit.Instance
-  bed=bedFor(part)
-  if not bed or part~=bed then return nil end
-  leadId=nil
+  bed,rootPart=bedFor(part)
+  leadId=bed and rootPart:GetAttribute('ResourceId')
+  if not bed or part~=bed and not leadId then return nil end
  end
  -- Use the cursor's footprint; a wide rock can hang beyond the bed or
  -- straddle the command-range boundary. Keep the rock only as a lead hint.

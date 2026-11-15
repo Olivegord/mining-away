@@ -969,7 +969,8 @@ local function registerDrone(source)
  end
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
  if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
- local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
+ local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,
+  flightImpulseAt=source:GetAttribute('FlightImpulseAt') or 0,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone)
@@ -1217,6 +1218,7 @@ local function resolveRenderedTarget(kind,id,allowBreaking)
 end
 local function renderDrone(d,dt,now)
  local previousPosition=d.pos
+ local previousVelocity=d.velocity or Vector3.zero
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
  local role=s:GetAttribute('Role')
  local isRamiel=role=='Ramiel'
@@ -1227,7 +1229,11 @@ local function renderDrone(d,dt,now)
  if typeof(logical)~='Vector3' or typeof(goal)~='Vector3' then return end
  d.lastState=state
  local life=s:GetAttribute('Life');local maxStep=s:GetAttribute('MaxStep60') or .35
- if life~=d.life then d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero end
+ local mass=s:GetAttribute('FlightMass')
+ local impulseAt=s:GetAttribute('FlightImpulseAt') or 0
+ if life~=d.life then
+  d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero;d.flightImpulseAt=impulseAt
+ end
  local motionPaused=s:GetAttribute('MotionPaused')==true
  local dock=state=='Pickup' and role=='Courier' and s:GetAttribute('CourierDock')
  local docking=typeof(dock)=='Vector3'
@@ -1242,7 +1248,7 @@ local function renderDrone(d,dt,now)
  d.pickupAge=docking and pickupAge or nil
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
- if state=='Follow' and not motionPaused then
+ if state=='Follow' and not motionPaused and not mass then
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
    local phaseStep=(s:GetAttribute('PhaseSeed') or maxStep*200)/200
@@ -1250,7 +1256,7 @@ local function renderDrone(d,dt,now)
    goal=Feel.followGoal(hr.Position,slot,count,now,phaseStep,isRamiel,height)
   end
  end
- if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
+ if state=='Destroyed' or state=='Reprinting' or state=='Docked' then d.pos=logical;d.velocity=Vector3.zero;d.flightImpulseAt=impulseAt
  elseif docking then
   local height,_,entryWeight=Workshop.courierStroke(pickupAge)
   local desired=dock+Vector3.yAxis*height+(s:GetAttribute('CourierEntryOffset') or Vector3.zero)*entryWeight
@@ -1279,7 +1285,25 @@ local function renderDrone(d,dt,now)
   local workTravel=state=='ToCharge' or state=='Charging' or state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
   local correction=error.Magnitude>5 and error.Unit*math.min((error.Magnitude-5)*.8,maxStep*60*.25) or Vector3.zero
-  if referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
+  if mass then
+   local response=s:GetAttribute('FlightResponse') or 1
+   if impulseAt>(d.flightImpulseAt or 0) then
+    local impulse=s:GetAttribute('FlightImpulse')
+    -- A late observer initializes from the already kicked snapshot. Current
+    -- observers consume each release once, including during a recovery turn.
+    if typeof(impulse)=='Vector3' then
+     local age=math.max(0,now-impulseAt)
+     if age<.32 then d.velocity+=impulse*math.exp(-age*4) end
+     d.flightImpulseAt=impulseAt
+    end
+   end
+   local extrapolation=math.clamp(now-(s:GetAttribute('SnapshotAt') or now),0,.13)
+   local offset=logical+(s:GetAttribute('Velocity') or Vector3.zero)*extrapolation-d.pos
+   local drift=offset.Magnitude
+   local reconcile=drift>.32 and offset.Unit*math.min((drift-.32)*2.4,maxStep*60*.34) or nil
+   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,dt,s:GetAttribute('FlightWork')==true,
+    reconcile,response,mass,s:GetAttribute('FlightSteering'))
+  elseif referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,1.35)
   elseif referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
   else
@@ -1289,12 +1313,12 @@ local function renderDrone(d,dt,now)
  end
  if docking and type(dockYaw)=='number' then d.yaw=Feel.approachYaw(d.yaw,dockYaw,dt)
  elseif not motionPaused then
-  local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
+  local targetYaw=not mass and referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
   if state=='Collect' and type(dockYaw)=='number' then targetYaw=dockYaw end
   if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
   else d.workingYaw=nil end
-  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
+  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine' or state=='Recover') then
    local aim=s:GetAttribute('TargetPosition')
    if isNomad then targetYaw=s:GetAttribute('Yaw') or d.yaw
    elseif typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
@@ -1305,19 +1329,31 @@ local function renderDrone(d,dt,now)
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(isRamiel or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
+ local desiredPitch=0
+ if mass then
+  desiredBank=0
+  local precision=state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
+   or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or state=='Docked' or docking
+  if not precision and not heavyFlight and not motionPaused and not CrystalImpactView.reducedMotion() then
+   local thrust=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(((d.velocity or Vector3.zero)-previousVelocity)/math.max(dt,1/144))
+   desiredBank=math.clamp(-thrust.X*.0032,-math.rad(5),math.rad(5))
+   desiredPitch=math.clamp(-thrust.Z*.0042,-math.rad(7),math.rad(7))
+  end
+  d.flightPitch=(d.flightPitch or 0)+(desiredPitch-(d.flightPitch or 0))*(1-math.exp(-math.min(dt,.1)*9))
+ end
  if not docking then d.lastDock=nil end
  if docking then desiredBank=0 end
  d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
  local grounded=docking or role=='Courier' and state=='Collect' or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
- local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
+ local drift=(mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
  -- Reading server time makes every observer see the same hop, and late joins
  -- never replay an old recall.
  local recallAt=s:GetAttribute('RecallAt') or -100
  local recallAge=now-recallAt;local hop,recallPitch=0,0
- if not heavyFlight and not referenceMiner and not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
+ if not mass and not heavyFlight and not referenceMiner and not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
   local p=recallAge/.72
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
@@ -1338,7 +1374,7 @@ local function renderDrone(d,dt,now)
   end
  end
  local visiblePose=CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
-  *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0)
+  *CFrame.Angles(recallPitch+(d.flightPitch or 0),0,d.bank)*CFrame.Angles(0,ramielRoll,0)
  local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
  local ramielLatched=false
  local ramielInRange=d.ramiel and BeamVFX.near(visiblePose.Position,d.ramielNeutral and 165 or 185)

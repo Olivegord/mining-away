@@ -39,7 +39,7 @@ W.COURIER_SCAN=.32
 W.COURIER_LOWER=.48
 W.COURIER_CLOSE=.18
 W.COURIER_CONTACT=W.COURIER_SCAN+W.COURIER_LOWER+W.COURIER_CLOSE
-W.COURIER_LIFT=.46
+W.COURIER_LIFT=.59
 W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
@@ -52,11 +52,19 @@ local function easeClaw(t)
  t=math.clamp(t,0,1)
  return t*t*t*(10+t*(-15+6*t))
 end
+local function clawSpeed(t,duration)
+ if t<=0 or t>=1 then return 0 end
+ return 30*t*t*(1-t)^2/duration
+end
 function W.courierStroke(age)
- local lower=easeClaw((age-W.COURIER_SCAN)/W.COURIER_LOWER)
+ local descent=(age-W.COURIER_SCAN)/W.COURIER_LOWER
+ local ascent=(age-W.COURIER_CONTACT)/W.COURIER_LIFT
+ local lower=easeClaw(descent)
  local close=easeClaw((age-W.COURIER_SCAN-W.COURIER_LOWER)/W.COURIER_CLOSE)
- local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
- return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
+ local lift=easeClaw(ascent)
+ local lowerSpeed=clawSpeed(descent,W.COURIER_LOWER)
+ return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower,
+  W.COURIER_CLEARANCE*(clawSpeed(ascent,W.COURIER_LIFT)-lowerSpeed),-lowerSpeed
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30

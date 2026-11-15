@@ -363,7 +363,7 @@ local function spawnDrone(p,owned,slot,origin)
  local d={id=owned.id,owner=p.player.UserId,owned=owned,name=owned.name,role=owned.role or owned.type,flightHeight=flightHeight,model=model,body=body,emitter=emitter,slot=slot,
   pos=pos,goal=pos,velocity=Vector3.zero,yaw=0,life=1,state='Follow',hp=stats.maxHealth,stats=stats,field=nil,target=nil,mining=false,battery=stats.batteryCapacity,
   beamSince=0,readyAt=0,shotAt=0,shield=0,evade=0,commandOutAt=nil,shotSerial=0,lastShotAt=0,lastCritAt=0,forkUntil=0,chainUntil=0,
-  mineCharge=0,minePulseSerial=0,minePulseAt=0,minePulseTargetId='',mineBreakSerial=0,healAt=0,chargeAt=nil}
+  mineCharge=0,minePulseSerial=0,minePulseAt=0,minePulseTargetId='',mineBreakSerial=0,healAt=0,chargeAt=nil,swarmTraits=Feel.swarmTraits(owned.id)}
  if roleName=='Vacuum' and not p.vacuum then p.vacuum=d end
  if roleName=='Compactor' and not p.compactor then p.compactor=d end
  drones[d.id]=d;table.insert(p.drones,d);return d
@@ -403,11 +403,22 @@ function scene.unlockedMiners(field)
  end
  return false
 end
-local function los(a,b,target,ignore,physicalOnly)
- local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances=ignore or {droneFolder}
- if physicalOnly or target and target:GetAttribute('ReferenceCrystal')==true then params.RespectCanCollide=true end
- local hit=workspace:Raycast(a,b-a,params)
- return hit==nil or hit.Instance==target or (target and hit.Instance:IsDescendantOf(target))
+local function los(a,b,target,ignore,physicalOnly,passCrystal)
+ local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
+ local reference=target and target:GetAttribute('ReferenceCrystal')==true
+ if physicalOnly or reference then params.RespectCanCollide=true end
+ local excluded=ignore or {droneFolder}
+ params.FilterDescendantsInstances=excluded
+ for attempt=1,12 do
+  local hit=workspace:Raycast(a,b-a,params)
+  if not hit or hit.Instance==target or (target and hit.Instance:IsDescendantOf(target)) then return true end
+  -- Solid to avatars, but retain the previous soft obstruction rule for
+  -- reference mining beams and loose ore. Scenery and junk still block them.
+  if not ((passCrystal or reference) and hit.Instance:GetAttribute('ReferenceCrystal')==true) then return false end
+  if attempt==1 then excluded=table.clone(excluded) end
+  table.insert(excluded,hit.Instance);params.FilterDescendantsInstances=excluded
+ end
+ return false
 end
 local function abilityLineOfSight(p,from,r)
  return los(from,r.part.Position,r.part,{droneFolder,p.player.Character})
@@ -551,6 +562,20 @@ function scene.junkLandingOccupied(position,radius)
   end
  end
  return false
+end
+function scene.rockCanSolidify(r,players)
+ -- Do not turn on a growing collider inside a character. Use the current
+ -- staged envelope, not the larger reservation footprint or the final size.
+ local part=r.part;local half=part.Size*.5
+ for _,player in ipairs(players) do
+  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+  if hr then
+   local localPosition=part.CFrame:PointToObjectSpace(hr.Position)
+   if math.abs(localPosition.X)<half.X+1.2 and math.abs(localPosition.Z)<half.Z+1.2
+    and localPosition.Y>-half.Y-1.5 and localPosition.Y<half.Y+2.9 then return false end
+  end
+ end
+ return true
 end
 function scene.replenishJunk(field)
  if now<(field.nextJunkDrop or 0) then return end
@@ -1073,9 +1098,7 @@ function scene.finishPress(press)
 end
 function scene.orePullClear(drop,from,target,targetModel)
  if drop.pullTarget~=targetModel or now>=(drop.queryAt or 0) then
-  -- Mineable proxies can be wider than their rendered cut and are not solid
-  -- to players. They must not also act as invisible walls for ore.
-  drop.clearPath=los(from,target,targetModel,{pickupFolder,droneFolder},true)
+  drop.clearPath=los(from,target,targetModel,{pickupFolder,droneFolder},true,true)
   drop.queryAt=now+.15;drop.pullTarget=targetModel
  end
  return drop.clearPath==true
@@ -1311,7 +1334,7 @@ local function pickupStep(dt)
     drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.arc and drop.arc.landX or drop.x,drop.floor,drop.arc and drop.arc.landZ or drop.z))
     drop.part:SetAttribute('GroundImpactSerial',1)
    end
-   if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,targetModel,{pickupFolder,droneFolder},true) then
+   if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,targetModel,{pickupFolder,droneFolder},true,true) then
     if pressing then
      if not press.pressInputs then
       press.pressInputs={};press.pressInputValue=0;press.pressDeadline=now+Workshop.COMPACTOR_WAIT
@@ -1491,8 +1514,12 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   -- final hit. No saved state/remote can authorize an echo from a retired node.
   if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-(d.workStation or Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize,primary.referenceCrystal))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
   if assist and primary.processingPrimary~=d.id then return false end
- elseif not clusterFinish and (d.target~=r or (d.pos-(d.workStation or Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal))).Magnitude>1
-  or (not clusterHit and not los(d.pos,r.position,r.part,{droneFolder}))) then return false end
+ elseif not clusterFinish then
+  local released=special and job.launched
+  local station=d.workStation or Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal)
+  if d.target~=r or (d.pos-station).Magnitude>(released and 3 or 1)
+   or (not clusterHit and not los(released and job.from or d.pos,released and job.contact or r.position,r.part,{droneFolder})) then return false end
+ end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
  if contactKind=='Consumable' or contactKind=='FieldTool' then r.consumableWorked=true end
@@ -2238,38 +2265,37 @@ local function travelSpeed(d)
   local boost=p and (returning or not fieldCharge) and Workshop.chargeSpeed(data(p)) or 1
   return d.stats.maxStep60*1.5*boost*roleScale
  end
- return d.stats.maxStep60*roleScale*(d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
+ local variation=d.state=='Follow' and d.swarmTraits and 1+(d.swarmTraits.speed-1)*(d.swarmCruise or 0) or 1
+ return d.stats.maxStep60*roleScale*variation*(d.role=='Medic' and .68 or (d.role=='Courier' and (d.loadSpeed or 1)*(1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
  d.intentGoal=goal
  local settling=d.target~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant' or d.state=='Intake'
- local weight=(d.state=='Recover' or d.state=='Follow') and 0 or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
- local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)
- d.swarmOffset=weight==0 and Vector3.zero or Feel.smoothSwarm(d.swarmOffset,desired,dt)
- goal=goal+d.swarmOffset
+ local weight=(d.state=='Recover' or d.state=='Vacuum' and (goal-d.pos).Magnitude<1) and 0
+  or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
+ local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight,d.state=='Follow' and d.swarmCruise or nil)*Feel.SwarmForce
+ d.flightSteering=weight==0 and Vector3.zero or Feel.smoothSwarm(d.flightSteering,desired,dt)
  d.goal=goal
  local work=d.target~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach'
  local speed=travelSpeed(d)
  local flight=RoleConfig.Prominent[d.role]
- local yaw
- if d.role=='Striker' then
-  local p=profiles[d.owner];local hr=p and characterRoot(p)
-  yaw=Feel.referenceYaw(d.pos,goal,speed,hr and hr.CFrame.LookVector,d.yaw)
-  if scene.runStart or d.squareJob then
-   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work,nil,1.35)
-  else d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,speed,dt) end
- else
-  local response=d.orePickupId and d.state=='Collect' and Workshop.COURIER_APPROACH_RESPONSE or flight and flight.response or nil
-  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work,nil,response)
-  yaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
- end
+ local response=d.orePickupId and d.state=='Collect' and Workshop.COURIER_APPROACH_RESPONSE or flight and flight.response
+  or d.role=='Striker' and 1.35 or 1
+ d.flightResponse=response;d.flightWork=work;d.flightSpeed=speed
+ d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work,nil,response,d.flightMass,d.flightSteering)
+ local yaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
  d.yaw=Feel.approachYaw(d.yaw,yaw,dt*(flight and flight.turn or 1))
  -- Fixed-rate logical motion; snapshotDrone publishes its physical proxy.
 end
-function scene.followGoal(d,position,count)
+function scene.followGoal(d,position,count,velocity,dt)
  local maxStep=d.owned.base.maxStep60
  local height=d.role=='Nomad' and d.flightHeight or scene.runStart and Feel.quarryFollowHeight(d.role,now,maxStep) or nil
- return Feel.followGoal(position,d.slot,count,now,maxStep,d.role=='Ramiel',height)
+ if d.role=='Nomad' then return Feel.followGoal(position,d.slot,count,now,maxStep,false,height) end
+ local goal
+ d.swarmTraits=d.swarmTraits or Feel.swarmTraits(d.id)
+ goal,d.swarmCruise=Feel.swarmFollow(position,velocity or Vector3.zero,d.slot,count,now,
+  height or Feel.ReferenceFollowHeight+Feel.hover(now,maxStep),d.swarmTraits,d.swarmCruise,dt or C.Tick)
+ return goal
 end
 function scene.holdSquare(d,p,dt)
  local square=p.miningSquare
@@ -2304,7 +2330,7 @@ local function supportDrone(d: any,p: any,hr: any,dt: number)
  if (not best or (best.hp>=best.stats.maxHealth and not best.target)) and now>=(d.healUntil or 0) then
   d.state='Follow';d.mining=false;d.healTargetId=nil
   if scene.holdSquare(d,p,dt) then return end
-  move(d,scene.followGoal(d,hr.Position,#p.drones),dt);return
+  move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt);return
  end
  local goal=best and best.pos+Vector3.new(2,1,2) or hr.Position+Vector3.new(3,d.flightHeight,3)
  d.state='Support';d.mining=false;move(d,goal,dt)
@@ -2435,7 +2461,7 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   if d.autoField==field.id then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt);return end
   if not d.autoField then local old=d.field;d.field=nil;dropFieldIfEmpty(p,old) end
   local hr=characterRoot(p)
-  move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
+  move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt)
  end
 end
 local function specialDrone(d: any,p: any,field: any,dt: number)
@@ -2450,11 +2476,14 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  local definition=DroneCatalog.Types[d.role]
  local projectile=definition.Projectile
  local goal=committedStation(d,r);local yaw=d.yaw;d.state='Travel';d.mining=false;move(d,goal,dt)
+ local job=d.specialJob
  local arrived=Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0)
+ -- A gun must earn its original firing station before it can launch. Once
+ -- the shot is in flight, the hull is free to recoil within a bounded area.
+ if job and job.launched and (d.pos-goal).Magnitude<=3 then arrived=true end
  if projectile and arrived then
   d.yaw=Feel.approachYaw(yaw,d.workYaw or Feel.levelYaw(d.pos,r.position,yaw),dt*((RoleConfig.Prominent[d.role] or {}).turn or 1))
  end
- local job=d.specialJob
  local warmup=scene.miningWarmup(d,r)+(projectile and not d.workShotStarted and ((d.slot*7)%11)*.012 or 0)
  local starting=not job and d.warmAt and now-d.warmAt>=warmup
  local contacting=job and not job.impacted and now>=job.startedAt+job.duration*job.impact
@@ -2463,7 +2492,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
   -- and the actual contact. Cosmetic recovery never adds damage.
   if projectile=='Prism' then
    d.specialClear=scene.prismTrace(d,r,d.pos,true)~=nil
-  else d.specialClear=los(d.pos,r.position,r.part,{droneFolder}) end
+  else d.specialClear=los(job and job.launched and job.from or d.pos,job and job.launched and job.contact or r.position,r.part,{droneFolder}) end
   d.specialQueryAt=now+C.Snapshot
  end
  if not arrived or not d.specialClear then
@@ -2497,7 +2526,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local visualRecovery=definition.BeamHold and definition.BeamHold+RoleConfig.RamielCloseTime
    local recovery=visualRecovery and visualRecovery+.075 or .10
    d.specialJob.duration=math.max(cycle.duration,windup+flight+recovery);d.specialJob.impact=(windup+flight)/d.specialJob.duration
-   d.specialJob.from=from;d.specialJob.contact=aim
+   d.specialJob.from=from;d.specialJob.contact=aim;d.specialJob.windup=windup
    local ground=projectile=='Nomad' and (r.part:GetAttribute('GroundY') or r.position.Y-r.part.Size.Y*.5) or nil
    d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,windup,flight,d.id,r.id,r.part.CFrame:PointToObjectSpace(aim)/r.part.Size,definition.BeamHold,visualRecovery,ground)
   else
@@ -2507,6 +2536,13 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  end
  d.state='SpecialMine'
  job=d.specialJob
+ if (d.role=='Needler' or d.role=='Ballcaster') and job.windup and not job.launched and now>=job.startedAt+job.windup then
+  job.launched=true
+  local impulse=Feel.gunImpulse(d.role,job.from,job.contact,d.flightMass)
+  d.velocity+=impulse
+  d.model:SetAttribute('FlightImpulse',impulse)
+  d.model:SetAttribute('FlightImpulseAt',now)
+ end
  if not job.impacted and now>=job.startedAt+job.duration*job.impact then
   local accepted
   if projectile=='Prism' then accepted=scene.firePrism(d,r,job)
@@ -2527,7 +2563,7 @@ local roleAbilityStep
 local function followRole(d,p,hr,dt,state)
  if scene.holdSquare(d,p,dt) then return end
  d.mining=false;d.state=state or 'Follow'
- move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
+ move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt)
 end
 local function roleNodes(p,field,worker)
  local list={}
@@ -2773,8 +2809,8 @@ function scene.collectGroundCargo(d,p,hr,dt)
  local id=d.orePickupId
  local drop=id and pickups[id]
  if d.oreSeatUntil then
-  local height=Workshop.courierStroke(now-d.pickupAt)
-  d.pos=d.oreDock+Vector3.yAxis*height;d.goal=d.pos;d.velocity=Vector3.zero
+  local height,_,_,speed=Workshop.courierStroke(now-d.pickupAt)
+  d.pos=d.oreDock+Vector3.yAxis*height;d.goal=d.pos;d.velocity=Vector3.yAxis*speed
   if now<d.oreSeatUntil then d.state='Pickup';return true end
   d.oreSeatUntil=nil;d.oreDock=nil;d.oreYaw=nil;d.pickupAt=nil
  end
@@ -2798,7 +2834,7 @@ function scene.collectGroundCargo(d,p,hr,dt)
  if not d.oreDock then
   local ignore={pickupFolder,droneFolder,hr.Parent}
   if (d.pos-overhead).Magnitude>.22 then return true end
-  if not los(position,overhead,d.model,ignore,true) then
+  if not los(position,overhead,d.model,ignore,true,true) then
    d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.pickupAt=nil;d.oreDock=nil;d.oreYaw=nil;p.nextEmptierPlan=nil
    return true
   end
@@ -2812,9 +2848,9 @@ function scene.collectGroundCargo(d,p,hr,dt)
   drop.part:SetAttribute('CourierDockYaw',yaw+gripYaw)
  end
  local age=now-d.pickupAt
- local height,_,entryWeight=Workshop.courierStroke(age)
+ local height,_,entryWeight,speed,entrySpeed=Workshop.courierStroke(age)
  d.state='Pickup';d.yaw=yaw
- d.pos=d.oreDock+Vector3.yAxis*height+d.oreEntryOffset*entryWeight;d.goal=d.pos;d.velocity=Vector3.zero
+ d.pos=d.oreDock+Vector3.yAxis*height+d.oreEntryOffset*entryWeight;d.goal=d.pos;d.velocity=Vector3.yAxis*speed+d.oreEntryOffset*entrySpeed
  if age<Workshop.COURIER_CONTACT then return true end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
   d.oreSeatUntil=d.pickupAt+Workshop.COURIER_CONTACT+Workshop.COURIER_LIFT+Workshop.COURIER_RENDER_DELAY
@@ -2861,11 +2897,16 @@ local function droneStep(d: any,dt: number)
     local job=d.breaker;d.goal=job.impact;d.intentGoal=job.impact
     d.pos,d.velocity=Feel.powerDive(job.diveStart,job.impact,now-job.phaseAt,DroneRoles.BREAKER.diveDuration)
     if now-job.phaseAt>=DroneRoles.BREAKER.diveDuration then d.velocity=Vector3.zero end
-   elseif not d.oreDock then move(d,d.intentGoal or (d.goal-(d.swarmOffset or Vector3.zero)),dt) end
+   elseif not d.oreDock then move(d,d.intentGoal or d.goal,dt) end
   end
   return
  end
  if not store:healthy(p.session) then release(d);return end
+ if d.role=='Courier' then
+  d.flightMass,d.loadSpeed=Feel.courierLoad(Pro.droneCargoUnits(data(p),d.id))
+ else
+  d.flightMass=d.role=='Ballcaster' and 1.24 or d.role=='Needler' and .94 or 1
+ end
  if logistics then
   local station=logistics:station(d)
   if station then
@@ -2949,14 +2990,14 @@ local function droneStep(d: any,dt: number)
   if scene.runStart then
    if not scene.collectGroundCargo(d,p,hr,dt) then
     d.state='Follow'
-    move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
+    move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt)
    end
    return
   end
   if logistics:capacity(p)<=0 then
    d.deliveryRequested=false;d.pickupAt=nil;d.state='StorageFull'
    if scene.holdSquare(d,p,dt) then return end
-   move(d,scene.followGoal(d,hr.Position,#p.drones),dt);return
+   move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt);return
   end
   if scene.emptierReady(d,data(p)) and now>=(d.collectAfter or 0) then
    local rank=0;for _,other in ipairs(p.drones) do if other.role=='Courier' then rank+=1;if other==d then break end end end
@@ -3011,7 +3052,7 @@ local function droneStep(d: any,dt: number)
     -- the swarm along. The profile-level leash clears the order before work resumes.
     if field.junk then leaveDroneField(p,d) end
     d.mining=false;d.warmAt=nil;d.mineCharge=0;d.state='Follow'
-    move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
+    move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt)
    elseif DroneCatalog.Types[d.role] then specialDrone(d,p,field,dt)
    elseif d.role=='Charger' then breakerDrone(d,p,hr,field,dt)
    else mineDrone(d,p,field,dt) end
@@ -3021,7 +3062,7 @@ local function droneStep(d: any,dt: number)
   d.chargeAt=nil;d.chargeTarget=nil
   local height=d.flightHeight or Feel.FollowHeight
   if d.state~='Return' then d.state='Follow' end
-  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or scene.followGoal(d,hr.Position,#p.drones)
+  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt)
   move(d,goal,dt)
   if d.state=='Return' and (d.pos-goal).Magnitude<1 then d.state='Follow' end
   if (d.pos-home).Magnitude<22 then d.hp=math.min(d.stats.maxHealth,d.hp+8*dt) end
@@ -3095,7 +3136,9 @@ local function snapshotDrone(d)
  local mining=not profiles[d.owner].busy and d.state=='Mine' and d.mining and target~=nil
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Role=d.role,FlightHeight=d.flightHeight or Feel.FollowHeight,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,ChargeAt=d.chargeAt or 0,Firing=combatId~='',
   Battery=scene.chargingStation and math.ceil(d.battery or 0) or nil,MaxBattery=scene.chargingStation and d.stats.batteryCapacity or nil,
-  Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
+  Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,FlightSteering=d.flightSteering or Vector3.zero,
+  FlightMass=d.flightMass or 1,FlightResponse=d.flightResponse or 1,FlightWork=d.flightWork==true,
+  Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=d.flightSpeed or travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=scene.miningWarmup(d,target),
   DoubleBeam=d.stats.doubleBeam==1,TwinThrusters=d.stats.twinThrusters==1,OreDuplicator=d.stats.oreDuplicator==1,
   BeamVariant=d.owned.beamVariant,MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
@@ -4284,6 +4327,7 @@ RunService.Heartbeat:Connect(function(dt: number)
  snapshotElapsed=snapshotElapsed+dt;autosaveElapsed=autosaveElapsed+dt
  if snapshotElapsed>=C.Snapshot then
   local snapshotDt=snapshotElapsed;snapshotElapsed=0
+  local occupants
   for _,d in pairs(drones) do snapshotDrone(d) end
   scene.publishCharger()
   for _,field in ipairs(patches) do
@@ -4293,12 +4337,15 @@ RunService.Heartbeat:Connect(function(dt: number)
    end
    for _,r in ipairs(field.resources) do
     scene.regrow(r,snapshotDt)
-    local solid=not r.referenceCrystal and not r.paid and now>=r.readyAt
+    local solid=not r.paid and now>=r.readyAt
     if field.junk then
      if r.part.CanQuery~=solid then r.part.CanQuery=solid end
      if solid and not r.part.CanCollide then solid=not scene.junkLandingOccupied(r.position,r.fullSize.Magnitude*.5) end
+    elseif solid and not r.part.CanCollide then
+     occupants=occupants or Players:GetPlayers()
+     solid=scene.rockCanSolidify(r,occupants)
     end
-    if r.part.CanCollide~=solid then r.part.CanCollide=solid;r.part.CanTouch=solid end
+    if r.part.CanCollide~=solid then r.part.CanCollide=solid;r.part.CanTouch=solid and not r.referenceCrystal end
    end
    field.model:SetAttribute('Phase',field.e.phase);field.model:SetAttribute('EncounterId',nil);field.model:SetAttribute('PhaseEndsAt',nil)
    for _,t in ipairs(field.turrets) do

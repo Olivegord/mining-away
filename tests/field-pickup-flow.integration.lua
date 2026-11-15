@@ -33,13 +33,17 @@ local function loose(position)
  drop.landed=true;drop.age=1
  return drop,pickupSerial
 end
-local rock=Instance.new('Part');rock.CanCollide=false;rock.Parent=zone
+local rock=Instance.new('Part');rock.CanCollide=true;rock.Parent=zone;rock:SetAttribute('ReferenceCrystal',true)
+rock.Size=Vector3.new(3,2,3);rock.CFrame=CFrame.new(hr.Position-Vector3.yAxis*2)
+assert(not scene.rockCanSolidify({part=rock},{pl}),'a growing rock would trap a player')
+rock.CFrame=CFrame.new(center)
+assert(scene.rockCanSolidify({part=rock},{pl}),'a clear rock cannot turn solid')
 local near,nearId=loose(hr.Position-Vector3.yAxis*2)
 workspace.Raycast=function(_,_,_,params)
- return not params.RespectCanCollide and {Instance=rock} or nil
+ return not table.find(params.FilterDescendantsInstances,rock) and {Instance=rock} or nil
 end
 for _=1,12 do now+=C.Tick;pickupStep(C.Tick) end
-assert(not pickups[nearId] and Pro.cargoUnits(data(p))==1,'non-solid rock blocked player pickup')
+assert(not pickups[nearId] and Pro.cargoUnits(data(p))==1,'solid mineable rock blocked player pickup')
 workspace.Raycast=initialRay
 
 local drop,id=loose(center+Vector3.yAxis*.22)
@@ -72,9 +76,48 @@ scene.collectGroundCargo(d,p,hr,C.Tick)
 assert((d.pos-high).Magnitude<.02 and d.deliveryRequested,'one ore should trigger delivery after climb')
 serviceDeliveries(p)
 assert(Pro.deliveryUnits(data(p),d.id)==1 and Pro.cargoUnits(data(p))==1)
-now+=3;droneStep(d,C.Tick);d.pos=d.goal;d.velocity=Vector3.zero;droneStep(d,C.Tick)
+now+=3;droneStep(d,C.Tick)
+assert(d.flightMass>1.5 and d.loadSpeed<.8,'the saved one-ore manifest did not load down the courier')
+d.pos=d.goal;d.velocity=Vector3.zero;droneStep(d,C.Tick)
 now+=2;droneStep(d,C.Tick);serviceDeliveries(p)
 assert(data(p).run.wallet.Quartz==7 and not data(p).run.deliveries[d.id],'one ore failed to sell')
 serviceDeliveries(p)
 assert(data(p).run.wallet.Quartz==7,'sale was credited twice')
 print('PASS raised bed commands, physical pickup path, overhead scan, repin during pickup, one-ore sale')
+
+field.center=bed.Position;field.model=zone;field.color=bed.Color
+field.cfg.AlwaysUnlocked=true;field.cfg.Key='Quartz'
+field.cfg.Value=1;field.cfg.Hardness=1;field.cfg.Turrets=0;field.cfg.ReferenceCrystals=true
+pl.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+scene.clearSquare(p)
+local kicks={}
+for _,role in ipairs({'Needler','Ballcaster'}) do
+ local gun
+ for _,worker in ipairs(p.drones) do if worker.role==role then gun=worker;break end end
+ assert(gun,'missing starter '..role)
+ local target=makeResource(field,center+Vector3.xAxis*8,'Crystal',1000,1,3,3)
+ target.readyAt=now
+ assert(assignOre(p,gun,target))
+ local station=committedStation(gun,target);gun.pos=station;gun.velocity=Vector3.zero
+ local hp=target.hp;local shot
+ for _=1,130 do
+  now+=C.Tick;droneStep(gun,C.Tick)
+  shot=shot or gun.specialJob
+  if target.hp<hp then break end
+ end
+ local kickAt=gun.model:GetAttribute('FlightImpulseAt')
+ local kick=gun.model:GetAttribute('FlightImpulse')
+ assert(shot and shot.launched and shot.impacted and target.hp<hp and kickAt<now,role..' lost a valid shot after recoil')
+ local backward=(shot.from-shot.contact).Unit
+ local retreat=(gun.pos-station):Dot(backward)
+ assert(kick.Unit:Dot(backward)>.99 and retreat>.3,role..' did not push back its logical hull')
+ kicks[role]=kick.Magnitude
+ for _=1,8 do now+=C.Tick;droneStep(gun,C.Tick) end
+ assert(gun.model:GetAttribute('FlightImpulseAt')==kickAt,'one projectile pushed twice')
+ local recoverStart=(gun.pos-station).Magnitude
+ for _=1,120 do now+=C.Tick;move(gun,station,C.Tick) end
+ assert((gun.pos-station).Magnitude<recoverStart*.45,'thrusters never returned the gun to the station')
+ release(gun)
+end
+assert(kicks.Ballcaster>kicks.Needler*1.4)
+print('PASS physical gun recoil, one impulse per launch, committed contact, and damped recovery')

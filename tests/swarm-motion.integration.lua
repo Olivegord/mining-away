@@ -116,4 +116,41 @@ check('replication correction shares the same thrust limit',function()
  local _,nextVelocity=Feel.inertialApproach(pos,Vector3.new(30,0,0),velocity,.35,1/60,false,Vector3.new(-100,0,0))
  assert((nextVelocity-velocity).Magnitude<=.35*60*1.6/60+1e-8)
 end)
+check('fast head-on flight passes with room for two starter hulls',function()
+ local crew={record('a',-24,0,50,0),record('b',24,0,-50,0)}
+ crew[1].velocity=Vector3.xAxis*30;crew[2].velocity=-Vector3.xAxis*30
+ local minimum=math.huge
+ for _=1,140 do
+  local grid=Feel.swarmGrid(crew)
+  for _,d in ipairs(crew) do
+   d.steer=Feel.smoothSwarm(d.steer,Feel.swarmOffset(d.pos,d.id,grid)*Feel.SwarmForce,1/60)
+   d.pos,d.velocity=Feel.inertialApproach(d.pos,d.goal,d.velocity,.5,1/60,false,nil,1,1,d.steer)
+  end
+  minimum=math.min(minimum,(crew[1].pos-crew[2].pos).Magnitude)
+ end
+ assert(minimum>2.75 and crew[1].pos.X>0 and crew[2].pos.X<0,'minimum clearance '..minimum)
+end)
+check('moving escort opens into independently seeded lanes and settles back into a ring',function()
+ local low,high,minRadius,maxRadius,minSpeed,maxSpeed=math.huge,-math.huge,math.huge,0,math.huge,0
+ for slot=1,9 do
+  local traits=Feel.swarmTraits('owner:starter:'..slot)
+  local point,cruise=Feel.swarmFollow(Vector3.zero,Vector3.xAxis*16,slot,9,20,19,traits,1,1/60)
+  local radius=Vector3.new(point.X,0,point.Z).Magnitude
+  low=math.min(low,point.Y);high=math.max(high,point.Y);minRadius=math.min(minRadius,radius);maxRadius=math.max(maxRadius,radius)
+  minSpeed=math.min(minSpeed,traits.speed);maxSpeed=math.max(maxSpeed,traits.speed)
+  for n=1,240 do point,cruise=Feel.swarmFollow(Vector3.zero,Vector3.zero,slot,9,20+n/60,19,traits,cruise,1/60) end
+  assert(math.abs(Vector3.new(point.X,0,point.Z).Magnitude-10)<.12)
+ end
+ assert(high-low>6 and maxRadius-minRadius>4 and maxSpeed-minSpeed>.12)
+end)
+check('loaded courier needs longer to accelerate and cruises slower',function()
+ local goal=Vector3.xAxis*80
+ local bareMass,bareSpeed=Feel.courierLoad(0);local heavyMass,heavySpeed=Feel.courierLoad(1)
+ local empty,loaded,emptyV,loadV=Vector3.zero,Vector3.zero,Vector3.zero,Vector3.zero
+ for _=1,80 do
+  empty,emptyV=Feel.inertialApproach(empty,goal,emptyV,.4*bareSpeed,1/60,false,nil,1,bareMass)
+  loaded,loadV=Feel.inertialApproach(loaded,goal,loadV,.4*heavySpeed,1/60,false,nil,1,heavyMass)
+ end
+ assert(heavyMass>bareMass and loaded.X<empty.X*.8 and loadV.X<emptyV.X*.81)
+end)
 print(checks..' production steering checks passed using Vector API doubles; not a Studio collision/visual playtest')

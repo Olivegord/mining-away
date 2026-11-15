@@ -19,9 +19,8 @@ function Motion.new(model,role)
  local pivot=model:GetPivot()
  for _,part in ipairs(model:GetDescendants()) do
   local kind=part:GetAttribute('SpecialMotion')
-  local gun=role=='Needler' or role=='Ballcaster'
-  if part:IsA('BasePart') and (kind or gun and part.Transparency<1) then
-   record.parts[#record.parts+1]={part=part,kind=kind or 'GunBody',side=part:GetAttribute('MotionSide') or 1,base=pivot:ToObjectSpace(part.CFrame),size=part.Size}
+  if part:IsA('BasePart') and kind then
+   record.parts[#record.parts+1]={part=part,kind=kind,side=part:GetAttribute('MotionSide') or 1,base=pivot:ToObjectSpace(part.CFrame),size=part.Size}
   end
  end
  return record
@@ -82,8 +81,8 @@ local function offset(record,item,t)
  return CFrame.new()
 end
 
--- Read the same clock as the projectile. Each cue stops at the pose that
--- makes the next action legible, then releases with a fast stroke and drag.
+-- Only prepare the loading hardware. Firing pushes back the actual drone;
+-- the visible hull follows that trajectory instead of playing a recoil pose.
 local function gunPose(ball,now,shot)
  if not shot or not shot.Parent then return nil end
  local started=shot:GetAttribute('StartedAt')
@@ -93,46 +92,36 @@ local function gunPose(ball,now,shot)
  local age=(paused>0 and math.min(now,paused) or now)-started
  if age<0 then return nil end
  local pull=ball and .44 or .28
- local travel=ball and .54 or .32
- local settle=ball and .48 or .26
  if age<windup then
   local q=age/windup
   local cock=smooth((q-.02)/(ball and .56 or .54))
   local brace=cock*(1-.10*smooth((q-.62)/.38))
-  return pull*brace,(ball and .20 or .14)*brace,smooth((q-.08)/.80)
+  return pull*brace,smooth((q-.08)/.80)
  end
  local t=age-windup
- if t>=settle then return nil end
- local reset=1-smooth((t-.065)/(settle-.065))
- local strike=smooth(t/.026)*(1-smooth((t-.027)/.062))
- local kick=smooth((t-.021)/.047)*reset
- local spring=smooth((t-.14)/.08)*(1-smooth((t-.22)/math.max(.04,settle-.22)))
- local slide=pull*.90*(1-smooth(t/.032))-pull*.50*strike+travel*kick-travel*.16*spring
- local brace=(ball and .20 or .14)*.90*(1-smooth(t/.04))+.42*travel*kick
- return slide,brace,1-smooth(t/.052)
+ if t>=.075 then return nil end
+ return pull*.90*(1-smooth(t/.075)),1-smooth(t/.052)
 end
 
 local function fieldStep(record,state,now,dt,shot,source)
  local ball=record.role=='Ballcaster'
  local gun=ball or record.role=='Needler'
- local slide,brace,load=0,0,0
+ local slide,load=0,0
  if gun then
   local active=state=='SpecialMine' or state=='Warmup' or state=='Recover'
    or ((source:GetAttribute('HP') or 1)>0 and shot and shot:GetAttribute('ContactAt')~=nil)
-  local movement,lean,heat
-  if active then movement,lean,heat=gunPose(ball,now,shot) end
+  local movement,heat
+  if active then movement,heat=gunPose(ball,now,shot) end
   local fade=math.exp(-math.min(dt or 0,.1)*19)
   slide=movement or (record.slide or 0)*fade
-  brace=lean or (record.brace or 0)*fade
   load=heat or (record.load or 0)*fade
-  record.slide,record.brace,record.load=slide,brace,load
+  record.slide,record.load=slide,load
  end
  local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant') or (record.role=='Compactor' and (state=='Intake' or state=='Press'))
  local engagement=record.engagement or 0
  engagement+=((engaging and 1 or 0)-engagement)*(1-math.exp(-math.min(dt or 0,.1)*12))
  record.engagement=engagement
  local pivot=record.model:GetPivot()
- if gun then pivot*=CFrame.new(0,brace*.32,brace*record.scale)*CFrame.Angles(-brace*.29,0,0) end
  for _,item in ipairs(record.parts) do
   if not item.part.Parent then continue end
   local kind=item.kind

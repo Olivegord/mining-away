@@ -129,7 +129,7 @@ W.COURIER_SCAN=.32
 W.COURIER_LOWER=.48
 W.COURIER_CLOSE=.18
 W.COURIER_CONTACT=W.COURIER_SCAN+W.COURIER_LOWER+W.COURIER_CLOSE
-W.COURIER_LIFT=.46
+W.COURIER_LIFT=.59
 W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
@@ -142,11 +142,19 @@ local function easeClaw(t)
  t=math.clamp(t,0,1)
  return t*t*t*(10+t*(-15+6*t))
 end
+local function clawSpeed(t,duration)
+ if t<=0 or t>=1 then return 0 end
+ return 30*t*t*(1-t)^2/duration
+end
 function W.courierStroke(age)
- local lower=easeClaw((age-W.COURIER_SCAN)/W.COURIER_LOWER)
+ local descent=(age-W.COURIER_SCAN)/W.COURIER_LOWER
+ local ascent=(age-W.COURIER_CONTACT)/W.COURIER_LIFT
+ local lower=easeClaw(descent)
  local close=easeClaw((age-W.COURIER_SCAN-W.COURIER_LOWER)/W.COURIER_CLOSE)
- local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
- return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
+ local lift=easeClaw(ascent)
+ local lowerSpeed=clawSpeed(descent,W.COURIER_LOWER)
+ return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower,
+  W.COURIER_CLEARANCE*(clawSpeed(ascent,W.COURIER_LIFT)-lowerSpeed),-lowerSpeed
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30
@@ -514,7 +522,8 @@ end)()
 local Feel = (function()
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,ReferenceFollowHeight=7,ReferenceCrystalPivot=3,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
+local F = {FollowHeight=3.2,ReferenceFollowHeight=7,ReferenceCrystalPivot=3,WorkHeight=10,WorkClearance=5,
+ SwarmSpacing=3.5,SwarmRadius=22,SwarmNear=6,SwarmMaxOffset=2.2,SwarmForce=36}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -573,7 +582,7 @@ function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,stea
  local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference)
  return CFrame.new(center)*CFrame.Angles(0,yaw,0),ground+size.Y-.06
 end
-function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response)
+function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response,mass,steering)
  -- Retain the original capped, distance-eased destination rule, but approach
  -- its requested velocity with thrust. New jobs, reversals and speed upgrades
  -- cannot replace momentum in a single frame. Substeps keep braking consistent
@@ -583,7 +592,9 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
  local elapsed=math.min(dt,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
  local cruise=math.max(0,maxStep60 or 0)*60
  response=math.clamp(response or 1,.3,8)
- local acceleration=math.max(10,cruise*1.6)*math.sqrt(response)
+ mass=math.clamp(mass or 1,.65,4)
+ local inertia=math.sqrt(mass)
+ local acceleration=math.max(10,cruise*1.6)*math.sqrt(response)/mass
  for _=1,steps do
   local delta=goal-position;local distance=delta.Magnitude
   -- Blend the near-work response continuously. The old distance<=16 switch
@@ -594,7 +605,7 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
   -- A damped arrival controller brakes lateral momentum as well as forward
   -- speed. Pure pursuit with a fixed acceleration repeatedly crossed the
   -- station and reversed direction during warmup.
-  local omega=ease*(1+proximity*.35)*response
+  local omega=ease*(1+proximity*.35)*response/inertia
   local requestedAcceleration=delta*(omega*omega)-velocity*(2*omega)
   local requestedVelocity=velocity+requestedAcceleration*h
   local speed=math.min(cap,math.sqrt(2*acceleration*distance))
@@ -602,6 +613,12 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
   if requested.Magnitude>speed then requested=requested.Unit*speed end
   if correction then
    requested+=correction
+   if requested.Magnitude>cap then requested=requested.Unit*cap end
+  end
+  -- Neighbor pressure is a lateral thruster force, not a moving station.
+  -- Apply it before the final cap so even evasive turns respect engine thrust.
+  if steering then
+   requested+=steering*(h/mass)
    if requested.Magnitude>cap then requested=requested.Unit*cap end
   end
   local change=requested-velocity;local limit=acceleration*h
@@ -664,6 +681,40 @@ local function swarmHash(id)
  for i=1,#id do value=(value*131+string.byte(id,i))%2147483647 end
  return value
 end
+function F.swarmTraits(id)
+ local seed=swarmHash(tostring(id))
+ -- Fleet IDs often differ only in their last digit. Mix nearby hashes so
+ -- those drones don't end up with almost identical speeds and heights.
+ seed=(bit32.bxor(seed,bit32.rshift(seed,16))*159733)%2147483647
+ seed=(bit32.bxor(seed,bit32.rshift(seed,13))*224081)%2147483647
+ return {phase=seed%6283*.001, lane=(math.floor(seed/17)%101)/50-1,
+  height=(math.floor(seed/131)%101)/50-1, speed=.87+(math.floor(seed/1091)%101)*.0026,
+  rate=.68+(math.floor(seed/8191)%101)*.0064}
+end
+function F.swarmFollow(center,velocity,slot,count,now,height,traits,cruise,dt)
+ local motion=Vector3.new(velocity.X,0,velocity.Z)
+ local moving=math.clamp((motion.Magnitude-.7)/6,0,1)
+ cruise=cruise or 0
+ cruise+=(moving-cruise)*(1-math.exp(-dt*(moving>cruise and 4.5 or 1.35)))
+ local angle=2*math.pi*slot/math.max(1,count)
+ local ringRadius=math.max(10,math.min(32,count*.60))
+ local t=now*traits.rate+traits.phase
+ local idle=Vector3.new(math.cos(angle)*ringRadius,traits.height*.9,math.sin(angle)*ringRadius)
+ -- Relax the slots into crossing paths at independent heights and periods.
+ -- The center follows the player, while each drone has its own drifting lane.
+ local air=Vector3.new(8.5*math.sin(t*.61)+3.2*math.sin(t*.93+angle),
+  5.6*traits.height+1.8*math.sin(t*.77),8*traits.lane+5*math.cos(t*.53+angle))
+ return center+Vector3.yAxis*height+idle:Lerp(air+motion*.14,cruise),cruise
+end
+function F.courierLoad(units)
+ local load=math.clamp(units or 0,0,4)
+ return 1.22+load*.42,1/(1+.26*load)
+end
+function F.gunImpulse(role,from,to,mass)
+ local momentum=role=='Needler' and 7 or role=='Ballcaster' and 15 or 0
+ local delta=from-to
+ return delta.Magnitude>.001 and delta.Unit*(momentum/(mass or 1)) or Vector3.zero
+end
 local function swarmCell(x,y,z) return x..':'..y..':'..z end
 local function intentVelocity(record)
  if record.velocity then return record.velocity end
@@ -691,7 +742,7 @@ function F.swarmGrid(records)
  for _,bucket in pairs(grid.buckets) do table.sort(bucket,function(a,b) return a.id<b.id end) end
  return grid
 end
-function F.swarmOffset(position,id,grid,weight)
+function F.swarmOffset(position,id,grid,weight,flocking)
  weight=math.clamp(weight or 1,0,1)
  if weight==0 or not grid then return Vector3.zero end
  id=tostring(id)
@@ -704,16 +755,18 @@ function F.swarmOffset(position,id,grid,weight)
  for dx=-1,1 do for dy=-1,1 do for dz=-1,1 do
   local key=swarmCell(x+dx,y+dy,z+dz);local bucket=grid.buckets[key]
   if bucket then
-   local n=#bucket;local samples=math.min(12,n);local start=swarmHash(id..key)%n
+   local n=#bucket;local samples=math.min(12,n);local start=n>samples and swarmHash(id..key)%n or 0
    for i=0,samples-1 do
     local other=bucket[(start+math.floor(i*n/samples))%n+1]
     if other.id~=id then
      local delta=position-other.pos;local square=delta:Dot(delta)
      if square<cell*cell then
       local relative=velocity-(other.velocity or Vector3.zero);local motion=relative:Dot(relative)
-      local closest=motion>.001 and math.clamp(-delta:Dot(relative)/motion,0,.45) or 0
+      local closest=motion>.001 and math.clamp(-delta:Dot(relative)/motion,0,.65) or 0
       local future=delta+relative*closest
-      local candidate={id=other.id,delta=delta,square=square,futureSquare=future:Dot(future),closest=closest}
+      local futureSquare=future:Dot(future)
+      if square>=F.SwarmNear^2 and (closest==0 or futureSquare>=5.5^2) then continue end
+      local candidate={id=other.id,delta=delta,square=square,futureSquare=futureSquare,closest=closest,velocity=other.velocity}
       if #neighbors<12 then table.insert(neighbors,candidate)
       else
        local worst=1
@@ -728,7 +781,7 @@ function F.swarmOffset(position,id,grid,weight)
   end
  end end end
  table.sort(neighbors,function(a,b) return a.id<b.id end)
- local force=Vector3.zero
+ local force,alignment,nearby=Vector3.zero,Vector3.zero,0
  for _,other in ipairs(neighbors) do
   local first=id<other.id;local pair=swarmHash(first and (id..'/'..other.id) or (other.id..'/'..id))
   local side=first and 1 or -1;local delta=other.delta
@@ -743,18 +796,25 @@ function F.swarmOffset(position,id,grid,weight)
   end
   -- Predict a crossing before the models overlap. Pair-stable tangents let
   -- head-on workers pass on opposite sides instead of stopping nose-to-nose.
-  local currentPressure=(1-distance/cell)^2
+  local currentPressure=math.max(0,1-distance/F.SwarmNear)^2
   local futureDistance=math.sqrt(other.futureSquare or other.square)
-  local anticipation=(other.closest or 0)>0 and (1-math.min(cell,futureDistance)/cell)^2*.8 or 0
+  local anticipation=(other.closest or 0)>0 and math.max(0,1-futureDistance/5.5)^2*.8 or 0
   local pressure=math.max(currentPressure,anticipation)
   local tangent=Vector3.new(-normal.Z,0,normal.X)*(pair%2==0 and 1 or -1)
-  local lane=side*((pair%3)-1)*.12
-  force+=(normal*1.8+tangent*(anticipation>currentPressure and 1.4 or .48)+Vector3.new(0,lane,0))*pressure
+  local lane=distance>.001 and math.clamp(delta.Y/distance,-1,1)*.95 or side*.35
+  force+=normal*(currentPressure*1.9+anticipation*.65)+tangent*(currentPressure*.48+anticipation*4.8)+Vector3.new(0,lane*pressure,0)
+  if flocking and flocking>0 then
+   local blend=math.max(0,1-distance/F.SwarmNear)
+   alignment+=(other.velocity-velocity)*blend;nearby+=blend
+  end
  end
- force=Vector3.new(force.X,math.clamp(force.Y,-.24,.24),force.Z)
+ if nearby>0 then
+  local match=alignment/nearby
+  force+=match*(match.Magnitude>.42 and .42/match.Magnitude or 1)*flocking*math.min(1,nearby)
+ end
+ force=Vector3.new(force.X,math.clamp(force.Y,-.85,.85),force.Z)
  if force.Magnitude>F.SwarmMaxOffset then force=force.Unit*F.SwarmMaxOffset end
- -- Add to the movement GOAL and pass through original capped easing. Settled
- -- mining passes zero weight so its exact overhead station/arrival gate wins.
+ -- Settled mining passes zero weight so its exact overhead station wins.
  return force*weight
 end
 function F.smoothSwarm(previous,desired,dt)
@@ -5987,9 +6047,8 @@ function Motion.new(model,role)
  local pivot=model:GetPivot()
  for _,part in ipairs(model:GetDescendants()) do
   local kind=part:GetAttribute('SpecialMotion')
-  local gun=role=='Needler' or role=='Ballcaster'
-  if part:IsA('BasePart') and (kind or gun and part.Transparency<1) then
-   record.parts[#record.parts+1]={part=part,kind=kind or 'GunBody',side=part:GetAttribute('MotionSide') or 1,base=pivot:ToObjectSpace(part.CFrame),size=part.Size}
+  if part:IsA('BasePart') and kind then
+   record.parts[#record.parts+1]={part=part,kind=kind,side=part:GetAttribute('MotionSide') or 1,base=pivot:ToObjectSpace(part.CFrame),size=part.Size}
   end
  end
  return record
@@ -6050,8 +6109,8 @@ local function offset(record,item,t)
  return CFrame.new()
 end
 
--- Read the same clock as the projectile. Each cue stops at the pose that
--- makes the next action legible, then releases with a fast stroke and drag.
+-- Only prepare the loading hardware. Firing pushes back the actual drone;
+-- the visible hull follows that trajectory instead of playing a recoil pose.
 local function gunPose(ball,now,shot)
  if not shot or not shot.Parent then return nil end
  local started=shot:GetAttribute('StartedAt')
@@ -6061,46 +6120,36 @@ local function gunPose(ball,now,shot)
  local age=(paused>0 and math.min(now,paused) or now)-started
  if age<0 then return nil end
  local pull=ball and .44 or .28
- local travel=ball and .54 or .32
- local settle=ball and .48 or .26
  if age<windup then
   local q=age/windup
   local cock=smooth((q-.02)/(ball and .56 or .54))
   local brace=cock*(1-.10*smooth((q-.62)/.38))
-  return pull*brace,(ball and .20 or .14)*brace,smooth((q-.08)/.80)
+  return pull*brace,smooth((q-.08)/.80)
  end
  local t=age-windup
- if t>=settle then return nil end
- local reset=1-smooth((t-.065)/(settle-.065))
- local strike=smooth(t/.026)*(1-smooth((t-.027)/.062))
- local kick=smooth((t-.021)/.047)*reset
- local spring=smooth((t-.14)/.08)*(1-smooth((t-.22)/math.max(.04,settle-.22)))
- local slide=pull*.90*(1-smooth(t/.032))-pull*.50*strike+travel*kick-travel*.16*spring
- local brace=(ball and .20 or .14)*.90*(1-smooth(t/.04))+.42*travel*kick
- return slide,brace,1-smooth(t/.052)
+ if t>=.075 then return nil end
+ return pull*.90*(1-smooth(t/.075)),1-smooth(t/.052)
 end
 
 local function fieldStep(record,state,now,dt,shot,source)
  local ball=record.role=='Ballcaster'
  local gun=ball or record.role=='Needler'
- local slide,brace,load=0,0,0
+ local slide,load=0,0
  if gun then
   local active=state=='SpecialMine' or state=='Warmup' or state=='Recover'
    or ((source:GetAttribute('HP') or 1)>0 and shot and shot:GetAttribute('ContactAt')~=nil)
-  local movement,lean,heat
-  if active then movement,lean,heat=gunPose(ball,now,shot) end
+  local movement,heat
+  if active then movement,heat=gunPose(ball,now,shot) end
   local fade=math.exp(-math.min(dt or 0,.1)*19)
   slide=movement or (record.slide or 0)*fade
-  brace=lean or (record.brace or 0)*fade
   load=heat or (record.load or 0)*fade
-  record.slide,record.brace,record.load=slide,brace,load
+  record.slide,record.load=slide,load
  end
  local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant') or (record.role=='Compactor' and (state=='Intake' or state=='Press'))
  local engagement=record.engagement or 0
  engagement+=((engaging and 1 or 0)-engagement)*(1-math.exp(-math.min(dt or 0,.1)*12))
  record.engagement=engagement
  local pivot=record.model:GetPivot()
- if gun then pivot*=CFrame.new(0,brace*.32,brace*record.scale)*CFrame.Angles(-brace*.29,0,0) end
  for _,item in ipairs(record.parts) do
   if not item.part.Parent then continue end
   local kind=item.kind
@@ -15685,9 +15734,9 @@ function V:aim(ray)
   filter.RespectCanCollide=true
   hit=workspace:Raycast(ray.Origin,direction,filter)
   part=hit and hit.Instance
-  bed=bedFor(part)
-  if not bed or part~=bed then return nil end
-  leadId=nil
+  bed,rootPart=bedFor(part)
+  leadId=bed and rootPart:GetAttribute('ResourceId')
+  if not bed or part~=bed and not leadId then return nil end
  end
  -- Use the cursor's footprint; a wide rock can hang beyond the bed or
  -- straddle the command-range boundary. Keep the rock only as a lead hint.
@@ -16859,7 +16908,8 @@ local function registerDrone(source)
  end
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
  if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
- local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
+ local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,
+  flightImpulseAt=source:GetAttribute('FlightImpulseAt') or 0,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone)
@@ -17107,6 +17157,7 @@ local function resolveRenderedTarget(kind,id,allowBreaking)
 end
 local function renderDrone(d,dt,now)
  local previousPosition=d.pos
+ local previousVelocity=d.velocity or Vector3.zero
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
  local role=s:GetAttribute('Role')
  local isRamiel=role=='Ramiel'
@@ -17117,7 +17168,11 @@ local function renderDrone(d,dt,now)
  if typeof(logical)~='Vector3' or typeof(goal)~='Vector3' then return end
  d.lastState=state
  local life=s:GetAttribute('Life');local maxStep=s:GetAttribute('MaxStep60') or .35
- if life~=d.life then d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero end
+ local mass=s:GetAttribute('FlightMass')
+ local impulseAt=s:GetAttribute('FlightImpulseAt') or 0
+ if life~=d.life then
+  d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero;d.flightImpulseAt=impulseAt
+ end
  local motionPaused=s:GetAttribute('MotionPaused')==true
  local dock=state=='Pickup' and role=='Courier' and s:GetAttribute('CourierDock')
  local docking=typeof(dock)=='Vector3'
@@ -17132,7 +17187,7 @@ local function renderDrone(d,dt,now)
  d.pickupAge=docking and pickupAge or nil
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
- if state=='Follow' and not motionPaused then
+ if state=='Follow' and not motionPaused and not mass then
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
    local phaseStep=(s:GetAttribute('PhaseSeed') or maxStep*200)/200
@@ -17140,7 +17195,7 @@ local function renderDrone(d,dt,now)
    goal=Feel.followGoal(hr.Position,slot,count,now,phaseStep,isRamiel,height)
   end
  end
- if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
+ if state=='Destroyed' or state=='Reprinting' or state=='Docked' then d.pos=logical;d.velocity=Vector3.zero;d.flightImpulseAt=impulseAt
  elseif docking then
   local height,_,entryWeight=Workshop.courierStroke(pickupAge)
   local desired=dock+Vector3.yAxis*height+(s:GetAttribute('CourierEntryOffset') or Vector3.zero)*entryWeight
@@ -17169,7 +17224,25 @@ local function renderDrone(d,dt,now)
   local workTravel=state=='ToCharge' or state=='Charging' or state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
   local correction=error.Magnitude>5 and error.Unit*math.min((error.Magnitude-5)*.8,maxStep*60*.25) or Vector3.zero
-  if referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
+  if mass then
+   local response=s:GetAttribute('FlightResponse') or 1
+   if impulseAt>(d.flightImpulseAt or 0) then
+    local impulse=s:GetAttribute('FlightImpulse')
+    -- A late observer initializes from the already kicked snapshot. Current
+    -- observers consume each release once, including during a recovery turn.
+    if typeof(impulse)=='Vector3' then
+     local age=math.max(0,now-impulseAt)
+     if age<.32 then d.velocity+=impulse*math.exp(-age*4) end
+     d.flightImpulseAt=impulseAt
+    end
+   end
+   local extrapolation=math.clamp(now-(s:GetAttribute('SnapshotAt') or now),0,.13)
+   local offset=logical+(s:GetAttribute('Velocity') or Vector3.zero)*extrapolation-d.pos
+   local drift=offset.Magnitude
+   local reconcile=drift>.32 and offset.Unit*math.min((drift-.32)*2.4,maxStep*60*.34) or nil
+   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,dt,s:GetAttribute('FlightWork')==true,
+    reconcile,response,mass,s:GetAttribute('FlightSteering'))
+  elseif referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,1.35)
   elseif referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
   else
@@ -17179,12 +17252,12 @@ local function renderDrone(d,dt,now)
  end
  if docking and type(dockYaw)=='number' then d.yaw=Feel.approachYaw(d.yaw,dockYaw,dt)
  elseif not motionPaused then
-  local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
+  local targetYaw=not mass and referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
   if state=='Collect' and type(dockYaw)=='number' then targetYaw=dockYaw end
   if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
   else d.workingYaw=nil end
-  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
+  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine' or state=='Recover') then
    local aim=s:GetAttribute('TargetPosition')
    if isNomad then targetYaw=s:GetAttribute('Yaw') or d.yaw
    elseif typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
@@ -17195,19 +17268,31 @@ local function renderDrone(d,dt,now)
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(isRamiel or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
+ local desiredPitch=0
+ if mass then
+  desiredBank=0
+  local precision=state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
+   or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or state=='Docked' or docking
+  if not precision and not heavyFlight and not motionPaused and not CrystalImpactView.reducedMotion() then
+   local thrust=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(((d.velocity or Vector3.zero)-previousVelocity)/math.max(dt,1/144))
+   desiredBank=math.clamp(-thrust.X*.0032,-math.rad(5),math.rad(5))
+   desiredPitch=math.clamp(-thrust.Z*.0042,-math.rad(7),math.rad(7))
+  end
+  d.flightPitch=(d.flightPitch or 0)+(desiredPitch-(d.flightPitch or 0))*(1-math.exp(-math.min(dt,.1)*9))
+ end
  if not docking then d.lastDock=nil end
  if docking then desiredBank=0 end
  d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
  local grounded=docking or role=='Courier' and state=='Collect' or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
- local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
+ local drift=(mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
  -- Reading server time makes every observer see the same hop, and late joins
  -- never replay an old recall.
  local recallAt=s:GetAttribute('RecallAt') or -100
  local recallAge=now-recallAt;local hop,recallPitch=0,0
- if not heavyFlight and not referenceMiner and not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
+ if not mass and not heavyFlight and not referenceMiner and not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
   local p=recallAge/.72
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
@@ -17228,7 +17313,7 @@ local function renderDrone(d,dt,now)
   end
  end
  local visiblePose=CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
-  *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0)
+  *CFrame.Angles(recallPitch+(d.flightPitch or 0),0,d.bank)*CFrame.Angles(0,ramielRoll,0)
  local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
  local ramielLatched=false
  local ramielInRange=d.ramiel and BeamVFX.near(visiblePose.Position,d.ramielNeutral and 165 or 185)

@@ -5,6 +5,19 @@ local function fixture()
  local view=Instance.new('Model');view.Parent=workspace
  return {source=source,view=view,pos=Vector3.zero,velocity=Vector3.zero,life=1,yaw=0,parts={},beam={}}
 end
+check('replicated impulse moves the hull once and late observers do not replay it',function()
+ local early,late=fixture(),fixture()
+ for _,d in ipairs({early,late}) do
+  d.source:SetAttribute('Role','Ballcaster');d.source:SetAttribute('FlightMass',1.24);d.source:SetAttribute('FlightWork',true)
+  d.source:SetAttribute('Goal',Vector3.zero);d.source:SetAttribute('State','SpecialMine')
+  d.source:SetAttribute('FlightImpulse',Vector3.xAxis*-10);d.source:SetAttribute('FlightImpulseAt',1)
+ end
+ late.flightImpulseAt=1
+ renderDrone(early,1/60,1);renderDrone(late,1/60,1)
+ assert(early.pos.X<-.1 and early.velocity.X<-9 and late.pos.Magnitude==0)
+ renderDrone(early,1/60,1+1/60)
+ assert(early.velocity.X>-10 and early.pos.X<-.22,'a second render applied another impulse')
+end)
 check('a missed dive snapshot enters the authoritative contact hold without braking',function()
  for _,fps in ipairs({30,60,144}) do
   local d=fixture();d.pos=Vector3.new(0,10,0);d.velocity=Vector3.new(0,-30,0)
