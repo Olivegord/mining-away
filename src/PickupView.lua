@@ -475,7 +475,7 @@ function V:update(dt,now)
     end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and r.gemOpacity or 1);r.opacity=opacity end
-   if r.faceted then GemAppearance.update(r.view,opacity) end
+   if r.faceted then GemAppearance.update(r.view,opacity,cameraPosition) end
    if cameraPosition then
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24

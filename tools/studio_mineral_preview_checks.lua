@@ -24,11 +24,31 @@ camera.CFrame=before
 shared.MineralPreviewCheck={view=view,root=fx,report=report,update=function() view:update(1/60,workspace:GetServerTimeNow()) end,
  close=function() view:destroy();fx:Destroy();shared.MineralPreviewCheck=nil end}
 local diamond=view.byId[-5]
-assert(diamond.view:FindFirstChild('MineralClouds'))
+assert(not diamond.view:FindFirstChild('MineralClouds'))
+assert(diamond.view:GetAttribute('RefractionLayers')==2)
+assert(diamond.view:GetAttribute('RefractionPatterns')==8)
+local gem=diamond.view;local pose=gem.CFrame
+local eye=pose:PointToWorldSpace(Vector3.new(0,0,15))
+RockFinish.Gems.update(gem,1,eye)
+local initial=gem:GetAttribute('RefractionPattern')
+for i=1,20 do
+ RockFinish.Gems.update(gem,1,pose:PointToWorldSpace(Vector3.new(math.sin(i)*.05,0,15)))
+ assert(gem:GetAttribute('RefractionPattern')==initial,'pattern flickers under tiny camera motion')
+end
+RockFinish.Gems.update(gem,1,pose:PointToWorldSpace(Vector3.new(15,0,0)))
+assert(gem:GetAttribute('RefractionPattern')~=initial,'camera motion must change pattern')
+RockFinish.Gems.update(gem,1,eye)
+assert(gem:GetAttribute('RefractionPattern')==initial,'same view must restore same pattern')
+gem.CFrame=pose*CFrame.Angles(0,math.pi/2,0)
+RockFinish.Gems.update(gem,1,eye)
+assert(gem:GetAttribute('RefractionPattern')~=initial,'gem rotation must change pattern')
+gem.CFrame=pose;RockFinish.Gems.update(gem,1,eye)
+local low,high=1,0
+for y=0,24 do for x=0,24 do local _,a=RockFinish.Gems.geometry.spectrum(x/24,y/24);low=math.min(low,a);high=math.max(high,a) end end
+assert(low<.32 and high>.9,'clear dark zones must differ from bright reflections')
 assert(diamond.view:FindFirstChild('PrismaticEdges'))
-assert(diamond.view.MineralClouds.Transparency==0,'inner cut must write opaque depth')
 assert(diamond.view.PrismaticEdges.Transparency==0,'rims must write opaque depth')
-assert(not diamond.view.DoubleSided and not diamond.view.MineralClouds.DoubleSided)
+assert(not diamond.view.DoubleSided)
 assert(not diamond.displayRig.outline.Enabled,'Diamond does not stack a white outline over its rims')
 assert(diamond.displayRig.light and diamond.displayRig.light.Enabled)
 assert(not view.byId[-1].displayRig.light)

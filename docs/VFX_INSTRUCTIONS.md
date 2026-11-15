@@ -1,5 +1,13 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — angle-driven layered refraction
+
+The owner rejected the opaque inner cut as painted on. Diamond restores the earlier spectrum structure with restrained fine noise, smoked transparent gaps and bright colored reflections. Texture alpha ranges from .30 in dark zones to .94 in saturated windows; the mesh opacity is .90. Inner and outer cut faces now share one MeshPart, so there are no two separate translucent body objects to exchange draw order. The inner faces retain offset UVs and lower vertex alpha. Opaque separated rims, back-face culling and removal of the extra white outline remain.
+
+Eight cached 256² RGB/alpha patterns (about 2 MiB raw pixels before engine overhead) are created once. Each local gem selects a pattern from the camera direction in gem space, including pitch. A hysteresis margin prevents small movements from flipping back and forth at an angle boundary. Turning the gem or walking around it changes the pattern; returning to the same view restores it. No texture pixels are generated in the update loop. Shared textures are reused across diamonds; individual selection state uses weak instance keys. This is a discrete artistic refraction approximation, not physical ray tracing or a continuously deforming shader.
+
+Native checks cover camera changes, rotation, tiny-motion stability, same-view repeatability and darker-zone transparency. The authored static preview uses coarsely sampled colors and overall translucent unions; only Play shows view-driven patterns. Previous preview is archived in ServerStorage.DiamondAngleArchive. Amber/Quartz are unchanged.
+
 ## November 14 — cleaner spectrum and stable depth
 
 The owner approves the dark spectral Diamond but reports mottled texture and flickering edges/inner cut. The texture now retains broad dark/rainbow windows without fine grain, branching fracture noise or high-frequency hue distortion; only two faint planar fractures remain. Diamond texture alpha is fully opaque. The inset cut and rim meshes render opaque at full visibility; the outer shell alone remains translucent, and Diamond meshes cull their back faces. This avoids the overlapping translucent-part ordering documented by [Roblox BasePart](https://create.roblox.com/docs/reference/engine/classes/BasePart). The outer shell opacity is .80 so the inset stays visible.

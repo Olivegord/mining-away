@@ -2741,6 +2741,8 @@ Finish.Gems=(function()
 -- Shared per-mineral shells and opaque, fixed interior grains.
 local Gem={}
 local templates,meshes,textures,attempted={},{},{},false
+local patterns={}
+local opticalState=setmetatable({},{__mode='k'})
 local Geometry=(function()
 -- One geometry description feeds runtime meshes and the durable Edit specimens.
 local G={}
@@ -2765,21 +2767,31 @@ function R.texture(u,v,key)
 end
 -- A fixed diffraction field: broad spectral windows separated by deep indigo,
 -- fine fracture lines and cloudy interference within each band.
-function R.spectrum(u,v)
- local warp=math.noise(u*6.4,v*7.1,15)*.09
- local region=math.noise(u*4.8+warp,v*5.3,31)
+function R.spectrum(u,v,variant)
+ variant=variant or 0
+ if variant~=0 then
+  local x,y=u-.5,v-.5
+  local angle=variant*.79;local c,s=math.cos(angle),math.sin(angle)
+  u=(x*c-y*s+.5+variant*.137)%1;v=(x*s+y*c+.5+variant*.219)%1
+ end
+ local warp=math.noise(u*6.4,v*7.1,15)*.13
+ local region=math.noise(u*4.8+warp,v*5.3,31)+math.noise(u*11,v*9,8)*.18
  local window=math.clamp((region+.10)*4.7,0,1)
  window=window*window*(3-2*window)
- local hue=(.70+u*.83-v*1.48+warp)%1
+ local hue=(.70+u*.83-v*1.48+warp+math.noise(u*18,v*15,3)*.045)%1
  local rainbow=Color3.fromHSV(hue,.88,.95)
- local dark=rgb(12,12,32):Lerp(rgb(32,18,49),math.clamp(.48+math.noise(u*3,v*3,2),0,1))
+ local dark=rgb(29,33,53):Lerp(rgb(48,29,66),math.clamp(.48+math.noise(u*7,v*5,2),0,1))
  local c=dark:Lerp(rainbow,window)
- -- A pair of faint planar fractures, without granular or branching noise.
- local slash=math.min(math.abs(u*.86+v*.51-.53),math.abs(u*.32-v*.94+.26))
- local scratched=math.clamp((.0025-slash)*100,0,.18)
- c=c:Lerp(rgb(195,216,243),scratched)
- -- Opaque texels let the inset cut write depth; only the outer mesh blends.
- return c,1
+ local fine=math.noise(u*156,v*173,4)
+ c=c:Lerp(rgb(173,197,231),math.clamp((fine-.18)*.075,0,.025))
+ -- Sparse hairline fractures; no even white fleck blanket.
+ local fracture=math.abs(math.noise(u*12+warp,v*10,27))
+ local hair=math.clamp((.006-fracture)*130,0,.42)
+ c=c:Lerp(rgb(199,220,255),hair*(.12+window*.22))
+ local slash=math.min(math.abs(u*.86+v*.51-.53),math.abs(u*.32-v*.94+.26),math.abs(u*.91-v*.41-.24),math.abs(u*.65+v*.76-.91))
+ local scratched=math.clamp((.0025-slash)*280,0,.48)*math.clamp(.7+math.noise(u*21,v*19,6),0,1)
+ c=c:Lerp(rgb(219,235,255),scratched)
+ return c,.30+window*.64
 end
 local function colors(key,p,index)
  if key=='Amber' then
@@ -2800,7 +2812,7 @@ end
 function R.describe(key)
  if key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
  local data={key=key,faces={},grains={},clouds={},rims={},boxes={},texture=key,
-  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .80,
+  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .90,
   vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or 1,
   material=key=='Amber' and 'SmoothPlastic' or 'Neon',
   aspect=key=='Amber' and V(1.10,1.42,.73) or key=='Quartz' and V(.96,2.05,.78) or V(.99,2.22,.69)}
@@ -3078,6 +3090,7 @@ local function build(key)
  local assets=game:GetService('AssetService')
  local texture
  if data.texture and key~='Amber' then
+  for variant=0,(key=='Diamond' and 7 or 0) do
   local ok,result=pcall(function()
    local width=key=='Diamond' and 256 or 128
    local bitmap=assert(assets:CreateEditableImage({Size=Vector2.new(width,width)}))
@@ -3086,7 +3099,7 @@ local function build(key)
     for x=0,width-1 do
      local value,alpha=Geometry.texture(x/width,y/width,key)
      local color=Color3.new(value,value,value)
-     if key=='Diamond' then color,alpha=Geometry.spectrum(x/width,y/width) end
+     if key=='Diamond' then color,alpha=Geometry.spectrum(x/width,y/width,variant) end
      local offset=(y*width+x)*4
      buffer.writeu8(pixels,offset,math.floor(color.R*255+.5));buffer.writeu8(pixels,offset+1,math.floor(color.G*255+.5));buffer.writeu8(pixels,offset+2,math.floor(color.B*255+.5))
      buffer.writeu8(pixels,offset+3,math.floor(alpha*255+.5))
@@ -3096,8 +3109,11 @@ local function build(key)
    bitmap:WritePixelsBuffer(Vector2.zero,Vector2.new(width,width),pixels)
    return bitmap
   end)
-  if ok then texture=result;textures[#textures+1]=texture
-  else warn('Gem texture fallback '..key..': '..tostring(result)) end
+  if ok then
+   textures[#textures+1]=result;texture=texture or result
+   if key=='Diamond' then patterns[#patterns+1]=Content.fromObject(result) end
+  else warn('Gem texture fallback '..key..': '..tostring(result));break end
+  end
  end
  -- Keep the dark/spectral fallback if an image budget is exhausted.
  if key=='Diamond' and not texture then
@@ -3107,14 +3123,20 @@ local function build(key)
   end end end
  end
  local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
- for _,f in ipairs(data.faces) do
+ -- One draw object holds the outer and inset faces. Separate translucent
+ -- parts with nearly the same center can exchange sort order as they turn.
+ local layers=key=='Diamond' and {data.clouds,data.faces} or {data.faces}
+ for layer,faces in ipairs(layers) do
+ for _,f in ipairs(faces) do
   local ids={}
   for i=1,3 do ids[i]=mesh:AddVertex(f[i]) end
   local face=mesh:AddTriangle(ids[1],ids[2],ids[3])
   local n=mesh:AddNormal((f[2]-f[1]):Cross(f[3]-f[1]).Unit)
   mesh:SetFaceNormals(face,{n,n,n})
   if f[7] then mesh:SetFaceUVs(face,{mesh:AddUV(f[7]),mesh:AddUV(f[8]),mesh:AddUV(f[9])}) end
-  mesh:SetFaceColors(face,{mesh:AddColor(f[4],data.vertexAlpha),mesh:AddColor(f[5],data.vertexAlpha),mesh:AddColor(f[6],data.vertexAlpha)})
+  local alpha=key=='Diamond' and layer==1 and .60 or data.vertexAlpha
+  mesh:SetFaceColors(face,{mesh:AddColor(f[4],alpha),mesh:AddColor(f[5],alpha),mesh:AddColor(f[6],alpha)})
+ end
  end
  local function part(m,name)
   -- Release the large dynamic allocation before building the next mineral.
@@ -3127,6 +3149,7 @@ local function build(key)
   return p
  end
  local shell=part(mesh,'Faceted'..key)
+ if key=='Diamond' then shell:SetAttribute('RefractionLayers',2);shell:SetAttribute('RefractionPatterns',#patterns) end
  if texture then shell.TextureContent=Content.fromObject(texture);shell:SetAttribute('OpticalTexture',true) end
  if #data.grains>0 then
   local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
@@ -3151,7 +3174,7 @@ local function build(key)
   grains:SetAttribute('CenterRatio',((coreMin+coreMax)*.5-data.center)/data.extents)
   grains.Parent=shell
  end
- if #data.clouds>0 then
+ if #data.clouds>0 and key~="Diamond" then
   local cloud=assert(assets:CreateEditableMesh());meshes[#meshes+1]=cloud
   local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
   for _,f in ipairs(data.clouds) do
@@ -3211,14 +3234,33 @@ function Gem.clone(source)
  Gem.update(p,1)
  return p,true
 end
-function Gem.update(part,opacity)
+function Gem.update(part,opacity,cameraPosition)
+ if part:GetAttribute('GemKind')=='Diamond' and #patterns>1 and opacity>.01 then
+  local camera=workspace.CurrentCamera
+  local eye=cameraPosition or (camera and camera.CFrame.Position)
+  if eye then
+   local direction=part.CFrame:PointToObjectSpace(eye)
+   if direction.Magnitude>.01 then
+    local phase=math.atan2(direction.X,direction.Z)+.65*math.atan2(direction.Y,math.sqrt(direction.X^2+direction.Z^2))
+    local step=math.pi*2/#patterns
+    local state=opticalState[part]
+    local delta=state and math.atan2(math.sin(phase-state*step),math.cos(phase-state*step)) or math.pi
+    if not state or math.abs(delta)>step*.5+.10 then
+     local index=math.floor(phase/step+.5)%#patterns
+     if index~=state then
+      part.TextureContent=patterns[index+1];part:SetAttribute('RefractionPattern',index)
+      opticalState[part]=index
+     end
+    end
+   end
+  end
+ end
  for _,name in ipairs({'FixedInclusions','MineralClouds','PrismaticEdges'}) do
  local core=part:FindFirstChild(name)
  if core then
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
-  -- The inset cut and rims write depth at full visibility. Only the outer
-  -- Diamond shell is translucent, avoiding competing transparent layers.
+  -- Diamond layers share the shell mesh; the separate rim mesh stays opaque.
   core.Transparency=1-opacity
  end
  end
@@ -14934,7 +14976,7 @@ function V:update(dt,now)
     end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and r.gemOpacity or 1);r.opacity=opacity end
-   if r.faceted then GemAppearance.update(r.view,opacity) end
+   if r.faceted then GemAppearance.update(r.view,opacity,cameraPosition) end
    if cameraPosition then
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24

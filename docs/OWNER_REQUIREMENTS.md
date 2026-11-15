@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — restore layered Diamond; angle-driven refraction and clearer dark zones
+
+The owner rejected the smooth/opaque-inner revision as painted on and prefers the earlier layered spectral appearance. Restore that depth. Try shuffling the refraction textures as the gem rotates or the player changes viewing angle, and make uncolored/dark regions more transparent instead of fully black. Preserve approved Amber. This supersedes the opaque-inner solution below.
+
 ## November 14 — preserve spectral Diamond; smooth texture and stop flicker
 
 The owner strongly approves the dark rainbow direction. Refine it without another redesign: reduce the mottled/mold-like texture and fix flickering white edges and the inner diamond. Keep the bright spectral depth and approved Amber.

@@ -30,7 +30,7 @@ local function bakeGemPreview(key,data,frame,size)
  local function point(p) return frame:PointToWorldSpace((p-data.center)/data.extents*size) end
  -- Bake the same transformed triangles and interpolated facet colors used
  -- by GemAppearance. Box scaling before rotation distorted the old bismuth.
- local alpha=1-data.opacity*data.vertexAlpha
+ local alpha=key=='Diamond' and .30 or 1-data.opacity*data.vertexAlpha
  local function texturedTriangle(vertices,colors,uvs,depth,parent,transparency)
   if depth>0 then
    local ab,bc,ca=(vertices[1]+vertices[2])*.5,(vertices[2]+vertices[3])*.5,(vertices[3]+vertices[1])*.5
@@ -75,7 +75,7 @@ local function bakeGemPreview(key,data,frame,size)
  end
  local clouds=Instance.new('Folder');clouds.Name='MineralClouds'
  for _,f in ipairs(data.clouds or {}) do
-  texturedTriangle({point(f[1]),point(f[2]),point(f[3])},{f[4],f[5],f[6]},{f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero},1,clouds,key=='Diamond' and 0 or .78)
+  texturedTriangle({point(f[1]),point(f[2]),point(f[3])},{f[4],f[5],f[6]},{f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero},1,clouds,key=='Diamond' and .55 or .78)
  end
  -- Consolidate the durable Edit approximation into one shell and one grain
  -- object. Thousands of temporary wedges must not remain in the live map.
