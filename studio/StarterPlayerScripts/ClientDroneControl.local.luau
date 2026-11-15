@@ -133,10 +133,10 @@ W.COURIER_LIFT=.59
 W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
-W.COURIER_SWEEP_IN=7.5
 W.COURIER_SWEEP_SPEED=11
 W.COURIER_SWEEP_OUT=7
 W.COURIER_SWEEP_RISE=5.4
+W.COURIER_TURN_RADIUS=15
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
@@ -166,17 +166,57 @@ local function courierSegment(a,b,va,vb,age,duration)
  return a+delta*(3*t2-2*t3)+duration*(va*(t3-2*t2+t)+vb*(t3-t2)),
   delta*((6*t-6*t2)/duration)+va*(3*t2-4*t+1)+vb*(3*t2-2*t)
 end
-function W.courierSwoop(dock,yaw,offset,entryVelocity,age)
+function W.courierApproachTime(offset)
+ local distance=Vector3.new(offset.X,0,offset.Z).Magnitude
+ return math.max(.7,distance/14+.22,math.abs(offset.Y)/16+.22)
+end
+function W.courierReturnTurn(dock,yaw,depot)
+ local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
+ local lateral=Vector3.new(-forward.Z,0,forward.X)
+ local delta=depot-dock-forward*W.COURIER_SWEEP_OUT
+ local radius=W.COURIER_TURN_RADIUS
+ local best=nil
+ -- Find where the return circle is tangent to the line to the counter.
+ -- Either side can turn back, so use the shorter arc.
+ for _,side in ipairs({1,-1}) do
+  local along=delta:Dot(forward)
+  local across=radius-side*delta:Dot(lateral)
+  local distance=math.sqrt(along*along+across*across)
+  if distance>=radius then
+   local angle=math.atan2(along,across)-math.acos(radius/distance)
+   local sweep=(angle+1e-7)%(2*math.pi)
+   if not best or sweep<math.abs(best) then best=side*sweep end
+  end
+ end
+ return best or 0
+end
+function W.courierTurnTime(turn)
+ return math.abs(turn)*W.COURIER_TURN_RADIUS/W.COURIER_SWEEP_SPEED
+end
+function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
+ approachTime=approachTime or W.COURIER_CONTACT
  local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
  local through=forward*W.COURIER_SWEEP_SPEED
- if age<W.COURIER_CONTACT then
-  return courierSegment(dock+offset,dock,entryVelocity,through,age,W.COURIER_CONTACT)
+ if age<approachTime then
+  local position,velocity=courierSegment(dock+offset,dock,entryVelocity,through,age,approachTime)
+  local t=math.clamp(age/approachTime,0,1)
+  -- Lead with the descent while preserving both endpoint velocities.
+  local verticalTime=age+approachTime*.72*t*t*(1-t)
+  local vertical,verticalVelocity=courierSegment(dock+offset,dock,entryVelocity,through,verticalTime,approachTime)
+  return Vector3.new(position.X,vertical.Y,position.Z),
+   Vector3.new(velocity.X,verticalVelocity.Y*(1+.72*t*(2-3*t)),velocity.Z)
  end
  local finish=dock+forward*W.COURIER_SWEEP_OUT+Vector3.yAxis*W.COURIER_SWEEP_RISE
- local exit=forward*9+Vector3.yAxis*3.8
- local after=age-W.COURIER_CONTACT
- if after>W.COURIER_LIFT then return finish+exit*math.min(after-W.COURIER_LIFT,W.COURIER_RENDER_DELAY),exit end
- return courierSegment(dock,finish,through,exit,after,W.COURIER_LIFT)
+ local after=age-approachTime
+ if after<W.COURIER_LIFT then return courierSegment(dock,finish,through,through,after,W.COURIER_LIFT) end
+ turn=turn or 0
+ local travel=after-W.COURIER_LIFT
+ local turningTime=W.courierTurnTime(turn)
+ local angle=math.min(math.abs(turn),travel*W.COURIER_SWEEP_SPEED/W.COURIER_TURN_RADIUS)
+ local side=Vector3.new(-forward.Z,0,forward.X)*(turn<0 and -1 or 1)
+ local tangent=(forward*math.cos(angle)+side*math.sin(angle))*W.COURIER_SWEEP_SPEED
+ local arc=finish+(forward*math.sin(angle)+side*(1-math.cos(angle)))*W.COURIER_TURN_RADIUS
+ return arc+tangent*math.clamp(travel-turningTime,0,W.COURIER_RENDER_DELAY),tangent
 end
 function W.clawSuspension(angles,spin,acceleration,loaded,dt)
  local elapsed=math.clamp(dt,0,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
@@ -17292,11 +17332,13 @@ local function renderDrone(d,dt,now)
  local dockYaw=role=='Courier' and s:GetAttribute('CourierDockYaw')
  local stroke=docking and s:GetAttribute('CourierPickupAt')
  local entryVelocity=docking and s:GetAttribute('CourierEntryVelocity')
- local dockClock=now-Workshop.COURIER_RENDER_DELAY
- if docking and s:GetAttribute('WorkPaused') then dockClock=(s:GetAttribute('SnapshotAt') or now)-Workshop.COURIER_RENDER_DELAY end
+ local approachTime=docking and s:GetAttribute('CourierApproachTime')
+ local returnTurn=docking and s:GetAttribute('CourierReturnTurn')
+ local dockClock=now
+ if docking and s:GetAttribute('WorkPaused') then dockClock=s:GetAttribute('SnapshotAt') or now end
  local pickupAge=stroke and dockClock-stroke
  if docking and not pickupAge then docking=false end
- d.pickupAge=docking and pickupAge or nil
+ d.pickupAge=docking and (pickupAge-(approachTime or Workshop.COURIER_CONTACT)+Workshop.COURIER_CONTACT) or nil
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused and not mass then
@@ -17312,7 +17354,7 @@ local function renderDrone(d,dt,now)
   local swoop=typeof(entryVelocity)=='Vector3' and type(dockYaw)=='number'
   local entryOffset=s:GetAttribute('CourierEntryOffset') or Vector3.zero
   local desired
-  if swoop then desired=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge)
+  if swoop then desired=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge,approachTime,returnTurn)
   else
    local height,_,entryWeight=Workshop.courierStroke(pickupAge)
    desired=dock+Vector3.yAxis*height+entryOffset*entryWeight
@@ -17368,7 +17410,9 @@ local function renderDrone(d,dt,now)
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,response)
   end
  end
- if docking and type(dockYaw)=='number' then d.yaw=Feel.approachYaw(d.yaw,dockYaw,dt)
+ if docking and type(dockYaw)=='number' then
+  local heading=typeof(entryVelocity)=='Vector3' and Feel.flightYaw(d.pos,d.pos,d.velocity,dockYaw) or dockYaw
+  d.yaw=Feel.approachYaw(d.yaw,heading,dt)
  elseif not motionPaused then
   local targetYaw=not mass and referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)

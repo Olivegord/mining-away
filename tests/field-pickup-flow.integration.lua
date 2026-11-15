@@ -52,6 +52,32 @@ end
 pl.Character:PivotTo(CFrame.new(center+Vector3.new(-20,3,0)))
 assert(queueGoals()[1].intentGoal.X==edgeX,'walking around a plot flipped the queue')
 pl.Character:PivotTo(CFrame.new(center+Vector3.new(20,3,0)))
+local miner=p.drones[1]
+assert(miner.role=='Striker' and scene.followHeight(miner)+4.5<scene.followHeight(d),'small miners should escort below the carriers')
+local previousState=miner.state
+miner.state='Follow';local followSpeed=travelSpeed(miner)
+miner.state='Travel';assert(followSpeed>travelSpeed(miner)*1.2,'small miners should accelerate their escort pace')
+miner.state=previousState
+
+do
+ local destination=Vector3.new(-48,9,0)
+ local start=Vector3.new(-18,15,0)
+ local approach=Workshop.courierApproachTime(start)
+ local turn=Workshop.courierReturnTurn(Vector3.zero,-math.pi/2,destination)
+ assert(math.abs(turn)>math.pi,'a counter behind the grab should get a wide return arc')
+ local turnStart=approach+Workshop.COURIER_LIFT
+ local previous=Vector3.xAxis
+ for i=0,120 do
+  local time=turnStart+Workshop.courierTurnTime(turn)*i/120
+  local pose,velocity=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,time,approach,turn)
+  assert(velocity.Magnitude>10.9 and previous:Dot(velocity.Unit)>.99,'the wide return lost speed or snapped its heading')
+  previous=velocity.Unit
+  if i==120 then
+   local toCounter=destination-pose
+   assert(Vector3.new(toCounter.X,0,toCounter.Z).Unit:Dot(previous)>.999,'the exit tangent missed the counter')
+  end
+ end
+end
 
 local material=Workshop.cargoKey('Amber',7)
 local function loose(position)
@@ -78,13 +104,14 @@ local drop,id=loose(center+Vector3.yAxis*.22)
 local extra,extraId=loose(center+Vector3.new(5,.22,0))
 local gem=Vector3.new(drop.x,drop.floor-.22+drop.part.Size.Y*.5,drop.z)
 local dock=gem+Vector3.yAxis*1.14
-d.pos=dock-Vector3.xAxis*Workshop.COURIER_SWEEP_IN+Vector3.yAxis*Workshop.COURIER_CLEARANCE;d.velocity=Vector3.zero
+d.pos=dock-Vector3.xAxis*18+Vector3.yAxis*15;d.velocity=Vector3.xAxis*4
 scene.assignEmptierPickups(p)
 assert(d.orePickupId==id and drop.courier==d,'nearest ore was not reserved')
 d.oreYaw=-math.pi/2
 scene.collectGroundCargo(d,p,hr,C.Tick)
 local high=d.pos
 assert(d.state=='Pickup' and (high-dock).Magnitude>5.9 and d.oreDock and pickups[id])
+assert(d.velocity.X>3.9,'swoop should begin directly from the flying approach')
 local idle=queueGoals()
 assert(d.state=='Pickup' and #idle>0 and #idle<#p.drones,'active couriers should leave the idle line')
 assert(math.abs((idle[1].intentGoal.Z+idle[#idle].intentGoal.Z)*.5-center.Z)<.001,'working drones left a hole in the line')
@@ -97,16 +124,19 @@ now+=Workshop.COURIER_SCAN*.75
 scene.assignEmptierPickups(p)
 scene.collectGroundCargo(d,p,hr,C.Tick)
 assert(d.pos.X>high.X+.15 and d.pos.Y<high.Y and pickups[id],'swoop stopped or lost its reservation through a new pin')
-now=d.pickupAt+Workshop.COURIER_CONTACT-.05
+now=d.pickupAt+d.oreApproachTime-.05
 scene.collectGroundCargo(d,p,hr,C.Tick)
 assert(d.pos.X<dock.X and d.velocity.X>8 and pickups[id],'ore attached ahead of contact or the claw stopped')
-now=d.pickupAt+Workshop.COURIER_CONTACT+.01
+now=d.pickupAt+d.oreApproachTime+.01
 scene.collectGroundCargo(d,p,hr,C.Tick)
 assert(not pickups[id] and pickups[extraId] and Pro.droneCargoUnits(data(p),d.id)==1)
 assert(d.pos.X>dock.X and d.velocity.X>8,'cargo contact interrupted forward flight')
+now=d.pickupAt+d.oreApproachTime+Workshop.COURIER_LIFT+.01
+scene.collectGroundCargo(d,p,hr,C.Tick)
+assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+5 and d.velocity.X>8,'climb turned backward before clearing the pickup')
 now=d.oreSeatUntil+.01
 scene.collectGroundCargo(d,p,hr,C.Tick)
-assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+5 and d.velocity.Magnitude>5 and d.deliveryRequested,'one ore should continue out of the swoop into delivery')
+assert(d.pos.Y>dock.Y+5 and d.velocity.Magnitude>5 and d.deliveryRequested,'one ore should continue out of the swoop into delivery')
 serviceDeliveries(p)
 assert(Pro.deliveryUnits(data(p),d.id)==1 and Pro.cargoUnits(data(p))==1)
 now+=3;droneStep(d,C.Tick)

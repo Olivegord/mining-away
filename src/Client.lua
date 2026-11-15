@@ -1240,11 +1240,13 @@ local function renderDrone(d,dt,now)
  local dockYaw=role=='Courier' and s:GetAttribute('CourierDockYaw')
  local stroke=docking and s:GetAttribute('CourierPickupAt')
  local entryVelocity=docking and s:GetAttribute('CourierEntryVelocity')
- local dockClock=now-Workshop.COURIER_RENDER_DELAY
- if docking and s:GetAttribute('WorkPaused') then dockClock=(s:GetAttribute('SnapshotAt') or now)-Workshop.COURIER_RENDER_DELAY end
+ local approachTime=docking and s:GetAttribute('CourierApproachTime')
+ local returnTurn=docking and s:GetAttribute('CourierReturnTurn')
+ local dockClock=now
+ if docking and s:GetAttribute('WorkPaused') then dockClock=s:GetAttribute('SnapshotAt') or now end
  local pickupAge=stroke and dockClock-stroke
  if docking and not pickupAge then docking=false end
- d.pickupAge=docking and pickupAge or nil
+ d.pickupAge=docking and (pickupAge-(approachTime or Workshop.COURIER_CONTACT)+Workshop.COURIER_CONTACT) or nil
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused and not mass then
@@ -1260,7 +1262,7 @@ local function renderDrone(d,dt,now)
   local swoop=typeof(entryVelocity)=='Vector3' and type(dockYaw)=='number'
   local entryOffset=s:GetAttribute('CourierEntryOffset') or Vector3.zero
   local desired
-  if swoop then desired=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge)
+  if swoop then desired=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge,approachTime,returnTurn)
   else
    local height,_,entryWeight=Workshop.courierStroke(pickupAge)
    desired=dock+Vector3.yAxis*height+entryOffset*entryWeight
@@ -1316,7 +1318,9 @@ local function renderDrone(d,dt,now)
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,response)
   end
  end
- if docking and type(dockYaw)=='number' then d.yaw=Feel.approachYaw(d.yaw,dockYaw,dt)
+ if docking and type(dockYaw)=='number' then
+  local heading=typeof(entryVelocity)=='Vector3' and Feel.flightYaw(d.pos,d.pos,d.velocity,dockYaw) or dockYaw
+  d.yaw=Feel.approachYaw(d.yaw,heading,dt)
  elseif not motionPaused then
   local targetYaw=not mass and referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)

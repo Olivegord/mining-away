@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — one sweep through the pickup and a wide return
+
+Make the descent, moving grab, and climb one continuous motion. The courier should carry through the pickup and turn back in a wide arc. Smaller drones should respond faster and fly lower while following the player.
+
 ## November 14 — descent first, fly-through grabs, and laser test crew
 
 Drones leaving formation should lose height before curving across to their job. Emptiers should swoop through the pickup and close their claw while moving, with momentum making the claw and rock swing. The regular Studio starter crew should have lasers and utility drones only; omit the starter guns for testing.
