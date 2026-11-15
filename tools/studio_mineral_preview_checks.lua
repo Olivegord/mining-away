@@ -26,6 +26,10 @@ shared.MineralPreviewCheck={view=view,root=fx,report=report,update=function() vi
 local diamond=view.byId[-5]
 assert(diamond.view:FindFirstChild('MineralClouds'))
 assert(diamond.view:FindFirstChild('PrismaticEdges'))
+assert(diamond.view.MineralClouds.Transparency==0,'inner cut must write opaque depth')
+assert(diamond.view.PrismaticEdges.Transparency==0,'rims must write opaque depth')
+assert(not diamond.view.DoubleSided and not diamond.view.MineralClouds.DoubleSided)
+assert(not diamond.displayRig.outline.Enabled,'Diamond does not stack a white outline over its rims')
 assert(diamond.displayRig.light and diamond.displayRig.light.Enabled)
 assert(not view.byId[-1].displayRig.light)
 for i=1,3 do assert(typeof(diamond.view:GetAttribute('GemFlare'..i))=='Vector3') end

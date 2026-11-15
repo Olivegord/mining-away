@@ -75,12 +75,12 @@ local function bakeGemPreview(key,data,frame,size)
  end
  local clouds=Instance.new('Folder');clouds.Name='MineralClouds'
  for _,f in ipairs(data.clouds or {}) do
-  texturedTriangle({point(f[1]),point(f[2]),point(f[3])},{f[4],f[5],f[6]},{f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero},1,clouds,key=='Diamond' and .40 or .78)
+  texturedTriangle({point(f[1]),point(f[2]),point(f[3])},{f[4],f[5],f[6]},{f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero},1,clouds,key=='Diamond' and 0 or .78)
  end
  -- Consolidate the durable Edit approximation into one shell and one grain
  -- object. Thousands of temporary wedges must not remain in the live map.
  local rims=Instance.new('Folder')
- for _,f in ipairs(data.rims or {}) do triangle(point(f[1]),point(f[2]),point(f[3]),f[4],rims,.32) end
+ for _,f in ipairs(data.rims or {}) do triangle(point(f[1]),point(f[2]),point(f[3]),f[4],rims,key=='Diamond' and 0 or .32) end
  local groups={{},{},clouds:GetChildren(),rims:GetChildren()}
  for _,p in ipairs(preview:GetChildren()) do local group=p.Transparency==0 and groups[2] or groups[1];group[#group+1]=p end
  for index,pieces in ipairs(groups) do

@@ -55,7 +55,7 @@ local function build(key)
   m:Destroy()
   local p=assets:CreateMeshPartAsync(Content.fromObject(fixed),{CollisionFidelity=Enum.CollisionFidelity.Box})
   p.Name=name;p.Anchored=true;p.Color=Color3.new(1,1,1);p.Material=Enum.Material.Neon
-  p.Reflectance=0;p.DoubleSided=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
+  p.Reflectance=0;p.DoubleSided=key~='Diamond';p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
   return p
  end
  local shell=part(mesh,'Faceted'..key)
@@ -149,7 +149,9 @@ function Gem.update(part,opacity)
  if core then
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
-  core.Transparency=1-opacity*(name=='MineralClouds' and .60 or 1)
+  -- The inset cut and rims write depth at full visibility. Only the outer
+  -- Diamond shell is translucent, avoiding competing transparent layers.
+  core.Transparency=1-opacity
  end
  end
 end

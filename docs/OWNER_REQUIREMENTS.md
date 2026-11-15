@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — preserve spectral Diamond; smooth texture and stop flicker
+
+The owner strongly approves the dark rainbow direction. Refine it without another redesign: reduce the mottled/mold-like texture and fix flickering white edges and the inner diamond. Keep the bright spectral depth and approved Amber.
+
 ## November 14 — dark crystal with bright internal rainbow refractions
 
 The owner rejected the pale Diamond as looking like plastic or ordinary glass. The newest two references supersede the uniformly light pastel direction: use a dark crystal body, sharply contrasting highlights and saturated rainbow refractions inside it to give depth. Preserve approved Amber. Dark reflective faces are desired; dull muddy shading without luminous internal color is not.

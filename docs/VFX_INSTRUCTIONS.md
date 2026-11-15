@@ -1,5 +1,11 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — cleaner spectrum and stable depth
+
+The owner approves the dark spectral Diamond but reports mottled texture and flickering edges/inner cut. The texture now retains broad dark/rainbow windows without fine grain, branching fracture noise or high-frequency hue distortion; only two faint planar fractures remain. Diamond texture alpha is fully opaque. The inset cut and rim meshes render opaque at full visibility; the outer shell alone remains translucent, and Diamond meshes cull their back faces. This avoids the overlapping translucent-part ordering documented by [Roblox BasePart](https://create.roblox.com/docs/reference/engine/classes/BasePart). The outer shell opacity is .80 so the inset stays visible.
+
+Partial colored rims are slightly broader, moved farther off their facet planes, trimmed away from corners and deduplicated across shared edges. Diamond no longer stacks a Highlight outline over them. Existing timed sparkle/rays remain intentional animation. Native checks verify opaque aligned children through 120 sampled production poses, but do not prove a temporal flicker-free full Play session. Amber/Quartz geometry, color and texture are unchanged. Previous Diamond preview is retained in ServerStorage.DiamondStableArchive.
+
 ## November 14 — dark spectral Diamond replaces pale glass
 
 The latest two owner references call for deep dark faces with bright rainbow reflections inside. Diamond now uses a cached 256² RGB optical texture: indigo shadows, localized spectral bands, sparse fine fractures and small cloudy variations. Unequal facet values and a complete inset cut with shifted texture coordinates create overlapping color planes and parallax. This is an authored approximation of internal refraction, not physical ray tracing. A failed texture allocation samples the same colors onto vertices. The thin highlights occupy selected partial edges; the previous continuous outline is removed. Existing facet rays/star flares and local spill remain, while Diamond rising dots are smaller/fainter. No per-frame texture generation or new asset upload.
