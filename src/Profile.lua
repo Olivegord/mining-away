@@ -420,6 +420,15 @@ function P.migrate(raw,uid,seed)
   if not correctStarterGrant(p) then return nil,'Unexpected oversized starter fleet' end
   ok,err=P.validate(p,uid);if not ok then return nil,err end
  end
+ -- Keep earned levels and paid choices when Cargo Rack switches to faster
+ -- turnaround. A saved card must not still advertise additional mounts.
+ for _,cards in ipairs({p.run.cards,p.run.pendingOffer and p.run.pendingOffer.choices}) do
+  for _,card in ipairs(cards) do
+   if card.cardId=='Q_CARGO_RACK' and card.title~=Workshop.BY_ID.Q_CARGO_RACK.title then
+    card.title=Workshop.BY_ID.Q_CARGO_RACK.title;card.preview=nil
+   end
+  end
+ end
  -- An acknowledged save reserves the charge before any world damage. If the
  -- server went away before its first accepted contact, return the unused tool.
  Consumables.refund(p.consumables)

@@ -124,15 +124,17 @@ W.EMPTIERS=2
 W.VACUUM_ENABLED=false
 W.ORE_REACH_SCALE=.28
 W.STARTER_SPECIALISTS={'Needler','Ballcaster','Vacuum','Compactor'}
-W.EMPTIER_BATCH=4
-W.COURIER_LOWER=.38
+W.EMPTIER_BATCH=1
+W.COURIER_SCAN=.32
+W.COURIER_LOWER=.48
 W.COURIER_CLOSE=.18
-W.COURIER_CONTACT=W.COURIER_LOWER+W.COURIER_CLOSE
-W.COURIER_LIFT=.38
-W.COURIER_CLEARANCE=1.45
+W.COURIER_CONTACT=W.COURIER_SCAN+W.COURIER_LOWER+W.COURIER_CLOSE
+W.COURIER_LIFT=.46
+W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
 function W.courierClawOffset(slot)
+ if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
  return side*.98,-1.14,.86-math.floor((slot-1)/2)*1.72,side*.06
 end
@@ -141,15 +143,14 @@ local function easeClaw(t)
  return t*t*t*(10+t*(-15+6*t))
 end
 function W.courierStroke(age)
- local lower=easeClaw(age/W.COURIER_LOWER)
- local close=easeClaw((age-W.COURIER_LOWER)/W.COURIER_CLOSE)
+ local lower=easeClaw((age-W.COURIER_SCAN)/W.COURIER_LOWER)
+ local close=easeClaw((age-W.COURIER_SCAN-W.COURIER_LOWER)/W.COURIER_CLOSE)
  local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30
 W.BLOCK_SIZE={1.45,.90,1.22}
-W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3
 W.COMPACTOR_WAIT=5
 W.COMPACTOR_PARTIAL_WAIT=1.5
@@ -201,7 +202,7 @@ W.CATALOG={
  {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
  {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
  {id='Q_DENSER_PACK',title='Denser Packing',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
- {id='Q_CARGO_RACK',title='Cargo Rack',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
+ {id='Q_CARGO_RACK',title='Quick Turnaround',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
  {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
@@ -231,10 +232,8 @@ function W.hasCompactor(p,extra)
  return W.effect(p,'compactor',extra)>0
 end
 function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra)+W.effect(p,'denserPacking',extra) end
-function W.emptierBatch(p,extra) return W.EMPTIER_BATCH+W.effect(p,'cargoRack',extra) end
-function W.emptierReady(units,capacity,waitingSince,now)
- return units>=capacity or units>0 and waitingSince~=nil and now-waitingSince>=W.EMPTIER_WAIT
-end
+function W.emptierBatch() return W.EMPTIER_BATCH end
+function W.emptierCooldown(base,p,extra) return base/(1+.5*W.effect(p,'cargoRack',extra)) end
 W.STAR_CATALOG={
  {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum',legacy=true},
  {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart',legacy=true},
@@ -657,8 +656,8 @@ function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
  return ownerPosition+Vector3.new(x,altitude or y,z)
 end
 function F.quarryFollowHeight(role,time,maxStep60)
- if role=='Ramiel' then return F.ReferenceFollowHeight+7 end
- return (role=='Courier' and 10.4 or 11.6)+F.hover(time,maxStep60)
+ if role=='Ramiel' then return F.ReferenceFollowHeight+12 end
+ return (role=='Courier' and 15.4 or 16.6)+F.hover(time,maxStep60)
 end
 local function swarmHash(id)
  local value=0
@@ -781,7 +780,7 @@ function F.mineGoal(resourcePosition,slot,geode,fullSize,reference,quarry)
  if quarry and fullSize then
   -- Center the drone above the intact tip. The deck height keeps the
   -- original 2-stud miner shell clear even over the smallest crystals.
-  height=math.max(7-fullSize.Y*.5,fullSize.Y*.5+3.1)
+  height=math.max(7-fullSize.Y*.5,fullSize.Y*.5+3.1)+4
  end
  local x,y,z=F.stationOffset(slot,geode,height)
  return resourcePosition+Vector3.new(x,y,z)
@@ -3888,6 +3887,27 @@ function W:courier(drone,record,now)
   drone.view:PivotTo(pivot*CFrame.new(0,math.sin(t*math.pi)*.18,0))
  end
  pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
+ local ground=source:GetAttribute('CourierPickupPoint')
+ local scanAge=drone.pickupAge
+ local scanning=state=='Pickup' and not paused and typeof(ground)=='Vector3' and scanAge~=nil
+  and scanAge>=0 and scanAge<Workshop.COURIER_SCAN+.17
+ if scanning and not fx.scanDots then
+  fx.scanDots={}
+  for i=1,9 do
+   local dot=part(fx.root,'PickupGuideDot');dot.Shape=Enum.PartType.Ball
+   dot.Material=Enum.Material.Neon;dot.Color=GOLD:Lerp(WHITE,.6)
+   dot.Size=Vector3.one*.15;fx.scanDots[i]=dot
+  end
+ end
+ for i,dot in ipairs(fx.scanDots or {}) do
+  local distance=scanning and (ground-mount).Magnitude or 0
+  local step=i*.63
+  if step<distance then
+   dot.Position=mount:Lerp(ground,step/distance)
+   local fade=math.clamp((scanAge-Workshop.COURIER_SCAN)/.17,0,1)
+   dot.Transparency=(reduced and .38 or .14)+(reduced and .62 or .86)*fade
+  else dot.Transparency=1 end
+ end
  fx.drive.CFrame=pivot;fx.anchor.CFrame=facing(mount,Vector3.new(0,-1,0))
  drawSpheres(fx,now,pickup and .3+.7*q or unload and slots==0 and .7 or 0,q,0,GOLD)
  if pickup then
@@ -13755,16 +13775,19 @@ local function fall(s,dt)
  end
  return impact
 end
+function O.collectible(s)
+ local collectAt=s.raw and .40 or O.SCATTER_TIME
+ if s.arc or s.raw then
+  collectAt=math.max(collectAt,(s.firstLandedAge or 0)+(s.arc and O.GEM_CONTACT_HOLD or .075))
+ end
+ return s.landed==true and s.age>=collectAt
+end
 function O.step(s,target,dt,attract,magnetRange)
  if dt<=0 then return false end
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local collectAt=s.raw and .40 or O.SCATTER_TIME
- if s.arc or s.raw then
-  collectAt=math.max(collectAt,(s.firstLandedAge or 0)+(s.arc and O.GEM_CONTACT_HOLD or .075))
- end
- local pulling=attract and s.landed==true and s.age>=collectAt and distance<=(magnetRange or O.MAGNET_RANGE)
+ local pulling=attract and O.collectible(s) and distance<=(magnetRange or O.MAGNET_RANGE)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then
@@ -13820,28 +13843,31 @@ function V.glow(mask)
  end
 end
 
-function V.rockOutline(record)
- local tint=record.previewed and white or nil
- local view,outline=record.view,record.rockOutline
- if not tint and outline then
-  outline:Destroy();record.rockOutline=nil
-  return
+function V.attackOutlines(records,camera,now,steady)
+ local nearest={}
+ for _,r in pairs(records) do
+  if not camera or r.visual.broken or not r.view.Parent or r.view.Transparency>=1
+   or now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)>.57 then continue end
+  local distance=(r.view.Position-camera).Magnitude
+  if distance<105 then table.insert(nearest,{record=r,distance=distance}) end
  end
- local visible=tint~=nil and not record.visual.broken and view.Transparency<1 and (view.LocalTransparencyModifier or 0)<1
- if not visible then
-  if outline and outline.Enabled then outline.Enabled=false end
-  return
+ table.sort(nearest,function(a,b) return a.distance<b.distance end)
+ for i=1,math.min(10,#nearest) do nearest[i].record.outlineAt=now end
+ for _,r in pairs(records) do
+  local outline=r.rockOutline
+  if r.outlineAt~=now then
+   if outline then outline:Destroy();r.rockOutline=nil end
+  else
+   if not outline then
+    outline=Instance.new('Highlight');outline.Name='AttackedRockOutline'
+    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.FillTransparency=1
+    outline.OutlineColor=r.baseColor:Lerp(white,.66);outline.Adornee=r.view
+    outline.Parent=r.view;r.rockOutline=outline;r.outlineStart=now
+   end
+   local wave=steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)
+   outline.OutlineTransparency=.55-.48*wave
+  end
  end
- if not outline then
-  outline=Instance.new('Highlight');outline.Name='RockOutline'
-  outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.FillTransparency=1
-  outline.Parent=view;record.rockOutline=outline
- end
- local alpha=record.previewed and .06 or .15
- if outline.OutlineColor~=tint then outline.OutlineColor=tint end
- if outline.OutlineTransparency~=alpha then outline.OutlineTransparency=alpha end
- if outline.Adornee~=view then outline.Adornee=view end
- if not outline.Enabled then outline.Enabled=true end
 end
 
 local function carrier(parent,name)
@@ -15527,7 +15553,7 @@ local function frame(parent)
 end
 
 local function outline(parent)
- local base=part(parent,'SelectorPreview');base.Size=Vector3.one
+ local base=part(parent,'SelectorOutline');base.Size=Vector3.one
  local gui=surface(base,Enum.NormalId.Top,Vector2.new(512,512))
  local edges={}
  for i=1,4 do
@@ -15536,9 +15562,13 @@ local function outline(parent)
  end
  return {base=base,gui=gui,edges=edges}
 end
-local function showOutline(mark,point,width)
+local function showOutline(mark,point,width,color)
  mark.gui.Enabled=point~=nil
  if not point then return end
+ if mark.color~=color then
+  for _,edge in ipairs(mark.edges) do edge.BackgroundColor3=color;edge.BackgroundTransparency=.22 end
+  mark.color=color
+ end
  if mark.point~=point then mark.base.Position=point+Vector3.yAxis*.055;mark.point=point end
  if mark.width~=width then
   mark.base.Size=Vector3.new(width,.02,width);mark.width=width
@@ -15549,6 +15579,19 @@ local function showOutline(mark,point,width)
   mark.edges[3].Position=UDim2.fromScale(0,t);mark.edges[3].Size=UDim2.fromScale(t,1-2*t)
   mark.edges[4].Position=UDim2.fromScale(1-t,t);mark.edges[4].Size=UDim2.fromScale(t,1-2*t)
  end
+end
+local function fill(parent,name)
+ local base=part(parent,name)
+ local gui=surface(base,Enum.NormalId.Top,Vector2.new(8,8))
+ local face=frame(gui);face.BackgroundColor3=previewColor
+ return {base=base,gui=gui,face=face}
+end
+local function showFill(mark,point,width,opacity)
+ mark.gui.Enabled=point~=nil and opacity>0
+ if not mark.gui.Enabled then return end
+ mark.base.Position=point+Vector3.yAxis*.04
+ mark.base.Size=Vector3.new(width,.02,width)
+ mark.face.BackgroundTransparency=1-opacity
 end
 
 local function walls(parent,name)
@@ -15628,25 +15671,36 @@ function V:aim(ray)
  local hit=workspace:Raycast(ray.Origin,direction,filter)
  if not hit then return nil end
  local part=hit.Instance
- local zone=part.Parent
- local bed=zone and zone.Parent==run and zone:FindFirstChild('Field')
- local leadId=bed and part:GetAttribute('ResourceId')
+ local function bedFor(node)
+  while node and node~=run do
+   local zone=node.Parent
+   if zone and zone.Parent==run then return zone:FindFirstChild('Field'),node end
+   node=zone
+  end
+ end
+ local bed,rootPart=bedFor(part)
+ local leadId=bed and rootPart:GetAttribute('ResourceId')
  if not bed or (part~=bed and not leadId) then
   if part.CanCollide then return nil end
   filter.RespectCanCollide=true
   hit=workspace:Raycast(ray.Origin,direction,filter)
   part=hit and hit.Instance
-  zone=part and part.Parent
-  bed=zone and zone.Parent==run and zone:FindFirstChild('Field')
+  bed=bedFor(part)
   if not bed or part~=bed then return nil end
   leadId=nil
  end
- local position=leadId and part:GetAttribute('FullPosition') or hit.Position
+ -- Use the cursor's footprint; a wide rock can hang beyond the bed or
+ -- straddle the command-range boundary. Keep the rock only as a lead hint.
+ local position=hit.Position
+ local top=bed.Position.Y+bed.Size.Y*.5
+ if leadId and ray.Direction.Y<-.001 then
+  position=ray.Origin+ray.Direction*((top-ray.Origin.Y)/ray.Direction.Y)
+ end
  local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
+ if not point and leadId then point=Mining.selectorCenter(rootPart:GetAttribute('FullPosition') or hit.Position,bed.CFrame,bed.Size) end
  if not point then return nil end
  local field=bed:GetAttribute('FieldId')
- if not Mining.selectorInRange(hr.Position,point) then return nil end
- return point,field,leadId
+ return point,field,leadId,Mining.selectorInRange(hr.Position,point)
 end
 function V:canReachStarterPlot()
  local o=self.options
@@ -15664,9 +15718,14 @@ function V:canReachStarterPlot()
  return point~=nil and Mining.selectorInRange(root.Position,point)
 end
 function V:commit(ray)
- local point,id,leadId=self:aim(ray)
+ local point,id,leadId,inRange=self:aim(ray)
  local profile=self.options.profile()
  if not point or not id or not profile then return false end
+ if not inRange then
+  if self.options.notify then self.options.notify('Move closer to select that area.') end
+  return true
+ end
+ self.flashPoint=point;self.flashAge=0
  self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id,leadId=leadId})
  return true
 end
@@ -15674,22 +15733,27 @@ function V:showAim(dt,ray)
  local o=self.options
  local profile=o.profile()
  local visible=profile and not o.hidden()
- local pin=visible and o.player:GetAttribute('MA_Selector') or nil
+ local pin=profile and not (o.hidePin or o.hidden)() and o.player:GetAttribute('MA_Selector') or nil
  local old=pin and o.player:GetAttribute('MA_SelectorPrevious') or nil
  if not self.pinned and profile and o.world.Map:FindFirstChild('CrystalRun') then
   self.pinned=walls(o.parent,'MiningSelector')
   self.previous=walls(o.parent,'PreviousMiningSelector')
-  self.preview=outline(o.parent)
+  self.preview=fill(o.parent,'SelectorPreviewFill')
+  self.flash=fill(o.parent,'SelectorClickFill')
+  self.activeEdge=outline(o.parent)
+  self.previousEdge=outline(o.parent)
  end
  if not self.pinned then return end
  local width=profile and Workshop.selectorWidth(profile) or 0
  self.clock+=dt
- if not visible or not ray then self.aimPoint=nil;self.aimField=nil;self.clock=.033
- elseif self.clock>=.033 then self.clock=0;self.aimPoint,self.aimField=self:aim(ray) end
+ if not visible or not ray then self.aimPoint=nil;self.clock=.033
+ elseif self.clock>=.033 then
+  self.clock=0
+  local point,_,_,inRange=self:aim(ray)
+  self.aimPoint=inRange and point or nil
+ end
  self.aimWidth=width
  local point=self.aimPoint
- if point and (point==pin or point==old) then point=nil end
- self.previewPoint=point
  local transfer=old and o.player:GetAttribute('MA_SelectorTransition')
  local color=transfer and pendingColor or (o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor)
  -- Keep the already extended walls when the current pin becomes the old one.
@@ -15700,7 +15764,17 @@ function V:showAim(dt,ray)
  showWalls(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant,position,true)
  showWalls(self.previous,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
   o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor,dt,instant or self.previous.point~=old,position)
- showOutline(self.preview,point,width)
+ showOutline(self.activeEdge,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color)
+ showOutline(self.previousEdge,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
+  o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor)
+ local flash=visible and self.flashPoint or nil
+ local age=self.flashAge or 0
+ showFill(self.preview,point~=flash and point or nil,width,.20)
+ local strength=(1-math.clamp(age/.27,0,1))^2
+ local base=flash and point==flash and .20 or 0
+ showFill(self.flash,flash,width,base+(.64-base)*strength)
+ self.flashAge=age+dt
+ if self.flashAge>=.27 then self.flashPoint=nil end
 end
 
 function V:heal(view,now)
@@ -15738,7 +15812,10 @@ function V:updateHealing(now)
  end
 end
 function V:destroy()
- if self.pinned then self.pinned.folder:Destroy();self.previous.folder:Destroy();self.preview.base:Destroy() end
+ if self.pinned then
+  self.pinned.folder:Destroy();self.previous.folder:Destroy()
+  for _,mark in ipairs({self.preview,self.flash,self.activeEdge,self.previousEdge}) do mark.base:Destroy() end
+ end
  for _,cue in ipairs(self.cues) do cue.gui:Destroy() end
 end
 return V
@@ -16031,6 +16108,8 @@ local function inspectingFleet() return fleetView and fleetView:isOpen() end
 local function menusVisible() return modal.Visible or inspectingFleet() or (logisticsView and logisticsView:isOpen()) end
 local selectorView=SelectorView.new({world=world,player=player,parent=localFX,command=command,profile=function() return profile end,
  reducedMotion=CrystalImpactView.reducedMotion,
+ notify=function(message) notice.Text=message;noticeUntil=os.clock()+2 end,
+ hidePin=menusVisible,
  hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
@@ -16888,19 +16967,14 @@ connect(world.DescendantRemoving,function(source)
  hiddenParts[source]=nil
 end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
-local function renderResource(r,now,aim,aimWidth,aimField)
+local function renderResource(r,now)
  local s=r.source;local view=r.view
  if r.dirty then
-  r.fieldId=s:GetAttribute('FieldId')
-  r.center=s:GetAttribute('FullPosition') or s.Position
   r.modifiers=s:GetAttribute('RockModifiers') or 0
+  local hp=s:GetAttribute('HP')
+  if hp and r.lastHP and hp<r.lastHP then r.lastHitAt=now end
+  r.lastHP=hp
  end
- if r.dirty or r.aim~=aim or r.aimWidth~=aimWidth or r.aimField~=aimField then
-  r.aim=aim;r.aimWidth=aimWidth;r.aimField=aimField
-  r.previewed=aim~=nil and aimWidth~=nil and aimField~=nil and r.fieldId==aimField
-   and Mining.selectorContains(aim,aimWidth*.5,r.center)
- end
- if r.previewed or r.modifiers~=0 or r.rockOutline then RockModifierView.rockOutline(r) end
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
  -- geometry writes. Spawn growth is animated; mining size changes are snaps.
  if r.settled and not r.dirty then return end
@@ -17241,6 +17315,7 @@ local function renderDrone(d,dt,now)
  if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
  elseif not active and not charging and state~='SpecialMine' and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
  local part,source,resource=resolveRenderedTarget(kind,id,active and kind=='resource')
+ if active and resource then resource.lastBeamAt=now end
  if d.shotMuzzle then
   RoleEffectView.aim(d,alive and not motionPaused and s:GetAttribute('WorkPaused')~=true
    and (state=='Warmup' or state=='SpecialMine') and resource or nil,now)
@@ -17249,7 +17324,11 @@ local function renderDrone(d,dt,now)
  local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')
  local procUntil=s:GetAttribute(procKind=='turret' and 'ChainUntil' or 'ForkUntil') or 0
  local extra,extraSource
- if active and now<procUntil then extra,extraSource=resolveRenderedTarget(procKind,procId) end
+ if active and now<procUntil then
+  local branch
+  extra,extraSource,branch=resolveRenderedTarget(procKind,procId)
+  if branch then branch.lastBeamAt=now end
+ end
  local beamSince=state=='Attack' and (s:GetAttribute('ShotAt') or now) or (s:GetAttribute('BeamSince') or now)
  local specialReleaseAt
  if state=='SpecialMine' and source and source:GetAttribute('EffectDrone')==s:GetAttribute('DroneId') then
@@ -17410,7 +17489,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
-  local fracture=renderResource(r,now,selectorView.previewPoint,selectorView.aimWidth,selectorView.aimField)
+  local fracture=renderResource(r,now)
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
@@ -17441,6 +17520,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
     and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5)) or 0 end
   end
  end
+ RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins)
  pickupView:update(dt,now)
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()

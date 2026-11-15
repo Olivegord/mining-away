@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — field click, attack and ore pickup cues
+
+Pending field selection uses a faint surface fill. Click raises the fill immediately, then fades it over 0.27 seconds. The accepted square keeps a separate thin border; tall walls retain their distance fade. The only rock outlines added here indicate real attacks or recent damage, with a soft pulse and a steady reduced-motion/reduced-flashing setting. Emptiers stop about six studs above the claw's grab pose, show a short dotted line aimed at the ore, descend after the scan, close the claw at contact and lift before flying to the counter. The guide fades during descent and shares the existing per-drone cleanup. This leaves the existing mining beam and mineral effects in place.
+
 ## November 14 — correct compact finish inheritance and reject polygon spectrum
 
 Owner screenshots reject the previous comparison and Diamond. Compact gems now take opacity, vertex alpha, material, texture, palette function and inclusion count/colors/sizes from their original description. Inclusions are remapped into the compact volume. Ruby's accidental .12 opacity is corrected to the original .72, with its 30 fixed specks restored. Violet's original .76 opacity and inclusions are restored; Quartz keeps its optical texture and blue/gold grains. Original non-Diamond cuts and appearances are unchanged by this correction.

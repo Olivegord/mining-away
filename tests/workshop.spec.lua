@@ -220,10 +220,9 @@ test('Crystal Run drafts trigger effects and offers Denser Packing only after Co
  review(true)
  eq(W.compactorBatch(p,W.card(W.BY_ID.Q_DENSER_PACK,3)),5)
  eq(W.compactorBatch(p,W.card(W.BY_ID.Q_BATCH_PRESS,3)),2)
- eq(W.emptierBatch(p,W.card(W.BY_ID.Q_CARGO_RACK,2)),5)
- eq(W.emptierReady(4,4,nil,0),true)
- eq(W.emptierReady(2,4,10,15.99),false)
- eq(W.emptierReady(2,4,10,16),true)
+ local turnaround=W.card(W.BY_ID.Q_CARGO_RACK,2)
+ eq(W.emptierBatch(p,turnaround),1)
+ eq(W.emptierCooldown(3,p,turnaround),2)
  p.run.quartzEarnings=360
  assert(prestige(p,'reset-press',p.run.id));eq(W.hasCompactor(p),false)
 end)

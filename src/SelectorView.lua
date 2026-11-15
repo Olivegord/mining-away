@@ -31,7 +31,7 @@ local function frame(parent)
 end
 
 local function outline(parent)
- local base=part(parent,'SelectorPreview');base.Size=Vector3.one
+ local base=part(parent,'SelectorOutline');base.Size=Vector3.one
  local gui=surface(base,Enum.NormalId.Top,Vector2.new(512,512))
  local edges={}
  for i=1,4 do
@@ -40,9 +40,13 @@ local function outline(parent)
  end
  return {base=base,gui=gui,edges=edges}
 end
-local function showOutline(mark,point,width)
+local function showOutline(mark,point,width,color)
  mark.gui.Enabled=point~=nil
  if not point then return end
+ if mark.color~=color then
+  for _,edge in ipairs(mark.edges) do edge.BackgroundColor3=color;edge.BackgroundTransparency=.22 end
+  mark.color=color
+ end
  if mark.point~=point then mark.base.Position=point+Vector3.yAxis*.055;mark.point=point end
  if mark.width~=width then
   mark.base.Size=Vector3.new(width,.02,width);mark.width=width
@@ -53,6 +57,19 @@ local function showOutline(mark,point,width)
   mark.edges[3].Position=UDim2.fromScale(0,t);mark.edges[3].Size=UDim2.fromScale(t,1-2*t)
   mark.edges[4].Position=UDim2.fromScale(1-t,t);mark.edges[4].Size=UDim2.fromScale(t,1-2*t)
  end
+end
+local function fill(parent,name)
+ local base=part(parent,name)
+ local gui=surface(base,Enum.NormalId.Top,Vector2.new(8,8))
+ local face=frame(gui);face.BackgroundColor3=previewColor
+ return {base=base,gui=gui,face=face}
+end
+local function showFill(mark,point,width,opacity)
+ mark.gui.Enabled=point~=nil and opacity>0
+ if not mark.gui.Enabled then return end
+ mark.base.Position=point+Vector3.yAxis*.04
+ mark.base.Size=Vector3.new(width,.02,width)
+ mark.face.BackgroundTransparency=1-opacity
 end
 
 local function walls(parent,name)
@@ -132,25 +149,36 @@ function V:aim(ray)
  local hit=workspace:Raycast(ray.Origin,direction,filter)
  if not hit then return nil end
  local part=hit.Instance
- local zone=part.Parent
- local bed=zone and zone.Parent==run and zone:FindFirstChild('Field')
- local leadId=bed and part:GetAttribute('ResourceId')
+ local function bedFor(node)
+  while node and node~=run do
+   local zone=node.Parent
+   if zone and zone.Parent==run then return zone:FindFirstChild('Field'),node end
+   node=zone
+  end
+ end
+ local bed,rootPart=bedFor(part)
+ local leadId=bed and rootPart:GetAttribute('ResourceId')
  if not bed or (part~=bed and not leadId) then
   if part.CanCollide then return nil end
   filter.RespectCanCollide=true
   hit=workspace:Raycast(ray.Origin,direction,filter)
   part=hit and hit.Instance
-  zone=part and part.Parent
-  bed=zone and zone.Parent==run and zone:FindFirstChild('Field')
+  bed=bedFor(part)
   if not bed or part~=bed then return nil end
   leadId=nil
  end
- local position=leadId and part:GetAttribute('FullPosition') or hit.Position
+ -- Use the cursor's footprint; a wide rock can hang beyond the bed or
+ -- straddle the command-range boundary. Keep the rock only as a lead hint.
+ local position=hit.Position
+ local top=bed.Position.Y+bed.Size.Y*.5
+ if leadId and ray.Direction.Y<-.001 then
+  position=ray.Origin+ray.Direction*((top-ray.Origin.Y)/ray.Direction.Y)
+ end
  local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
+ if not point and leadId then point=Mining.selectorCenter(rootPart:GetAttribute('FullPosition') or hit.Position,bed.CFrame,bed.Size) end
  if not point then return nil end
  local field=bed:GetAttribute('FieldId')
- if not Mining.selectorInRange(hr.Position,point) then return nil end
- return point,field,leadId
+ return point,field,leadId,Mining.selectorInRange(hr.Position,point)
 end
 function V:canReachStarterPlot()
  local o=self.options
@@ -168,9 +196,14 @@ function V:canReachStarterPlot()
  return point~=nil and Mining.selectorInRange(root.Position,point)
 end
 function V:commit(ray)
- local point,id,leadId=self:aim(ray)
+ local point,id,leadId,inRange=self:aim(ray)
  local profile=self.options.profile()
  if not point or not id or not profile then return false end
+ if not inRange then
+  if self.options.notify then self.options.notify('Move closer to select that area.') end
+  return true
+ end
+ self.flashPoint=point;self.flashAge=0
  self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id,leadId=leadId})
  return true
 end
@@ -178,22 +211,27 @@ function V:showAim(dt,ray)
  local o=self.options
  local profile=o.profile()
  local visible=profile and not o.hidden()
- local pin=visible and o.player:GetAttribute('MA_Selector') or nil
+ local pin=profile and not (o.hidePin or o.hidden)() and o.player:GetAttribute('MA_Selector') or nil
  local old=pin and o.player:GetAttribute('MA_SelectorPrevious') or nil
  if not self.pinned and profile and o.world.Map:FindFirstChild('CrystalRun') then
   self.pinned=walls(o.parent,'MiningSelector')
   self.previous=walls(o.parent,'PreviousMiningSelector')
-  self.preview=outline(o.parent)
+  self.preview=fill(o.parent,'SelectorPreviewFill')
+  self.flash=fill(o.parent,'SelectorClickFill')
+  self.activeEdge=outline(o.parent)
+  self.previousEdge=outline(o.parent)
  end
  if not self.pinned then return end
  local width=profile and Workshop.selectorWidth(profile) or 0
  self.clock+=dt
- if not visible or not ray then self.aimPoint=nil;self.aimField=nil;self.clock=.033
- elseif self.clock>=.033 then self.clock=0;self.aimPoint,self.aimField=self:aim(ray) end
+ if not visible or not ray then self.aimPoint=nil;self.clock=.033
+ elseif self.clock>=.033 then
+  self.clock=0
+  local point,_,_,inRange=self:aim(ray)
+  self.aimPoint=inRange and point or nil
+ end
  self.aimWidth=width
  local point=self.aimPoint
- if point and (point==pin or point==old) then point=nil end
- self.previewPoint=point
  local transfer=old and o.player:GetAttribute('MA_SelectorTransition')
  local color=transfer and pendingColor or (o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor)
  -- Keep the already extended walls when the current pin becomes the old one.
@@ -204,7 +242,17 @@ function V:showAim(dt,ray)
  showWalls(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant,position,true)
  showWalls(self.previous,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
   o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor,dt,instant or self.previous.point~=old,position)
- showOutline(self.preview,point,width)
+ showOutline(self.activeEdge,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color)
+ showOutline(self.previousEdge,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
+  o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor)
+ local flash=visible and self.flashPoint or nil
+ local age=self.flashAge or 0
+ showFill(self.preview,point~=flash and point or nil,width,.20)
+ local strength=(1-math.clamp(age/.27,0,1))^2
+ local base=flash and point==flash and .20 or 0
+ showFill(self.flash,flash,width,base+(.64-base)*strength)
+ self.flashAge=age+dt
+ if self.flashAge>=.27 then self.flashPoint=nil end
 end
 
 function V:heal(view,now)
@@ -242,7 +290,10 @@ function V:updateHealing(now)
  end
 end
 function V:destroy()
- if self.pinned then self.pinned.folder:Destroy();self.previous.folder:Destroy();self.preview.base:Destroy() end
+ if self.pinned then
+  self.pinned.folder:Destroy();self.previous.folder:Destroy()
+  for _,mark in ipairs({self.preview,self.flash,self.activeEdge,self.previousEdge}) do mark.base:Destroy() end
+ end
  for _,cue in ipairs(self.cues) do cue.gui:Destroy() end
 end
 return V

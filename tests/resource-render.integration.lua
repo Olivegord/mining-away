@@ -63,31 +63,26 @@ end
 local lateFixed={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=true,visual=Feel.newStagePresentation(3,false,76,3)}
 renderResource(lateFixed,76)
 assert(lateFixed.view.Color.R==fixedRecord.view.Color.R and lateFixed.view.Size.X==fixedRecord.view.Size.X)
-fixed:SetAttribute('FieldId',8)
-fixedRecord.dirty=true
-renderResource(fixedRecord,79)
+fixedRecord.view.Parent=workspace
 local rockColor=fixedRecord.view.Color
-renderResource(fixedRecord,80,Vector3.new(-15,0,0),30,8)
+local records={fixedRecord}
+local camera=Vector3.new(0,15,0)
+RockModifierView.attackOutlines(records,camera,80,false)
+assert(not fixedRecord.rockOutline,'idle crystal should not be outlined')
+fixedRecord.lastBeamAt=80.15
+RockModifierView.attackOutlines(records,camera,80.15,false)
 local outline=assert(fixedRecord.rockOutline)
-assert(outline.Enabled and outline.Adornee==fixedRecord.view and outline.FillTransparency==1
- and outline.DepthMode==Enum.HighlightDepthMode.Occluded,'a rock centered on the preview edge needs an occluded outline')
-assert(fixedRecord.view.Color==rockColor,'preview changed the rock color')
-renderResource(fixedRecord,81,Vector3.new(-15.01,0,0),30,8)
-assert(not outline.Parent and not fixedRecord.rockOutline and fixedRecord.view.Color==rockColor,'moving the preview should clear the outline')
-renderResource(fixedRecord,82,Vector3.zero,30,9)
-assert(not fixedRecord.rockOutline,'another field must not get the preview highlight')
-renderResource(fixedRecord,83,Vector3.zero,30,8)
-assert(fixedRecord.rockOutline.Enabled and fixedRecord.view.Color==rockColor)
-renderResource(fixedRecord,84)
-assert(not fixedRecord.rockOutline and fixedRecord.view.Color==rockColor,'clearing the preview left a highlight or changed the color')
+assert(outline.Adornee==fixedRecord.view and outline.FillTransparency==1
+ and outline.DepthMode==Enum.HighlightDepthMode.Occluded)
+local bright=outline.OutlineTransparency
+RockModifierView.attackOutlines(records,camera,80.52,false)
+assert(outline.OutlineTransparency>bright and fixedRecord.view.Color==rockColor,'attack pulse should only change the outline')
+RockModifierView.attackOutlines(records,camera,81,false)
+assert(not outline.Parent and not fixedRecord.rockOutline,'attack outline did not expire')
 fixed:SetAttribute('RockModifiers',Mining.ROCK_MODIFIERS.Frosted);fixedRecord.dirty=true
 local material=fixedRecord.view.Material
 renderResource(fixedRecord,85)
+RockModifierView.attackOutlines(records,camera,85,false)
 assert(not fixedRecord.rockOutline,'a modifier restored the removed silhouette outline')
 assert(fixedRecord.view.Color.R==rockColor.R and fixedRecord.view.Color.G==rockColor.G and fixedRecord.view.Material==material,'Frosted changed the red mineral')
-renderResource(fixedRecord,86,Vector3.zero,30,8)
-outline=assert(fixedRecord.rockOutline)
-assert(outline.Enabled and outline.OutlineColor.R>.9)
-renderResource(fixedRecord,87)
-assert(not fixedRecord.rockOutline,'clearing the preview should remove the outline even on modified rocks')
-print('PASS production resource renderer: immediate size snaps, replicated stage turns, idle fast path and no duplicate effects over 7200 stable frames')
+print('PASS production resource renderer: size snaps, stage turns, idle fast path and pulsing attack outline')

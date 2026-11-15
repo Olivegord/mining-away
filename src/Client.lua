@@ -218,6 +218,8 @@ local function inspectingFleet() return fleetView and fleetView:isOpen() end
 local function menusVisible() return modal.Visible or inspectingFleet() or (logisticsView and logisticsView:isOpen()) end
 local selectorView=SelectorView.new({world=world,player=player,parent=localFX,command=command,profile=function() return profile end,
  reducedMotion=CrystalImpactView.reducedMotion,
+ notify=function(message) notice.Text=message;noticeUntil=os.clock()+2 end,
+ hidePin=menusVisible,
  hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
@@ -1075,19 +1077,14 @@ connect(world.DescendantRemoving,function(source)
  hiddenParts[source]=nil
 end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
-local function renderResource(r,now,aim,aimWidth,aimField)
+local function renderResource(r,now)
  local s=r.source;local view=r.view
  if r.dirty then
-  r.fieldId=s:GetAttribute('FieldId')
-  r.center=s:GetAttribute('FullPosition') or s.Position
   r.modifiers=s:GetAttribute('RockModifiers') or 0
+  local hp=s:GetAttribute('HP')
+  if hp and r.lastHP and hp<r.lastHP then r.lastHitAt=now end
+  r.lastHP=hp
  end
- if r.dirty or r.aim~=aim or r.aimWidth~=aimWidth or r.aimField~=aimField then
-  r.aim=aim;r.aimWidth=aimWidth;r.aimField=aimField
-  r.previewed=aim~=nil and aimWidth~=nil and aimField~=nil and r.fieldId==aimField
-   and Mining.selectorContains(aim,aimWidth*.5,r.center)
- end
- if r.previewed or r.modifiers~=0 or r.rockOutline then RockModifierView.rockOutline(r) end
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
  -- geometry writes. Spawn growth is animated; mining size changes are snaps.
  if r.settled and not r.dirty then return end
@@ -1428,6 +1425,7 @@ local function renderDrone(d,dt,now)
  if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
  elseif not active and not charging and state~='SpecialMine' and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
  local part,source,resource=resolveRenderedTarget(kind,id,active and kind=='resource')
+ if active and resource then resource.lastBeamAt=now end
  if d.shotMuzzle then
   RoleEffectView.aim(d,alive and not motionPaused and s:GetAttribute('WorkPaused')~=true
    and (state=='Warmup' or state=='SpecialMine') and resource or nil,now)
@@ -1436,7 +1434,11 @@ local function renderDrone(d,dt,now)
  local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')
  local procUntil=s:GetAttribute(procKind=='turret' and 'ChainUntil' or 'ForkUntil') or 0
  local extra,extraSource
- if active and now<procUntil then extra,extraSource=resolveRenderedTarget(procKind,procId) end
+ if active and now<procUntil then
+  local branch
+  extra,extraSource,branch=resolveRenderedTarget(procKind,procId)
+  if branch then branch.lastBeamAt=now end
+ end
  local beamSince=state=='Attack' and (s:GetAttribute('ShotAt') or now) or (s:GetAttribute('BeamSince') or now)
  local specialReleaseAt
  if state=='SpecialMine' and source and source:GetAttribute('EffectDrone')==s:GetAttribute('DroneId') then
@@ -1597,7 +1599,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
-  local fracture=renderResource(r,now,selectorView.previewPoint,selectorView.aimWidth,selectorView.aimField)
+  local fracture=renderResource(r,now)
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
@@ -1628,6 +1630,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
     and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5)) or 0 end
   end
  end
+ RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins)
  pickupView:update(dt,now)
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()

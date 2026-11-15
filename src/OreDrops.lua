@@ -90,16 +90,19 @@ local function fall(s,dt)
  end
  return impact
 end
+function O.collectible(s)
+ local collectAt=s.raw and .40 or O.SCATTER_TIME
+ if s.arc or s.raw then
+  collectAt=math.max(collectAt,(s.firstLandedAge or 0)+(s.arc and O.GEM_CONTACT_HOLD or .075))
+ end
+ return s.landed==true and s.age>=collectAt
+end
 function O.step(s,target,dt,attract,magnetRange)
  if dt<=0 then return false end
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local collectAt=s.raw and .40 or O.SCATTER_TIME
- if s.arc or s.raw then
-  collectAt=math.max(collectAt,(s.firstLandedAge or 0)+(s.arc and O.GEM_CONTACT_HOLD or .075))
- end
- local pulling=attract and s.landed==true and s.age>=collectAt and distance<=(magnetRange or O.MAGNET_RANGE)
+ local pulling=attract and O.collectible(s) and distance<=(magnetRange or O.MAGNET_RANGE)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then

@@ -142,8 +142,8 @@ function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
  return ownerPosition+Vector3.new(x,altitude or y,z)
 end
 function F.quarryFollowHeight(role,time,maxStep60)
- if role=='Ramiel' then return F.ReferenceFollowHeight+7 end
- return (role=='Courier' and 10.4 or 11.6)+F.hover(time,maxStep60)
+ if role=='Ramiel' then return F.ReferenceFollowHeight+12 end
+ return (role=='Courier' and 15.4 or 16.6)+F.hover(time,maxStep60)
 end
 local function swarmHash(id)
  local value=0
@@ -266,7 +266,7 @@ function F.mineGoal(resourcePosition,slot,geode,fullSize,reference,quarry)
  if quarry and fullSize then
   -- Center the drone above the intact tip. The deck height keeps the
   -- original 2-stud miner shell clear even over the smallest crystals.
-  height=math.max(7-fullSize.Y*.5,fullSize.Y*.5+3.1)
+  height=math.max(7-fullSize.Y*.5,fullSize.Y*.5+3.1)+4
  end
  local x,y,z=F.stationOffset(slot,geode,height)
  return resourcePosition+Vector3.new(x,y,z)

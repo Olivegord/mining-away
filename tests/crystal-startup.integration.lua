@@ -235,7 +235,7 @@ do
  local sent,loadedAt
  for _=1,math.ceil(22/C.Tick) do
   advance(C.Tick)
-  loadedAt=loadedAt or crew.drones[8].oreLoadedAt or crew.drones[9].oreLoadedAt
+  loadedAt=loadedAt or crew.drones[8].oreLoadedVisualAt or crew.drones[9].oreLoadedVisualAt
   sent=next(data(crew).run.deliveries)
   if sent then break end
  end
@@ -302,7 +302,7 @@ do
   local filled,saleStarted
   for _=1,math.ceil(45/C.Tick) do
    advance(C.Tick)
-   filled=filled or crew.drones[8].oreLoadedAt or crew.drones[9].oreLoadedAt
+   filled=filled or crew.drones[8].oreLoadedVisualAt or crew.drones[9].oreLoadedVisualAt
    local _,parcel=next(data(crew).run.deliveries)
    if parcel then
     saleStarted=now
@@ -312,7 +312,7 @@ do
     break
    end
   end
-  assert(saleStarted and (not filled or saleStarted-filled<Workshop.EMPTIER_WAIT),'milestone cargo waited for the normal timeout')
+  assert(saleStarted and (not filled or saleStarted-filled<2),'single cargo did not depart promptly')
   filled=filled or saleStarted
   for _=1,math.ceil(35/C.Tick) do
    if not next(data(crew).run.deliveries) then break end

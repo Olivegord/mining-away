@@ -578,30 +578,36 @@ check('physical courier cargo settles above the table and waits for its receipt'
  near(work.bursts[1].part.Position.Y,7.18)
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy();original:Destroy()
 end)
-check('courier claws close at ground contact without a tether and snap once',function()
+check('courier draws a dotted guide overhead, then closes the claw at contact',function()
  local source=Instance.new('Folder');source:SetAttribute('Role','Courier');source:SetAttribute('State','Pickup')
- source:SetAttribute('DeliverySlots',4);source:SetAttribute('CourierDock',Vector3.new(0,5,0))
+ source:SetAttribute('DeliverySlots',1);source:SetAttribute('CourierDock',Vector3.new(0,5,0))
+ source:SetAttribute('CourierPickupPoint',Vector3.new(0,4,0))
  source:SetAttribute('CourierPickupAt',720);source:SetAttribute('SnapshotAt',720);source.Parent=root
  local model=Instance.new('Model');model.Parent=root
- local emitter=Instance.new('Part');emitter.Position=Vector3.new(0,5,0);emitter.Parent=model;model.PrimaryPart=emitter
+ local emitter=Instance.new('Part');emitter.Position=Vector3.new(0,11,0);emitter.Parent=model;model.PrimaryPart=emitter
  local drone={source=source,view=model,emitter=emitter,pos=emitter.Position}
  local record={events={dead=false}};local work=WorkEffects.new(root)
- assert(not work:courier(drone,record,720.10))
+ drone.pickupAge=.10
+ assert(not work:courier(drone,record,720+drone.pickupAge))
  local slot=record.courier.mounts[1]
  local open=slot.fingers[1][2].Position
  assert(not slot.cargo and slot.fingers[1][2].Transparency==0 and not record.courier.tetherVFX)
- assert(not work:courier(drone,record,720.48))
+ local dots=assert(record.courier.scanDots)
+ assert(dots[1].Transparency<1 and dots[2].Position.Y<dots[1].Position.Y)
+ drone.pickupAge=Workshop.COURIER_CONTACT-.08
+ assert(not work:courier(drone,record,720+drone.pickupAge))
+ assert(dots[1].Transparency==1,'dotted guide lingered through contact')
  assert((open-slot.fingers[1][2].Position).Magnitude>.02 and not slot.cargo)
  source:SetAttribute('DeliveryUnits',1);source:SetAttribute('DeliveryMaterials','Rock:Quartz:10')
  source:SetAttribute('CourierLoadedOre',19);source:SetAttribute('CourierLoadedMaterial','Rock:Quartz:10')
- source:SetAttribute('CourierLoadedAt',720.56)
+ source:SetAttribute('CourierLoadedAt',720+Workshop.COURIER_CONTACT)
  drone.pickupAge=Workshop.COURIER_CONTACT-.04
- assert(not work:courier(drone,record,720.57))
+ assert(not work:courier(drone,record,720+Workshop.COURIER_CONTACT+.01))
  assert(slot.cargo.Transparency==1 and not drone.cargoMount,'early cargo receipt jumped ahead of the animated fingers')
  drone.pickupAge=Workshop.COURIER_CONTACT+.01
- assert(work:courier(drone,record,720.57))
+ assert(work:courier(drone,record,720+Workshop.COURIER_CONTACT+.01))
  assert(slot.cargo.Transparency==0 and drone.cargoMount.id==19)
- assert(not work:courier(drone,record,720.58))
+ assert(not work:courier(drone,record,720+Workshop.COURIER_CONTACT+.02))
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)
 check('crystal break dust follows the stone and keeps small ore-colored motes alive',function()

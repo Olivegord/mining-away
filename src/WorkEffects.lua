@@ -460,6 +460,27 @@ function W:courier(drone,record,now)
   drone.view:PivotTo(pivot*CFrame.new(0,math.sin(t*math.pi)*.18,0))
  end
  pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
+ local ground=source:GetAttribute('CourierPickupPoint')
+ local scanAge=drone.pickupAge
+ local scanning=state=='Pickup' and not paused and typeof(ground)=='Vector3' and scanAge~=nil
+  and scanAge>=0 and scanAge<Workshop.COURIER_SCAN+.17
+ if scanning and not fx.scanDots then
+  fx.scanDots={}
+  for i=1,9 do
+   local dot=part(fx.root,'PickupGuideDot');dot.Shape=Enum.PartType.Ball
+   dot.Material=Enum.Material.Neon;dot.Color=GOLD:Lerp(WHITE,.6)
+   dot.Size=Vector3.one*.15;fx.scanDots[i]=dot
+  end
+ end
+ for i,dot in ipairs(fx.scanDots or {}) do
+  local distance=scanning and (ground-mount).Magnitude or 0
+  local step=i*.63
+  if step<distance then
+   dot.Position=mount:Lerp(ground,step/distance)
+   local fade=math.clamp((scanAge-Workshop.COURIER_SCAN)/.17,0,1)
+   dot.Transparency=(reduced and .38 or .14)+(reduced and .62 or .86)*fade
+  else dot.Transparency=1 end
+ end
  fx.drive.CFrame=pivot;fx.anchor.CFrame=facing(mount,Vector3.new(0,-1,0))
  drawSpheres(fx,now,pickup and .3+.7*q or unload and slots==0 and .7 or 0,q,0,GOLD)
  if pickup then

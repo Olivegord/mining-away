@@ -34,15 +34,17 @@ W.EMPTIERS=2
 W.VACUUM_ENABLED=false
 W.ORE_REACH_SCALE=.28
 W.STARTER_SPECIALISTS={'Needler','Ballcaster','Vacuum','Compactor'}
-W.EMPTIER_BATCH=4
-W.COURIER_LOWER=.38
+W.EMPTIER_BATCH=1
+W.COURIER_SCAN=.32
+W.COURIER_LOWER=.48
 W.COURIER_CLOSE=.18
-W.COURIER_CONTACT=W.COURIER_LOWER+W.COURIER_CLOSE
-W.COURIER_LIFT=.38
-W.COURIER_CLEARANCE=1.45
+W.COURIER_CONTACT=W.COURIER_SCAN+W.COURIER_LOWER+W.COURIER_CLOSE
+W.COURIER_LIFT=.46
+W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
 W.COURIER_RENDER_DELAY=.10
 function W.courierClawOffset(slot)
+ if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
  return side*.98,-1.14,.86-math.floor((slot-1)/2)*1.72,side*.06
 end
@@ -51,15 +53,14 @@ local function easeClaw(t)
  return t*t*t*(10+t*(-15+6*t))
 end
 function W.courierStroke(age)
- local lower=easeClaw(age/W.COURIER_LOWER)
- local close=easeClaw((age-W.COURIER_LOWER)/W.COURIER_CLOSE)
+ local lower=easeClaw((age-W.COURIER_SCAN)/W.COURIER_LOWER)
+ local close=easeClaw((age-W.COURIER_SCAN-W.COURIER_LOWER)/W.COURIER_CLOSE)
  local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30
 W.BLOCK_SIZE={1.45,.90,1.22}
-W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3
 W.COMPACTOR_WAIT=5
 W.COMPACTOR_PARTIAL_WAIT=1.5
@@ -111,7 +112,7 @@ W.CATALOG={
  {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
  {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
  {id='Q_DENSER_PACK',title='Denser Packing',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
- {id='Q_CARGO_RACK',title='Cargo Rack',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
+ {id='Q_CARGO_RACK',title='Quick Turnaround',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
  {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
@@ -141,10 +142,8 @@ function W.hasCompactor(p,extra)
  return W.effect(p,'compactor',extra)>0
 end
 function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra)+W.effect(p,'denserPacking',extra) end
-function W.emptierBatch(p,extra) return W.EMPTIER_BATCH+W.effect(p,'cargoRack',extra) end
-function W.emptierReady(units,capacity,waitingSince,now)
- return units>=capacity or units>0 and waitingSince~=nil and now-waitingSince>=W.EMPTIER_WAIT
-end
+function W.emptierBatch() return W.EMPTIER_BATCH end
+function W.emptierCooldown(base,p,extra) return base/(1+.5*W.effect(p,'cargoRack',extra)) end
 W.STAR_CATALOG={
  {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum',legacy=true},
  {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart',legacy=true},

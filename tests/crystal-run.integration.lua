@@ -1096,7 +1096,7 @@ end
 local emptier=buyer.drones[4]
 assert(emptier.role=='Courier')
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_SHIFT_RELAY,3));publish(buyer)
-local rubyCargo=Workshop.cargoKey('RunRuby',40)
+local rubyCargo=Workshop.cargoKey('RunRuby',440)
 local emeraldCargo=Workshop.cargoKey('RunEmerald',300)
 local pressedCargo=Workshop.cargoKey('RunCobalt',90,true)
 local quartzCargo=Workshop.cargoKey('Quartz',10)
@@ -1105,7 +1105,7 @@ local hr=characterRoot(buyer)
 local function stageGroundCargo(material,position)
  local tier,value,packed=Workshop.crystalCargo(material)
  scene.spawnOrePickup(f.part,{owner=shopper.UserId,runId=data(buyer).run.id,nodeId='courier-test',
-  material=material,tierMaterial=tier,value=value,units=1,raw=true,compacted=packed,floor=position.Y},
+  material=material,tierMaterial=tier,value=value,units=1,raw=true,compacted=packed,floor=position.Y,fieldPart=f.part},
   position,Vector3.zero,f.color)
  local drop=pickups[pickupSerial]
  drop.landed=true;drop.age=1
@@ -1113,10 +1113,8 @@ local function stageGroundCargo(material,position)
 end
 emptier.pos=hr.Position
 buyer.nextEmptierPlan=nil
-local originalMilestone=Pro.deliveryFundsMilestone
-Pro.deliveryFundsMilestone=function() return false end
 local function grabGroundCargo(drop)
- emptier.orePickupId=pickupSerial
+ emptier.orePickupId=pickupSerial;drop.courier=emptier
  local slot=Pro.droneCargoUnits(data(buyer),emptier.id)+1
  local x,y,z=Workshop.courierClawOffset(slot)
  local center=Vector3.new(drop.x,drop.floor-.22+drop.part.Size.Y*.5,drop.z)
@@ -1127,7 +1125,7 @@ local function grabGroundCargo(drop)
  scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
  assert(emptier.oreDock and emptier.state=='Pickup' and not drop.part:GetAttribute('CourierCollected'))
  assert((emptier.pos-approachStart).Magnitude<.02,'the descent snapped to its entry point')
- now+=Workshop.COURIER_LOWER+.04
+ now+=Workshop.COURIER_SCAN+Workshop.COURIER_LOWER+.04
  scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
  assert((emptier.pos-emptier.oreDock).Magnitude<.001 and not drop.part:GetAttribute('CourierCollected'))
  now+=Workshop.COURIER_CLOSE
@@ -1138,22 +1136,18 @@ local function grabGroundCargo(drop)
  scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
  assert(not emptier.oreDock and emptier.pos.Y>center.Y+2.5)
 end
-for _,material in ipairs({rubyCargo,emeraldCargo,pressedCargo,quartzCargo}) do
- local drop=stageGroundCargo(material,hr.Position-Vector3.yAxis*2.6)
- grabGroundCargo(drop)
-end
-Pro.deliveryFundsMilestone=originalMilestone
-assert(emptier.oreLoadedAt and Pro.droneCargoUnits(data(buyer),emptier.id)==4)
+grabGroundCargo(stageGroundCargo(rubyCargo,hr.Position+Vector3.new(0,-2.6,14)))
+assert(emptier.oreLoadedVisualAt and Pro.droneCargoUnits(data(buyer),emptier.id)==1)
 local restored=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
 Pro.reconcileCargo(restored,{emptier.id},true)
-assert(Pro.droneCargoUnits(restored,emptier.id)==4 and Pro.cargoUnits(restored)==9,
+assert(Pro.droneCargoUnits(restored,emptier.id)==1 and Pro.cargoUnits(restored)==9,
  'restoring a partly loaded Emptier moved its ore into the backpack')
 local function stepEmptier()
  scene.assignEmptierPickups(buyer);droneStep(emptier,C.Tick)
 end
 stepEmptier();now+=1;stepEmptier();serviceDeliveries(buyer)
 local manifest=assert(data(buyer).run.deliveries[emptier.id])
-assert(manifest.cargo[rubyCargo]==1 and manifest.cargo[emeraldCargo]==1 and manifest.cargo[pressedCargo]==1 and manifest.cargo[quartzCargo]==1)
+assert(manifest.cargo[rubyCargo]==1 and next(manifest.cargo,rubyCargo)==nil)
 assert(Pro.cargoUnits(data(buyer))==9 and data(buyer).run.cargo[quartzCargo]==6)
 snapshotDrone(emptier)
 local counter=scene.packStation
@@ -1176,16 +1170,15 @@ assert(scene.shiftReady(buyer) and not buyer.shiftUntil,'sale spent the surge be
 scene.publishSquareStatus(buyer)
 assert(shopper:GetAttribute('MA_SelectorStatus')=='SurgeReady')
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_CARGO_RACK,2));publish(buyer)
--- This parcel funds neither the next pack nor prestige, so wait for the batch timer.
+-- An ordinary ore also triggers a single sale.
 now+=3;emptier.pos=hr.Position
 local smallParcel=Workshop.cargoKey('RunRuby',5,true)
-local drop=stageGroundCargo(smallParcel,hr.Position-Vector3.yAxis*2.6)
+local drop=stageGroundCargo(smallParcel,hr.Position+Vector3.new(0,-2.6,14))
 grabGroundCargo(drop)
-now+=Workshop.EMPTIER_WAIT
 stepEmptier();serviceDeliveries(buyer)
 assert(Pro.deliveryUnits(data(buyer),emptier.id)==1 and Pro.cargoUnits(data(buyer))==9)
 snapshotDrone(emptier)
-assert(emptier.model:GetAttribute('DeliverySlots')==5 and emptier.model:GetAttribute('DeliveryMaterials')=='Block:RunRuby:5')
+assert(emptier.model:GetAttribute('DeliverySlots')==1 and emptier.model:GetAttribute('DeliveryMaterials')=='Block:RunRuby:5')
 local saleDelay=now
 now+=20
 scene.clearSquare(buyer)

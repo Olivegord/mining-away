@@ -22,28 +22,31 @@ function V.glow(mask)
  end
 end
 
-function V.rockOutline(record)
- local tint=record.previewed and white or nil
- local view,outline=record.view,record.rockOutline
- if not tint and outline then
-  outline:Destroy();record.rockOutline=nil
-  return
+function V.attackOutlines(records,camera,now,steady)
+ local nearest={}
+ for _,r in pairs(records) do
+  if not camera or r.visual.broken or not r.view.Parent or r.view.Transparency>=1
+   or now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)>.57 then continue end
+  local distance=(r.view.Position-camera).Magnitude
+  if distance<105 then table.insert(nearest,{record=r,distance=distance}) end
  end
- local visible=tint~=nil and not record.visual.broken and view.Transparency<1 and (view.LocalTransparencyModifier or 0)<1
- if not visible then
-  if outline and outline.Enabled then outline.Enabled=false end
-  return
+ table.sort(nearest,function(a,b) return a.distance<b.distance end)
+ for i=1,math.min(10,#nearest) do nearest[i].record.outlineAt=now end
+ for _,r in pairs(records) do
+  local outline=r.rockOutline
+  if r.outlineAt~=now then
+   if outline then outline:Destroy();r.rockOutline=nil end
+  else
+   if not outline then
+    outline=Instance.new('Highlight');outline.Name='AttackedRockOutline'
+    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.FillTransparency=1
+    outline.OutlineColor=r.baseColor:Lerp(white,.66);outline.Adornee=r.view
+    outline.Parent=r.view;r.rockOutline=outline;r.outlineStart=now
+   end
+   local wave=steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)
+   outline.OutlineTransparency=.55-.48*wave
+  end
  end
- if not outline then
-  outline=Instance.new('Highlight');outline.Name='RockOutline'
-  outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.FillTransparency=1
-  outline.Parent=view;record.rockOutline=outline
- end
- local alpha=record.previewed and .06 or .15
- if outline.OutlineColor~=tint then outline.OutlineColor=tint end
- if outline.OutlineTransparency~=alpha then outline.OutlineTransparency=alpha end
- if outline.Adornee~=view then outline.Adornee=view end
- if not outline.Enabled then outline.Enabled=true end
 end
 
 local function carrier(parent,name)

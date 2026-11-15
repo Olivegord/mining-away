@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — reliable field selection, one-ore sellers and clearer drone movement
+
+Fix clicks that fail to place a new mining area and keep the accepted square outlined. Show aiming with a fill, then brighten it immediately on click and fade the flash quickly. Raise idle and attacking drones, and pulse the outline of rocks taking attacks. Make loose ore reliably collectible. A seller should hold one ore and go sell it. When a drone retrieves a rock, it should arrive above it, draw a dotted beam down, descend for the grab and climb back up.
+
 ## November 14 — wider mining beds, stout rocks and higher idle drones
 
 Double the width of all five active Crystal Run beds. Widen field rocks, make them shorter and more stout, and have drones hover higher while idle. The goal is more open space in the field. Drones still descend for their usual work.

@@ -388,7 +388,7 @@ end
 local function kill(d)
  if d.hp<=0 then return end
  release(d);spend(d);d.field=nil;d.autoField=nil;d.recharging=nil;d.battery=d.stats.batteryCapacity;R.reprint(d,now,C.Reprint+C.Assembly)
- d.orePickupId=nil;d.oreLoadedAt=nil;d.pickupAt=nil;d.oreDock=nil;d.oreYaw=nil;d.oreSeatUntil=nil;d.launchAt=nil;d.unloadAt=nil;d.deliveryArrived=false;d.deliveryRequested=false
+ d.orePickupId=nil;d.pickupAt=nil;d.oreDock=nil;d.oreYaw=nil;d.oreSeatUntil=nil;d.launchAt=nil;d.unloadAt=nil;d.deliveryArrived=false;d.deliveryRequested=false
  d.repairChargeAt=nil;d.repairTarget=nil;d.healTargetId=nil;d.healUntil=0
  d.model:SetAttribute('DeathSerial',(d.model:GetAttribute('DeathSerial') or 0)+1)
 end
@@ -403,9 +403,9 @@ function scene.unlockedMiners(field)
  end
  return false
 end
-local function los(a,b,target,ignore)
+local function los(a,b,target,ignore,physicalOnly)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances=ignore or {droneFolder}
- if target and target:GetAttribute('ReferenceCrystal')==true then params.RespectCanCollide=true end
+ if physicalOnly or target and target:GetAttribute('ReferenceCrystal')==true then params.RespectCanCollide=true end
  local hit=workspace:Raycast(a,b-a,params)
  return hit==nil or hit.Instance==target or (target and hit.Instance:IsDescendantOf(target))
 end
@@ -1073,7 +1073,9 @@ function scene.finishPress(press)
 end
 function scene.orePullClear(drop,from,target,targetModel)
  if drop.pullTarget~=targetModel or now>=(drop.queryAt or 0) then
-  drop.clearPath=los(from,target,targetModel,{pickupFolder,droneFolder})
+  -- Mineable proxies can be wider than their rendered cut and are not solid
+  -- to players. They must not also act as invisible walls for ore.
+  drop.clearPath=los(from,target,targetModel,{pickupFolder,droneFolder},true)
   drop.queryAt=now+.15;drop.pullTarget=targetModel
  end
  return drop.clearPath==true
@@ -1309,7 +1311,7 @@ local function pickupStep(dt)
     drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.arc and drop.arc.landX or drop.x,drop.floor,drop.arc and drop.arc.landZ or drop.z))
     drop.part:SetAttribute('GroundImpactSerial',1)
    end
-   if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,targetModel,{pickupFolder,droneFolder}) then
+   if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,targetModel,{pickupFolder,droneFolder},true) then
     if pressing then
      if not press.pressInputs then
       press.pressInputs={};press.pressInputValue=0;press.pressDeadline=now+Workshop.COMPACTOR_WAIT
@@ -2326,7 +2328,8 @@ local function attackDrone(d: any,field: any,dt: number)
    if target then
     local stats=field.e.roster[d.id].stats
     local side=d.evade%2==0 and 1 or -1
-    local goal=target.emitter.Position+Vector3.new(side*(8+(d.slot%3)*3),5+((d.flightHeight or Feel.FollowHeight)-Feel.FollowHeight),9)
+    local offset=Vector3.new(side*(11+(d.slot%3)*3),10+((d.flightHeight or Feel.FollowHeight)-Feel.FollowHeight),11)
+    local goal=target.emitter.Position+offset.Unit*math.min(offset.Magnitude,stats.range*.92)
     d.state='Attack';move(d,goal,dt)
     if (d.pos-target.emitter.Position).Magnitude<=stats.range and los(d.pos,target.emitter.Position,target.model,{droneFolder}) then
      d.combatTarget=target;d.mining=true;d.targetPosition=target.emitter.Position
@@ -2373,7 +2376,7 @@ local function committedStation(d,r)
    local bestCount=0
    for turn=0,3 do
     local angle=direction+turn*math.pi/2
-    local station=r.position+Vector3.new(math.cos(angle)*offset,2.8,math.sin(angle)*offset)
+    local station=r.position+Vector3.new(math.cos(angle)*offset,prism and 6.8 or 6.3,math.sin(angle)*offset)
     if turn==0 then d.workStation=station end
     if prism then
      local path=scene.prismTrace(d,r,station,false)
@@ -2710,18 +2713,18 @@ function scene.emptierOffset(rank)
 end
 function scene.emptierReady(d,profile)
  if not scene.runStart then return Pro.cargoUnits(profile)>0 end
- local units=Pro.droneCargoUnits(profile,d.id)
- local capacity=Workshop.emptierBatch(profile)
- return Workshop.emptierReady(units,capacity,d.oreLoadedAt or 0,now)
-  or units>0 and Pro.deliveryFundsMilestone(profile,capacity,profile.run.droneCargo[d.id])
+ return Pro.droneCargoUnits(profile,d.id)>0
 end
 function scene.emptierCanCollect(p,drop,id,hr)
  if not drop or drop.owner~=p.player.UserId or drop.runId~=data(p).run.id
-  or not drop.raw or not Workshop.crystalCargo(drop.material) or not drop.landed or drop.age<OreDrops.SCATTER_TIME
+  or not drop.raw or not Workshop.crystalCargo(drop.material) or not OreDrops.collectible(drop)
   or drop.homing or drop.pressSocket or not drop.part.Parent
   or OreDrops.expired(drop.spawnAt,now,drop.returnUntil)
   or (p.compactorTarget and p.compactorTarget.id==id) then return false end
  local position=Vector3.new(drop.x,drop.y,drop.z)
+ -- Once the downward scan begins the courier owns this one stroke, even
+ -- when the player places a new square before the claw closes.
+ if drop.courier and drop.courier.orePickupId==id and drop.courier.oreDock and drop.courier.hp>0 then return true end
  local square=p.miningSquare
  return (square and drop.fieldPart==square.field.part and scene.cargoInSquare(square,position))
   or (hr.Position-position).Magnitude<=28
@@ -2792,13 +2795,18 @@ function scene.collectGroundCargo(d,p,hr,dt)
   d.state='Collect';move(d,overhead,dt)
   d.yaw=Feel.approachYaw(before,yaw,dt)
  end
- local ignore={pickupFolder,droneFolder,hr.Parent}
- if not d.oreDock and (not los(position,overhead,d.model,ignore) or not los(dock,overhead,d.model,ignore)) then
-  d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.pickupAt=nil;d.oreDock=nil;d.oreYaw=nil;p.nextEmptierPlan=nil
-  return true
- end
  if not d.oreDock then
+  local ignore={pickupFolder,droneFolder,hr.Parent}
   if (d.pos-overhead).Magnitude>.22 then return true end
+  if not los(position,overhead,d.model,ignore,true) then
+   d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.pickupAt=nil;d.oreDock=nil;d.oreYaw=nil;p.nextEmptierPlan=nil
+   return true
+  end
+  local reach=(p.cargoReach or OreDrops.CARGO_REACH)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
+  if (hr.Position-position).Magnitude<=reach and Pro.cargoUnits(profile)<Ca.capacity(profile,previewPerks(p))
+   and scene.orePullClear(drop,position,hr.Position,hr.Parent) then
+   d.orePickupId=nil;d.oreYaw=nil;return false
+  end
   d.oreDock=dock;d.oreEntryOffset=d.pos-overhead;d.pickupAt=now
   drop.part:SetAttribute('CourierDocking',d.id)
   drop.part:SetAttribute('CourierDockYaw',yaw+gripYaw)
@@ -2809,7 +2817,6 @@ function scene.collectGroundCargo(d,p,hr,dt)
  d.pos=d.oreDock+Vector3.yAxis*height+d.oreEntryOffset*entryWeight;d.goal=d.pos;d.velocity=Vector3.zero
  if age<Workshop.COURIER_CONTACT then return true end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
-  d.oreLoadedAt=d.oreLoadedAt or now
   d.oreSeatUntil=d.pickupAt+Workshop.COURIER_CONTACT+Workshop.COURIER_LIFT+Workshop.COURIER_RENDER_DELAY
   d.oreLoadedId=id;d.oreLoadedMaterial=drop.material;d.oreLoadedVisualAt=now
   d.deliveryRequested=false
@@ -3055,7 +3062,7 @@ local function snapshotDrone(d)
  end
  local deliveryId=delivery and delivery.id or ''
  local load=delivery and delivery.cargo or profile.run.droneCargo[d.id]
- local units=scene.runStart and Pro.droneCargoUnits(profile,d.id) or Pro.deliveryUnits(profile,d.id)
+ local units=slots>0 and math.min(slots,Pro.droneCargoUnits(profile,d.id)) or Pro.deliveryUnits(profile,d.id)
  if slots>0 and (d.displayedDelivery~=deliveryId or d.displayedUnits~=units) then
   d.displayedDelivery=deliveryId;d.displayedUnits=units
   local materials,shown={},{}
@@ -3097,6 +3104,7 @@ local function snapshotDrone(d)
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
   DeliveryUnits=units,DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
   CourierDock=d.oreDock or false,CourierDockYaw=d.oreYaw or false,
+  CourierPickupPoint=d.oreDock and groundCargo and Vector3.new(groundCargo.x,groundCargo.floor-.22+groundCargo.part.Size.Y*.5,groundCargo.z) or false,
   CourierEntryOffset=d.oreDock and d.oreEntryOffset or Vector3.zero,
   CourierPacked=groundCargo and groundCargo.compacted==true or false,
   CourierLoadedOre=d.oreLoadedId or 0,CourierLoadedMaterial=d.oreLoadedMaterial or '',CourierLoadedAt=d.oreLoadedVisualAt or 0,
@@ -3320,7 +3328,8 @@ local function serviceDeliveries(p: any)
      worker.deliveryArrived=false;worker.deliveryId=nil;worker.deliveryRequested=false
      worker.pickupAt=nil;worker.launchAt=nil;worker.unloadAt=nil
      worker.saleSerial=(worker.saleSerial or 0)+1;worker.saleAt=now
-     worker.field=nil;worker.autoField=nil;worker.state='Collect';worker.collectAfter=now+RoleConfig.Courier.PickupCooldown
+     worker.field=nil;worker.autoField=nil;worker.state='Collect'
+     worker.collectAfter=now+(scene.runStart and Workshop.emptierCooldown(RoleConfig.Courier.PickupCooldown,data(p)) or RoleConfig.Courier.PickupCooldown)
     end
     if scene.runStart then
      local proceeds=result.quartz>0 and (' · +'..result.quartz..' Quartz') or ''
@@ -3353,7 +3362,7 @@ local function serviceDeliveries(p: any)
      p.nextEmptierPlan=nil
      local worker=drones[id]
      if worker and worker.owner==p.player.UserId then
-      release(worker);worker.oreLoadedAt=nil;worker.deliveryId=result.id;worker.deliveryArrived=false;worker.state='Launch';worker.launchAt=now;worker.unloadAt=nil;worker.deliveryRequested=false
+      release(worker);worker.deliveryId=result.id;worker.deliveryArrived=false;worker.state='Launch';worker.launchAt=now;worker.unloadAt=nil;worker.deliveryRequested=false
      end
      p.publishDirty=true
     end)
@@ -3870,7 +3879,7 @@ function scene.placeSquare(p,payload)
  if not center then return end
  local hr=characterRoot(p)
  local square={field=field,center=center,half=Workshop.selectorWidth(data(p))*.5,placedAt=now}
- if not hr or not scene.squareInRange(hr.Position,square) then return end
+ if not hr or not scene.squareInRange(hr.Position,square) then notice(p,'Move closer to select that area.');return end
  local leadId=payload.leadId
  local lead=type(leadId)=='string' and #leadId<=128 and resources[leadId]
  if lead and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
@@ -3887,9 +3896,8 @@ function scene.placeSquare(p,payload)
  local current=p.miningSquare
  local samePin=current and current.field==field and current.half==square.half and (current.center-center).Magnitude==0
  if samePin and leadId~=nil and not square.focusId then return end
- local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={part.Parent.Parent};params.RespectCanCollide=true
- local from=hr.Position+Vector3.new(0,1,0)
- if workspace:Raycast(from,center+Vector3.new(0,2,0)-from,params) then return end
+ -- This is a command to the fleet within a validated bed and walking range.
+ -- Mining itself still checks the worker's contact path and target ownership.
  if samePin then
   current.leadId=square.leadId;current.pairId=square.pairId;current.focusId=square.focusId
   scene.prioritizeSquareApproach(p,current)
