@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — dark crystal with bright internal rainbow refractions
+
+The owner rejected the pale Diamond as looking like plastic or ordinary glass. The newest two references supersede the uniformly light pastel direction: use a dark crystal body, sharply contrasting highlights and saturated rainbow refractions inside it to give depth. Preserve approved Amber. Dark reflective faces are desired; dull muddy shading without luminous internal color is not.
+
 ## November 14 — Amber approved; brighter Diamond and colored edges
 
 The owner explicitly likes the revised Amber. Preserve it. Diamond still looks muddy/dark compared with the supplied photo and lacks its light emission and colored edges. Lift its dark texture, retain light pastel color through the body, and add selective luminous pink/cyan/mint/peach rims, short facet rays and small sparkle flares. Compare the actual pickup renderer against the image.

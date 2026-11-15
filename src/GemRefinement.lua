@@ -16,6 +16,28 @@ function R.texture(u,v,key)
  local veil=math.clamp((cloud-.08)*.70,0,.10)
  return math.clamp(.99-veil+fine*.08+fracture*.035,.88,1),.92+muddy*.08
 end
+-- A fixed diffraction field: broad spectral windows separated by deep indigo,
+-- fine fracture lines and cloudy interference within each band.
+function R.spectrum(u,v)
+ local warp=math.noise(u*6.4,v*7.1,15)*.13
+ local region=math.noise(u*4.8+warp,v*5.3,31)+math.noise(u*11,v*9,8)*.18
+ local window=math.clamp((region+.10)*4.7,0,1)
+ window=window*window*(3-2*window)
+ local hue=(.70+u*.83-v*1.48+warp+math.noise(u*18,v*15,3)*.045)%1
+ local rainbow=Color3.fromHSV(hue,.88,.95)
+ local dark=rgb(9,10,27):Lerp(rgb(40,20,59),math.clamp(.48+math.noise(u*7,v*5,2),0,1))
+ local c=dark:Lerp(rainbow,window)
+ local fine=math.noise(u*156,v*173,4)
+ c=c:Lerp(rgb(173,197,231),math.clamp((fine-.18)*.20,0,.06))
+ -- Sparse hairline fractures; no even white fleck blanket.
+ local fracture=math.abs(math.noise(u*12+warp,v*10,27))
+ local hair=math.clamp((.006-fracture)*130,0,.42)
+ c=c:Lerp(rgb(199,220,255),hair*(.25+window*.5))
+ local slash=math.min(math.abs(u*.86+v*.51-.53),math.abs(u*.32-v*.94+.26),math.abs(u*.91-v*.41-.24),math.abs(u*.65+v*.76-.91))
+ local scratched=math.clamp((.0025-slash)*280,0,.48)*math.clamp(.7+math.noise(u*21,v*19,6),0,1)
+ c=c:Lerp(rgb(219,235,255),scratched)
+ return c,.96-window*.19
+end
 local function colors(key,p,index)
  if key=='Amber' then
   local t=math.clamp(.49+p.Y*.8+p.X*.48-p.Z*.21,0,1)
@@ -27,18 +49,16 @@ local function colors(key,p,index)
   local c=t<.42 and rgb(235,196,103):Lerp(rgb(210,228,218),t/.42) or rgb(210,228,218):Lerp(rgb(62,155,216),(t-.42)/.58)
   return c:Lerp(rgb(179,221,237),index%4==0 and .28 or .02)
  end
- local palette={rgb(246,174,219),rgb(141,221,239),rgb(183,226,180),rgb(249,199,153),rgb(218,231,246),rgb(192,221,241),rgb(244,194,222)}
- local faces={2,1,4,3,1,2,4,2,3,5,2,1,4,1,3,2}
- local base=palette[faces[index] or 2]
- local alternate=palette[(index+2)%#palette+1]
- local t=math.clamp(.48+p.Y*.54+p.X*.37-p.Z*.48,0,1)
- return base:Lerp(alternate,t*.44):Lerp(white,.04)
+ -- Neutral facet values preserve the saturated spectrum texture. Unequal
+ -- face brightness gives the crystal dark reflective planes at every angle.
+ local shade=({.92,.78,.95,.76,.91,.58,.98,.83,.72,.87,.66,.93,.81,.70,.96,.74})[index] or .9
+ return Color3.new(shade,shade,shade)
 end
 function R.describe(key)
  if key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
  local data={key=key,faces={},grains={},clouds={},rims={},boxes={},texture=key,
-  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .80,
-  vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or .88,
+  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .94,
+  vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or 1,
   material=key=='Amber' and 'SmoothPlastic' or 'Neon',
   aspect=key=='Amber' and V(1.10,1.42,.73) or key=='Quartz' and V(.96,2.05,.78) or V(.99,2.22,.69)}
  local function face(a,b,c,index,center)
@@ -77,14 +97,15 @@ function R.describe(key)
     center/=#polygon
     local axis=(polygon[1]-center).Unit;local other=plane[1].Unit:Cross(axis)
     table.sort(polygon,function(a,b) local x,y=a-center,b-center;return math.atan2(x:Dot(other),x:Dot(axis))<math.atan2(y:Dot(other),y:Dot(axis)) end)
-    if key=='Diamond' and (index==1 or index==4 or index==5 or index==8 or index==9 or index==14) then
+    if key=='Diamond' and (index==5 or index==8 or index==9 or index==14) then
      local palette={rgb(107,237,255),rgb(255,153,218),rgb(165,255,153),rgb(255,197,132)}
-          local normal=frame:VectorToWorldSpace(plane[1].Unit)*.0015
+     local normal=frame:VectorToWorldSpace(plane[1].Unit)*.0015
      for i=1,#polygon do
       local a,b=polygon[i],polygon[i%#polygon+1]
       local mid=(a+b)*.5
       local color=mid.Y>.16 and (mid.X>0 and palette[4] or palette[2]) or mid.Y<-.16 and palette[3] or (mid.X<0 and palette[1] or palette[2])
-      local width=(index==4 or index==9) and .007 or .0035
+      local width=index==9 and .004 or .002
+      b=a+(b-a)*(.40+(i%3)*.16)
       local ia=a+(center-a).Unit*width;local ib=b+(center-b).Unit*width
       local function point(p) return frame:PointToWorldSpace(p*scale)+normal end
       a,b,ia,ib=point(a),point(b),point(ia),point(ib)
@@ -134,14 +155,16 @@ function R.describe(key)
   end
  else
   cut(diamond,CFrame.Angles(.04,-.08,-.12),Vector3.one)
-  -- Close inset fracture surfaces carry the same cloudy optical texture.
-  -- They span the volume rather than floating as five colored islands.
-  for i,f in ipairs(data.faces) do
-   if i%3==1 then
-    local g={}
-    for n=1,3 do g[n]=f[n]*.82+V(.015,-.012,.008);g[n+3]=f[n+3]:Lerp(white,.18);g[n+6]=f[n+6] end
-    data.clouds[#data.clouds+1]=g
+  -- A complete inset cut carries a displaced optical field. Occlusion and
+  -- parallax make this read through the outer faces rather than as confetti.
+  for _,f in ipairs(data.faces) do
+   local g={}
+   for n=1,3 do
+    g[n]=f[n]*.76+V(.018,-.025,.006)
+    g[n+3]=white
+    g[n+6]=f[n+6]+Vector2.new(.19,.27)
    end
+   data.clouds[#data.clouds+1]=g
   end
  end
  local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge

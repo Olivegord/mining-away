@@ -2763,6 +2763,28 @@ function R.texture(u,v,key)
  local veil=math.clamp((cloud-.08)*.70,0,.10)
  return math.clamp(.99-veil+fine*.08+fracture*.035,.88,1),.92+muddy*.08
 end
+-- A fixed diffraction field: broad spectral windows separated by deep indigo,
+-- fine fracture lines and cloudy interference within each band.
+function R.spectrum(u,v)
+ local warp=math.noise(u*6.4,v*7.1,15)*.13
+ local region=math.noise(u*4.8+warp,v*5.3,31)+math.noise(u*11,v*9,8)*.18
+ local window=math.clamp((region+.10)*4.7,0,1)
+ window=window*window*(3-2*window)
+ local hue=(.70+u*.83-v*1.48+warp+math.noise(u*18,v*15,3)*.045)%1
+ local rainbow=Color3.fromHSV(hue,.88,.95)
+ local dark=rgb(9,10,27):Lerp(rgb(40,20,59),math.clamp(.48+math.noise(u*7,v*5,2),0,1))
+ local c=dark:Lerp(rainbow,window)
+ local fine=math.noise(u*156,v*173,4)
+ c=c:Lerp(rgb(173,197,231),math.clamp((fine-.18)*.20,0,.06))
+ -- Sparse hairline fractures; no even white fleck blanket.
+ local fracture=math.abs(math.noise(u*12+warp,v*10,27))
+ local hair=math.clamp((.006-fracture)*130,0,.42)
+ c=c:Lerp(rgb(199,220,255),hair*(.25+window*.5))
+ local slash=math.min(math.abs(u*.86+v*.51-.53),math.abs(u*.32-v*.94+.26),math.abs(u*.91-v*.41-.24),math.abs(u*.65+v*.76-.91))
+ local scratched=math.clamp((.0025-slash)*280,0,.48)*math.clamp(.7+math.noise(u*21,v*19,6),0,1)
+ c=c:Lerp(rgb(219,235,255),scratched)
+ return c,.96-window*.19
+end
 local function colors(key,p,index)
  if key=='Amber' then
   local t=math.clamp(.49+p.Y*.8+p.X*.48-p.Z*.21,0,1)
@@ -2774,18 +2796,16 @@ local function colors(key,p,index)
   local c=t<.42 and rgb(235,196,103):Lerp(rgb(210,228,218),t/.42) or rgb(210,228,218):Lerp(rgb(62,155,216),(t-.42)/.58)
   return c:Lerp(rgb(179,221,237),index%4==0 and .28 or .02)
  end
- local palette={rgb(246,174,219),rgb(141,221,239),rgb(183,226,180),rgb(249,199,153),rgb(218,231,246),rgb(192,221,241),rgb(244,194,222)}
- local faces={2,1,4,3,1,2,4,2,3,5,2,1,4,1,3,2}
- local base=palette[faces[index] or 2]
- local alternate=palette[(index+2)%#palette+1]
- local t=math.clamp(.48+p.Y*.54+p.X*.37-p.Z*.48,0,1)
- return base:Lerp(alternate,t*.44):Lerp(white,.04)
+ -- Neutral facet values preserve the saturated spectrum texture. Unequal
+ -- face brightness gives the crystal dark reflective planes at every angle.
+ local shade=({.92,.78,.95,.76,.91,.58,.98,.83,.72,.87,.66,.93,.81,.70,.96,.74})[index] or .9
+ return Color3.new(shade,shade,shade)
 end
 function R.describe(key)
  if key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
  local data={key=key,faces={},grains={},clouds={},rims={},boxes={},texture=key,
-  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .80,
-  vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or .88,
+  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .94,
+  vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or 1,
   material=key=='Amber' and 'SmoothPlastic' or 'Neon',
   aspect=key=='Amber' and V(1.10,1.42,.73) or key=='Quartz' and V(.96,2.05,.78) or V(.99,2.22,.69)}
  local function face(a,b,c,index,center)
@@ -2824,14 +2844,15 @@ function R.describe(key)
     center/=#polygon
     local axis=(polygon[1]-center).Unit;local other=plane[1].Unit:Cross(axis)
     table.sort(polygon,function(a,b) local x,y=a-center,b-center;return math.atan2(x:Dot(other),x:Dot(axis))<math.atan2(y:Dot(other),y:Dot(axis)) end)
-    if key=='Diamond' and (index==1 or index==4 or index==5 or index==8 or index==9 or index==14) then
+    if key=='Diamond' and (index==5 or index==8 or index==9 or index==14) then
      local palette={rgb(107,237,255),rgb(255,153,218),rgb(165,255,153),rgb(255,197,132)}
-          local normal=frame:VectorToWorldSpace(plane[1].Unit)*.0015
+     local normal=frame:VectorToWorldSpace(plane[1].Unit)*.0015
      for i=1,#polygon do
       local a,b=polygon[i],polygon[i%#polygon+1]
       local mid=(a+b)*.5
       local color=mid.Y>.16 and (mid.X>0 and palette[4] or palette[2]) or mid.Y<-.16 and palette[3] or (mid.X<0 and palette[1] or palette[2])
-      local width=(index==4 or index==9) and .007 or .0035
+      local width=index==9 and .004 or .002
+      b=a+(b-a)*(.40+(i%3)*.16)
       local ia=a+(center-a).Unit*width;local ib=b+(center-b).Unit*width
       local function point(p) return frame:PointToWorldSpace(p*scale)+normal end
       a,b,ia,ib=point(a),point(b),point(ia),point(ib)
@@ -2881,14 +2902,16 @@ function R.describe(key)
   end
  else
   cut(diamond,CFrame.Angles(.04,-.08,-.12),Vector3.one)
-  -- Close inset fracture surfaces carry the same cloudy optical texture.
-  -- They span the volume rather than floating as five colored islands.
-  for i,f in ipairs(data.faces) do
-   if i%3==1 then
-    local g={}
-    for n=1,3 do g[n]=f[n]*.82+V(.015,-.012,.008);g[n+3]=f[n+3]:Lerp(white,.18);g[n+6]=f[n+6] end
-    data.clouds[#data.clouds+1]=g
+  -- A complete inset cut carries a displaced optical field. Occlusion and
+  -- parallax make this read through the outer faces rather than as confetti.
+  for _,f in ipairs(data.faces) do
+   local g={}
+   for n=1,3 do
+    g[n]=f[n]*.76+V(.018,-.025,.006)
+    g[n+3]=white
+    g[n+6]=f[n+6]+Vector2.new(.19,.27)
    end
+   data.clouds[#data.clouds+1]=g
   end
  end
  local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
@@ -2911,6 +2934,7 @@ return R
 
 end)()
 G.texture=Refinement.texture
+G.spectrum=Refinement.spectrum
 local rgb=Color3.fromRGB
 G.order={'Amber','Ruby','Quartz','Violet','Diamond'}
 G.definitions={
@@ -3058,8 +3082,10 @@ local function build(key)
    for y=0,width-1 do
     for x=0,width-1 do
      local value,alpha=Geometry.texture(x/width,y/width,key)
-     local offset=(y*width+x)*4;local shade=math.floor(value*255+.5)
-     buffer.writeu8(pixels,offset,shade);buffer.writeu8(pixels,offset+1,shade);buffer.writeu8(pixels,offset+2,shade)
+     local color=Color3.new(value,value,value)
+     if key=='Diamond' then color,alpha=Geometry.spectrum(x/width,y/width) end
+     local offset=(y*width+x)*4
+     buffer.writeu8(pixels,offset,math.floor(color.R*255+.5));buffer.writeu8(pixels,offset+1,math.floor(color.G*255+.5));buffer.writeu8(pixels,offset+2,math.floor(color.B*255+.5))
      buffer.writeu8(pixels,offset+3,math.floor(alpha*255+.5))
     end
     if y%32==0 then task.wait() end
@@ -3069,6 +3095,13 @@ local function build(key)
   end)
   if ok then texture=result;textures[#textures+1]=texture
   else warn('Gem texture fallback '..key..': '..tostring(result)) end
+ end
+ -- Keep the dark/spectral fallback if an image budget is exhausted.
+ if key=='Diamond' and not texture then
+  for _,group in ipairs({data.faces,data.clouds}) do for _,f in ipairs(group) do for i=1,3 do
+   local uv=f[6+i];local c=Geometry.spectrum(uv.X%1,uv.Y%1)
+   f[3+i]=Color3.new(f[3+i].R*c.R,f[3+i].G*c.G,f[3+i].B*c.B)
+  end end end
  end
  local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
  for _,f in ipairs(data.faces) do
@@ -3123,11 +3156,11 @@ local function build(key)
    for i=1,3 do ids[i]=cloud:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
    local face=cloud:AddTriangle(ids[1],ids[2],ids[3])
    if f[7] then cloud:SetFaceUVs(face,{cloud:AddUV(f[7]),cloud:AddUV(f[8]),cloud:AddUV(f[9])}) end
-   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.065),cloud:AddColor(f[5],.065),cloud:AddColor(f[6],.065)})
+   cloud:SetFaceColors(face,{cloud:AddColor(f[4],1),cloud:AddColor(f[5],1),cloud:AddColor(f[6],1)})
   end
   local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.Neon
-  -- Diamond's pale inner reflections are luminous, not a second dark texture.
-  if texture and key~='Diamond' then inside.TextureContent=Content.fromObject(texture) end
+  -- Shifted spectrum on the inset cut supplies refracted depth.
+  if texture then inside.TextureContent=Content.fromObject(texture) end
   inside:SetAttribute('SizeRatio',(hi-lo)/data.extents)
   inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   inside.Parent=shell
@@ -3181,7 +3214,7 @@ function Gem.update(part,opacity)
  if core then
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
-  core.Transparency=1-opacity*(name=='MineralClouds' and .16 or 1)
+  core.Transparency=1-opacity*(name=='MineralClouds' and .60 or 1)
  end
  end
 end
@@ -14320,7 +14353,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local remaining=1-t
    local tint=rig.moteColor:Lerp(record.color:Lerp(Color3.fromRGB(119,62,166),.24),t*t)
    local opacity=(1-math.exp(-t*18))*math.sqrt(remaining)*strength*.82
-   EnergyDisc.place(mote,position,diameter*scale*remaining*(optical and .38 or 1),tint,opacity*(optical and .65 or 1))
+   EnergyDisc.place(mote,position,diameter*scale*remaining*(diamond and .20 or optical and .38 or 1),tint,opacity*(diamond and .30 or optical and .65 or 1))
   end
  end
 end

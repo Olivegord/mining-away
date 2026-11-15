@@ -2,6 +2,7 @@
 local G={}
 local Refinement=require('./GemRefinement')
 G.texture=Refinement.texture
+G.spectrum=Refinement.spectrum
 local rgb=Color3.fromRGB
 G.order={'Amber','Ruby','Quartz','Violet','Diamond'}
 G.definitions={

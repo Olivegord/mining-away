@@ -1,5 +1,11 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — dark spectral Diamond replaces pale glass
+
+The latest two owner references call for deep dark faces with bright rainbow reflections inside. Diamond now uses a cached 256² RGB optical texture: indigo shadows, localized spectral bands, sparse fine fractures and small cloudy variations. Unequal facet values and a complete inset cut with shifted texture coordinates create overlapping color planes and parallax. This is an authored approximation of internal refraction, not physical ray tracing. A failed texture allocation samples the same colors onto vertices. The thin highlights occupy selected partial edges; the previous continuous outline is removed. Existing facet rays/star flares and local spill remain, while Diamond rising dots are smaller/fainter. No per-frame texture generation or new asset upload.
+
+Amber and Quartz geometry/colors/texture remain exact matches to the preceding revision. The authored Diamond preview uses coarsely sampled spectral colors on persistent unions; Play uses the full texture and shared pickup renderer. Only Diamond PreviewGeometry is replaced; its predecessor is retained in ServerStorage.DiamondSpectrumArchive.
+
 ## November 14 — luminous Diamond follow-up; preserve approved Amber
 
 Diamond optical texture now stays pale rather than producing charcoal patches. Its internal reflections have lower opacity. Narrow mesh ribbons add pink/cyan/mint/peach facet rims; three normalized edge anchors carry white-to-color rays, small star/halo sprites and the existing four-point particle glint. A pooled, Diamond-only local light adds short-range spill. Hide/distance/Reduced Effects disable rays, flares and light; Reduced Motion keeps their intensity steady. No gameplay change. Amber and Quartz geometry/colors/texture were compared exactly against the prior revision.

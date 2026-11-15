@@ -161,7 +161,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local remaining=1-t
    local tint=rig.moteColor:Lerp(record.color:Lerp(Color3.fromRGB(119,62,166),.24),t*t)
    local opacity=(1-math.exp(-t*18))*math.sqrt(remaining)*strength*.82
-   EnergyDisc.place(mote,position,diameter*scale*remaining*(optical and .38 or 1),tint,opacity*(optical and .65 or 1))
+   EnergyDisc.place(mote,position,diameter*scale*remaining*(diamond and .20 or optical and .38 or 1),tint,opacity*(diamond and .30 or optical and .65 or 1))
   end
  end
 end

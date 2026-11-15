@@ -17,8 +17,10 @@ local function build(key)
    for y=0,width-1 do
     for x=0,width-1 do
      local value,alpha=Geometry.texture(x/width,y/width,key)
-     local offset=(y*width+x)*4;local shade=math.floor(value*255+.5)
-     buffer.writeu8(pixels,offset,shade);buffer.writeu8(pixels,offset+1,shade);buffer.writeu8(pixels,offset+2,shade)
+     local color=Color3.new(value,value,value)
+     if key=='Diamond' then color,alpha=Geometry.spectrum(x/width,y/width) end
+     local offset=(y*width+x)*4
+     buffer.writeu8(pixels,offset,math.floor(color.R*255+.5));buffer.writeu8(pixels,offset+1,math.floor(color.G*255+.5));buffer.writeu8(pixels,offset+2,math.floor(color.B*255+.5))
      buffer.writeu8(pixels,offset+3,math.floor(alpha*255+.5))
     end
     if y%32==0 then task.wait() end
@@ -28,6 +30,13 @@ local function build(key)
   end)
   if ok then texture=result;textures[#textures+1]=texture
   else warn('Gem texture fallback '..key..': '..tostring(result)) end
+ end
+ -- Keep the dark/spectral fallback if an image budget is exhausted.
+ if key=='Diamond' and not texture then
+  for _,group in ipairs({data.faces,data.clouds}) do for _,f in ipairs(group) do for i=1,3 do
+   local uv=f[6+i];local c=Geometry.spectrum(uv.X%1,uv.Y%1)
+   f[3+i]=Color3.new(f[3+i].R*c.R,f[3+i].G*c.G,f[3+i].B*c.B)
+  end end end
  end
  local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
  for _,f in ipairs(data.faces) do
@@ -82,11 +91,11 @@ local function build(key)
    for i=1,3 do ids[i]=cloud:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
    local face=cloud:AddTriangle(ids[1],ids[2],ids[3])
    if f[7] then cloud:SetFaceUVs(face,{cloud:AddUV(f[7]),cloud:AddUV(f[8]),cloud:AddUV(f[9])}) end
-   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.065),cloud:AddColor(f[5],.065),cloud:AddColor(f[6],.065)})
+   cloud:SetFaceColors(face,{cloud:AddColor(f[4],1),cloud:AddColor(f[5],1),cloud:AddColor(f[6],1)})
   end
   local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.Neon
-  -- Diamond's pale inner reflections are luminous, not a second dark texture.
-  if texture and key~='Diamond' then inside.TextureContent=Content.fromObject(texture) end
+  -- Shifted spectrum on the inset cut supplies refracted depth.
+  if texture then inside.TextureContent=Content.fromObject(texture) end
   inside:SetAttribute('SizeRatio',(hi-lo)/data.extents)
   inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   inside.Parent=shell
@@ -140,7 +149,7 @@ function Gem.update(part,opacity)
  if core then
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
-  core.Transparency=1-opacity*(name=='MineralClouds' and .16 or 1)
+  core.Transparency=1-opacity*(name=='MineralClouds' and .60 or 1)
  end
  end
 end

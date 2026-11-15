@@ -46,7 +46,10 @@ local function bakeGemPreview(key,data,frame,size)
   if data.texture then
    local uv=(uvs[1]+uvs[2]+uvs[3])/3
    local shade=RockFinish.Gems.geometry.texture(uv.X%1,uv.Y%1,key)
-   c=Color3.new(c.R*shade,c.G*shade,c.B*shade)
+   if key=='Diamond' then
+    local spectral=RockFinish.Gems.geometry.spectrum(uv.X%1,uv.Y%1)
+    c=Color3.new(c.R*spectral.R,c.G*spectral.G,c.B*spectral.B)
+   else c=Color3.new(c.R*shade,c.G*shade,c.B*shade) end
   end
   triangle(vertices[1],vertices[2],vertices[3],c,parent,transparency)
  end
@@ -72,7 +75,7 @@ local function bakeGemPreview(key,data,frame,size)
  end
  local clouds=Instance.new('Folder');clouds.Name='MineralClouds'
  for _,f in ipairs(data.clouds or {}) do
-  texturedTriangle({point(f[1]),point(f[2]),point(f[3])},{f[4],f[5],f[6]},{f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero},1,clouds,key=='Diamond' and .84 or .78)
+  texturedTriangle({point(f[1]),point(f[2]),point(f[3])},{f[4],f[5],f[6]},{f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero},1,clouds,key=='Diamond' and .40 or .78)
  end
  -- Consolidate the durable Edit approximation into one shell and one grain
  -- object. Thousands of temporary wedges must not remain in the live map.
