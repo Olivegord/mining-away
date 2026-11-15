@@ -397,7 +397,7 @@ end
 local function destroyGrapple(fx)
  if fx.grapple then fx.grapple.root:Destroy();fx.grapple=nil end
 end
-local function grappleFrame(fx,pivot,cradle,ground,age,loadedId,paused,reduced,now)
+local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,reduced,velocity,now)
  if age<.24 and not loadedId then return nil end
  local hook=fx.grapple
  if not hook then
@@ -407,51 +407,50 @@ local function grappleFrame(fx,pivot,cradle,ground,age,loadedId,paused,reduced,n
   local start=Instance.new('Attachment');start.Parent=anchor
   local eye=Instance.new('Attachment');eye.Position=Vector3.yAxis*.56;eye.Parent=payload
   local rope=Instance.new('RopeConstraint');rope.Name='GrappleRope'
-  rope.Attachment0=start;rope.Attachment1=eye
-  rope.Visible=true;rope.Thickness=.075;rope.Restitution=0
-  rope.WinchTarget=.35;rope.WinchSpeed=8;rope.WinchForce=260;rope.WinchResponsiveness=22
+  rope.Attachment0=start;rope.Attachment1=eye;rope.Visible=true;rope.Thickness=.075;rope.Restitution=0
   rope.Parent=root
-  hook={root=root,anchor=anchor,payload=payload,rope=rope}
+  hook={root=root,anchor=anchor,payload=payload,rope=rope,clock=0,lastAt=now}
   fx.grapple=hook
  end
  local anchor,payload,rope=hook.anchor,hook.payload,hook.rope
+ local dt=math.max(0,now-hook.lastAt);hook.lastAt=now
  anchor.CFrame=pivot*CFrame.new(0,-.48,0)
  local reach=progress(age,.24,Workshop.COURIER_CONTACT-.24)
- local target=CFrame.new(ground)*cradle.Rotation
+ -- Drive the cable endpoints on the same clock as the hull. The local
+ -- physics solver previously fought the rendered pivot on every frame.
+ local target=CFrame.new(groundPose and groundPose.Position or ground)*cradle.Rotation
  if loadedId and not hook.ore then
-  payload.CFrame=target
-  rope.Length=math.max(.4,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude+.06)
-  hook.ore=loadedId;hook.caughtAt=now
+  hook.ore=loadedId;hook.contact=hook.shown or target;hook.velocity=velocity
+ elseif hook.ore and not paused then
+  hook.clock+=dt
  end
- if hook.ore and not hook.seatingAt and not reduced then
-  if paused and not payload.Anchored then
-   hook.pausedVelocity=payload.AssemblyLinearVelocity
-   payload.Anchored=true
-  elseif not paused and payload.Anchored then
-   payload.Anchored=false
-   payload.AssemblyLinearVelocity=hook.pausedVelocity or Vector3.zero
-   hook.pausedVelocity=nil
-  end
+ local seated=false
+ if hook.ore then
+  payload.CFrame,seated=Workshop.grappleReel(hook.contact,cradle,hook.velocity,hook.clock,reduced)
+ else
+  payload.CFrame=cradle:Lerp(target,reach^3*(10+reach*(-15+6*reach)))
  end
- if not hook.ore then
-  payload.CFrame=cradle:Lerp(target,reach*reach*(3-2*reach))
- elseif not hook.seatingAt and not paused then
-  local elapsed=now-hook.caughtAt
-  if reduced or elapsed>1.35 or elapsed>.13 and (payload.Position-cradle.Position).Magnitude<.7 then
-   hook.seatingAt=now;hook.seatingFrom=payload.CFrame;payload.Anchored=true
-  end
+ hook.shown=payload.CFrame
+ rope.Length=math.max(.04,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude)
+ if seated then
+  fx.grappleDone=hook.ore;destroyGrapple(fx)
+  return cradle,true
  end
- if hook.seatingAt then
-  local t=progress(now,hook.seatingAt,.23)
-  payload.CFrame=hook.seatingFrom:Lerp(cradle,t*t*(3-2*t))
-  if t>=1 then fx.grappleDone=hook.ore;destroyGrapple(fx);return cradle end
- end
- if payload.Anchored then
-  rope.Length=math.max(.4,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude+.06)
- end
- rope.WinchEnabled=hook.ore~=nil and not payload.Anchored and not paused
- return payload.CFrame
+ return payload.CFrame,false
 end
+
+function W:grappleSeat(position,color,now)
+ if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,110) then return end
+ local anchor=part(self.parent,'GrappleSeatImpact');anchor.CFrame=facing(position,-Vector3.yAxis)
+ local chips=particle(anchor,'OreSeatChips',color)
+ chips.Color=ColorSequence.new(color:Lerp(WHITE,.35),color)
+ chips.Speed=NumberRange.new(4,8);chips.Lifetime=NumberRange.new(.65,1.20)
+ chips.Drag=4;chips.Acceleration=Vector3.new(0,-3,0);chips.SpreadAngle=Vector2.new(82,82)
+ EnergyDisc.configure(chips,.25,.70,.72,.42,.29)
+ chips:Emit(11)
+ table.insert(self.bursts,{part=anchor,untilAt=now+1.25})
+end
+
 function W:courier(drone,record,now)
  local source=drone.source;local state=source:GetAttribute('State')
  local snapPosition
@@ -586,6 +585,10 @@ function W:courier(drone,record,now)
   if saleAge>=0 and saleAge<.21 then count=math.max(count,#fx.mounts) end
   local loadedId=source:GetAttribute('CourierLoadedOre')
   local loadedMaterial=source:GetAttribute('CourierLoadedMaterial')
+  local hookId=source:GetAttribute('CourierHookOre') or loadedId
+  local groundPose=grappling and self.oreFrame and self.oreFrame(hookId)
+  if groundPose then fx.grappleOrePose=groundPose
+  elseif not grappling then fx.grappleOrePose=nil end
   local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
   local loadingSlot
   if loadedId and loadedId>0 and (loadAge<.55 or grappling and loadAge<2) and not unload then
@@ -648,9 +651,12 @@ function W:courier(drone,record,now)
     slot.angles,slot.spin=Workshop.clawSuspension(slot.angles or Vector3.zero,spin,localAcceleration,i<=parcelUnits,paused and 0 or clawDt)
     cargoFrame=cargoFrame*CFrame.new(0,.56,0)*CFrame.Angles(slot.angles.X,0,slot.angles.Z)*CFrame.new(0,-.56,0)
    elseif not paused then slot.angles=nil;slot.spin=nil end
+   local seatImpact
    if hooked then
-    local hookPose=grappleFrame(fx,pivot,cargoFrame,ground,pickupAge,not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,now)
+    local hookPose,seated=grappleFrame(fx,pivot,cargoFrame,ground,fx.grappleOrePose,pickupAge,
+     not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,velocity,now)
     if hookPose then cargoFrame=hookPose end
+    seatImpact=seated
    end
    if i==loadingSlot then
     if beforeContact then closed=grip end
@@ -704,6 +710,18 @@ function W:courier(drone,record,now)
     cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or (slot.faceted and 1-(slot.cargo:GetAttribute('GemOpacity') or .76) or 0)
     local position=cargoFrame.Position
     local rotation=cargoFrame.Rotation
+    if i==loadingSlot and fx.grappleOrePose then
+     local incoming=fx.grappleOrePose.Rotation
+     local mountBlend=hooked and fx.grapple and math.clamp(fx.grapple.clock/.48,0,1) or 1
+     rotation=incoming:Lerp(rotation,mountBlend*mountBlend*(3-2*mountBlend))
+    end
+    if seatImpact then
+     local key=Workshop.crystalCargo(material)
+     local rgb=key and Shops.COLORS[key]
+     local color=slot.faceted and RockFinish.Gems.tint(key or material)
+      or rgb and Color3.fromRGB(table.unpack(rgb)) or cargo.Color
+     self:grappleSeat(cargoFrame:PointToWorldSpace(Vector3.yAxis*.42),color,now)
+    end
     size=cargo.Size
     if unload then
      local t=math.clamp((fx.unloadProgress-(i-1)*.045)/.64,0,1)

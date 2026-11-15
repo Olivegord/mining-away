@@ -137,6 +137,24 @@ W.COURIER_SWEEP_SPEED=11
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
 W.COURIER_HOOK_DROP=4.8
+W.COURIER_REEL_TIME=.68
+function W.oreOrientation(seed,packed)
+ local n=math.abs(seed)
+ local yaw=2*math.pi*(n*381%997)/997
+ if packed then return 0,yaw,0 end
+ local bearing=2*math.pi*(n*619%991)/991
+ local lean=math.rad(14+n*173%39)
+ return math.cos(bearing)*lean,yaw,math.sin(bearing)*lean
+end
+function W.grappleReel(contact,cradle,velocity,elapsed,reduced)
+ local t=math.clamp(elapsed/(reduced and .43 or W.COURIER_REEL_TIME),0,1)
+ -- A smooth release off the ground, with a short mechanical stop on seating.
+ local draw=t*t*(2.5-1.5*t)
+ local drift=Vector3.new(velocity.X,0,velocity.Z)
+ if drift.Magnitude>12 then drift=drift.Unit*12 end
+ local swing=reduced and Vector3.zero or -drift*(math.sin(t*math.pi)^2*.045)
+ return CFrame.new(swing)*contact:Lerp(cradle,draw),t>=1
+end
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
@@ -664,10 +682,18 @@ function F.rockYaw(seed,stage,turn,reference)
  end
  return yaw
 end
-function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,steady)
- local center=Vector3.new(position.X,ground+size.Y*.5-.06,position.Z)
- local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference)
- return CFrame.new(center)*CFrame.Angles(0,yaw,0),ground+size.Y-.06
+function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,steady,varied)
+ local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference and not varied)
+ local pitch,roll=0,0
+ if varied then
+  local magnitude=math.rad(7+seed*173%22)
+  local bearing=2*math.pi*(seed*397%997)/997
+  pitch=magnitude*math.cos(bearing);roll=magnitude*math.sin(bearing)
+ end
+ local c=math.cos(pitch)
+ local halfHeight=(size.X*math.abs(c*math.sin(roll))+size.Y*c*math.cos(roll)+size.Z*math.abs(math.sin(pitch)))*.5
+ local center=Vector3.new(position.X,ground+halfHeight-(varied and (halfHeight-size.Y*.5)*.56 or 0)-.06,position.Z)
+ return CFrame.new(center)*CFrame.Angles(0,yaw,0)*CFrame.Angles(pitch,0,roll),center.Y+halfHeight
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response,mass,steering)
  -- Retain the original capped, distance-eased destination rule, but approach
@@ -2953,6 +2979,7 @@ Finish.Gems=(function()
 -- Shared per-mineral shells and opaque, fixed interior grains.
 local Gem={}
 local templates,meshes,textures,attempted={},{},{},false
+local supports={}
 local Geometry=(function()
 -- One geometry description feeds runtime meshes and the durable Edit specimens.
 local G={}
@@ -3449,6 +3476,16 @@ local function build(key,compact)
  shell:SetAttribute('GemAspect',data.aspect)
  shell:SetAttribute('GemOpacity',data.opacity)
  shell.Transparency=1-shell:GetAttribute('GemOpacity')
+ local points,seen={},{}
+ for _,face in ipairs(data.faces) do
+  for i=1,3 do
+   local point=face[i]
+   if not seen[point] then
+    seen[point]=true;points[#points+1]=(point-data.center)/data.extents
+   end
+  end
+ end
+ supports[key..(compact and 'Compact' or '')]=points
  return shell
 end
 function Gem.prepare()
@@ -3478,6 +3515,15 @@ function Gem.clone(source)
  for k,v in pairs(source:GetAttributes()) do p:SetAttribute(k,v) end
  Gem.update(p,1)
  return p,true
+end
+function Gem.support(part,rotation)
+ local key=part:GetAttribute('GemKind')
+ local points=key and supports[key..(part:GetAttribute('GemCut')=='Compact' and 'Compact' or '')]
+ if not points then return nil end
+ local up=rotation:VectorToObjectSpace(Vector3.yAxis)*part.Size
+ local height=-math.huge
+ for _,point in ipairs(points) do height=math.max(height,-up:Dot(point)) end
+ return height
 end
 function Gem.update(part,opacity,cameraPosition)
  for _,name in ipairs({'FixedInclusions','MineralClouds','PrismaticEdges'}) do
@@ -4037,7 +4083,7 @@ end
 local function destroyGrapple(fx)
  if fx.grapple then fx.grapple.root:Destroy();fx.grapple=nil end
 end
-local function grappleFrame(fx,pivot,cradle,ground,age,loadedId,paused,reduced,now)
+local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,reduced,velocity,now)
  if age<.24 and not loadedId then return nil end
  local hook=fx.grapple
  if not hook then
@@ -4047,51 +4093,50 @@ local function grappleFrame(fx,pivot,cradle,ground,age,loadedId,paused,reduced,n
   local start=Instance.new('Attachment');start.Parent=anchor
   local eye=Instance.new('Attachment');eye.Position=Vector3.yAxis*.56;eye.Parent=payload
   local rope=Instance.new('RopeConstraint');rope.Name='GrappleRope'
-  rope.Attachment0=start;rope.Attachment1=eye
-  rope.Visible=true;rope.Thickness=.075;rope.Restitution=0
-  rope.WinchTarget=.35;rope.WinchSpeed=8;rope.WinchForce=260;rope.WinchResponsiveness=22
+  rope.Attachment0=start;rope.Attachment1=eye;rope.Visible=true;rope.Thickness=.075;rope.Restitution=0
   rope.Parent=root
-  hook={root=root,anchor=anchor,payload=payload,rope=rope}
+  hook={root=root,anchor=anchor,payload=payload,rope=rope,clock=0,lastAt=now}
   fx.grapple=hook
  end
  local anchor,payload,rope=hook.anchor,hook.payload,hook.rope
+ local dt=math.max(0,now-hook.lastAt);hook.lastAt=now
  anchor.CFrame=pivot*CFrame.new(0,-.48,0)
  local reach=progress(age,.24,Workshop.COURIER_CONTACT-.24)
- local target=CFrame.new(ground)*cradle.Rotation
+ -- Drive the cable endpoints on the same clock as the hull. The local
+ -- physics solver previously fought the rendered pivot on every frame.
+ local target=CFrame.new(groundPose and groundPose.Position or ground)*cradle.Rotation
  if loadedId and not hook.ore then
-  payload.CFrame=target
-  rope.Length=math.max(.4,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude+.06)
-  hook.ore=loadedId;hook.caughtAt=now
+  hook.ore=loadedId;hook.contact=hook.shown or target;hook.velocity=velocity
+ elseif hook.ore and not paused then
+  hook.clock+=dt
  end
- if hook.ore and not hook.seatingAt and not reduced then
-  if paused and not payload.Anchored then
-   hook.pausedVelocity=payload.AssemblyLinearVelocity
-   payload.Anchored=true
-  elseif not paused and payload.Anchored then
-   payload.Anchored=false
-   payload.AssemblyLinearVelocity=hook.pausedVelocity or Vector3.zero
-   hook.pausedVelocity=nil
-  end
+ local seated=false
+ if hook.ore then
+  payload.CFrame,seated=Workshop.grappleReel(hook.contact,cradle,hook.velocity,hook.clock,reduced)
+ else
+  payload.CFrame=cradle:Lerp(target,reach^3*(10+reach*(-15+6*reach)))
  end
- if not hook.ore then
-  payload.CFrame=cradle:Lerp(target,reach*reach*(3-2*reach))
- elseif not hook.seatingAt and not paused then
-  local elapsed=now-hook.caughtAt
-  if reduced or elapsed>1.35 or elapsed>.13 and (payload.Position-cradle.Position).Magnitude<.7 then
-   hook.seatingAt=now;hook.seatingFrom=payload.CFrame;payload.Anchored=true
-  end
+ hook.shown=payload.CFrame
+ rope.Length=math.max(.04,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude)
+ if seated then
+  fx.grappleDone=hook.ore;destroyGrapple(fx)
+  return cradle,true
  end
- if hook.seatingAt then
-  local t=progress(now,hook.seatingAt,.23)
-  payload.CFrame=hook.seatingFrom:Lerp(cradle,t*t*(3-2*t))
-  if t>=1 then fx.grappleDone=hook.ore;destroyGrapple(fx);return cradle end
- end
- if payload.Anchored then
-  rope.Length=math.max(.4,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude+.06)
- end
- rope.WinchEnabled=hook.ore~=nil and not payload.Anchored and not paused
- return payload.CFrame
+ return payload.CFrame,false
 end
+
+function W:grappleSeat(position,color,now)
+ if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,110) then return end
+ local anchor=part(self.parent,'GrappleSeatImpact');anchor.CFrame=facing(position,-Vector3.yAxis)
+ local chips=particle(anchor,'OreSeatChips',color)
+ chips.Color=ColorSequence.new(color:Lerp(WHITE,.35),color)
+ chips.Speed=NumberRange.new(4,8);chips.Lifetime=NumberRange.new(.65,1.20)
+ chips.Drag=4;chips.Acceleration=Vector3.new(0,-3,0);chips.SpreadAngle=Vector2.new(82,82)
+ EnergyDisc.configure(chips,.25,.70,.72,.42,.29)
+ chips:Emit(11)
+ table.insert(self.bursts,{part=anchor,untilAt=now+1.25})
+end
+
 function W:courier(drone,record,now)
  local source=drone.source;local state=source:GetAttribute('State')
  local snapPosition
@@ -4226,6 +4271,10 @@ function W:courier(drone,record,now)
   if saleAge>=0 and saleAge<.21 then count=math.max(count,#fx.mounts) end
   local loadedId=source:GetAttribute('CourierLoadedOre')
   local loadedMaterial=source:GetAttribute('CourierLoadedMaterial')
+  local hookId=source:GetAttribute('CourierHookOre') or loadedId
+  local groundPose=grappling and self.oreFrame and self.oreFrame(hookId)
+  if groundPose then fx.grappleOrePose=groundPose
+  elseif not grappling then fx.grappleOrePose=nil end
   local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
   local loadingSlot
   if loadedId and loadedId>0 and (loadAge<.55 or grappling and loadAge<2) and not unload then
@@ -4288,9 +4337,12 @@ function W:courier(drone,record,now)
     slot.angles,slot.spin=Workshop.clawSuspension(slot.angles or Vector3.zero,spin,localAcceleration,i<=parcelUnits,paused and 0 or clawDt)
     cargoFrame=cargoFrame*CFrame.new(0,.56,0)*CFrame.Angles(slot.angles.X,0,slot.angles.Z)*CFrame.new(0,-.56,0)
    elseif not paused then slot.angles=nil;slot.spin=nil end
+   local seatImpact
    if hooked then
-    local hookPose=grappleFrame(fx,pivot,cargoFrame,ground,pickupAge,not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,now)
+    local hookPose,seated=grappleFrame(fx,pivot,cargoFrame,ground,fx.grappleOrePose,pickupAge,
+     not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,velocity,now)
     if hookPose then cargoFrame=hookPose end
+    seatImpact=seated
    end
    if i==loadingSlot then
     if beforeContact then closed=grip end
@@ -4344,6 +4396,18 @@ function W:courier(drone,record,now)
     cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or (slot.faceted and 1-(slot.cargo:GetAttribute('GemOpacity') or .76) or 0)
     local position=cargoFrame.Position
     local rotation=cargoFrame.Rotation
+    if i==loadingSlot and fx.grappleOrePose then
+     local incoming=fx.grappleOrePose.Rotation
+     local mountBlend=hooked and fx.grapple and math.clamp(fx.grapple.clock/.48,0,1) or 1
+     rotation=incoming:Lerp(rotation,mountBlend*mountBlend*(3-2*mountBlend))
+    end
+    if seatImpact then
+     local key=Workshop.crystalCargo(material)
+     local rgb=key and Shops.COLORS[key]
+     local color=slot.faceted and RockFinish.Gems.tint(key or material)
+      or rgb and Color3.fromRGB(table.unpack(rgb)) or cargo.Color
+     self:grappleSeat(cargoFrame:PointToWorldSpace(Vector3.yAxis*.42),color,now)
+    end
     size=cargo.Size
     if unload then
      local t=math.clamp((fx.unloadProgress-(i-1)*.045)/.64,0,1)
@@ -6392,8 +6456,8 @@ local function fieldStep(record,state,now,dt,shot,source)
   if not item.part.Parent then continue end
   local kind=item.kind
   local offset=Vector3.zero
-  if kind=='DartSlide' or kind=='BallSlide' then offset=Vector3.new(0,0,slide)
-  elseif kind=='BallReload' or kind=='DartLoad' then offset=Vector3.new(0,0,slide*.91)
+  if kind=='DartSlide' or kind=='BallSlide' then offset=Vector3.new(0,slide,0)
+  elseif kind=='BallReload' or kind=='DartLoad' then offset=Vector3.new(0,slide*.91,0)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
   elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then
@@ -8419,7 +8483,8 @@ local function gunCharge(self,r,origin,target,color,ball,q)
   r.load={root=root,core=core,ring=ring,motes=motes};self.loads+=1
  end
  local load=r.load
- local frame=CFrame.lookAt(origin,target)
+ local aim=(target-origin).Unit
+ local frame=CFrame.lookAt(origin,target,math.abs(aim.Y)>.95 and Vector3.zAxis or Vector3.yAxis)
  local build=smooth((q-.10)/.61)
  local squeeze=smooth((q-.82)/.18)
  local focus=build*(1-.14*squeeze)
@@ -8733,7 +8798,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      local stretch=1+(ball and .36 or .31)*smooth(t/.21)*(1-smooth((t-.26)/.58))
      value.Size=ball and Vector3.new(.81,.81,.81*stretch) or Vector3.new(.15,.15,1.48*stretch)
      local center=from:Lerp(to,lead)-direction*(value.Size.Z*.5)
-     value.CFrame=CFrame.lookAt(center,center+direction)
+     value.CFrame=CFrame.lookAt(center,center+direction,math.abs(direction.Y)>.95 and Vector3.zAxis or Vector3.yAxis)
      if r.shell then r.shell.CFrame=value.CFrame;r.shell.Size=Vector3.new(1.06,1.06,1.06*stretch) end
     end
    elseif kind=='Orbital' then
@@ -15228,10 +15293,13 @@ function V:update(dt,now)
     r.pull=(r.pull or 0)+(targetPull-(r.pull or 0))*(1-math.exp(-math.min(dt,.1)*18))
     if r.pull<.001 then r.pull=0 end
     glow=math.max(glow,.34*r.pull)
-    local rx,ry,rz
+    local rx,ry,rz,remaining
     if r.arc then
-     local remaining=reducedMotion and 0 or 1-math.clamp(age/math.max(.01,r.arc.contact*.87),0,1)
-     rx=remaining^1.2*math.pi*.63;ry=(r.seed*.92)%6.283+.45*remaining;rz=.14*math.sin(remaining*math.pi)
+     remaining=reducedMotion and 0 or 1-math.clamp(age/math.max(.01,r.arc.contact*.87),0,1)
+     local pitch,yaw,roll=Workshop.oreOrientation(r.seed,false)
+     local sign=r.seed%2==0 and 1 or -1
+     rx=pitch+sign*remaining^1.2*math.pi*(.50+math.abs(r.seed)%5*.09)
+     ry=yaw+sign*.60*remaining;rz=roll+.48*math.sin(remaining*math.pi)*sign
     else
      local tumble=reducedMotion and 0 or PickupMotion.tumble(age,r.landAge)
      rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.28,r.seed*.43+tumble*.21
@@ -15239,8 +15307,14 @@ function V:update(dt,now)
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
      local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)
-     local raised=math.max(latest.floor+support-.22,position.Y)
-     if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5-.22) end
+     if remaining and remaining<.18 and r.faceted then
+      local exact=r.landingSupport or GemAppearance.support(r.view,CFrame.Angles(rx,ry,rz))
+      if exact then
+       support+=(exact-support)*(1-remaining/.18)
+       if remaining==0 then r.landingSupport=exact end
+      end
+     end
+     local raised=if r.arc then math.max(latest.floor,position.Y)+support-.22 else math.max(latest.floor+support-.22,position.Y)
      position=Vector3.new(position.X,raised,position.Z)
     end
     r.motionPose=heldPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
@@ -15280,10 +15354,12 @@ function V:update(dt,now)
      if not r.dockFrom then r.dockFrom=r.view.CFrame;r.dockAt=now end
      local t=math.clamp((now-r.dockAt)/.26,0,1)
      local ground=latest.floor or r.pos.Y
-     local target=CFrame.new(r.pos.X,ground-.22+r.size.Y*.5,r.pos.Z)
-      *CFrame.Angles(0,source:GetAttribute('CourierDockYaw') or 0,0)
-     pose=r.dockFrom:Lerp(target,t*t*(3-2*t))
-    else r.dockFrom=nil end
+     local packed=select(3,Workshop.crystalCargo(r.mineralKey))==true
+     local pitch,yaw,roll=Workshop.oreOrientation(r.seed,packed)
+     local support=r.landingSupport or PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,pitch,yaw,roll)
+     r.dockTarget=CFrame.new(r.pos.X,ground-.22+support,r.pos.Z)*CFrame.Angles(pitch,yaw,roll)
+     pose=r.dockFrom:Lerp(r.dockTarget,t*t*(3-2*t))
+    else r.dockFrom=nil;r.dockTarget=nil end
     r.drawPosition=pose.Position;r.view.CFrame=pose
    end
    local floor=arcLanded and r.arc.floor or latest.floor
@@ -15817,7 +15893,7 @@ local previewColor=Color3.fromRGB(234,245,255)
 local activeColor=Color3.fromRGB(255,147,61)
 local clearColor=Color3.fromRGB(85,243,148)
 local white=Color3.new(1,1,1)
-local riseTime,wallHeight=.32,10
+local riseTime,wallHeight=.32,10*2/3
 local wallHold,wallFadeTime,flashTime=.12,.46,.27
 local wallFade=NumberSequence.new({
  NumberSequenceKeypoint.new(0,.62),NumberSequenceKeypoint.new(.36,.51),
@@ -16227,6 +16303,10 @@ BeamVFX.onCue=function(kind,position,now)
  if kind=='launch' then presentation:kick(position,.028,now) end
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
+presentation.work.oreFrame=function(id)
+ local ore=id and pickupView.byId[id]
+ return ore and ore.dockTarget
+end
 local impactFreeze=ImpactFreeze.new(player)
 local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
 local function requestCrystalHold(kind,record)
@@ -17357,7 +17437,7 @@ local function renderResource(r,now)
   local seed=s:GetAttribute('StageSeed') or 0
   local ground=s:GetAttribute('GroundY')
   local frame
-  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false,reference,s:GetAttribute('SteadyCrystal')==true)
+  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false,reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   if junk then
    if now<readyAt then
@@ -17383,8 +17463,9 @@ local function renderResource(r,now)
   if event=='break' and cut then
    r.splitSize=full*Feel.crystalStageShape(stageCount,stageCount,quarry and full or nil)*Feel.rockShape(s:GetAttribute('SliceScale'),s:GetAttribute('MeltBand'))
    local ground=s:GetAttribute('GroundY')
-   local center=Vector3.new(final.X,ground+r.splitSize.Y*.5-.06,final.Z)
-   r.splitPose=CFrame.new(center)*(r.restPose and r.restPose.Rotation or view.CFrame.Rotation)*CFrame.new(-r.splitSize*cutOffset)
+   local rest=Feel.groundedRockFrame(final,r.splitSize,ground,stage,seed,s:GetAttribute('CubicRock')==false,
+    reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
+   r.splitPose=CFrame.new(rest.Position)*(r.restPose and r.restPose.Rotation or rest.Rotation)*CFrame.new(-r.splitSize*cutOffset)
   end
   view.Transparency=1
   if r.rockOutline then r.rockOutline.Enabled=false end
@@ -17536,7 +17617,7 @@ local function renderDrone(d,dt,now)
   if state=='Collect' and type(dockYaw)=='number' then targetYaw=dockYaw end
   if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
   else d.workingYaw=nil end
-  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine' or state=='Recover') then
+  if d.shotMuzzle and not DroneConfig.DownwardGunDepth[role] and (state=='Warmup' or state=='SpecialMine' or state=='Recover') then
    local aim=s:GetAttribute('TargetPosition')
    if isNomad then targetYaw=s:GetAttribute('Yaw') or d.yaw
    elseif typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
@@ -17550,7 +17631,7 @@ local function renderDrone(d,dt,now)
  local desiredPitch=0
  if mass then
   desiredBank=0
-  local precision=state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
+  local precision=(DroneConfig.DownwardGunDepth[role]~=nil and (state=='Warmup' or state=='SpecialMine')) or state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
    or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or state=='Docked' or docking
   if not precision and not heavyFlight and not motionPaused and not CrystalImpactView.reducedMotion() then
    local thrust=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(((d.velocity or Vector3.zero)-previousVelocity)/math.max(dt,1/144))
@@ -17679,7 +17760,8 @@ local function renderDrone(d,dt,now)
  if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
  elseif not active and not charging and state~='SpecialMine' and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
  local part,source,resource=resolveRenderedTarget(kind,id,active and kind=='resource')
- if active and resource then resource.lastBeamAt=now end
+ if resource and (active or alive and state=='SpecialMine' and DroneConfig.DownwardGunDepth[role]
+  and not motionPaused and s:GetAttribute('WorkPaused')~=true) then resource.lastBeamAt=now end
  if d.shotMuzzle then
   RoleEffectView.aim(d,alive and not motionPaused and s:GetAttribute('WorkPaused')~=true
    and (state=='Warmup' or state=='SpecialMine') and resource or nil,now)

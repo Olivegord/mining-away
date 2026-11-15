@@ -5,7 +5,7 @@ local previewColor=Color3.fromRGB(234,245,255)
 local activeColor=Color3.fromRGB(255,147,61)
 local clearColor=Color3.fromRGB(85,243,148)
 local white=Color3.new(1,1,1)
-local riseTime,wallHeight=.32,10
+local riseTime,wallHeight=.32,10*2/3
 local wallHold,wallFadeTime,flashTime=.12,.46,.27
 local wallFade=NumberSequence.new({
  NumberSequenceKeypoint.new(0,.62),NumberSequenceKeypoint.new(.36,.51),

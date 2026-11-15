@@ -180,7 +180,10 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  local ribbon=assert(r.ribbon)
  assert(not ribbon.trail.Enabled and ribbon.trail.Parent==r.view,'a clean gem arc deleted its trail on contact')
  local landed=r.motionPose
- assert(math.abs(landed.Position.Y-r.view.Size.Y*.5)<1e-8 and landed.Position.X==r.arc.landX)
+ local pitch,yaw,roll=Workshop.oreOrientation(r.seed,false)
+ local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,pitch,yaw,roll)
+ assert(math.abs(landed.Position.Y-support)<1e-8 and landed.Position.X==r.arc.landX,
+  'tilted gem did not land at its seeded resting pose')
  cargo:SetAttribute('Position',Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ))
  cargo:SetAttribute('Velocity',Vector3.zero);cargo:SetAttribute('SnapshotAt',contact-.07)
  renderer:update(1/60,contact+.045)
@@ -282,7 +285,7 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  assert(first.view.Size.X==sizes[2].X,'combining a settled pile resized the ore')
  reducedMotion=true
  renderer:update(1/60,realTime+6.1)
- assert(math.abs(first.view.Position.Y-first.view.Size.Y*.5-1.52)<1e-8,'reduced motion did not hold a steady hover')
+ assert(math.abs(first.view.Position.Y-first.motionPose.Position.Y-1.52)<1e-8,'reduced motion did not hold a steady hover')
  local pose=first.view.CFrame
  workspace.CurrentCamera.CFrame=CFrame.new(0,2,0)
  renderer:update(1/60,realTime+13.30)

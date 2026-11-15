@@ -50,6 +50,24 @@ W.COURIER_SWEEP_SPEED=11
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
 W.COURIER_HOOK_DROP=4.8
+W.COURIER_REEL_TIME=.68
+function W.oreOrientation(seed,packed)
+ local n=math.abs(seed)
+ local yaw=2*math.pi*(n*381%997)/997
+ if packed then return 0,yaw,0 end
+ local bearing=2*math.pi*(n*619%991)/991
+ local lean=math.rad(14+n*173%39)
+ return math.cos(bearing)*lean,yaw,math.sin(bearing)*lean
+end
+function W.grappleReel(contact,cradle,velocity,elapsed,reduced)
+ local t=math.clamp(elapsed/(reduced and .43 or W.COURIER_REEL_TIME),0,1)
+ -- A smooth release off the ground, with a short mechanical stop on seating.
+ local draw=t*t*(2.5-1.5*t)
+ local drift=Vector3.new(velocity.X,0,velocity.Z)
+ if drift.Magnitude>12 then drift=drift.Unit*12 end
+ local swing=reduced and Vector3.zero or -drift*(math.sin(t*math.pi)^2*.045)
+ return CFrame.new(swing)*contact:Lerp(cradle,draw),t>=1
+end
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
@@ -1821,10 +1839,18 @@ function F.rockYaw(seed,stage,turn,reference)
  end
  return yaw
 end
-function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,steady)
- local center=Vector3.new(position.X,ground+size.Y*.5-.06,position.Z)
- local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference)
- return CFrame.new(center)*CFrame.Angles(0,yaw,0),ground+size.Y-.06
+function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,steady,varied)
+ local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference and not varied)
+ local pitch,roll=0,0
+ if varied then
+  local magnitude=math.rad(7+seed*173%22)
+  local bearing=2*math.pi*(seed*397%997)/997
+  pitch=magnitude*math.cos(bearing);roll=magnitude*math.sin(bearing)
+ end
+ local c=math.cos(pitch)
+ local halfHeight=(size.X*math.abs(c*math.sin(roll))+size.Y*c*math.cos(roll)+size.Z*math.abs(math.sin(pitch)))*.5
+ local center=Vector3.new(position.X,ground+halfHeight-(varied and (halfHeight-size.Y*.5)*.56 or 0)-.06,position.Z)
+ return CFrame.new(center)*CFrame.Angles(0,yaw,0)*CFrame.Angles(pitch,0,roll),center.Y+halfHeight
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response,mass,steering)
  -- Retain the original capped, distance-eased destination rule, but approach
@@ -6277,6 +6303,7 @@ DroneConfig.Prominent={
  Nomad={span=14.2,lift=0,altitude=45,speed=.84,response=.77,turn=.64},
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
+DroneConfig.DownwardGunDepth={Needler=1.35,Ballcaster=1.54}
 DroneConfig.HullSpans={Striker=2.15,Needler=2.68,Ballcaster=2.73,Vacuum=2.65,Compactor=2.75,Courier=2.72,Medic=2.5,Charger=2.75}
 
 -- Each slit is cut into a fixed part of Nomad's underside. The endpoints
@@ -6531,18 +6558,23 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   shotMuzzle(bay,Vector3.new(0,-.18,0)*scale)
   hardware('DropBayLens',Vector3.new(.23,.045,.32),CFrame.new(1.78,-.58,.115),Color3.fromRGB(52,72,88),smooth)
  elseif role=='Needler' then
-  hardware('NeedlerHull',Vector3.new(1.47,.48,1.67),CFrame.new(0,0,.26),painted,slate)
-  local rail=hardware('DartRail',Vector3.new(.29,.20,1.39),CFrame.new(0,.19,-.64),dark,metal,nil,'DartSlide')
-  shotMuzzle(rail,Vector3.new(0,.11,-.70)*scale)
-  hardware('ChamberedDart',Vector3.new(.15,.15,.62),CFrame.new(0,.30,-.77),color,Enum.Material.Neon,nil,'DartLoad')
- elseif role=='Ballcaster' then
-  hardware('CoilHousing',Vector3.new(1.35,1.45,1.45),CFrame.new(0,0,.28)*foreAft,painted,slate,cylinder)
-  local port=hardware('OrbSeat',Vector3.new(.15,.81,.81),CFrame.new(0,0,-.43)*foreAft,dark,metal,cylinder,'BallSlide')
-  shotMuzzle(port,Vector3.new(.67,0,0)*scale)
+  hardware('NeedlerHull',Vector3.new(1.47,.48,1.67),CFrame.new(0,0,.19),painted,slate)
+  local gun=CFrame.new(0,-.30,0)*CFrame.Angles(-math.pi/2,0,0)
+  local rail=hardware('DartRail',Vector3.new(.29,.25,1.24),gun*CFrame.new(0,0,-.43),dark,metal,nil,'DartSlide')
+  shotMuzzle(rail,Vector3.new(0,0,-.62)*scale)
+  hardware('ChamberedDart',Vector3.new(.15,.15,.62),gun*CFrame.new(0,0,-.70),color,Enum.Material.Neon,nil,'DartLoad')
   for _,side in ipairs({-1,1}) do
-   hardware('CoilFork',Vector3.new(.24,.38,.83),CFrame.new(side*.54,0,-.70),dark,metal,nil,'BallSlide')
+   hardware('RailBrace',Vector3.new(.26,.32,.72),CFrame.new(side*.31,-.38,0),painted,slate)
   end
-  hardware('LoadedOrb',Vector3.one*.70,CFrame.new(0,0,-.78),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
+ elseif role=='Ballcaster' then
+  local gun=CFrame.new(0,-.22,0)*CFrame.Angles(-math.pi/2,0,0)
+  hardware('CoilHousing',Vector3.new(1.25,1.67,1.67),gun*CFrame.new(0,0,.13)*foreAft,painted,slate,cylinder)
+  local port=hardware('OrbSeat',Vector3.new(.15,.81,.81),gun*CFrame.new(0,0,-.82)*foreAft,dark,metal,cylinder,'BallSlide')
+  shotMuzzle(port,Vector3.new(.50,0,0)*scale)
+  for _,side in ipairs({-1,1}) do
+   hardware('CoilFork',Vector3.new(.24,.38,.83),gun*CFrame.new(side*.54,0,-.70),dark,metal,nil,'BallSlide')
+  end
+  hardware('LoadedOrb',Vector3.one*.70,gun*CFrame.new(0,0,-.92),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
  elseif role=='Vacuum' then
   pod('VacuumHull',1.81,.55,.18,painted,slate)
   hardware('IntakeTurbine',Vector3.new(.13,.65,.65),CFrame.new(0,-.26,0)*vertical,color,Enum.Material.Neon,cylinder,'Intake')
@@ -9692,14 +9724,6 @@ function scene.runtimeFleet(p: any)
  local base=p.testFleet or profile.fleet
  local fleet=table.clone(base)
  if scene.runStart then
-  -- Studio's regular preview crew hides the two starter guns. Keep their
-  -- permanent records and leave explicit loadouts / earned drones available.
-  if inStudio and not p.testFleet then
-   for i=profile.starterDrones,1,-1 do
-    local owned=fleet[i]
-    if owned and (owned.role=='Needler' or owned.role=='Ballcaster') then table.remove(fleet,i) end
-   end
-  end
   local role=RoleConfig.StudioRoles.Courier
   for slot=1,Workshop.EMPTIERS do
    table.insert(fleet,{id=Workshop.emptierId(profile.run.id,slot),type='Courier',role='Courier',name='Emptier '..slot,flightHeight=role.height,base=role.base})
@@ -9902,7 +9926,7 @@ function scene.poseResource(r)
  local scale=cfg.ContinuousCrystals and Feel.crystalStageShape(r.stage,r.stageCount,r.fullSize)
   or cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
  part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
- part.CFrame=Feel.groundedRockFrame(r.position,part.Size,part:GetAttribute('GroundY'),r.stage,r.stageSeed,part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady)
+ part.CFrame=Feel.groundedRockFrame(r.position,part.Size,part:GetAttribute('GroundY'),r.stage,r.stageSeed,part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady,r.variedPose)
  if r.cutOffset then part.CFrame*=CFrame.new(-part.Size*r.cutOffset) end
 end
 local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount,junk,modifiers)
@@ -9930,6 +9954,8 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  if cut then fullSize*=CrystalCuts.proportions(cut,original) end
  if field.cfg.ContinuousCrystals and kind=='Crystal' then fullSize=CrystalCuts.fieldSize(fullSize) end
+ local variedPose=field.cfg.ContinuousCrystals==true and kind=='Crystal' and not junk
+ if variedPose then part:SetAttribute('VariedRockPose',true) end
  local steady=field.cfg.ContinuousCrystals==true and (modifiers==Mining.ROCK_MODIFIERS.Massive
   or size>=Mining.FIELD_CRYSTAL_MIN_SIZE+Mining.FIELD_CRYSTAL_SIZE_RANGE*1.80/3.35)
  if steady then part:SetAttribute('SteadyCrystal',true) end
@@ -9959,14 +9985,14 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,referenceCrystal=reference,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
-  slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,steady=steady,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
+  slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,steady=steady,variedPose=variedPose,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
  r.modifiers=modifiers
  if modifiers then part:SetAttribute('RockModifiers',modifiers) end
  if junk then
   r.spawnAt=now+.18*(junk.order-1)
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
  end
- part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference,steady)
+ part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference,steady,variedPose)
  if cut then
   r.cutOffset=cut.ExtentsCFrame.Position/cut.Size
   part.CFrame*=CFrame.new(-fullSize*r.cutOffset)
@@ -11887,6 +11913,9 @@ local function committedStation(d,r)
    local ground=r.part:GetAttribute('GroundY') or r.position.Y
    local frame=CFrame.new(r.position.X,ground,r.position.Z)*CFrame.Angles(0,d.workYaw,0)
    d.workStation=frame:PointToWorldSpace(Vector3.new(0,definition.StationHeight,1.43))
+  elseif definition and RoleConfig.DownwardGunDepth[d.role] and r.kind~='Geode' then
+   local target=r.part.Position
+   d.workStation=Vector3.new(target.X,math.max(d.workStation.Y,target.Y+8),target.Z)
   elseif r.field.cfg.SelectionOnly and d.targetSlot==2 and not (definition and definition.Projectile=='Prism') then
    local base=d.workStation
    for turn=0,3 do
@@ -11985,7 +12014,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  -- A gun must earn its original firing station before it can launch. Once
  -- the shot is in flight, the hull is free to recoil within a bounded area.
  if job and job.launched and (d.pos-goal).Magnitude<=3 then arrived=true end
- if projectile and arrived then
+ if projectile and not RoleConfig.DownwardGunDepth[d.role] and arrived then
   d.yaw=Feel.approachYaw(yaw,d.workYaw or Feel.levelYaw(d.pos,r.position,yaw),dt*((RoleConfig.Prominent[d.role] or {}).turn or 1))
  end
  local warmup=scene.miningWarmup(d,r)+(projectile and not d.workShotStarted and ((d.slot*7)%11)*.012 or 0)
@@ -12016,9 +12045,15 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
   if projectile then
    local vector=r.part.Position-d.pos
    local from=projectile=='Nomad' and (CFrame.new(goal)*CFrame.Angles(0,d.workYaw,0)):PointToWorldSpace(RoleConfig.NomadDropOffset) or d.pos+vector.Unit*.9
+   local depth=RoleConfig.DownwardGunDepth[d.role]
+   if depth then from=d.pos-Vector3.yAxis*(depth*d.model:GetScale()) end
    local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
-   local contact=workspace:Raycast(from,r.part.Position-from,query)
-   local aim=contact and contact.Position or r.part.Position
+   local target=r.part.Position
+   local contact=workspace:Raycast(from,target-from,query)
+   local aim=contact and contact.Position or target
+   if depth and not los(from,aim,r.part,{droneFolder}) then
+    release(d);r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+3;return
+   end
    if projectile=='Prism' then
     local path=scene.prismTrace(d,r,d.pos,true)
     if path then from=path.origin;aim=path.selected.point end
@@ -12139,7 +12174,7 @@ local function publishBreakerPhase(d,job)
 end
 local function breakerSurface(r)
  local ground=r.part:GetAttribute('GroundY') or r.position.Y-r.fullSize.Y*.5
- local _,top=Feel.groundedRockFrame(r.position,r.part.Size,ground,r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false)
+ local _,top=Feel.groundedRockFrame(r.position,r.part.Size,ground,r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady,r.variedPose)
  local contact=Vector3.new(r.position.X,top,r.position.Z)
  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
  local origin=contact+Vector3.new(0,2,0)
@@ -12684,6 +12719,7 @@ local function snapshotDrone(d)
   DeliveryUnits=units,DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
   CourierDock=d.oreDock or false,CourierDockYaw=d.oreYaw or false,
   CourierPickupPoint=d.oreDock and d.oreHookPoint or false,CourierGrappling=d.oreDock~=nil,
+  CourierHookOre=d.oreDock and d.orePickupId or d.oreLoadedId or 0,
   CourierEntryOffset=d.oreDock and d.oreEntryOffset or Vector3.zero,
   CourierEntryVelocity=d.oreDock and d.oreEntryVelocity or false,
   CourierApproachTime=d.oreDock and d.oreApproachTime or false,CourierReturnTurn=d.oreDock and d.oreReturnTurn or false,
@@ -13181,7 +13217,7 @@ local function abilityContext(p,fieldId,operator,deployment)
   end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return nil end end
   -- Gadgets survey the current health-scaled body and actual cut height.
-  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady))
+  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady,r.variedPose))
   local click=deployment and deployment.kind=='Orbital' and deployment.targetId==r.id and deployment.position or r.position
   return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.part.Size.X*.5),x=click.X,y=top,z=click.Z}
  end

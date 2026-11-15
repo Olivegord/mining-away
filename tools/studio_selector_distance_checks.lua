@@ -42,11 +42,12 @@ local ok,err=xpcall(function()
  local side=view.pinned.sides[1]
  local peak=side.opacity;local startHeight=side.part.Size.Y
  view:showAim(.05,ray)
- assert(side.opacity==peak and side.part.Size.Y>5.5 and startHeight<2,'wall did not rise sharply and hold its flash')
+ assert(side.opacity==peak and side.part.Size.Y>3.7 and startHeight<2,'wall did not rise sharply and hold its flash')
  assert(side.edge.Size.X==30 and side.sparks.Lifetime.Max>=1.2 and view.pinned.emitted,'edge burst did not arm')
  view:showAim(.22,ray);local early=side.opacity
  view:showAim(.22,ray);local late=side.opacity
  view:showAim(.44,ray);local idle=side.opacity
+ assert(math.abs(side.part.Size.Y-20/3)<.001,'wall height was not reduced by one third')
  assert(peak>.9 and early>late and late>idle and idle>=.32,'wall lost its brightness floor')
  assert(view.pinned.point==center and view.aimEdge.point==hovered and not view.flash.gui.Enabled,'aim moved the pin or painted its floor')
  assert(view:commit(shallow) and sent.fieldId==1 and sent.position==point and sent.requestId)

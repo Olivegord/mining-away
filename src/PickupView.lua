@@ -399,10 +399,13 @@ function V:update(dt,now)
     r.pull=(r.pull or 0)+(targetPull-(r.pull or 0))*(1-math.exp(-math.min(dt,.1)*18))
     if r.pull<.001 then r.pull=0 end
     glow=math.max(glow,.34*r.pull)
-    local rx,ry,rz
+    local rx,ry,rz,remaining
     if r.arc then
-     local remaining=reducedMotion and 0 or 1-math.clamp(age/math.max(.01,r.arc.contact*.87),0,1)
-     rx=remaining^1.2*math.pi*.63;ry=(r.seed*.92)%6.283+.45*remaining;rz=.14*math.sin(remaining*math.pi)
+     remaining=reducedMotion and 0 or 1-math.clamp(age/math.max(.01,r.arc.contact*.87),0,1)
+     local pitch,yaw,roll=Workshop.oreOrientation(r.seed,false)
+     local sign=r.seed%2==0 and 1 or -1
+     rx=pitch+sign*remaining^1.2*math.pi*(.50+math.abs(r.seed)%5*.09)
+     ry=yaw+sign*.60*remaining;rz=roll+.48*math.sin(remaining*math.pi)*sign
     else
      local tumble=reducedMotion and 0 or PickupMotion.tumble(age,r.landAge)
      rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.28,r.seed*.43+tumble*.21
@@ -410,8 +413,14 @@ function V:update(dt,now)
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
      local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)
-     local raised=math.max(latest.floor+support-.22,position.Y)
-     if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5-.22) end
+     if remaining and remaining<.18 and r.faceted then
+      local exact=r.landingSupport or GemAppearance.support(r.view,CFrame.Angles(rx,ry,rz))
+      if exact then
+       support+=(exact-support)*(1-remaining/.18)
+       if remaining==0 then r.landingSupport=exact end
+      end
+     end
+     local raised=if r.arc then math.max(latest.floor,position.Y)+support-.22 else math.max(latest.floor+support-.22,position.Y)
      position=Vector3.new(position.X,raised,position.Z)
     end
     r.motionPose=heldPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
@@ -451,10 +460,12 @@ function V:update(dt,now)
      if not r.dockFrom then r.dockFrom=r.view.CFrame;r.dockAt=now end
      local t=math.clamp((now-r.dockAt)/.26,0,1)
      local ground=latest.floor or r.pos.Y
-     local target=CFrame.new(r.pos.X,ground-.22+r.size.Y*.5,r.pos.Z)
-      *CFrame.Angles(0,source:GetAttribute('CourierDockYaw') or 0,0)
-     pose=r.dockFrom:Lerp(target,t*t*(3-2*t))
-    else r.dockFrom=nil end
+     local packed=select(3,Workshop.crystalCargo(r.mineralKey))==true
+     local pitch,yaw,roll=Workshop.oreOrientation(r.seed,packed)
+     local support=r.landingSupport or PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,pitch,yaw,roll)
+     r.dockTarget=CFrame.new(r.pos.X,ground-.22+support,r.pos.Z)*CFrame.Angles(pitch,yaw,roll)
+     pose=r.dockFrom:Lerp(r.dockTarget,t*t*(3-2*t))
+    else r.dockFrom=nil;r.dockTarget=nil end
     r.drawPosition=pose.Position;r.view.CFrame=pose
    end
    local floor=arcLanded and r.arc.floor or latest.floor

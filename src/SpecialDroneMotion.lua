@@ -126,8 +126,8 @@ local function fieldStep(record,state,now,dt,shot,source)
   if not item.part.Parent then continue end
   local kind=item.kind
   local offset=Vector3.zero
-  if kind=='DartSlide' or kind=='BallSlide' then offset=Vector3.new(0,0,slide)
-  elseif kind=='BallReload' or kind=='DartLoad' then offset=Vector3.new(0,0,slide*.91)
+  if kind=='DartSlide' or kind=='BallSlide' then offset=Vector3.new(0,slide,0)
+  elseif kind=='BallReload' or kind=='DartLoad' then offset=Vector3.new(0,slide*.91,0)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
   elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then

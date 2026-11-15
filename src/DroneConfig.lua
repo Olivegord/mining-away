@@ -627,6 +627,7 @@ DroneConfig.Prominent={
  Nomad={span=14.2,lift=0,altitude=45,speed=.84,response=.77,turn=.64},
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
+DroneConfig.DownwardGunDepth={Needler=1.35,Ballcaster=1.54}
 DroneConfig.HullSpans={Striker=2.15,Needler=2.68,Ballcaster=2.73,Vacuum=2.65,Compactor=2.75,Courier=2.72,Medic=2.5,Charger=2.75}
 
 -- Each slit is cut into a fixed part of Nomad's underside. The endpoints
@@ -881,18 +882,23 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   shotMuzzle(bay,Vector3.new(0,-.18,0)*scale)
   hardware('DropBayLens',Vector3.new(.23,.045,.32),CFrame.new(1.78,-.58,.115),Color3.fromRGB(52,72,88),smooth)
  elseif role=='Needler' then
-  hardware('NeedlerHull',Vector3.new(1.47,.48,1.67),CFrame.new(0,0,.26),painted,slate)
-  local rail=hardware('DartRail',Vector3.new(.29,.20,1.39),CFrame.new(0,.19,-.64),dark,metal,nil,'DartSlide')
-  shotMuzzle(rail,Vector3.new(0,.11,-.70)*scale)
-  hardware('ChamberedDart',Vector3.new(.15,.15,.62),CFrame.new(0,.30,-.77),color,Enum.Material.Neon,nil,'DartLoad')
- elseif role=='Ballcaster' then
-  hardware('CoilHousing',Vector3.new(1.35,1.45,1.45),CFrame.new(0,0,.28)*foreAft,painted,slate,cylinder)
-  local port=hardware('OrbSeat',Vector3.new(.15,.81,.81),CFrame.new(0,0,-.43)*foreAft,dark,metal,cylinder,'BallSlide')
-  shotMuzzle(port,Vector3.new(.67,0,0)*scale)
+  hardware('NeedlerHull',Vector3.new(1.47,.48,1.67),CFrame.new(0,0,.19),painted,slate)
+  local gun=CFrame.new(0,-.30,0)*CFrame.Angles(-math.pi/2,0,0)
+  local rail=hardware('DartRail',Vector3.new(.29,.25,1.24),gun*CFrame.new(0,0,-.43),dark,metal,nil,'DartSlide')
+  shotMuzzle(rail,Vector3.new(0,0,-.62)*scale)
+  hardware('ChamberedDart',Vector3.new(.15,.15,.62),gun*CFrame.new(0,0,-.70),color,Enum.Material.Neon,nil,'DartLoad')
   for _,side in ipairs({-1,1}) do
-   hardware('CoilFork',Vector3.new(.24,.38,.83),CFrame.new(side*.54,0,-.70),dark,metal,nil,'BallSlide')
+   hardware('RailBrace',Vector3.new(.26,.32,.72),CFrame.new(side*.31,-.38,0),painted,slate)
   end
-  hardware('LoadedOrb',Vector3.one*.70,CFrame.new(0,0,-.78),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
+ elseif role=='Ballcaster' then
+  local gun=CFrame.new(0,-.22,0)*CFrame.Angles(-math.pi/2,0,0)
+  hardware('CoilHousing',Vector3.new(1.25,1.67,1.67),gun*CFrame.new(0,0,.13)*foreAft,painted,slate,cylinder)
+  local port=hardware('OrbSeat',Vector3.new(.15,.81,.81),gun*CFrame.new(0,0,-.82)*foreAft,dark,metal,cylinder,'BallSlide')
+  shotMuzzle(port,Vector3.new(.50,0,0)*scale)
+  for _,side in ipairs({-1,1}) do
+   hardware('CoilFork',Vector3.new(.24,.38,.83),gun*CFrame.new(side*.54,0,-.70),dark,metal,nil,'BallSlide')
+  end
+  hardware('LoadedOrb',Vector3.one*.70,gun*CFrame.new(0,0,-.92),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
  elseif role=='Vacuum' then
   pod('VacuumHull',1.81,.55,.18,painted,slate)
   hardware('IntakeTurbine',Vector3.new(.13,.65,.65),CFrame.new(0,-.26,0)*vertical,color,Enum.Material.Neon,cylinder,'Intake')

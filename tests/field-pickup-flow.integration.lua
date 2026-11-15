@@ -14,8 +14,10 @@ local run=data(p).run
 inStudio=true
 local studioCrew=scene.runtimeFleet(p)
 inStudio=false
-assert(#studioCrew==7 and #data(p).fleet==7,'preview should have five workers plus two Emptiers without mutating profile ownership')
-for _,worker in ipairs(studioCrew) do assert(worker.role~='Needler' and worker.role~='Ballcaster') end
+local starterRoles={}
+for _,worker in ipairs(studioCrew) do starterRoles[worker.role]=true end
+assert(#studioCrew==9 and #data(p).fleet==7 and starterRoles.Needler and starterRoles.Ballcaster,
+ 'both guns should join the regular Studio starter crew without mutating ownership')
 local zone=Instance.new('Folder');zone.Parent=scene.map
 local bed=World.part(zone,'Field',Vector3.new(0,5,-60),Vector3.new(216,1,64),Color3.new(1,.5,0))
 local field={id=#patches+1,cfg={SelectionOnly=true},part=bed,resources={},respawnQueue={},e=R.newEncounter(C)}

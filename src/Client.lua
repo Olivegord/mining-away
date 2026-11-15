@@ -18,6 +18,10 @@ BeamVFX.onCue=function(kind,position,now)
  if kind=='launch' then presentation:kick(position,.028,now) end
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
+presentation.work.oreFrame=function(id)
+ local ore=id and pickupView.byId[id]
+ return ore and ore.dockTarget
+end
 local impactFreeze=ImpactFreeze.new(player)
 local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
 local function requestCrystalHold(kind,record)
@@ -1148,7 +1152,7 @@ local function renderResource(r,now)
   local seed=s:GetAttribute('StageSeed') or 0
   local ground=s:GetAttribute('GroundY')
   local frame
-  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false,reference,s:GetAttribute('SteadyCrystal')==true)
+  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false,reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   if junk then
    if now<readyAt then
@@ -1174,8 +1178,9 @@ local function renderResource(r,now)
   if event=='break' and cut then
    r.splitSize=full*Feel.crystalStageShape(stageCount,stageCount,quarry and full or nil)*Feel.rockShape(s:GetAttribute('SliceScale'),s:GetAttribute('MeltBand'))
    local ground=s:GetAttribute('GroundY')
-   local center=Vector3.new(final.X,ground+r.splitSize.Y*.5-.06,final.Z)
-   r.splitPose=CFrame.new(center)*(r.restPose and r.restPose.Rotation or view.CFrame.Rotation)*CFrame.new(-r.splitSize*cutOffset)
+   local rest=Feel.groundedRockFrame(final,r.splitSize,ground,stage,seed,s:GetAttribute('CubicRock')==false,
+    reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
+   r.splitPose=CFrame.new(rest.Position)*(r.restPose and r.restPose.Rotation or rest.Rotation)*CFrame.new(-r.splitSize*cutOffset)
   end
   view.Transparency=1
   if r.rockOutline then r.rockOutline.Enabled=false end
@@ -1327,7 +1332,7 @@ local function renderDrone(d,dt,now)
   if state=='Collect' and type(dockYaw)=='number' then targetYaw=dockYaw end
   if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
   else d.workingYaw=nil end
-  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine' or state=='Recover') then
+  if d.shotMuzzle and not DroneConfig.DownwardGunDepth[role] and (state=='Warmup' or state=='SpecialMine' or state=='Recover') then
    local aim=s:GetAttribute('TargetPosition')
    if isNomad then targetYaw=s:GetAttribute('Yaw') or d.yaw
    elseif typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
@@ -1341,7 +1346,7 @@ local function renderDrone(d,dt,now)
  local desiredPitch=0
  if mass then
   desiredBank=0
-  local precision=state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
+  local precision=(DroneConfig.DownwardGunDepth[role]~=nil and (state=='Warmup' or state=='SpecialMine')) or state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
    or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or state=='Docked' or docking
   if not precision and not heavyFlight and not motionPaused and not CrystalImpactView.reducedMotion() then
    local thrust=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(((d.velocity or Vector3.zero)-previousVelocity)/math.max(dt,1/144))
@@ -1470,7 +1475,8 @@ local function renderDrone(d,dt,now)
  if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
  elseif not active and not charging and state~='SpecialMine' and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
  local part,source,resource=resolveRenderedTarget(kind,id,active and kind=='resource')
- if active and resource then resource.lastBeamAt=now end
+ if resource and (active or alive and state=='SpecialMine' and DroneConfig.DownwardGunDepth[role]
+  and not motionPaused and s:GetAttribute('WorkPaused')~=true) then resource.lastBeamAt=now end
  if d.shotMuzzle then
   RoleEffectView.aim(d,alive and not motionPaused and s:GetAttribute('WorkPaused')~=true
    and (state=='Warmup' or state=='SpecialMine') and resource or nil,now)

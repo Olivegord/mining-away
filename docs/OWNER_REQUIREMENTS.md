@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — varied stone poses, shorter walls, and guns overhead
+
+Give both mineable rocks and loose ore more orientation variety. Cut the selection wall height by about one third. Smooth the Emptier's grapple and make seating feel like a solid catch, with small crystal-colored particles that linger. Restore Needler and Ballcaster to the regular Studio starter crew. Mount their guns underneath so they fire downward. This supersedes the earlier Studio-only exclusion of the starter guns.
+
 ## November 14 — reliable field placement and pickup; outline and wall feedback
 
 Fix intermittent field selection and loose ore pickup. The cursor follows a thin outline while the full set of walls stays on the accepted area. On a click, briefly flash the floor and the rocks within the new area white. Outline every actively mined rock. Walls always have a visible minimum brightness: appear at full flash intensity, hold, then fade linearly to that minimum. The rise should hit quickly and throw lingering particles along the edges. This supersedes the previous hover fill and the close camera wall cutoff.

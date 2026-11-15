@@ -47,6 +47,24 @@ W.COURIER_SWEEP_SPEED=11
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
 W.COURIER_HOOK_DROP=4.8
+W.COURIER_REEL_TIME=.68
+function W.oreOrientation(seed,packed)
+ local n=math.abs(seed)
+ local yaw=2*math.pi*(n*381%997)/997
+ if packed then return 0,yaw,0 end
+ local bearing=2*math.pi*(n*619%991)/991
+ local lean=math.rad(14+n*173%39)
+ return math.cos(bearing)*lean,yaw,math.sin(bearing)*lean
+end
+function W.grappleReel(contact,cradle,velocity,elapsed,reduced)
+ local t=math.clamp(elapsed/(reduced and .43 or W.COURIER_REEL_TIME),0,1)
+ -- A smooth release off the ground, with a short mechanical stop on seating.
+ local draw=t*t*(2.5-1.5*t)
+ local drift=Vector3.new(velocity.X,0,velocity.Z)
+ if drift.Magnitude>12 then drift=drift.Unit*12 end
+ local swing=reduced and Vector3.zero or -drift*(math.sin(t*math.pi)^2*.045)
+ return CFrame.new(swing)*contact:Lerp(cradle,draw),t>=1
+end
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1

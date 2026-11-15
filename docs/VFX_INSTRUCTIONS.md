@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — one continuous reel and a crystal-colored seating impact
+
+A visible Roblox RopeConstraint follows the claw and hull. The approach and reel position the endpoints on the render clock so a physics handoff cannot tug them away from the visible drone. The confirmed grab starts the reel from the last drawn claw pose and carries the ore's resting rotation into the cradle. A small burst samples the mineral color at seating. It lasts up to 1.2 seconds and survives rope cleanup. Needler and Ballcaster load vertically and fire at the rock from overhead. Their original shot timing and flight recoil remain. Cut selection walls to two thirds of their former height while keeping their flash, visible floor, and edge sparks.
+
 ## November 14 — flash the selected rocks and leave the walls on the pin
 
 The cursor uses a thin outline. On click, one white pulse drives the floor fill and the visible rocks whose authored centers sit inside that field and square. The accepted pin alone owns the full walls and border. Mining outlines share the same rock Highlight and keep pulsing independently. Walls rise on a fast fourth-power ease, stay bright for 0.12 seconds, then fade linearly for 0.46 seconds to a visible idle level, including up close. The upward edge burst lasts up to 1.24 seconds. Reduced Flashing softens the peak; Reduced Motion shows the full wall height immediately and skips the burst, and Reduced Effects also skips the burst. This supersedes the hover fill and zero visibility at close distance in the older entries.

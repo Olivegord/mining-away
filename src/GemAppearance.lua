@@ -1,6 +1,7 @@
 -- Shared per-mineral shells and opaque, fixed interior grains.
 local Gem={}
 local templates,meshes,textures,attempted={},{},{},false
+local supports={}
 local Geometry=require('./GemGeometry')
 Gem.geometry=Geometry
 Gem.key=Geometry.key
@@ -131,6 +132,16 @@ local function build(key,compact)
  shell:SetAttribute('GemAspect',data.aspect)
  shell:SetAttribute('GemOpacity',data.opacity)
  shell.Transparency=1-shell:GetAttribute('GemOpacity')
+ local points,seen={},{}
+ for _,face in ipairs(data.faces) do
+  for i=1,3 do
+   local point=face[i]
+   if not seen[point] then
+    seen[point]=true;points[#points+1]=(point-data.center)/data.extents
+   end
+  end
+ end
+ supports[key..(compact and 'Compact' or '')]=points
  return shell
 end
 function Gem.prepare()
@@ -160,6 +171,15 @@ function Gem.clone(source)
  for k,v in pairs(source:GetAttributes()) do p:SetAttribute(k,v) end
  Gem.update(p,1)
  return p,true
+end
+function Gem.support(part,rotation)
+ local key=part:GetAttribute('GemKind')
+ local points=key and supports[key..(part:GetAttribute('GemCut')=='Compact' and 'Compact' or '')]
+ if not points then return nil end
+ local up=rotation:VectorToObjectSpace(Vector3.yAxis)*part.Size
+ local height=-math.huge
+ for _,point in ipairs(points) do height=math.max(height,-up:Dot(point)) end
+ return height
 end
 function Gem.update(part,opacity,cameraPosition)
  for _,name in ipairs({'FixedInclusions','MineralClouds','PrismaticEdges'}) do

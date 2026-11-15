@@ -394,7 +394,8 @@ local function gunCharge(self,r,origin,target,color,ball,q)
   r.load={root=root,core=core,ring=ring,motes=motes};self.loads+=1
  end
  local load=r.load
- local frame=CFrame.lookAt(origin,target)
+ local aim=(target-origin).Unit
+ local frame=CFrame.lookAt(origin,target,math.abs(aim.Y)>.95 and Vector3.zAxis or Vector3.yAxis)
  local build=smooth((q-.10)/.61)
  local squeeze=smooth((q-.82)/.18)
  local focus=build*(1-.14*squeeze)
@@ -708,7 +709,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      local stretch=1+(ball and .36 or .31)*smooth(t/.21)*(1-smooth((t-.26)/.58))
      value.Size=ball and Vector3.new(.81,.81,.81*stretch) or Vector3.new(.15,.15,1.48*stretch)
      local center=from:Lerp(to,lead)-direction*(value.Size.Z*.5)
-     value.CFrame=CFrame.lookAt(center,center+direction)
+     value.CFrame=CFrame.lookAt(center,center+direction,math.abs(direction.Y)>.95 and Vector3.zAxis or Vector3.yAxis)
      if r.shell then r.shell.CFrame=value.CFrame;r.shell.Size=Vector3.new(1.06,1.06,1.06*stretch) end
     end
    elseif kind=='Orbital' then
