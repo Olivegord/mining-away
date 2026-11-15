@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — reliable field placement and pickup; outline and wall feedback
+
+Fix intermittent field selection and loose ore pickup. The cursor follows a thin outline while the full set of walls stays on the accepted area. On a click, briefly flash the floor and the rocks within the new area white. Outline every actively mined rock. Walls always have a visible minimum brightness: appear at full flash intensity, hold, then fade linearly to that minimum. The rise should hit quickly and throw lingering particles along the edges. This supersedes the previous hover fill and the close camera wall cutoff.
+
 ## November 14 — continuous grappling sweep
 
 The courier's climb and turn should read as a single arc. Use a physical Roblox rope for the grappling hook and reel the grabbed rock in while the courier keeps flying.

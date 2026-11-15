@@ -28,6 +28,8 @@ scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center})
 assert((p.miningSquare.center-center).Magnitude<.001,'raised bed blocked a legal command')
 scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center-Vector3.xAxis*28})
 assert((p.miningSquare.center-center).Magnitude<.001,'out-of-range command changed the pin')
+assert((Mining.selectorCenter(center+Vector3.xAxis*108.001,bed.CFrame,bed.Size)-(center+Vector3.xAxis*108)).Magnitude<.001)
+assert(not Mining.selectorCenter(center+Vector3.xAxis*108.1,bed.CFrame,bed.Size),'server accepted an off-bed position')
 workspace.Raycast=initialRay
 
 -- Let production droneStep decide who is waiting. The line uses only those
@@ -104,6 +106,28 @@ end
 for _=1,12 do now+=C.Tick;pickupStep(C.Tick) end
 assert(not pickups[nearId] and Pro.cargoUnits(data(p))==1,'solid mineable rock blocked player pickup')
 workspace.Raycast=initialRay
+
+do
+ local movingGem=hr.Position-Vector3.yAxis*2
+ local offered,offeredId=loose(movingGem)
+ offered.firstLandedAge=.65
+ local wall=Instance.new('Part')
+ wall.CanCollide=true;wall.Parent=zone
+ offered.courier=d;d.orePickupId=offeredId;d.oreDock=movingGem+Vector3.yAxis*5
+ workspace.Raycast=function() return {Instance=wall} end
+ now+=C.Tick;pickupStep(C.Tick)
+ assert(pickups[offeredId] and d.orePickupId==offeredId and not offered.homing,'blocked pickup took priority through scenery')
+ workspace.Raycast=initialRay
+ -- Move before the cached obstructed ray expires; collection should respond now.
+ pl.Character:PivotTo(CFrame.new(hr.Position+Vector3.zAxis*1.5))
+ now+=C.Tick;pickupStep(C.Tick)
+ assert(not d.orePickupId and not d.oreDock and not offered.part:GetAttribute('CourierDocking'),'nearby player did not take over a reserved pickup')
+ for _=1,12 do now+=C.Tick;pickupStep(C.Tick) end
+ assert(not pickups[offeredId] and Pro.cargoUnits(data(p))==2 and Pro.droneCargoUnits(data(p),d.id)==0,'pickup did not credit the player exactly once')
+ run.cargo[material]-=1
+ pl.Character:PivotTo(CFrame.new(center+Vector3.new(20,3,0)))
+ wall:Destroy()
+end
 
 local drop,id=loose(center+Vector3.yAxis*.22)
 local extra,extraId=loose(center+Vector3.new(5,.22,0))

@@ -11,7 +11,8 @@ local DEPOT_ROUTE_RADIUS=54 -- Half the authored Crystal Run bed width.
 function M.selectorCenter(position,frame,size)
  local point=frame:PointToObjectSpace(Vector3.new(position.X,frame.Position.Y,position.Z))
  local halfX,halfZ=size.X*.5,size.Z*.5
- if math.abs(point.X)>halfX or math.abs(point.Z)>halfZ then return nil end
+ -- Native Vector3 round trips can put a legitimate bed-edge hit just outside.
+ if math.abs(point.X)>halfX+.002 or math.abs(point.Z)>halfZ+.002 then return nil end
  local maxX,maxZ=math.floor(halfX/SELECTOR_GRID),math.floor(halfZ/SELECTOR_GRID)
  local x=math.clamp(math.round(point.X/SELECTOR_GRID),-maxX,maxX)*SELECTOR_GRID
  local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID

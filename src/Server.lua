@@ -1105,9 +1105,10 @@ function scene.finishPress(press)
  scene.resetPress(press)
 end
 function scene.orePullClear(drop,from,target,targetModel)
- if drop.pullTarget~=targetModel or now>=(drop.queryAt or 0) then
+ if drop.pullTarget~=targetModel or now>=(drop.queryAt or 0)
+  or (from-drop.pullFrom).Magnitude>1.25 or (target-drop.pullTo).Magnitude>1.25 then
   drop.clearPath=los(from,target,targetModel,{pickupFolder,droneFolder},true,true)
-  drop.queryAt=now+.15;drop.pullTarget=targetModel
+  drop.queryAt=now+.15;drop.pullTarget=targetModel;drop.pullFrom=from;drop.pullTo=target
  end
  return drop.clearPath==true
 end
@@ -1300,7 +1301,18 @@ local function pickupStep(dt)
    local vacuumApproaching=false
    local relayReach=p.vacuumReach+12
    local reach=relay and math.max(relayReach,naturalReach) or naturalReach
-   if pressing then
+   local playerPull=hasSpace and not pressing and drop.raw and OreDrops.collectible(drop) and (target-from).Magnitude<=naturalReach
+    and scene.orePullClear(drop,from,target,hr.Parent)
+   if playerPull then
+    -- A reachable loose gem belongs to the player until a worker has
+    -- actually grabbed it. Release the approach before stepping either claim.
+    if docking then
+     courier.orePickupId=nil;courier.oreDock=nil;courier.oreYaw=nil;courier.pickupAt=nil
+     drop.courier=nil;docking=false
+     drop.part:SetAttribute('CourierDocking',nil)
+    end
+    reach=naturalReach
+   elseif pressing then
     target=scene.pressSocket(press,socket);reach=13
    elseif hasSpace and vacuum and vacuum.hp>0 and not vacuum.carrierId and not relay and not assignedToPress
     and not (drop.courier and drop.courier.orePickupId==id and drop.courier.hp>0 and drop.courier.model.Parent)
@@ -4020,17 +4032,26 @@ function scene.moveSquareWork(p,current,square)
  end
 end
 function scene.placeSquare(p,payload)
- if type(payload)~='table' or payload.runId~=data(p).run.id or not R.finite(payload.fieldId) or typeof(payload.position)~='Vector3' then return end
+ if type(payload)~='table' or payload.runId~=data(p).run.id or not R.finite(payload.fieldId) or typeof(payload.position)~='Vector3' then
+  commandReply(p.player,payload,'rejected','Field selection is unavailable.');return
+ end
  local field=patches[payload.fieldId]
- if not field or not field.cfg.SelectionOnly or activeAssault(p) then return end
+ if not field or not field.cfg.SelectionOnly then
+  commandReply(p.player,payload,'rejected','Select a spot on the mining bed.');return
+ end
+ if activeAssault(p) then
+  commandReply(p.player,payload,'rejected','Recall fighting drones before selecting an area.');return
+ end
  local position=payload.position
  if not R.finite(position.X) or not R.finite(position.Z) then return end
  local part=field.part
  local center=Mining.selectorCenter(position,part.CFrame,part.Size)
- if not center then return end
+ if not center then commandReply(p.player,payload,'rejected','Select a spot on the mining bed.');return end
  local hr=characterRoot(p)
  local square={field=field,center=center,half=Workshop.selectorWidth(data(p))*.5,placedAt=now}
- if not hr or not scene.squareInRange(hr.Position,square) then notice(p,'Move closer to select that area.');return end
+ if not hr or not scene.squareInRange(hr.Position,square) then
+  commandReply(p.player,payload,'rejected','Move closer to select that area.');return
+ end
  local leadId=payload.leadId
  local lead=type(leadId)=='string' and #leadId<=128 and resources[leadId]
  if lead and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
@@ -4046,14 +4067,16 @@ function scene.placeSquare(p,payload)
  end
  local current=p.miningSquare
  local samePin=current and current.field==field and current.half==square.half and (current.center-center).Magnitude==0
- if samePin and leadId~=nil and not square.focusId then return end
+ if samePin and leadId~=nil and not square.focusId then
+  commandReply(p.player,payload,'accepted');return
+ end
  -- This is a command to the fleet within a validated bed and walking range.
  -- Mining itself still checks the worker's contact path and target ownership.
  if samePin then
   current.leadId=square.leadId;current.pairId=square.pairId;current.focusId=square.focusId
   scene.prioritizeSquareApproach(p,current)
   scene.publishSquareFocus(p,current)
-  return
+  commandReply(p.player,payload,'accepted');return
  end
  scene.moveSquareWork(p,current,square)
  p.previousSquare=p.previousSquare or current
@@ -4063,6 +4086,7 @@ function scene.placeSquare(p,payload)
  p.player:SetAttribute('MA_SelectorField',field.id)
  p.player:SetAttribute('MA_SelectorWidth',square.half*2)
  p.player:SetAttribute('MA_Selector',center)
+ commandReply(p.player,payload,'accepted')
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end

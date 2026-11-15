@@ -1675,7 +1675,8 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
     and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5)) or 0 end
   end
  end
- RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins)
+ local click,flash=selectorView:flashState()
+ RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,click,flash)
  pickupView:update(dt,now)
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
@@ -1772,6 +1773,7 @@ connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:Ge
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
  local ok,state=pcall(Http.JSONDecode,Http,gui.Parent:GetAttribute('MA_CommandState') or '')
  if not ok or type(state)~='table' then return end
+ if selectorView:reply(state) and state.status~='rejected' then return end
  commandView:reply(state)
  soundscape:play(state.status=='rejected' and 'denied' or 'command')
  if state.status=='rejected' then notice.Text=state.reason or '';noticeUntil=os.clock()+2.2 end

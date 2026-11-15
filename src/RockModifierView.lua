@@ -22,30 +22,29 @@ function V.glow(mask)
  end
 end
 
-function V.attackOutlines(records,camera,now,steady)
- local nearest={}
- for _,r in pairs(records) do
-  if not camera or r.visual.broken or not r.view.Parent or r.view.Transparency>=1
-   or now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)>.57 then continue end
-  local distance=(r.view.Position-camera).Magnitude
-  if distance<105 then table.insert(nearest,{record=r,distance=distance}) end
- end
- table.sort(nearest,function(a,b) return a.distance<b.distance end)
- for i=1,math.min(10,#nearest) do nearest[i].record.outlineAt=now end
+function V.attackOutlines(records,_camera,now,steady,click,flash)
  for _,r in pairs(records) do
   local outline=r.rockOutline
-  if r.outlineAt~=now then
+  local visible=not r.visual.broken and r.view.Parent and r.view.Transparency<1
+   and (r.view.LocalTransparencyModifier or 0)<1
+  local attacked=visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
+  local selected=visible and click and r.source:GetAttribute('FieldId')==click.field
+   and Mining.selectorContains(click.point,click.width*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
+  if not attacked and not selected then
    if outline then outline:Destroy();r.rockOutline=nil end
   else
    if not outline then
-    outline=Instance.new('Highlight');outline.Name='AttackedRockOutline'
-    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.FillTransparency=1
-    outline.OutlineColor=r.baseColor:Lerp(white,.66);outline.Adornee=r.view
-    outline.Parent=r.view;r.rockOutline=outline;r.outlineStart=now
+    outline=Instance.new('Highlight');outline.Name='MiningRockFeedback'
+    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.Adornee=r.view
+    outline.OutlineColor=r.baseColor:Lerp(white,.66);outline.FillColor=Color3.new(1,1,1)
+    outline.Parent=r.view;r.rockOutline=outline
    end
-   local wave=steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)
-   outline.OutlineTransparency=.55-.48*wave
+   if attacked then r.outlineStart=r.outlineStart or now else r.outlineStart=nil end
+   local wave=attacked and (steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)) or 0
+   outline.OutlineTransparency=attacked and .50-.43*wave or 1
+   outline.FillTransparency=selected and 1-flash or 1
   end
+  if not attacked then r.outlineStart=nil end
  end
 end
 

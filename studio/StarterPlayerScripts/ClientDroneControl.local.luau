@@ -1180,7 +1180,8 @@ local DEPOT_ROUTE_RADIUS=54 -- Half the authored Crystal Run bed width.
 function M.selectorCenter(position,frame,size)
  local point=frame:PointToObjectSpace(Vector3.new(position.X,frame.Position.Y,position.Z))
  local halfX,halfZ=size.X*.5,size.Z*.5
- if math.abs(point.X)>halfX or math.abs(point.Z)>halfZ then return nil end
+ -- Native Vector3 round trips can put a legitimate bed-edge hit just outside.
+ if math.abs(point.X)>halfX+.002 or math.abs(point.Z)>halfZ+.002 then return nil end
  local maxX,maxZ=math.floor(halfX/SELECTOR_GRID),math.floor(halfZ/SELECTOR_GRID)
  local x=math.clamp(math.round(point.X/SELECTOR_GRID),-maxX,maxX)*SELECTOR_GRID
  local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
@@ -14129,30 +14130,29 @@ function V.glow(mask)
  end
 end
 
-function V.attackOutlines(records,camera,now,steady)
- local nearest={}
- for _,r in pairs(records) do
-  if not camera or r.visual.broken or not r.view.Parent or r.view.Transparency>=1
-   or now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)>.57 then continue end
-  local distance=(r.view.Position-camera).Magnitude
-  if distance<105 then table.insert(nearest,{record=r,distance=distance}) end
- end
- table.sort(nearest,function(a,b) return a.distance<b.distance end)
- for i=1,math.min(10,#nearest) do nearest[i].record.outlineAt=now end
+function V.attackOutlines(records,_camera,now,steady,click,flash)
  for _,r in pairs(records) do
   local outline=r.rockOutline
-  if r.outlineAt~=now then
+  local visible=not r.visual.broken and r.view.Parent and r.view.Transparency<1
+   and (r.view.LocalTransparencyModifier or 0)<1
+  local attacked=visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
+  local selected=visible and click and r.source:GetAttribute('FieldId')==click.field
+   and Mining.selectorContains(click.point,click.width*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
+  if not attacked and not selected then
    if outline then outline:Destroy();r.rockOutline=nil end
   else
    if not outline then
-    outline=Instance.new('Highlight');outline.Name='AttackedRockOutline'
-    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.FillTransparency=1
-    outline.OutlineColor=r.baseColor:Lerp(white,.66);outline.Adornee=r.view
-    outline.Parent=r.view;r.rockOutline=outline;r.outlineStart=now
+    outline=Instance.new('Highlight');outline.Name='MiningRockFeedback'
+    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.Adornee=r.view
+    outline.OutlineColor=r.baseColor:Lerp(white,.66);outline.FillColor=Color3.new(1,1,1)
+    outline.Parent=r.view;r.rockOutline=outline
    end
-   local wave=steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)
-   outline.OutlineTransparency=.55-.48*wave
+   if attacked then r.outlineStart=r.outlineStart or now else r.outlineStart=nil end
+   local wave=attacked and (steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)) or 0
+   outline.OutlineTransparency=attacked and .50-.43*wave or 1
+   outline.FillTransparency=selected and 1-flash or 1
   end
+  if not attacked then r.outlineStart=nil end
  end
 end
 
@@ -15438,7 +15438,11 @@ function V:update(dt,now)
  local used=0
  for _,id in ipairs(marked) do
   local r=records[id]
-  if visible and r and r.view.Parent and (r.source:GetAttribute('HP') or 0)>0 and used<24 then
+  -- The mining/selection renderer owns the silhouette in Crystal Run.
+  local zone=r and r.source.Parent
+  if visible and r and r.view.Parent and not r.rockOutline
+   and not (zone and zone.Parent and zone.Parent.Name=='CrystalRun')
+   and (r.source:GetAttribute('HP') or 0)>0 and used<24 then
    used+=1
    local h=self.pool[used]
    if not h then
@@ -15810,14 +15814,14 @@ local SelectorView = (function()
 local V={}
 V.__index=V
 local previewColor=Color3.fromRGB(234,245,255)
-local pendingColor=Color3.fromRGB(155,162,174)
 local activeColor=Color3.fromRGB(255,147,61)
 local clearColor=Color3.fromRGB(85,243,148)
-local riseTime,wallHeight=.68,10
-local revealFadeTime=.65
+local white=Color3.new(1,1,1)
+local riseTime,wallHeight=.32,10
+local wallHold,wallFadeTime,flashTime=.12,.46,.27
 local wallFade=NumberSequence.new({
- NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.30,.84),
- NumberSequenceKeypoint.new(.80,.49),NumberSequenceKeypoint.new(1,0),
+ NumberSequenceKeypoint.new(0,.62),NumberSequenceKeypoint.new(.36,.51),
+ NumberSequenceKeypoint.new(.80,.26),NumberSequenceKeypoint.new(1,0),
 })
 
 local function part(parent,name)
@@ -15869,7 +15873,7 @@ end
 local function fill(parent,name)
  local base=part(parent,name)
  local gui=surface(base,Enum.NormalId.Top,Vector2.new(8,8))
- local face=frame(gui);face.BackgroundColor3=previewColor
+ local face=frame(gui);face.BackgroundColor3=white
  return {base=base,gui=gui,face=face}
 end
 local function showFill(mark,point,width,opacity)
@@ -15892,7 +15896,21 @@ local function walls(parent,name)
    gradient.Rotation=90;gradient.Transparency=wallFade;gradient.Parent=f
    table.insert(faces,f)
   end
-  mark.sides[i]={part=plane,faces=faces}
+  local edge=part(folder,'WallParticleEdge')
+  local sparks=Instance.new('ParticleEmitter');sparks.Name='RisingEdgeSparks'
+  sparks.Texture='rbxasset://textures/particles/SquareParticle.png'
+  sparks.Enabled=false;sparks.Rate=0;sparks.LockedToPart=false
+  sparks.EmissionDirection=Enum.NormalId.Top;sparks.Shape=Enum.ParticleEmitterShape.Box
+  sparks.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+  sparks.LightEmission=.78;sparks.LightInfluence=0;sparks.Brightness=1.3
+  sparks.Lifetime=NumberRange.new(.68,1.24);sparks.Speed=NumberRange.new(4,10)
+  sparks.Drag=2;sparks.Acceleration=Vector3.yAxis*.8;sparks.SpreadAngle=Vector2.new(24,24)
+  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18,.08),
+   NumberSequenceKeypoint.new(.58,.13),NumberSequenceKeypoint.new(1,.035)})
+  sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),
+   NumberSequenceKeypoint.new(.32,.18),NumberSequenceKeypoint.new(1,1)})
+  sparks.Parent=edge
+  mark.sides[i]={part=plane,faces=faces,edge=edge,sparks=sparks}
  end
  return mark
 end
@@ -15904,30 +15922,26 @@ local function setVisibility(side,opacity)
   f.Parent.Enabled=opacity>0
  end
 end
-local function showWalls(mark,point,width,color,dt,instant,cameraPosition,reveal)
+local function showWalls(mark,point,width,color,dt,instant,cameraPosition,lowFlash,reduced)
  if not point then
   for _,side in ipairs(mark.sides) do setVisibility(side,0) end
-  mark.point=nil
   return
  end
- local moved=point~=mark.point
- if moved then mark.age=0 end
- if not moved then mark.age=math.min(riseTime+revealFadeTime,mark.age+dt) end
- local remaining=instant and 0 or 1-math.min(1,mark.age/riseTime)
- local height=.08+(wallHeight-.08)*math.sqrt(1-remaining^2)
+ local moved=point~=mark.point or width~=mark.width
+ if moved then mark.age=0;mark.emitted=false end
+ local age=mark.age
+ local remaining=instant and 0 or 1-math.clamp(age/riseTime,0,1)
+ local height=wallHeight*(1-.86*remaining^4)
  local sizeChanged=height~=mark.height or width~=mark.width
- -- The camera determines legibility. Close-up mining stays unobstructed,
- -- including the initial reveal; zooming out smoothly reveals the boundary.
  local distance=cameraPosition and (cameraPosition-point).Magnitude or 0
  local far=math.clamp((distance-42)/28,0,1)
- far=far*far*(3-2*far)
- local opacity=.53
- if reveal and mark.age<riseTime+revealFadeTime then
-  local t=math.clamp((mark.age-riseTime)/revealFadeTime,0,1)
-  opacity=.84+(opacity-.84)*t*t*(3-2*t)
- end
- opacity*=far
+ local idle=.33+.20*far
+ -- Hit full intensity, hold it, then fade linearly to the visible wall.
+ local flash=1-math.clamp((age-wallHold)/wallFadeTime,0,1)
+ local opacity=idle+((lowFlash and .60 or .94)-idle)*flash
  opacity=math.round(opacity*128)/128
+ local tint=color:Lerp(white,flash*(lowFlash and .12 or .38))
+ local emit=not reduced and not mark.emitted and age+dt>=.07
  for i,side in ipairs(mark.sides) do
   local plane=side.part
   if moved or sizeChanged then
@@ -15935,10 +15949,19 @@ local function showWalls(mark,point,width,color,dt,instant,cameraPosition,reveal
    plane.Size=Vector3.new(width,height,.02)
    plane.CFrame=sideFrame*CFrame.new(0,0,-width*.5)
   end
-  if color~=mark.color then for _,f in ipairs(side.faces) do f.BackgroundColor3=color end end
+  if tint~=mark.tint then for _,f in ipairs(side.faces) do f.BackgroundColor3=tint end end
   setVisibility(side,opacity)
+  if emit then
+   local edge=side.edge
+   edge.Size=Vector3.new(width,.10,.10)
+   edge.CFrame=CFrame.new(point+Vector3.yAxis*(wallHeight*.61))*CFrame.Angles(0,(i-1)*math.pi*.5,0)*CFrame.new(0,0,-width*.5)
+   side.sparks.Color=ColorSequence.new(white,color)
+   side.sparks:Emit(lowFlash and 5 or math.clamp(math.round(width*.37),8,16))
+  end
  end
- mark.point=point;mark.width=width;mark.height=height;mark.color=color
+ mark.emitted=mark.emitted or emit
+ mark.age=math.min(wallHold+wallFadeTime,age+dt)
+ mark.point=point;mark.width=width;mark.height=height;mark.tint=tint
 end
 
 function V.new(options)
@@ -15952,11 +15975,10 @@ function V:aim(ray)
  local hr=character and character:FindFirstChild('HumanoidRootPart')
  if not hr then return nil end
  local filter=RaycastParams.new();filter.FilterType=Enum.RaycastFilterType.Exclude
- filter.FilterDescendantsInstances={character,o.parent}
+ local ignore={character,o.parent}
+ local drones=o.world:FindFirstChild('Drones')
+ if drones then table.insert(ignore,drones) end
  local direction=ray.Direction*500
- local hit=workspace:Raycast(ray.Origin,direction,filter)
- if not hit then return nil end
- local part=hit.Instance
  local function bedFor(node)
   while node and node~=run do
    local zone=node.Parent
@@ -15964,30 +15986,42 @@ function V:aim(ray)
    node=zone
   end
  end
- local bed,rootPart=bedFor(part)
- local leadId=bed and rootPart:GetAttribute('ResourceId')
- if not bed or (part~=bed and not leadId) then
+ for _=1,12 do
+  filter.FilterDescendantsInstances=ignore
+  local hit=workspace:Raycast(ray.Origin,direction,filter)
+  if not hit then return nil end
+  local part=hit.Instance
+  local bed,rootPart=bedFor(part)
+  local leadId=bed and rootPart:GetAttribute('ResourceId')
+  if bed and (part==bed or leadId) then
+   local position=hit.Position
+   local top=bed.Position.Y+bed.Size.Y*.5
+   if leadId and ray.Direction.Y<-.001 then
+    position=ray.Origin+ray.Direction*((top-ray.Origin.Y)/ray.Direction.Y)
+   end
+   local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
+   local inRange=point and Mining.selectorInRange(hr.Position,point)
+   if leadId then
+    -- A shallow ray can put the floor projection off the bed, out of range,
+    -- or too far from the rock that was actually clicked.
+    local rockPosition=rootPart:GetAttribute('FullPosition') or hit.Position
+    local profile=o.profile()
+    local coversRock=point and profile and Mining.selectorContains(point,Workshop.selectorWidth(profile)*.5,rockPosition)
+    if not inRange or not coversRock then
+     local rockPoint=Mining.selectorCenter(rockPosition,bed.CFrame,bed.Size)
+     if rockPoint and (not point or Mining.selectorInRange(hr.Position,rockPoint)) then
+      point=rockPoint;inRange=Mining.selectorInRange(hr.Position,point)
+     end
+    end
+   end
+   if point then return point,bed:GetAttribute('FieldId'),leadId,inRange end
+   return nil
+  end
   if part.CanCollide then return nil end
-  filter.RespectCanCollide=true
-  hit=workspace:Raycast(ray.Origin,direction,filter)
-  part=hit and hit.Instance
-  bed,rootPart=bedFor(part)
-  leadId=bed and rootPart:GetAttribute('ResourceId')
-  if not bed or part~=bed and not leadId then return nil end
+  table.insert(ignore,part)
  end
- -- Use the cursor's footprint; a wide rock can hang beyond the bed or
- -- straddle the command-range boundary. Keep the rock only as a lead hint.
- local position=hit.Position
- local top=bed.Position.Y+bed.Size.Y*.5
- if leadId and ray.Direction.Y<-.001 then
-  position=ray.Origin+ray.Direction*((top-ray.Origin.Y)/ray.Direction.Y)
- end
- local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
- if not point and leadId then point=Mining.selectorCenter(rootPart:GetAttribute('FullPosition') or hit.Position,bed.CFrame,bed.Size) end
- if not point then return nil end
- local field=bed:GetAttribute('FieldId')
- return point,field,leadId,Mining.selectorInRange(hr.Position,point)
 end
+
 function V:canReachStarterPlot()
  local o=self.options
  local run=o.world.Map:FindFirstChild('CrystalRun')
@@ -16006,30 +16040,42 @@ end
 function V:commit(ray)
  local point,id,leadId,inRange=self:aim(ray)
  local profile=self.options.profile()
- if not point or not id or not profile then return false end
+ if not point or not id or not profile or not profile.run then return false end
  if not inRange then
   if self.options.notify then self.options.notify('Move closer to select that area.') end
   return true
  end
- self.flashPoint=point;self.flashAge=0
- self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id,leadId=leadId})
+ local requestId=game:GetService('HttpService'):GenerateGUID(false)
+ self.click={point=point,field=id,width=Workshop.selectorWidth(profile),at=os.clock(),requestId=requestId}
+ self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id,leadId=leadId,requestId=requestId})
  return true
+end
+function V:reply(state)
+ if not self.click or self.click.requestId~=state.requestId then return false end
+ if state.status=='rejected' then self.click=nil end
+ return true
+end
+function V:flashState()
+ local click=self.click
+ if not click or self.options.hidden() then return nil,0 end
+ local age=os.clock()-click.at
+ if age>=flashTime then return nil,0 end
+ local peak=self.options.player:GetAttribute('ReducedFlashing')==true and .34 or .78
+ return click,peak*(1-math.clamp((age-.045)/(flashTime-.045),0,1))
 end
 function V:showAim(dt,ray)
  local o=self.options
  local profile=o.profile()
  local visible=profile and not o.hidden()
  local pin=profile and not (o.hidePin or o.hidden)() and o.player:GetAttribute('MA_Selector') or nil
- local old=pin and o.player:GetAttribute('MA_SelectorPrevious') or nil
  if not self.pinned and profile and o.world.Map:FindFirstChild('CrystalRun') then
   self.pinned=walls(o.parent,'MiningSelector')
-  self.previous=walls(o.parent,'PreviousMiningSelector')
-  self.preview=fill(o.parent,'SelectorPreviewFill')
   self.flash=fill(o.parent,'SelectorClickFill')
+  self.aimEdge=outline(o.parent)
   self.activeEdge=outline(o.parent)
-  self.previousEdge=outline(o.parent)
  end
  if not self.pinned then return end
+ if not o.player:GetAttribute('MA_Selector') then self.pinned.point=nil end
  local width=profile and Workshop.selectorWidth(profile) or 0
  self.clock+=dt
  if not visible or not ray then self.aimPoint=nil;self.clock=.033
@@ -16038,29 +16084,16 @@ function V:showAim(dt,ray)
   local point,_,_,inRange=self:aim(ray)
   self.aimPoint=inRange and point or nil
  end
- self.aimWidth=width
- local point=self.aimPoint
- local transfer=old and o.player:GetAttribute('MA_SelectorTransition')
- local color=transfer and pendingColor or (o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor)
- -- Keep the already extended walls when the current pin becomes the old one.
- if old and old~=pin and self.pinned.point==old then self.pinned,self.previous=self.previous,self.pinned end
- local instant=o.reducedMotion()
+ local color=o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor
  local camera=workspace.CurrentCamera
- local position=camera and camera.CFrame.Position
- showWalls(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant,position,true)
- showWalls(self.previous,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
-  o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor,dt,instant or self.previous.point~=old,position)
- showOutline(self.activeEdge,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color)
- showOutline(self.previousEdge,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
-  o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor)
- local flash=visible and self.flashPoint or nil
- local age=self.flashAge or 0
- showFill(self.preview,point~=flash and point or nil,width,.20)
- local strength=(1-math.clamp(age/.27,0,1))^2
- local base=flash and point==flash and .20 or 0
- showFill(self.flash,flash,width,base+(.64-base)*strength)
- self.flashAge=age+dt
- if self.flashAge>=.27 then self.flashPoint=nil end
+ local instant=o.reducedMotion()
+ local lowFlash=o.player:GetAttribute('ReducedFlashing')==true
+ local pinWidth=o.player:GetAttribute('MA_SelectorWidth') or width
+ showWalls(self.pinned,pin,pinWidth,color,dt,instant,camera and camera.CFrame.Position,lowFlash,instant or BeamVFX.reduced())
+ showOutline(self.activeEdge,pin,pinWidth,color)
+ showOutline(self.aimEdge,self.aimPoint~=pin and self.aimPoint or nil,width,previewColor)
+ local flash,strength=self:flashState()
+ showFill(self.flash,flash and flash.point or nil,flash and flash.width or width,strength)
 end
 
 function V:heal(view,now)
@@ -16099,8 +16132,8 @@ function V:updateHealing(now)
 end
 function V:destroy()
  if self.pinned then
-  self.pinned.folder:Destroy();self.previous.folder:Destroy()
-  for _,mark in ipairs({self.preview,self.flash,self.activeEdge,self.previousEdge}) do mark.base:Destroy() end
+  self.pinned.folder:Destroy()
+  for _,mark in ipairs({self.flash,self.aimEdge,self.activeEdge}) do mark.base:Destroy() end
  end
  for _,cue in ipairs(self.cues) do cue.gui:Destroy() end
 end
@@ -17851,7 +17884,8 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
     and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5)) or 0 end
   end
  end
- RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins)
+ local click,flash=selectorView:flashState()
+ RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,click,flash)
  pickupView:update(dt,now)
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
@@ -17948,6 +17982,7 @@ connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:Ge
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
  local ok,state=pcall(Http.JSONDecode,Http,gui.Parent:GetAttribute('MA_CommandState') or '')
  if not ok or type(state)~='table' then return end
+ if selectorView:reply(state) and state.status~='rejected' then return end
  commandView:reply(state)
  soundscape:play(state.status=='rejected' and 'denied' or 'command')
  if state.status=='rejected' then notice.Text=state.reason or '';noticeUntil=os.clock()+2.2 end

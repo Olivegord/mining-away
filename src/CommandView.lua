@@ -86,7 +86,11 @@ function V:update(dt,now)
  local used=0
  for _,id in ipairs(marked) do
   local r=records[id]
-  if visible and r and r.view.Parent and (r.source:GetAttribute('HP') or 0)>0 and used<24 then
+  -- The mining/selection renderer owns the silhouette in Crystal Run.
+  local zone=r and r.source.Parent
+  if visible and r and r.view.Parent and not r.rockOutline
+   and not (zone and zone.Parent and zone.Parent.Name=='CrystalRun')
+   and (r.source:GetAttribute('HP') or 0)>0 and used<24 then
    used+=1
    local h=self.pool[used]
    if not h then
