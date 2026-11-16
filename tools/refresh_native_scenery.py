@@ -54,6 +54,9 @@ ARRIVAL_SCOPE = {
 CRYSTAL_WAYFINDER_SCOPE = {
     "scenery": (MAP + ".CrystalRun", {"DepotWayfinder"}, {"Folder", "Part", "SurfaceGui", "TextLabel"}),
 }
+CRYSTAL_OUTCROP_SCOPE = {
+    "scenery": (MAP + ".CrystalRun", {"SeamOutcrops"}, {"Folder", "Model", "UnionOperation"}),
+}
 LIMINAL_RESERVE_SCOPE = {
     "scenery": (MAP, {"LiminalReserve"}, {"Folder", "Part", "WedgePart", "Decal"}),
 }
@@ -498,6 +501,8 @@ def main():
                        help="Append only the spawn and biome approach accents")
     scope.add_argument("--crystal-wayfinder", dest="addition", action="store_const", const=CRYSTAL_WAYFINDER_SCOPE,
                        help="Append only the Crystal Run direction sign at the depot")
+    scope.add_argument("--crystal-outcrops", dest="addition", action="store_const", const=CRYSTAL_OUTCROP_SCOPE,
+                       help="Append only the authored rock masses between Crystal Run beds")
     scope.add_argument("--liminal-reserve", dest="addition", action="store_const", const=LIMINAL_RESERVE_SCOPE,
                        help="Append only the reserve enclosure, landscapes, oddities, and cloud blocks")
     scope.add_argument("--quarry-motifs", dest="addition", action="store_const", const=MOTIF_SCOPE,

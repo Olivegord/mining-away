@@ -42,40 +42,40 @@ local function fitsReference(x,z,halfX,halfZ,radius,occupied,gap)
  end
  return true
 end
--- Coordinates are authored in the 216 x 64 bed and scaled with the actual
--- part. Consecutive beds share one entrance. The clusters have distinct
--- shapes, and the branch bends through a different part of each bed.
-local entrances={-10,10,-17,14,-18,12}
+-- Small connected gaps leave more than one way through each 216 x 64 bed.
+-- Their entrances flank the authored rock masses at the shared boundaries.
+local entrances={{-48,37},{-60,24},{-22,78},{-70,26},{-53,58},{-22,69}}
+P.seamOutcrops={
+ {x=-19,halfX=22,halfZ=9},
+ {x=30,halfX=23,halfZ=10},
+ {x=-26,halfX=23,halfZ=10},
+ {x=1,halfX=23,halfZ=10},
+}
 local beds={
  {
-  walk={{-13,-18},{4,-4},{20,13}},
-  branch={{4,-4},{31,-2},{55,10},{65,32}},
-  clumps={{-87,-14,18,13,'boulder'},{-72,14,26,15},{-48,3,19,15},{-36,-17,18,10,'spire'},
-   {-21,20,18,10},{30,-19,19,9},{54,-18,19,11,'boulder'},{86,-3,16,20},{88,19,15,10,'spire'}},
+  gaps={{{-65,-15},{-47,3},{-63,20}},{{51,-17},{32,-3},{15,16}}},
+  clumps={{-88,-9,20,15,'boulder'},{-89,15,15,12},{-48,-21,14,9},{-28,-6,17,14},
+   {-12,9,19,11,'spire'},{3,-16,16,12,'spire'},{49,20,15,9},{46,1,12,12},{72,8,22,14,'boulder'},{88,-16,17,11}},
  },
  {
-  walk={{28,-18},{12,-8},{-14,8}},
-  branch={{12,-8},{-15,-9},{-37,-20},{-66,-32}},
-  clumps={{-87,4,19,23},{-80,-19,17,10,'spire'},{-60,16,21,14,'boulder'},{-45,-3,15,11},
-   {-29,-24,12,6},{13,15,18,14},{54,4,21,16,'spire'},{72,-17,24,10,'boulder'},{89,17,16,12}},
+  gaps={{{-72,-17},{-49,-5},{-35,13}},{{39,-18},{57,-6},{67,14}}},
+  clumps={{-88,8,19,18,'boulder'},{-59,20,13,10},{-40,-15,16,10},{-8,-11,21,12,'spire'},
+   {10,7,20,12,'boulder'},{-94,-18,13,8},{36,14,16,10},{35,-5,15,14},{65,-22,15,8},{92,-9,12,15,'spire'},{91,16,13,12}},
  },
  {
-  walk={{-29,-20},{-21,-5},{3,13}},
-  branch={{-21,-5},{-46,0},{-67,15},{-108,24}},
-  clumps={{-88,-7,16,20,'boulder'},{-65,-14,14,13},{-60,24,14,6},{-32,15,12,12,'spire'},
-   {4,-20,14,8},{41,-7,18,16,'boulder'},{58,16,21,13},{82,-14,17,10,'spire'},{93,10,11,18}},
+  gaps={{{-34,-17},{-17,-2},{-43,13}},{{90,-12},{63,5},{36,19}}},
+  clumps={{-89,-5,15,20,'boulder'},{-64,-17,17,10,'spire'},{-51,-4,12,12},{-25,19,13,9},
+   {-87,18,13,10},{5,3,17,17,'boulder'},{25,-15,19,10},{35,1,17,11},{51,-16,15,12},{67,20,16,9},{91,17,13,12,'spire'}},
  },
  {
-  walk={{29,-19},{12,-4},{-11,13}},
-  branch={{12,-4},{39,2},{62,3},{89,32}},
-  clumps={{-89,13,15,16,'spire'},{-76,-15,18,12},{-53,-2,17,20,'boulder'},{-27,-15,17,12},
-   {9,22,15,8},{37,18,18,11,'spire'},{55,-15,20,12},{82,-9,21,15,'boulder'},{96,11,10,10}},
+  gaps={{{-53,-17},{-70,-4},{-62,12}},{{40,-20},{18,0},{48,16}}},
+  clumps={{-90,-14,16,11,'boulder'},{-88,16,16,13},{-48,14,16,13},{-29,1,18,15,'spire'},
+   {0,-12,17,10,'spire'},{-11,14,11,11},{14,11,16,14},{62,-13,18,11},{82,4,21,15,'boulder'},{91,21,13,9}},
  },
  {
-  walk={{-22,-16},{-3,1},{29,13}},
-  branch={{-3,1},{13,-12},{44,-13},{72,-32}},
-  clumps={{-88,-13,16,14,'boulder'},{-72,12,23,17},{-49,-10,15,18,'spire'},{-21,19,16,10},
-   {9,-25,14,6},{17,21,14,10},{52,9,16,19,'spire'},{78,-4,24,16,'boulder'},{93,19,13,11}},
+  gaps={{{-71,-17},{-57,5},{-41,20}},{{38,-18},{55,1},{68,17}}},
+  clumps={{-89,0,17,20,'boulder'},{-70,20,14,9},{-33,-12,17,11,'spire'},{-31,7,14,13},
+   {-4,23,16,9},{17,9,17,14,'boulder'},{42,17,14,11},{80,12,14,13},{86,-13,17,12,'spire'}},
  },
 }
 local function addPath(segments,points,scaleX,scaleZ,halfWidth)
@@ -86,13 +86,21 @@ local function addPath(segments,points,scaleX,scaleZ,halfWidth)
  end
 end
 function P.crystalLayout(width,depth,zone)
- local spec=beds[zone] or beds[1]
+ zone=if beds[zone] then zone else 1
+ local spec=beds[zone]
  local scaleX,scaleZ=width/216,depth/64
- local layout={clumps={},landmarks={},paths={}}
- local walk={{entrances[zone] or entrances[1],-32},table.unpack(spec.walk)}
- table.insert(walk,{entrances[zone+1] or entrances[2],32})
- addPath(layout.paths,walk,scaleX,scaleZ,6)
- addPath(layout.paths,spec.branch,scaleX,scaleZ,4)
+ local layout={clumps={},landmarks={},paths={},ridges={}}
+ for side,bends in ipairs(spec.gaps) do
+  local route={{entrances[zone][side],-32},table.unpack(bends)}
+  table.insert(route,{entrances[zone+1][side],32})
+  addPath(layout.paths,route,scaleX,scaleZ,2.5)
+ end
+ for side=-1,1,2 do
+  local ridge=P.seamOutcrops[zone+(side-1)/2]
+  if ridge then
+   table.insert(layout.ridges,{x=ridge.x*scaleX,z=depth*.5*side,halfX=ridge.halfX*scaleX,halfZ=ridge.halfZ*scaleZ})
+  end
+ end
  for _,site in ipairs(spec.clumps) do
   local center={x=site[1]*scaleX,z=site[2]*scaleZ,wide=site[3]*scaleX,deep=site[4]*scaleZ,shape=site[5]}
   table.insert(layout.clumps,center)
@@ -101,6 +109,11 @@ function P.crystalLayout(width,depth,zone)
  return layout
 end
 function P.crystalPathClear(layout,x,z,radius)
+ for _,ridge in ipairs(layout.ridges) do
+  local dx=math.max(0,math.abs(x-ridge.x)-ridge.halfX)
+  local dz=math.max(0,math.abs(z-ridge.z)-ridge.halfZ)
+  if dx*dx+dz*dz<radius*radius then return false end
+ end
  for _,segment in ipairs(layout.paths) do
   local dx,dz=x-segment.x,z-segment.z
   local t=math.clamp((dx*segment.dx+dz*segment.dz)/segment.lengthSquared,0,1)
@@ -126,16 +139,17 @@ function P.sample(width: number,depth: number,radius: number,occupied,random,cle
   if minX>maxX or minZ>maxZ then return nil,0 end
  end
  local clumps={}
+ local shoulder=1.34
  if layout and not preferred then
   for _,center in ipairs(layout.clumps) do
-   if center.x+center.wide*1.22>=minX and center.x-center.wide*1.22<=maxX
-    and center.z+center.deep*1.22>=minZ and center.z-center.deep*1.22<=maxZ then
+   if center.x+center.wide*shoulder>=minX and center.x-center.wide*shoulder<=maxX
+    and center.z+center.deep*shoulder>=minZ and center.z-center.deep*shoulder<=maxZ then
     table.insert(clumps,center)
    end
   end
  end
  local first=#clumps>0 and math.min(#clumps,math.floor(random(0,#clumps))+1) or 1
- local attempts=preferred and 1 or (layout and 36 or P.MAX_ATTEMPTS)
+ local attempts=preferred and 1 or (layout and 42 or P.MAX_ATTEMPTS)
  for attempt=1,attempts do
   -- A grower's committed plan is rechecked exactly where it planted.
   local x,z
@@ -144,7 +158,7 @@ function P.sample(width: number,depth: number,radius: number,occupied,random,cle
   elseif #clumps>0 and (not bounds or attempt<=28) then
    local center=clumps[(first+attempt-2)%#clumps+1]
    local angle=random(0,math.pi*2)
-   local distance=if attempt<=26 then random(0,1) else random(0,1)^.74*1.22
+   local distance=if attempt<=30 then random(0,1) else random(0,1)^.74*shoulder
    x,z=center.x+math.cos(angle)*distance*center.wide,center.z+math.sin(angle)*distance*center.deep
   elseif not layout or bounds then
    x,z=random(minX,maxX),random(minZ,maxZ)

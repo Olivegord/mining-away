@@ -654,7 +654,8 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
    mineral.landmark=landmark and landmark.shape
    if scene.classicCrystal and scene.crystalCuts then
     local available=scene.crystalCuts.variants
-    local choices=CrystalCuts.mineralCuts[field.cfg.Material or field.cfg.Key] or available
+    local choices=landmark and CrystalCuts.landmarkCuts[landmark.shape]
+     or CrystalCuts.mineralCuts[field.cfg.Material or field.cfg.Key] or available
     local cut=choices[seed:NextInteger(1,#choices)]
     mineral.cut=if table.find(available,cut) then cut else available[seed:NextInteger(1,#available)]
    end

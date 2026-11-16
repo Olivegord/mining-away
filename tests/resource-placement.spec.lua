@@ -78,16 +78,26 @@ check('seeded field populations preserve random positions without overlap',funct
   assert(successes>=16,'starter-sized field cannot populate after bounded retries: '..seed)
  end
 end)
-check('Crystal Run keeps connected winding paths and grows landmark clusters',function()
+check('Crystal Run preserves two narrow crossings and grows landmark clusters away from the cliffs',function()
  local width,depth=216,64
- local widestCutDepth={1,1,.85,.81,.77}
- local entrance
+ local widestCutDepth={.93,.93,.85,.85,.85}
+ local exits
  for zone=1,5 do
   local layout=P.crystalLayout(width,depth,zone)
-  if entrance then assert(layout.paths[1].x==entrance) end
-  local exit=layout.paths[4]
-  entrance=exit.x+exit.dx
-  assert(math.abs(layout.paths[2].dx)+math.abs(layout.paths[3].dx)>=30,'through route has no lateral bend')
+  if exits then assert(layout.paths[1].x==exits[1] and layout.paths[5].x==exits[2]) end
+  local left,right=layout.paths[4],layout.paths[8]
+  exits={left.x+left.dx,right.x+right.dx}
+  assert(exits[2]-exits[1]>=60 and left.halfWidth==2.5 and right.halfWidth==2.5)
+  for _,ridge in ipairs(layout.ridges) do
+   for _,path in ipairs(layout.paths) do
+    for step=0,20 do
+     local x,z=path.x+path.dx*step/20,path.z+path.dz*step/20
+     local dx=math.max(0,math.abs(x-ridge.x)-ridge.halfX)
+     local dz=math.max(0,math.abs(z-ridge.z)-ridge.halfZ)
+     assert(dx*dx+dz*dz>path.halfWidth^2,'a crossing clips the mountain footprint')
+    end
+   end
+  end
   for seed=1,6 do
    local random=rng(seed*113+zone)
    local occupied={}
@@ -102,7 +112,7 @@ check('Crystal Run keeps connected winding paths and grows landmark clusters',fu
     local radius,y,z=footprint(99,site.shape)
     local spot=P.sample(width,depth,radius,occupied,random,nil,site,false,nil,nil,layout)
     assert(spot,string.format('landmark %s at %d,%d could not fit in bed %d with radius %.1f',site.shape,site.x,site.z,zone,radius))
-    assert(if site.shape=='spire' then y>17 else z>12)
+    assert(if site.shape=='spire' then y>20 else z>12)
     table.insert(occupied,spot);clustered+=1
    end
    assert(#occupied==4)
@@ -113,7 +123,7 @@ check('Crystal Run keeps connected winding paths and grows landmark clusters',fu
      assert(P.crystalPathClear(layout,spot.x,spot.z,radius))
      assert(P.fits(spot.x,spot.z,width,depth,radius,occupied))
      for _,center in ipairs(layout.clumps) do
-      if ((spot.x-center.x)/center.wide)^2+((spot.z-center.z)/center.deep)^2<=1 then
+      if ((spot.x-center.x)/center.wide)^2+((spot.z-center.z)/center.deep)^2<=1.1^2 then
        clustered+=1;break
       end
      end

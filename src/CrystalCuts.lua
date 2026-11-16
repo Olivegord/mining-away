@@ -3,18 +3,19 @@ local CrystalGeometry=require('./CrystalGeometry')
 local CrystalVeins=require('./CrystalVeins')
 local C={variants={'Needle','Crown','Spear','Oblique','Triad','Fan','Terrace','Outcrop'}}
 C.mineralCuts={
- Amber={'Crown','Terrace'},RunQuartz={'Needle','Spear'},Diamond={'Spear','Oblique'},
- Quartz={'Needle','Spear'},Ruby={'Crown','Terrace'},RunRuby={'Crown','Terrace'},
+ Amber={'Crown','Spear','Oblique'},RunQuartz={'Needle','Spear','Oblique'},Diamond={'Spear','Oblique'},
+ Quartz={'Needle','Spear'},Ruby={'Crown','Terrace'},RunRuby={'Crown','Oblique','Spear'},
  Cobalt={'Oblique','Spear'},RunCobalt={'Oblique','Spear'},
- Violet={'Triad','Fan'},RunViolet={'Triad','Fan'},
+ Violet={'Triad','Fan'},RunViolet={'Triad','Fan','Needle'},
  Emerald={'Outcrop','Needle'},RunEmerald={'Outcrop','Needle'},
 }
+C.landmarkCuts={spire={'Needle','Spear','Oblique'},boulder={'Oblique','Spear','Crown'}}
 C.inset=CrystalVeins.carve
 function C.fieldScales(large,spire,landmark)
- if landmark=='spire' then return 1.48,1.98 end
- if landmark=='boulder' then return 2.70,1.02 end
- local width=1.13+large*(spire and .15 or .38)
- local height=.70+large*(spire and .40 or .19)
+ if landmark=='spire' then return 1.58,2.23 end
+ if landmark=='boulder' then return 2.85,1.15 end
+ local width=1.17+large*(spire and .20 or .38)
+ local height=.82+large*(spire and .44 or .22)
  return width,height
 end
 function C.fieldSize(size,large,spire,landmark)

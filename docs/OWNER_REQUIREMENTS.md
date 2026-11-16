@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 15 — natural gaps and giant outcrops
+
+Keep the clustered rock direction. Break up the single wide, winding corridor so players find several smaller ways through the rocks and the beds look organic. Make the mineable clusters bigger and sharper. Add giant unmineable rock formations between the beds.
+
 ## November 15 — highest-health reinforcements and a two-second ground pull
 
 When helping on an occupied rock, drones choose the eligible rock with the most health left. The first workers still take weaker unclaimed rocks first, and helpers still join after the staggered delay.
