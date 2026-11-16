@@ -153,11 +153,6 @@ pickupView.cargoMount=function(droneId,pickupId)
  local mount=drone and drone.cargoMount
  if mount and mount.id==pickupId then return mount.frame end
 end
-pickupView.pressMount=function(droneId,slot)
- local drone=droneId and droneIndex[droneId]
- local socket=slot and DroneConfig.PressSockets[slot]
- if drone and socket then return drone.view:GetPivot():PointToWorldSpace(socket) end
-end
 local turretIndex={}
 local hiddenParts={}
 local pendingDroneSources={}
@@ -168,6 +163,15 @@ local toolView=nil
 local U=Interface
 local palette=U.palette
 local DroneConfig=require(RS:WaitForChild('Shared'):WaitForChild('DroneConfig'))
+pickupView.pressMount=function(droneId,slot)
+ local drone=droneId and droneIndex[tostring(droneId)]
+ local socket=slot and DroneConfig.PressSockets[slot]
+ if not drone or not socket then return end
+ local seat=drone.view:GetPivot():PointToWorldSpace(socket)
+ local port=drone.view:FindFirstChild('PressSocket'..slot)
+ local winch=port and port.CFrame:PointToWorldSpace(Vector3.new(-port.Size.X*.5,0,0))
+ return seat,winch
+end
 local TacticalHUD=require(RS.Shared:WaitForChild('TacticalHUD'))
 local colors={Blue=Color3.fromRGB(99,198,246),Red=Color3.fromRGB(243,117,112),Green=Color3.fromRGB(122,219,163),Dart=Color3.fromRGB(87,220,255),Striker=Color3.fromRGB(255,210,86),Medic=Color3.fromRGB(99,255,164),Charger=Color3.fromRGB(255,112,72)}
 for name,definition in pairs(DroneConfig.Types) do colors[name]=definition.Color end
@@ -1463,7 +1467,14 @@ local function renderDrone(d,dt,now)
   if resting then d.ramielFiringShot=nil;d.ramielFiringPose=nil end
   d.ramielResting=resting
  end
- if s:GetAttribute('Role')=='Compactor' then
+ if role=='Compactor' then
+  local oreClock=now-PickupMotion.DELAY
+  local grip=s:GetAttribute('PressGripAt') or 0
+  if grip>0 and oreClock>=grip and oreClock-grip<.24 and d.pressGripAt~=grip then
+   d.pressGripAt=grip
+   soundscape:play('parcel_latch',d.emitter.Position,{pitch=.74,level=.82})
+   cameraBeat('CompactorGrip',d.emitter.Position,now)
+  end
   local at=s:GetAttribute('PressAt') or 0
   if at>0 and now>=at+Workshop.PRESS_CONTACT and now-at<Workshop.PRESS_CONTACT+.18 and d.pressSoundAt~=at then
    d.pressSoundAt=at;soundscape:play('metal_land',d.emitter.Position,{pitch=.84,level=.68})
@@ -1471,9 +1482,13 @@ local function renderDrone(d,dt,now)
    presentation.work:burst(d.emitter.Position-Vector3.yAxis*.48,Vector3.yAxis,Color3.fromRGB(255,198,118),12,now)
   end
   local eject=s:GetAttribute('PressEjectAt') or 0
-  if eject>0 and now>=eject and now-eject<.23 and d.pressEjectAt~=eject then
-   d.pressEjectAt=eject;soundscape:play('parcel_latch',d.emitter.Position,{pitch=1.12,level=.75})
-   presentation.work:burst(d.emitter.Position,Vector3.yAxis,Color3.fromRGB(255,228,164),7,now)
+  if eject>0 and oreClock>=eject and oreClock-eject<.25 and d.pressEjectAt~=eject then
+   d.pressEjectAt=eject
+   local outlet=s:GetAttribute('PressEjectPosition') or d.emitter.Position
+   local direction=s:GetAttribute('PressEjectDirection') or Vector3.yAxis
+   soundscape:play('parcel_latch',outlet,{pitch=1.12,level=.8})
+   cameraBeat('CompactorEject',outlet,now)
+   presentation.work:burst(outlet,(direction+Vector3.yAxis*.65).Unit,Color3.fromRGB(255,228,164),12,now)
   end
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0

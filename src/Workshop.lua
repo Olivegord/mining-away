@@ -188,11 +188,15 @@ W.COMPACTOR_REACH=22
 W.COMPACTOR_PAIR_WINDOW=6
 W.COMPACTOR_ARRIVAL_TIME=8
 W.GRAPPLE_MARK=.28
-W.GRAPPLE_CAST=.16
-W.GRAPPLE_REEL=.56
+W.GRAPPLE_CAST=.24
+W.GRAPPLE_REEL=.66
 W.PRESS_DURATION=2.2
 W.PRESS_CONTACT=.43
 W.PRESS_RECOVER=.38
+function W.grapplePull(origin,socket,progress)
+ local t=math.clamp(progress,0,1)
+ return origin:Lerp(socket,t*t*(3-2*t))+Vector3.new(0,math.sin(t*math.pi)*.5,0)
+end
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
 -- New physical cargo occupies one slot per object. Keep legacy mineral keys
 -- unchanged so existing bags and in-flight Emptier manifests retain value.

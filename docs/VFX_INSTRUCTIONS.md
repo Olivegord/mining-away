@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — two continuous grapples and a visible pickup outline
+
+Use a separate cable from each Compactor winch to a claw on its own rock. Keep both cables drawn through the buffered reel and remove them at seating. Add screen shake when the claws latch, the jaws press and the larger gem ejects. Use the actual ejection point for the burst. Temporarily render highlighted gem shells opaque so the native white or amber outline draws around their faceted shape.
+
 ## November 15 — Compactor grapples and the rapid Needler
 
 The Compactor reaches clear space before marking the pair. Two cables cast together and reel the real drops in. When the merge bar fills, eject the larger gem in its normal rising and falling arc, with existing trailing particles and landing effects. Needler fires four times as often with smaller hits, recoil and camera beats. Keep Ballcaster's slower release and heavier contact. The selected plot floor stays white; status color belongs on the edges.

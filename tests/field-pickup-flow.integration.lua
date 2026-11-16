@@ -423,6 +423,47 @@ do
 end
 print('PASS Compactor gets first chance at fresh ore while E stays usable, flies to distant pairs, and releases unpaired rocks for sale')
 
+do
+ local press=assert(p.compactor)
+ local spot=p.miningSquare.center+Vector3.yAxis*.22
+ local big,massive,titan=Mining.ROCK_MODIFIERS.Big,Mining.ROCK_MODIFIERS.Massive,Mining.ROCK_MODIFIERS.Titan
+ press.pos=spot+Vector3.new(0,6,-8);press.thinkUntil=now+1.0
+ local first,firstId=loose(spot-Vector3.xAxis*3)
+ local second=loose(spot+Vector3.xAxis*3)
+ first.age=10;second.age=10
+ pickupStep(C.Tick)
+ assert(first.pressCarrier==press and second.pressCarrier==press and not press.pressJob.castAt,
+  'the thinking drone failed to claim its pair privately')
+ assert(not first.part:GetAttribute('PressMarked') and not scene.emptierCanCollect(p,first,firstId,hr))
+ local middleA=loose(spot-Vector3.xAxis*4,big)
+ local middleB=loose(spot+Vector3.xAxis*4,big)
+ local largeA,largeId=loose(spot-Vector3.xAxis*7,massive)
+ largeA.age=22;largeA.firstLandedAge=.5
+ assert(not scene.emptierCanCollect(p,largeA,largeId,hr),'an unmatched Massive rock was sold before a pair could form')
+ now+=.2;pickupStep(C.Tick)
+ assert(press.pressJob.tier==2 and middleA.pressCarrier==press and middleB.pressCarrier==press and not first.pressCarrier)
+ local largeB=loose(spot+Vector3.xAxis*7,massive)
+ now+=.2;pickupStep(C.Tick)
+ assert(press.pressJob.tier==3 and largeA.pressCarrier==press and largeB.pressCarrier==press
+  and not middleA.pressCarrier and not press.pressJob.castAt,'a larger pair could not replace the smaller claim while thinking')
+ pl.Character:PivotTo(CFrame.new(Vector3.new(largeA.x,largeA.y+2,largeA.z)))
+ scene.orePromptAt=nil;pickupStep(C.Tick)
+ assert(pl:GetAttribute('MA_OrePickup')==largeId,'the private mark blocked the player pickup prompt')
+ scene.requestOrePickup(p,largeId)
+ assert(largeA.playerPickup and not press.pressJob and not largeB.pressCarrier,
+  'manual pickup should release the untouched partner before casting')
+ for id,drop in pairs(pickups) do drop.part:Destroy();pickups[id]=nil end
+ local _,hugeId=loose(spot,titan)
+ local small,smallId=loose(spot+Vector3.xAxis*6)
+ small.age=10
+ now+=1.6
+ d.pos=spot+Vector3.yAxis*6;d.oreDock=nil;d.orePickupId=nil;p.nextEmptierPlan=nil
+ scene.assignEmptierPickups(p)
+ assert(d.orePickupId==smallId and d.orePickupId~=hugeId,'the Emptier chose nearer Titan ore over smaller ore')
+ for id,drop in pairs(pickups) do drop.part:Destroy();pickups[id]=nil end
+end
+print('PASS private thinking claims, upgrades to the largest pair, manual override and smaller Emptier priority')
+
 field.center=bed.Position;field.model=zone;field.color=bed.Color
 field.cfg.AlwaysUnlocked=true;field.cfg.Key='Quartz'
 field.cfg.Value=1;field.cfg.Hardness=1;field.cfg.Turrets=0;field.cfg.ReferenceCrystals=true

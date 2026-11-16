@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 15 — rendered pickup outline and two visible grapples
+
+The pickup highlight must visibly outline the rock in play. Show only one indicator at a time. Display battery only while mining, and remove the spinner background. The Compactor must cast a separate grapple for each rock and use screen shake. Reserve its pair while it thinks, favor the larger matching rocks, and have Emptiers choose smaller rocks first.
+
 ## November 15 — Compactor reliability, battery bars, and pickup highlight
 
 The Compactor did nothing in the owner's Play session. Give it a reliable opportunity to find matching loose rocks before Emptiers take them. Guns use the same real battery display as laser drones. Use thick rectangular bars and square spinner elements. Show the spinner during useful work transitions, including Recall. Put a visible Roblox Highlight on the exact loose rock offered for pickup.

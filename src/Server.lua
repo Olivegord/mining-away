@@ -1135,11 +1135,13 @@ function scene.resetPress(press,restore)
     drop.x,drop.y,drop.z=origin.X,origin.Y,origin.Z
     drop.vx,drop.vy,drop.vz=0,0,0
     drop.part:SetAttribute('PressSocket',nil);drop.part:SetAttribute('PressMarked',nil)
-    drop.part:SetAttribute('PressDrone',nil);drop.part:SetAttribute('PressCastAt',nil);drop.part:SetAttribute('PressSlot',nil)
+    drop.part:SetAttribute('PressCastAt',nil);drop.part:SetAttribute('PressDrone',nil)
+    drop.part:SetAttribute('PressSlot',nil);drop.part:SetAttribute('PressOrigin',nil)
     scene.snapshotOrePickup(drop)
    end
   end
  end
+ if restore and job.castAt then press.model:SetAttribute('PressGripAt',nil) end
  press.pressJob=nil
 end
 function scene.finishPress(press,drops)
@@ -1158,6 +1160,8 @@ function scene.finishPress(press,drops)
   drop.part.Transparency=1;Debris:AddItem(drop.part,Workshop.PRESS_CONTACT+.22);pickups[id]=nil
  end
  press.pressUntil=now+Workshop.PRESS_RECOVER
+ press.model:SetAttribute('PressEjectPosition',from)
+ press.model:SetAttribute('PressEjectDirection',job.direction)
  press.model:SetAttribute('PressEjectAt',now)
  scene.resetPress(press,false)
 end
@@ -1214,12 +1218,15 @@ end
 function scene.pressPairingWindow(p,drop,position)
  local press=p.compactor
  local square=p.miningSquare
- return press and press.hp>0 and not press.carrierId and not press.pressJob and square
+ if not press or press.hp<=0 or press.carrierId or not square or not scene.pressCandidate(square,drop,position) then return false end
+ -- Hold Big and Massive ore for the next matching input while this pin is active.
+ -- Plain ore gets a short chance to pair and can then move on to the Emptiers.
+ if Mining.sizeTier(drop.modifiers)>1 then return true end
+ return not press.pressJob and now>=(drop.pressBlockedUntil or 0)
   and drop.age-(drop.firstLandedAge or 0)<Workshop.COMPACTOR_PAIR_WINDOW
-  and now>=(drop.pressBlockedUntil or 0) and scene.pressCandidate(square,drop,position)
 end
 function scene.planPress(p,press,candidates)
- press.pressWaiting=#candidates>0
+ press.pressWaiting=not press.pressJob and #candidates>0
  table.sort(candidates,function(a,b)
   if a.tier~=b.tier then return a.tier>b.tier end
   if a.distance~=b.distance then return a.distance<b.distance end
@@ -1236,9 +1243,12 @@ function scene.planPress(p,press,candidates)
    if probes>24 then return end
    local position,yaw,direction,floor=scene.pressClearing(press,p.miningSquare,a,b,p.player.Character)
    if position then
+    -- A better pair can take over any claim before the visible cast begins.
+    scene.resetPress(press,true)
     press.pressJob={ids={a.id,b.id},origins={a.position,b.position},square=p.miningSquare,
-     position=position,yaw=yaw,direction=direction,floor=floor,arriveBy=now+Workshop.COMPACTOR_ARRIVAL_TIME,
-     modifiers=Mining.nextSizeMask(a.drop.modifiers,b.drop.modifiers)}
+     position=position,yaw=yaw,direction=direction,floor=floor,
+     arriveBy=math.max(now,press.thinkUntil or 0)+Workshop.COMPACTOR_ARRIVAL_TIME,
+     tier=a.tier,modifiers=Mining.nextSizeMask(a.drop.modifiers,b.drop.modifiers)}
     press.pressWaiting=false
     for _,candidate in ipairs({a,b}) do
      local drop=candidate.drop
@@ -1260,7 +1270,7 @@ end
 function scene.stepPress(p,press)
  local job=press.pressJob
  local drops={pickups[job.ids[1]],pickups[job.ids[2]]}
- if press.hp<=0 or not characterRoot(p) or (p.miningSquare~=job.square and not job.startedAt)
+ if press.hp<=0 or press.carrierId or not characterRoot(p) or (p.miningSquare~=job.square and not job.startedAt)
   or (not job.castAt and now>job.arriveBy) then scene.resetPress(press,true);return end
  for slot=1,2 do
   local drop=drops[slot]
@@ -1273,7 +1283,7 @@ function scene.stepPress(p,press)
   scene.resetPress(press,true);return
  end
  if not job.castAt then
-  if (press.pos-job.position).Magnitude>.8 then return end
+  if now<(press.thinkUntil or 0) or (press.pos-job.position).Magnitude>.8 then return end
   local ignore={pickupFolder,droneFolder,p.player.Character}
   for slot=1,2 do
    if not los(job.origins[slot],scene.pressSocket(job.position,job.yaw,slot),nil,ignore,true) then
@@ -1284,8 +1294,10 @@ function scene.stepPress(p,press)
   for slot,drop in ipairs(drops) do
    drop.pressMarked=true
    drop.part:SetAttribute('PressMarked',true);drop.part:SetAttribute('PressDrone',press.id)
-   drop.part:SetAttribute('PressSlot',slot);drop.part:SetAttribute('PressCastAt',job.castAt)
+   drop.part:SetAttribute('PressSlot',slot);drop.part:SetAttribute('PressOrigin',job.origins[slot])
+   drop.part:SetAttribute('PressCastAt',job.castAt)
   end
+  press.model:SetAttribute('PressGripAt',job.castAt+Workshop.GRAPPLE_CAST)
  end
  if job.startedAt then
   if now>=job.finishAt then scene.finishPress(press,drops) end
@@ -1294,15 +1306,14 @@ function scene.stepPress(p,press)
  local t=math.clamp((now-job.castAt-Workshop.GRAPPLE_CAST)/Workshop.GRAPPLE_REEL,0,1)
  if t<=0 then return end
  for slot,drop in ipairs(drops) do
-  local t1=t*t*(3-2*t)
   local target=scene.pressSocket(job.position,job.yaw,slot)
-  local position=job.origins[slot]:Lerp(target,t1)+Vector3.yAxis*(math.sin(t*math.pi)*.5)
+  local position=Workshop.grapplePull(job.origins[slot],target,t)
   drop.x,drop.y,drop.z=position.X,position.Y,position.Z
   drop.vx,drop.vy,drop.vz=0,0,0;drop.homing=t<1;drop.dronePull=t<1
   if t>=1 then
    drop.pressSocket=slot;drop.pressMarked=nil
    drop.part:SetAttribute('PressSocket',slot);drop.part:SetAttribute('PressMarked',nil)
-   drop.part:SetAttribute('PressDrone',nil);drop.part:SetAttribute('PressCastAt',nil);drop.part:SetAttribute('PressSlot',nil)
+   -- Keep the cast receipt for clients playing the buffered motion or joining mid-reel.
   end
   if now>=(drop.snapshotAt or 0) or t>=1 then scene.snapshotOrePickup(drop) end
  end
@@ -1335,8 +1346,9 @@ function scene.vacuumApproach(drop,from,hr)
  return drop.vacuumGoal
 end
 function scene.playerCanPickOre(p,drop,id,hr,from,reach)
+ local job=drop.pressCarrier and drop.pressCarrier.pressJob
  return drop.raw and drop.owner==p.player.UserId and drop.runId==data(p).run.id
-  and drop.part.Parent and drop.units>0 and not drop.pressCarrier
+  and drop.part.Parent and drop.units>0 and not (job and job.castAt)
   and not (drop.homing and drop.dronePull) and OreDrops.collectible(drop)
   and now>=(drop.launchAt or 0) and not scene.oreExpired(drop,now)
   and (hr.Position-from).Magnitude<=reach and scene.orePullClear(drop,from,hr.Position,hr.Parent)
@@ -1351,6 +1363,7 @@ function scene.requestOrePickup(p,id)
  local reach=(p.cargoReach or OreDrops.CARGO_REACH)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
  drop.queryAt=0
  if not scene.playerCanPickOre(p,drop,id,hr,from,reach) then return end
+ if drop.pressCarrier then scene.resetPress(drop.pressCarrier,true) end
  drop.playerPickup=true
  p.player:SetAttribute('MA_OrePickup',nil)
  local courier=drop.courier
@@ -1359,6 +1372,11 @@ function scene.requestOrePickup(p,id)
   drop.part:SetAttribute('CourierDocking',nil)
  end
  drop.courier=nil
+end
+function scene.offerOrePickup(p,id,distance)
+ if distance<p.orePromptDistance or distance==p.orePromptDistance and id<p.orePromptId then
+  p.orePromptId=id;p.orePromptDistance=distance
+ end
 end
 local function pickupStep(dt)
  local activePresses={}
@@ -1373,10 +1391,11 @@ local function pickupStep(dt)
   end
   local press=p.compactor
   if not press then continue end
-  if press.pressJob then scene.stepPress(p,press)
-  elseif not p.miningSquare or press.hp<=0 or press.carrierId or not healthy(p) or not characterRoot(p) then
+  if not p.miningSquare or press.hp<=0 or press.carrierId or not healthy(p) or not characterRoot(p) then
    press.pressWaiting=false
-  elseif now>=math.max(press.thinkUntil or 0,press.pressUntil or 0,press.pressSearchAt or 0) then
+  elseif not (press.pressJob and (press.pressJob.castAt or press.pressJob.tier>=3))
+   and now>=math.max(press.pressUntil or 0,press.pressSearchAt or 0) then
+   -- Reserve the best available pair while the spinner is still visible.
    press.pressSearchAt=now+.18
    activePresses[press.owner]={}
   end
@@ -1391,9 +1410,10 @@ local function pickupStep(dt)
     or now<(drop.relayUntil or 0) or (drop.courier and drop.courier.oreDock)
     or drop.runId~=data(p).run.id then continue end
    local position=Vector3.new(drop.x,drop.y,drop.z)
-   if scene.pressCandidate(p.miningSquare,drop,position) then
+   local tier=Mining.sizeTier(drop.modifiers)
+   if scene.pressCandidate(p.miningSquare,drop,position) and (not p.compactor.pressJob or tier>p.compactor.pressJob.tier) then
     local offset=p.compactor.pos-position
-    table.insert(candidates,{id=id,drop=drop,tier=Mining.sizeTier(drop.modifiers),position=position,
+    table.insert(candidates,{id=id,drop=drop,tier=tier,position=position,
      distance=offset.X^2+offset.Z^2})
    end
   end
@@ -1401,12 +1421,26 @@ local function pickupStep(dt)
    local p=profiles[owner];scene.planPress(p,p.compactor,candidates)
   end
  end
+ for _,p in pairs(profiles) do
+  local press=p.compactor
+  if press and press.pressJob then scene.stepPress(p,press) end
+ end
  for id,drop in pairs(pickups) do
   local p=profiles[drop.owner]
   if p and drop.pressCarrier and drop.pressCarrier~=p.compactor then scene.resetPress(drop.pressCarrier,true) end
   if not p or p.leaving or data(p).run.id~=drop.runId or scene.oreExpired(drop,now) then
    drop.part:Destroy();pickups[id]=nil;if p then p.publishDirty=true end
-  elseif healthy(p) and not drop.pressCarrier and now>=(drop.launchAt or 0) then
+  elseif healthy(p) and drop.pressCarrier then
+   if updatePrompt then
+    local hr=characterRoot(p)
+    local from=Vector3.new(drop.x,drop.y,drop.z)
+    local reach=(p.cargoReach or OreDrops.CARGO_REACH)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
+    if hr and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
+     and scene.playerCanPickOre(p,drop,id,hr,from,reach) then
+     scene.offerOrePickup(p,id,(hr.Position-from).Magnitude)
+    end
+   end
+  elseif healthy(p) and now>=(drop.launchAt or 0) then
    -- A chip can roll off a raised ore bed. Sample the real map floor only
    -- outside its original footprint, at bounded intervals while moving.
    if drop.fieldPart and (not drop.arc or drop.arcEnded) and now>=(drop.floorQueryAt or 0) then
@@ -1459,10 +1493,7 @@ local function pickupStep(dt)
    local playerPull=drop.playerPickup and withinReach
    if drop.playerPickup and not playerPull then drop.playerPickup=nil end
    if updatePrompt and withinReach and not playerPull then
-    local distance=(target-from).Magnitude
-    if distance<p.orePromptDistance or distance==p.orePromptDistance and id<p.orePromptId then
-     p.orePromptId=id;p.orePromptDistance=distance
-    end
+    scene.offerOrePickup(p,id,(target-from).Magnitude)
    end
    if playerPull then
     reach=naturalReach
@@ -3132,15 +3163,16 @@ function scene.assignEmptierPickups(p)
   end
  end
  for _,d in ipairs(available) do
-  local best,bestDistance
+  local best,bestSize,bestDistance
   local space=capacity-Pro.droneCargoUnits(profile,d.id)
   for id,drop in pairs(pickups) do
    if reserved[id] or drop.units>space or not scene.emptierCanCollect(p,drop,id,hr)
     or (d.oreBlockedId==id and now<(d.pickupRetryAt or 0)) then continue end
    local position=Vector3.new(drop.x,drop.y,drop.z)
+   local size=Mining.sizeTier(drop.modifiers)
    local distance=(d.pos-position).Magnitude
-   if not best or distance<bestDistance or distance==bestDistance and id<best then
-    best,bestDistance=id,distance
+   if not best or size<bestSize or size==bestSize and (distance<bestDistance or distance==bestDistance and id<best) then
+    best,bestSize,bestDistance=id,size,distance
    end
   end
   if best then d.orePickupId=best;d.pickupAt=nil;d.oreDock=nil;d.oreYaw=nil;reserved[best]=true;pickups[best].courier=d end
@@ -4298,6 +4330,8 @@ function scene.placeSquare(p,payload)
   if DroneRoles.isWorker(d.role) then
    if d.target or d.lingerUntil or d.breaker then scene.releaseSquareApproach(d) end
    d.field=nil;d.autoField=nil;d.squareSearchAt=nil
+  elseif d.role=='Compactor' then
+   d.pressSearchAt=nil
   elseif d.role=='Courier' and d.orePickupId and not d.oreDock then
    local drop=pickups[d.orePickupId]
    if drop and drop.courier==d then drop.courier=nil end

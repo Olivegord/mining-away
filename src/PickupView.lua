@@ -181,19 +181,87 @@ local function sample(r,source,now)
   seated=source:GetAttribute('PressSocket')~=nil})
  while #r.samples>5 do table.remove(r.samples,1) end
 end
+local function grapplePart(kind,name,size,color,parent)
+ local part=Instance.new(kind);part.Name=name;part.Size=size;part.Color=color
+ part.Material=Enum.Material.Metal;part.Anchored=true;part.CanCollide=false
+ part.CanTouch=false;part.CanQuery=false;part.CastShadow=false;part.Parent=parent
+ return part
+end
 local function newGrapple(view)
  local root=Instance.new('Folder');root.Name='CompactorGrapple';root.Parent=view
- local a=Instance.new('Attachment');a.Name='Winch';a.Parent=view
- local head=Instance.new('Part');head.Name='GrappleHead';head.Shape=Enum.PartType.Ball
- head.Size=Vector3.new(.21,.28,.21);head.Material=Enum.Material.Metal
- head.Color=Color3.fromRGB(253,202,117);head.Anchored=true;head.CanCollide=false
- head.CanTouch=false;head.CanQuery=false;head.CastShadow=false;head.Parent=root
- local b=Instance.new('Attachment');b.Parent=head
+ local brass=Color3.fromRGB(255,206,121)
+ local winch=grapplePart('Part','Winch',Vector3.one*.05,brass,root);winch.Transparency=1
+ local head=grapplePart('Part','GrappleHead',Vector3.new(.26,.25,.42),brass,root)
+ local jaws={}
+ for i=1,2 do jaws[i]=grapplePart('WedgePart','Jaw',Vector3.new(.13,.21,.30),brass,root) end
+ local a=Instance.new('Attachment');a.Parent=winch
+ local b=Instance.new('Attachment');b.Position=Vector3.new(0,0,.16);b.Parent=head
  local line=Instance.new('Beam');line.Name='GrappleCable';line.Attachment0=a;line.Attachment1=b
- line.FaceCamera=true;line.Width0=.072;line.Width1=.041;line.LightEmission=.48
- line.Color=ColorSequence.new(Color3.fromRGB(166,134,96),Color3.fromRGB(255,210,133));line.Parent=root
- root.Destroying:Once(function() a:Destroy() end)
- return {root=root,a=a,head=head}
+ line.FaceCamera=true;line.Width0=.115;line.Width1=.074;line.LightEmission=.56
+ line.Color=ColorSequence.new(Color3.fromRGB(202,168,104),brass);line.Parent=root
+ return {root=root,winch=winch,head=head,jaws=jaws}
+end
+local function clearGrapple(r)
+ if r.grapple then r.grapple.root:Destroy();r.grapple=nil end
+end
+local function drawGrapple(self,r,source,displayAt,distance)
+ local cast=source:GetAttribute('PressCastAt')
+ local origin=source:GetAttribute('PressOrigin')
+ if not cast or typeof(origin)~='Vector3' then r.pressVisual=nil;clearGrapple(r);return end
+ local age=displayAt-cast
+ if not r.pressVisual or r.pressVisual.cast~=cast then
+  local start=r.view.CFrame
+  if age>=Workshop.GRAPPLE_CAST then
+   -- The rest pose may have been missed by a joining observer.
+   local contact=origin+Vector3.yAxis*(r.size.Y*.45+(r.physical and 1.52 or 1.04))
+   start=CFrame.new(contact)*start.Rotation
+  end
+  r.pressVisual={cast=cast,start=start}
+ elseif age<0 then r.pressVisual.start=r.view.CFrame end
+ local mount,winch
+ if self.pressMount then
+  mount,winch=self.pressMount(source:GetAttribute('PressDrone'),source:GetAttribute('PressSlot'))
+ end
+ if not mount or age<0 then clearGrapple(r);return end
+ local start=r.pressVisual.start
+ local reel=(age-Workshop.GRAPPLE_CAST)/Workshop.GRAPPLE_REEL
+ local position=Workshop.grapplePull(start.Position,mount,reel)
+ r.view.CFrame=CFrame.new(position)*start.Rotation
+ r.drawPosition=position
+ if reel>=1 or distance>=105 then clearGrapple(r);return end
+ r.grapple=r.grapple or newGrapple(r.view)
+ local rig=r.grapple
+ local castProgress=math.clamp(age/Workshop.GRAPPLE_CAST,0,1)
+ local grip=position+r.view.CFrame.UpVector*(r.size.Y*.24)
+ winch=winch or mount
+ local direction=grip-winch
+ if direction.Magnitude<.01 then direction=-Vector3.yAxis else direction=direction.Unit end
+ local tip=winch:Lerp(grip,castProgress)+Vector3.yAxis*(math.sin(castProgress*math.pi)*.5)
+ rig.winch.Position=winch
+ rig.head.CFrame=CFrame.lookAt(tip,tip+direction)
+ local spread=castProgress<1 and .20 or .12
+ for i,jaw in ipairs(rig.jaws) do
+  local side=i==1 and -1 or 1
+  jaw.CFrame=rig.head.CFrame*CFrame.new(side*spread,-.02,-.15)*CFrame.Angles(0,side*.34,-side*.16)
+ end
+end
+local function showSelection(self,r,selected,marked)
+ if not selected and not marked then
+  if r.selection then r.selection:Destroy();r.selection=nil end
+  if r.label then r.label:Destroy();r.label=nil end
+  return
+ end
+ if not r.selection then
+  local outline=Instance.new('Highlight');outline.Name='SelectedOre';outline.Adornee=r.view
+  outline.Enabled=true;outline.Parent=self.parent;r.selection=outline
+ end
+ local tint=selected and Color3.fromRGB(247,253,255) or Color3.fromRGB(255,193,106)
+ r.selection.DepthMode=selected and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+ r.selection.OutlineTransparency=0
+ r.selection.FillTransparency=selected and .56 or .69
+ r.selection.OutlineColor=tint;r.selection.FillColor=tint
+ if not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
+ r.label.AlwaysOnTop=selected;r.label.MaxDistance=selected and 100 or 62
 end
 function V.new(root,parent,audio,reducedMotion)
  GemAppearance.prepare()
@@ -368,9 +436,7 @@ function V:update(dt,now)
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
    if r.faceted then GemAppearance.update(r.view,0) end
-   if r.label then r.label:Destroy();r.label=nil end
-   if r.selection then r.selection:Destroy();r.selection=nil end
-   if r.grapple then r.grapple.root:Destroy();r.grapple=nil end
+   showSelection(self,r,false,false);clearGrapple(r)
    finishTrail(self,r,now);removeIdle(self,r)
    if r.liftDust and not r.liftTail then r.liftTail=now+.42 end
    if r.ribbon or r.liftTail and now<r.liftTail then r.view.Transparency=1
@@ -502,50 +568,20 @@ function V:update(dt,now)
      table.insert(self.displayCandidates,r)
     end
    end
-   if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and r.gemOpacity or 1);r.opacity=opacity end
+   local selected=live and r.seed==focusId and not r.preview and opacity>0 and cameraPosition~=nil
+   local distance=cameraPosition and (r.drawPosition-cameraPosition).Magnitude or math.huge
+   local marked=live and source:GetAttribute('PressMarked')==true and distance<62
+   showSelection(self,r,selected,marked)
+   -- Roblox does not reliably draw Highlight on the translucent optical shell.
+   -- Give the selected gem its actual solid silhouette for the duration of the cue.
+   local transparency=r.selection and 0 or 1-opacity*(r.faceted and r.gemOpacity or 1)
+   if r.view.Transparency~=transparency then r.view.Transparency=transparency end
+   r.opacity=opacity
+   if live then drawGrapple(self,r,source,displayAt,distance) else clearGrapple(r) end
    if r.faceted then GemAppearance.update(r.view,opacity,cameraPosition) end
-   if cameraPosition then
-    local distance=(r.drawPosition-cameraPosition).Magnitude
-    local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
-    local marked=live and source:GetAttribute('PressMarked')==true
-    -- The pickup prompt can still offer a rock an Emptier is about to grab.
-    -- Use the prompt's actual ID even when that rock is settling or docked.
-    local selected=live and r.seed==focusId and not r.preview and opacity>0
-    local highlighted=selected or (marked and distance<62)
-    if highlighted then
-     if not r.selection then
-      local outline=Instance.new('Highlight');outline.Name='SelectedOre';outline.Adornee=r.view
-      outline.Enabled=true;outline.Parent=r.view;r.selection=outline
-     end
-     local tint=selected and Color3.fromRGB(247,253,255) or Color3.fromRGB(255,193,106)
-     r.selection.DepthMode=selected and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-     r.selection.OutlineTransparency=selected and 0 or .04
-     r.selection.FillTransparency=selected and .52 or .77
-     r.selection.OutlineColor=tint;r.selection.FillColor=tint
-     if not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
-     r.label.AlwaysOnTop=selected
-     r.label.MaxDistance=selected and 100 or 62
-    end
-    if not highlighted then
-     if r.selection then r.selection:Destroy();r.selection=nil end
-     if r.label then r.label:Destroy();r.label=nil end
-    end
-    local cast=marked and source:GetAttribute('PressCastAt')
-    local mount=cast and distance<85 and self.pressMount
-     and self.pressMount(source:GetAttribute('PressDrone'),source:GetAttribute('PressSlot'))
-    if mount and displayAt>=cast then
-     r.grapple=r.grapple or newGrapple(r.view)
-     local t=math.clamp((displayAt-cast)/Workshop.GRAPPLE_CAST,0,1)
-     r.grapple.a.WorldPosition=mount
-     r.grapple.head.Position=mount:Lerp(r.drawPosition,t)+Vector3.yAxis*(math.sin(t*math.pi)*.55)
-    elseif r.grapple then r.grapple.root:Destroy();r.grapple=nil end
-    if r.modifiers~=0 and landingAge and landingAge>=0 and loose and distance<62 and not reducedEffects and not reducedMotion then
-     RockModifierView.drop(r,now,landingAge,reducedFlashing)
-    end
-   else
-    if r.label then r.label:Destroy();r.label=nil end
-    if r.selection then r.selection:Destroy();r.selection=nil end
-    if r.grapple then r.grapple.root:Destroy();r.grapple=nil end
+   local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
+   if r.modifiers~=0 and landingAge and landingAge>=0 and loose and distance<62 and not reducedEffects and not reducedMotion then
+    RockModifierView.drop(r,now,landingAge,reducedFlashing)
    end
    local canGlint=landingAge and ((landingAge<.24 and (live or r.collectAt)) or (live and not seated and not pulling))
    if (r.arc or r.physical) and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
@@ -572,7 +608,11 @@ end
 function V:destroy()
  if self.closed then return end;self.closed=true
  for _,c in ipairs(self.connections) do c:Disconnect() end
- for source,r in pairs(self.records) do if source.Parent then source.LocalTransparencyModifier=0 end;r.view:Destroy() end
+ for source,r in pairs(self.records) do
+  if source.Parent then source.LocalTransparencyModifier=0 end
+  if r.selection then r.selection:Destroy() end
+  r.view:Destroy()
+ end
  for _,glint in ipairs(self.idlePool) do glint.anchor:Destroy() end
  for _,rig in ipairs(self.displays) do rig.base:Destroy() end
  if self.amountGui then self.amountGui:Destroy() end

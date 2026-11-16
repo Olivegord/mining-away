@@ -5,7 +5,6 @@ local ink=Color3.fromRGB(22,29,35)
 local empty=Color3.fromRGB(58,71,78)
 local green=Color3.fromRGB(158,232,161)
 local gold=Color3.fromRGB(255,200,113)
-local red=Color3.fromRGB(248,130,114)
 local busyStates={
  Travel=true, Waiting=true, Warmup=true, ToCharge=true, Charging=true,
  Collect=true, Pickup=true, Deliver=true, Unload=true, Launch=true, Vacuum=true,
@@ -37,7 +36,7 @@ local function new(adornee)
  end
 
  local spinner=rectangle(gui,'Spinner',20,20,ink)
- spinner.AnchorPoint=Vector2.new(.5,.5)
+ spinner.AnchorPoint=Vector2.new(.5,.5);spinner.BackgroundTransparency=1
  local ticks={}
  local cells={{1,0},{2,0},{2,1},{2,2},{1,2},{0,2},{0,1},{0,0}}
  for i,cell in ipairs(cells) do
@@ -61,23 +60,21 @@ function Status.draw(drone,source,state,role,alive,now,reducedMotion)
  local deciding=recalling or now<(source:GetAttribute('ThinkUntil') or 0)
  local start=source:GetAttribute('PressStarted') or 0
  local finish=source:GetAttribute('PressFinish') or 0
- local pressing=start>0 and finish>start
- local spinner=deciding or pressing or busyStates[state]==true
-  or role=='Compactor' and source:GetAttribute('PressWaiting')==true
-
+ local pressing=role=='Compactor' and state=='Press' and start>0 and finish>start
+ local mining=state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact'
  local fraction,tint
- if pressing then
-  fraction=(now-start)/(finish-start);tint=gold
- elseif source:GetAttribute('BatteryPowered') then
-  local maximum=source:GetAttribute('MaxBattery') or 1
-  fraction=(source:GetAttribute('Battery') or 0)/math.max(1,maximum)
-  tint=fraction<.22 and gold or green
- else
-  local maximum=source:GetAttribute('MaxHP') or 1
-  local health=source:GetAttribute('HP') or maximum
-  if health<maximum then fraction=health/maximum;tint=red end
+ if not deciding then
+  if pressing then
+   fraction=(now-start)/(finish-start);tint=gold
+  elseif mining and source:GetAttribute('BatteryPowered') and not source:GetAttribute('WorkPaused') then
+   local maximum=source:GetAttribute('MaxBattery') or 1
+   fraction=(source:GetAttribute('Battery') or 0)/math.max(1,maximum)
+   tint=fraction<.22 and gold or green
+  end
  end
  local showBar=fraction~=nil
+ local spinner=not showBar and (deciding or busyStates[state]==true
+  or role=='Compactor' and source:GetAttribute('PressWaiting')==true)
  if not showBar and not spinner then
   if rig then rig.gui.Enabled=false end
   return
@@ -87,8 +84,8 @@ function Status.draw(drone,source,state,role,alive,now,reducedMotion)
  rig.gui.Enabled=true
  rig.track.Visible=showBar
  rig.spinner.Visible=spinner
- rig.track.Position=UDim2.fromOffset(spinner and 24 or 35,11)
- rig.spinner.Position=UDim2.fromOffset(showBar and 59 or 35,11)
+ rig.track.Position=UDim2.fromScale(.5,.5)
+ rig.spinner.Position=UDim2.fromScale(.5,.5)
  if showBar then
   local cells=math.clamp(fraction,0,1)*cellCount
   for i,level in ipairs(rig.levels) do
