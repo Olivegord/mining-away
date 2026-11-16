@@ -26,6 +26,7 @@ local CUES = {
  sale_gem={id='9125869138',volume=.40,duration=.28,pitch=1.44,cooldown=.048,maxVoices=4},
  sale_credit={id='9126066421',volume=.19,duration=.19,pitch=1.62,attack=.003,cooldown=.045,maxVoices=4},
  sale_dust_credit={id='9125869138',volume=.16,duration=.24,pitch=1.54,attack=.004,cooldown=.065,maxVoices=4},
+ sale_finish={id='91735091370012',volume=.26,duration=.72,pitch=.90,attack=.012,cooldown=.30,maxVoices=2,reserved=true},
  gem_reveal={id='91735091370012',volume=.44,duration=1.1,pitch=1.31,attack=.008,cooldown=.11,range=90,maxVoices=3,reserved=true},
  gem_land={id='9125869138',volume=.48,duration=.49,pitch=1.48,cooldown=.055,range=79,maxVoices=4},
  stone_land={id='9125869495',volume=.36,duration=.29,pitch=.71,cooldown=.06,range=62,maxVoices=3},

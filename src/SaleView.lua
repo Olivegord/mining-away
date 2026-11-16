@@ -4,12 +4,14 @@ local Lighting=game:GetService('Lighting')
 local GuiService=game:GetService('GuiService')
 local Input=game:GetService('UserInputService')
 local Actions=game:GetService('ContextActionService')
+local TextService=game:GetService('TextService')
 local CONFIRM_ACTION='MiningAwayConfirmSale'
-local FIRST_HIT=.38
-local BREAK_TIME=.065
-local FINISH_HOLD=.95
-local READOUT_TIME=.92
-local DUST_WAVE_STEP=.16
+local FIRST_HIT=.58
+local BREAK_TIME=.08
+local FINISH_HOLD=1.48
+local READOUT_TIME=1.68
+local DUST_WAVE_STEP=.23
+local GEM_WINDUP=.115
 local MONEY=Color3.fromRGB(113,246,146)
 local GOLD=Color3.fromRGB(255,218,104)
 local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
@@ -27,8 +29,8 @@ function Sale.new(refs)
  local blocker=Instance.new('Frame');blocker.Name='SaleInputArea';blocker.BackgroundTransparency=1
  blocker.Active=true;blocker.Visible=false;blocker.Size=UDim2.fromScale(1,1);blocker.Parent=gui
  self.blocker=blocker
- self.title=label(gui,'',Color3.new(1,1,1),24);self.title.Visible=false
- self.title.Size=UDim2.fromOffset(300,34);self.title.ZIndex=2
+ self.title=label(gui,'',Color3.new(1,1,1),28);self.title.Visible=false
+ self.title.Size=UDim2.fromOffset(300,38);self.title.ZIndex=2
  local prompt=Instance.new('TextButton');prompt.Name='ConfirmSale';prompt.Visible=false
  prompt.AnchorPoint=Vector2.new(.5,1);prompt.Position=UDim2.new(.5,0,1,-32)
  prompt.Size=UDim2.fromOffset(214,49);prompt.BackgroundColor3=Color3.fromRGB(33,27,20)
@@ -182,7 +184,9 @@ function Sale:start(receipt,now)
   self.blocker.Visible=true;self:bindInput()
  end
  self.breakIndex=1;self.lastBreakAt=nil
- self.breakInterval=receipt.full and math.clamp(1.25/#receipt.items,.085,.13) or .085
+ self.breakInterval=receipt.full and math.clamp(2.3/#receipt.items,.14,.245) or .12
+ self.firstHit=receipt.full and FIRST_HIT or .30
+ self.gemWindup=receipt.full and math.min(GEM_WINDUP,1.15/#receipt.items) or 0
  local count=0
  for i,item in ipairs(receipt.items) do
   local ore,gem=self:makeOre(item)
@@ -211,34 +215,51 @@ local function createToken(parent,money,color)
  return token
 end
 
+local function payoutText(money,key,amount,width,full)
+ local number=money and '+$'..tostring(amount) or '+'..string.format('%.2f',amount/100):gsub('0+$',''):gsub('%.$','')
+ if not full then return money and number or number..' '..Workshop.RESOURCE_NAMES[key],money and 23 or 19 end
+ local preferred=money and (width>=155 and 39 or 33) or (width>=155 and 27 or 23)
+ if money then return number,preferred end
+ local name=Workshop.RESOURCE_NAMES[key]
+ local text=number..' '..name
+ local size=TextService:GetTextSize(text,preferred,Enum.Font.SourceSansBold,Vector2.new(2000,100)).X
+ -- At phone widths keep the amount legible and name the mineral. The
+ -- destination row still carries the complete resource name.
+ if size>width and width<150 then text=number..' '..key end
+ return text,preferred
+end
+
 function Sale:payout(key,amount,from,line,width,now)
  if amount<=0 then return end
+ local receipt=self.active
  local money=key=='Money'
  local color=money and MONEY or Color3.fromRGB(table.unpack(Workshop.RESOURCE_COLORS[key]))
- local number=money and tostring(amount) or string.format('%.2f',amount/100):gsub('0+$',''):gsub('%.$','')
- local caption=label(self.gui,money and '+$'..number or '+'..number..' '..Workshop.RESOURCE_NAMES[key],color,money and 21 or 16)
- caption.Name='SaleAmount_'..key;caption.TextScaled=true;caption.TextStrokeTransparency=.22
- caption.Size=UDim2.fromOffset(width,money and 25 or 20);caption.ZIndex=4
- local limits=Instance.new('UITextSizeConstraint');limits.MaxTextSize=money and 21 or 18;limits.Parent=caption
- local textOrigin=from+Vector2.new(0,line*20-17)
+ local contents,preferred=payoutText(money,key,amount,width,receipt.full)
+ local caption=label(self.gui,contents,color,preferred)
+ caption.Name='SaleAmount_'..key;caption.TextScaled=true;caption.TextStrokeTransparency=.11
+ caption.Size=UDim2.fromOffset(width,preferred+5);caption.ZIndex=4
+ local limits=Instance.new('UITextSizeConstraint');limits.MaxTextSize=preferred;limits.Parent=caption
+ local spacing=receipt.full and (width>=155 and 30 or 26) or 22
+ local textOrigin=from+Vector2.new(0,line*spacing-spacing)
  caption.Position=UDim2.fromOffset(textOrigin.X,textOrigin.Y)
- table.insert(self.readouts,{view=caption,from=textOrigin,at=now})
+ local scale=Instance.new('UIScale');scale.Parent=caption
+ table.insert(self.readouts,{view=caption,scale=scale,from=textOrigin,at=now,duration=receipt.full and READOUT_TIME or 1.02})
 
- local receipt=self.active
  local random=self.random
  local reduced=self.refs.reducedMotion()
  local count=math.min(amount,(reduced or not receipt.full) and 1 or money and 3 or 2)
  local phase=random:NextNumber(-math.pi,math.pi)
+ receipt.tokensRemaining=(receipt.tokensRemaining or 0)+count
  for i=1,count do
   local angle=phase+(i-1)*math.pi*2/count+random:NextNumber(-.26,.26)
   local speed=random:NextNumber(165,300)*(receipt.full and 1 or .55)
   local direction=Vector2.new(math.cos(angle),math.sin(angle)*.70-.24)
   local token=createToken(self.gui,money,color)
-  local size=money and random:NextNumber(13,16) or random:NextNumber(6.5,10)
+  local size=money and random:NextNumber(15,19) or random:NextNumber(8,12)
   token.Size=UDim2.fromOffset(size,size);token.Position=UDim2.fromOffset(from.X,from.Y)
   table.insert(self.flights,{view=token,key=key,receipt=receipt,amount=math.floor(amount/count)+(i<=amount%count and 1 or 0),
    from=from,at=now,velocity=direction*speed,size=size,rotation=money and random:NextNumber(-35,35) or random:NextNumber(20,70),spin=random:NextNumber(-135,135),
-   delay=random:NextNumber(.11,.22),curve=random:NextNumber(-.24,.24),wave=receipt.waves[key] or 0,
+   delay=receipt.full and random:NextNumber(.31,.45) or random:NextNumber(.13,.21),curve=random:NextNumber(-.24,.24),wave=receipt.waves[key] or 0,
    timing=random:NextNumber(.86,1.14),pitch=random:NextNumber(.90,1.12)})
  end
 end
@@ -248,8 +269,8 @@ function Sale:breakRock(tile,index,point,now,cameraUp,width)
  self:payout('Money',item.cash*item.units,point,0,width,now)
  if item.resource then self:payout(item.resource,item.dust*item.units,point,1,width,now) end
  if item.stoneUnits>0 then self:payout('Stone',item.stoneUnits*item.units,point,2,width,now) end
- if index==#self.tiles then self.active.dustAt=now+(self.active.full and .30 or .26) end
- if self.refs.audio then self.refs.audio:play(item.stone and 'sale_stone' or 'sale_gem',nil,{pitch=.89+(index%8)*.045}) end
+ if index==#self.tiles then self.active.dustAt=now+(self.active.full and .56 or .30) end
+ if self.refs.audio then self.refs.audio:play(item.stone and 'sale_stone' or 'sale_gem',nil,{pitch=.90+(index%7)*.043,level=item.stone and .9 or 1.18}) end
  if not self.refs.reducedMotion() then
   if self.active.full then
    local character=self.refs.player.Character
@@ -265,6 +286,9 @@ function Sale:breakRock(tile,index,point,now,cameraUp,width)
  tile.hitAt=now;self.lastBreakAt=now
 end
 function Sale:clearGrid()
+ if self.active and (self.active.tokensRemaining or 0)>0 and not self.active.dustAt then
+  self.active.dustAt=os.clock()+.24
+ end
  for _,tile in ipairs(self.tiles) do if not tile.sold then tile.ore:Destroy();tile.caption:Destroy() end end
  self.tiles={};self.active=nil;self.title.Visible=false;self.pendingAt=nil;self.cascadeAt=nil
  self.prompt.Visible=false;self.back.Visible=false;self.blocker.Visible=false
@@ -283,7 +307,6 @@ function Sale:update()
   local age=now-self.started;local count=#self.tiles;local full=self.active.full
   local preview=self.active.kind=='preview'
   if preview and (age>44 or (self.pendingAt and now-self.pendingAt>15)) then self:clearGrid();return end
-  local cascadeAge=self.cascadeAt and now-self.cascadeAt
   if preview then
    local input=Input:GetLastInputType()
    self.prompt.Text=self.pendingAt and 'Selling…' or input==Enum.UserInputType.Touch and 'Sell ore'
@@ -300,8 +323,15 @@ function Sale:update()
   self.title.Position=UDim2.fromOffset(center.X,math.max(35,center.Y-rows*cell*.5-13))
   local lastHit=self.tiles[count].hitAt
   if self.focus then
-   local fade=lastHit and smooth((now-lastHit-.52)/.25) or 0
+   local fade=lastHit and smooth((now-lastHit-.77)/.38) or 0
    self.focus.FarIntensity=.34*smooth(age/.22)*(1-fade)
+  end
+  local scheduledIndex=self.breakIndex
+  local nextTile=self.tiles[scheduledIndex]
+  local breakAt
+  if self.cascadeAt and nextTile then
+   breakAt=self.lastBreakAt and self.lastBreakAt+self.breakInterval or self.cascadeAt+self.firstHit
+   if not nextTile.item.stone then breakAt+=self.gemWindup end
   end
   local depth=4;local unitsPerPixel=2*depth*math.tan(math.rad(camera.FieldOfView*.5))/viewport.Y
   for i,tile in ipairs(self.tiles) do if not tile.sold then
@@ -313,8 +343,10 @@ function Sale:update()
    local position=ray.Origin+ray.Direction*(depth/math.max(.1,ray.Direction:Dot(camera.CFrame.LookVector)))
    local hit=tile.hitAt and math.clamp((now-tile.hitAt)/BREAK_TIME,0,1) or 0
    local scale=cell*(full and .88 or .70)*unitsPerPixel/math.max(tile.size.X,tile.size.Y,tile.size.Z)
-   if tile.hitAt and not reduced then scale*=1-.40*hit end
-   tile.ore.Size=tile.size*scale*(.7+.3*rise)
+   local winding=not reduced and full and breakAt and i==self.breakIndex and not tile.hitAt
+   local anticipation=winding and smooth((now-breakAt+.15)/.15) or 0
+   if tile.hitAt and not reduced then scale*=1-.46*hit end
+   tile.ore.Size=tile.size*Vector3.new(1+.035*anticipation,1-.12*anticipation,1+.035*anticipation)*scale*(.7+.3*rise)
    tile.ore.CFrame=CFrame.new(position)*camera.CFrame.Rotation*CFrame.Angles(.16,(reduced and .3 or age*.45)+i*.6,.12)
    if tile.gem then RockFinish.Gems.update(tile.ore,rise*(1-hit),camera.CFrame.Position) end
    if tile.hitAt then tile.ore.Transparency=tile.transparency+(1-tile.transparency)*hit end
@@ -323,13 +355,12 @@ function Sale:update()
    if tile.hitAt and hit>=1 then
     tile.ore:Destroy();tile.caption:Destroy();tile.sold=true
     self.breakIndex+=1
-   elseif i==self.breakIndex and not tile.hitAt and cascadeAge and cascadeAge>=FIRST_HIT
-    and (not self.lastBreakAt or now-self.lastBreakAt>=self.breakInterval) then
+   elseif i==scheduledIndex and i==self.breakIndex and not tile.hitAt and breakAt and now>=breakAt then
     -- Advance only after the prior rock is gone, even when a frame stalls.
-    self:breakRock(tile,i,point,now,camera.CFrame.UpVector,math.clamp(cell*.95,72,204))
+    self:breakRock(tile,i,point,now,camera.CFrame.UpVector,math.clamp(cell*.98,84,282))
    end
   end end
-  if lastHit and now-lastHit>FINISH_HOLD then self:clearGrid() end
+  if lastHit and now-lastHit>(full and FINISH_HOLD or .90) then self:clearGrid() end
  end
  self:updatePayouts(now,reduced)
 end
@@ -350,7 +381,7 @@ function Sale:updatePayouts(now,reduced)
   local token=self.flights[i]
   local money=token.key=='Money'
   local pullAt=money and token.at+token.delay or token.receipt.dustAt
-  if pullAt and not money then pullAt+=token.wave*DUST_WAVE_STEP+(token.delay-.11)*.73 end
+  if pullAt and not money then pullAt+=token.wave*DUST_WAVE_STEP+(token.delay-(token.receipt.full and .31 or .13))*.84 end
   local target=self.refs.hud:currencyTarget(token.key)
   local age=math.max(0,now-token.at)
   local position=drift(token,age,reduced)
@@ -360,7 +391,9 @@ function Sale:updatePayouts(now,reduced)
    if not token.pullAt then
     token.pullAt=math.max(pullAt,now-.05)
     token.origin,token.initial=drift(token,math.max(0,token.pullAt-token.at),reduced)
-    token.duration=math.clamp(.24+(target-token.origin).Magnitude/2750,.26,.52)*token.timing
+    local duration=token.receipt.full and math.clamp(.39+(target-token.origin).Magnitude/2300,.44,.73)
+     or math.clamp(.27+(target-token.origin).Magnitude/2700,.29,.54)
+    token.duration=duration*token.timing
    end
    progress=math.clamp((now-token.pullAt)/token.duration,0,1)
    if not reduced then
@@ -372,10 +405,14 @@ function Sale:updatePayouts(now,reduced)
     position=token.origin*(u^3)+p1*(3*u*u*t)+p2*(3*u*t*t)+target*(t^3)
    end
   end
-  if progress>=1 or age>8 then
-   self.refs.hud:currencyHit(token.receipt.id,token.key,token.amount,reduced)
+  if progress>=1 or (pullAt and now-pullAt>3) or age>18 then
+   local receipt=token.receipt
+   receipt.tokensRemaining-=1
+   local last=progress>=1 and receipt.full and receipt.dustAt~=nil and receipt.tokensRemaining==0
+   self.refs.hud:currencyHit(receipt.id,token.key,token.amount,reduced,last)
    if progress>=1 and self.refs.audio then
-    self.refs.audio:play(money and 'sale_credit' or 'sale_dust_credit',nil,{pitch=token.pitch})
+    local cue=last and 'sale_finish' or money and 'sale_credit' or 'sale_dust_credit'
+    self.refs.audio:play(cue,nil,{pitch=last and 1 or token.pitch})
    end
    token.view:Destroy();table.remove(self.flights,i)
   else
@@ -388,14 +425,17 @@ function Sale:updatePayouts(now,reduced)
  end
  for i=#self.readouts,1,-1 do
   local readout=self.readouts[i]
-  local t=math.clamp((now-readout.at)/READOUT_TIME,0,1)
+  local age=now-readout.at
+  local t=math.clamp(age/readout.duration,0,1)
   if t>=1 then
    readout.view:Destroy();table.remove(self.readouts,i)
   else
    local rise=reduced and 0 or 11*smooth(t)
    readout.view.Position=UDim2.fromOffset(readout.from.X,readout.from.Y-rise)
-   local fade=smooth((t-.65)/.35)
-   readout.view.TextTransparency=fade;readout.view.TextStrokeTransparency=.22+.78*fade
+   local fade=smooth((t-.77)/.23)
+   readout.view.TextTransparency=fade;readout.view.TextStrokeTransparency=.11+.89*fade
+   local pop=math.clamp(age/.17,0,1)
+   readout.scale.Scale=reduced and 1 or 1+.13*math.sin(math.pi*pop)*(1-pop*.35)
   end
  end
 end

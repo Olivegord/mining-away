@@ -227,7 +227,7 @@ function HUD:currencyTarget(key)
   end
  end
 end
-function HUD:currencyHit(id,key,amount,reduced)
+function HUD:currencyHit(id,key,amount,reduced,final)
  local sale=self.saleCredits[id]
  if sale then
   local credit=math.min(amount,sale.remaining[key] or 0)
@@ -239,7 +239,10 @@ function HUD:currencyHit(id,key,amount,reduced)
  end
  local now=os.clock()
  for _,entry in ipairs(self.wallets) do
-  if entry.key==key then entry.pulseAt=now;entry.steadyPulse=reduced;entry.untilAt=math.max(entry.untilAt,now+3) end
+  if entry.key==key then
+   entry.pulseAt=now;entry.pulseDuration=final and .48 or .28;entry.pulseSize=final and 6 or 3
+   entry.steadyPulse=reduced;entry.untilAt=math.max(entry.untilAt,now+3)
+  end
  end
 end
 function HUD:pendingSaleBalances(profile,now)
@@ -280,9 +283,10 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
    local value=money and balance or balance/100
    entry.value.Text=value<10000 and not money and string.format('%.2f',value):gsub('0+$',''):gsub('%.$','') or compact(value)
    entry.name.TextTransparency=1-opacity;entry.value.TextTransparency=1-opacity
-   local pulse=1-math.clamp((now-(entry.pulseAt or -10))/.20,0,1)
-   entry.value.TextColor3=(money and C.money or C.text):Lerp(entry.color,pulse)
-   entry.value.TextSize=20+(entry.steadyPulse and 0 or math.floor(3*pulse+.5))
+   local pulse=1-math.clamp((now-(entry.pulseAt or -10))/(entry.pulseDuration or .28),0,1)
+   local flash=money and C.money:Lerp(Color3.fromRGB(219,255,224),.55) or entry.color
+   entry.value.TextColor3=(money and C.money or C.text):Lerp(flash,pulse)
+   entry.value.TextSize=21+(entry.steadyPulse and 0 or math.floor((entry.pulseSize or 3)*pulse+.5))
   end
  end
  local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)

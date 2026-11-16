@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 15 — larger payouts and slower sale pacing
+
+The owner likes the currency animation but reports that the entire sale is too fast, the text is too small, and the result still lacks impact. Research how to make the sale more satisfying. Give the boosts time to read and feel while keeping the individual rock break quick.
+
 ## November 15 — colored sale amounts and weighted currency tokens
 
 Show how much each rock sold for in lingering colored text, with green money and material-colored dust. Give money and dust different token shapes. Tokens burst out quickly, slow as they drift, and carry their motion into the pull toward their counters. Pull money first and gather dust in waves, with a little variation between tokens. Play an arrival sound and increase the displayed balance as each token lands.

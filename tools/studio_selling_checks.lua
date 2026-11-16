@@ -71,24 +71,31 @@ local ok,err=xpcall(function()
  hud:update(camera.ViewportSize,world,false)
  assert(hud.wallets[1].value.Text=='1234' and hud.wallets[2].value.Text=='0','wallet jumped before tokens arrived')
  view:update(1/60);assert(beats==0 and #view.flights==0,'confirmation has no anticipation beat')
- view.cascadeAt=os.clock()-.40;view:update(1/60)
+ view.cascadeAt=os.clock()-.40;view:update(1/60);assert(beats==0 and view.firstHit>=.55)
+ assert(view.breakInterval>=.22 and view.gemWindup>=.10)
+ view.cascadeAt=os.clock()-.60;view:update(1/60)
  local first=view.tiles[1]
  assert(first.hitAt and not first.sold and not view.tiles[2].hitAt and #view.flights==5 and beats==1)
  local money,amber,stone=view.flights[1],view.flights[2],view.flights[4]
  assert(money.view.Name=='MoneyCoin' and amber.view.Name=='MaterialFleck')
  assert(view.readouts[1].view.Text=='+$1' and view.readouts[2].view.Text=='+0.07 Amber chips')
- assert(view.readouts[1].view.TextColor3.G>view.readouts[1].view.TextColor3.R)
+ local cashLabel=view.readouts[1]
+ assert(cashLabel.view.TextColor3.G>cashLabel.view.TextColor3.R)
+ assert(cashLabel.view.UITextSizeConstraint.MaxTextSize>=33 and view.readouts[2].view.UITextSizeConstraint.MaxTextSize>=23)
+ assert(cashLabel.duration>=1.6)
  local function point(token) return Vector2.new(token.view.Position.X.Offset,token.view.Position.Y.Offset) end
  view:updatePayouts(amber.at+.01,false);local a=point(amber)
  view:updatePayouts(amber.at+.06,false);local b=point(amber)
  view:updatePayouts(amber.at+.11,false);local c=point(amber)
  assert((b-a).Magnitude>(c-b).Magnitude and (c-b).Magnitude>0,'drift failed to decelerate continuously')
- view:updatePayouts(money.at+.23,false)
+ view:updatePayouts(money.at+.24,false);assert(not money.pullAt)
+ view:updatePayouts(money.at+.46,false)
  assert(money.pullAt and not amber.pullAt and view.readouts[1].view.TextTransparency==0)
  view:updatePayouts(money.pullAt+money.duration+.01,false);hud:update(camera.ViewportSize,world,false)
+ assert(cashLabel.view.TextTransparency==0,'cash text faded before arrival')
  assert(hud.wallets[1].value.Text=='1235' and cues.sale_credit==1 and not amber.pullAt)
  local burst=assert(fx:FindFirstChild('GemRewardParticles'))
- assert(burst.AirborneSparks.Lifetime.Min>=.59 and burst.ImpactAccent.Lifetime.Max>1,'gem particles need a visible tail')
+ assert(burst.AirborneSparks.Lifetime.Min>=.81 and burst.ImpactAccent.Lifetime.Max>1.45,'gem particles need a visible tail')
  view.cascadeAt=os.clock()-4
  view.lastBreakAt=os.clock()-1
  view:update(1/60)
@@ -96,11 +103,12 @@ local ok,err=xpcall(function()
  for index=1,#view.tiles do
   local tile=view.tiles[index]
   assert(tile.hitAt and not tile.sold)
-  tile.hitAt=os.clock()-.09;view.lastBreakAt=os.clock()-.14
+  tile.hitAt=os.clock()-.09;view.lastBreakAt=os.clock()-.40
   view:update(1/60)
   assert(tile.sold)
   if index<#view.tiles then
-   assert(view.tiles[index+1].hitAt and beats==index+1)
+   assert(not view.tiles[index+1].hitAt)
+   view:update(1/60);assert(view.tiles[index+1].hitAt and beats==index+1)
    assert(not view.tiles[index+2] or not view.tiles[index+2].hitAt)
   end
   if index==1 then assert(burst.Parent==fx,'breaking the next rock cleared the prior gem particles') end
@@ -110,10 +118,10 @@ local ok,err=xpcall(function()
  view:updatePayouts(wave+.12,false)
  assert(stone.pullAt and not amber.pullAt,'material types did not get separate pull waves')
  view:updatePayouts(wave+2,false);view:updatePayouts(wave+3,false)
- view.tiles[10].hitAt=os.clock()-1.1;view:update(1/60)
+ view.tiles[10].hitAt=os.clock()-1.6;view:update(1/60)
  hud:update(camera.ViewportSize,world,false)
  assert(not view.active and not view.focus and #view.flights==0 and #view.readouts==0)
- assert(cues.sale_credit>1 and cues.sale_dust_credit>0)
+ assert(cues.sale_credit>1 and cues.sale_dust_credit>0 and cues.sale_finish==1)
  assert(hud.wallets[1].value.Text=='4303' and hud.wallets[2].value.Text=='5','arrival credits missed the authoritative totals')
  local pending={id='receipt-first',runId=snapshot.run.id,revision=6}
  hud:beginSale(pending,{Money=9});hud:currencyHit(pending.id,'Money',4,false)

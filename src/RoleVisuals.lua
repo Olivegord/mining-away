@@ -342,7 +342,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
   -- The same gem reveal discs and glints, scaled for the camera-facing sale grid.
   sparks.Speed=NumberRange.new(sparks.Speed.Min*.15,sparks.Speed.Max*.15)
   sparks.Acceleration=Vector3.new(0,-1.7,0)
-  sparks.Lifetime=NumberRange.new(.6,1)
+  sparks.Lifetime=NumberRange.new(.82,1.29)
  end
  sparks.Parent=root;sparks:Emit(style and style.count or prism and 20 or residual and 9 or orbital and 10 or crystal and 15 or 8)
  -- Keep impact signatures distinct: cuts have a short directional snap;
@@ -357,7 +357,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
   if saleParent then
    accent.Speed=NumberRange.new(.5,1.5)
    accent.Acceleration=Vector3.new(0,-.35,0)
-   accent.Lifetime=NumberRange.new(.76,1.17)
+   accent.Lifetime=NumberRange.new(.97,1.47)
   end
   accent:Emit(prism and 4 or dark and 5 or 3)
  end
@@ -388,7 +388,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
   glints.Drag=2.8;glints:Emit(7)
  end
  local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
- Debris:AddItem(root,stoneColor and crystal and 2.35 or residual and 2.7 or 1.4)
+ Debris:AddItem(root,saleParent and 1.59 or stoneColor and crystal and 2.35 or residual and 2.7 or 1.4)
  if dustCount==0 then return end
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
  EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20,crystal and .55 or .32)
