@@ -15905,13 +15905,7 @@ local previewColor=Color3.fromRGB(234,245,255)
 local activeColor=Color3.fromRGB(255,147,61)
 local clearColor=Color3.fromRGB(85,243,148)
 local white=Color3.new(1,1,1)
-local riseTime,wallHeight=.32,10*2/3
-local wallHold,wallFadeTime,flashTime=.12,.46,.38
-local previewTime,snapTime=.26,.15
-local wallFade=NumberSequence.new({
- NumberSequenceKeypoint.new(0,.62),NumberSequenceKeypoint.new(.36,.51),
- NumberSequenceKeypoint.new(.80,.26),NumberSequenceKeypoint.new(1,0),
-})
+local previewTime,flashTime=.26,.38
 
 local function part(parent,name)
  local p=Instance.new('Part')
@@ -15973,116 +15967,8 @@ local function showFill(mark,point,width,opacity,color,lift)
  if mark.color~=color then mark.face.BackgroundColor3=color;mark.color=color end
  if mark.opacity~=opacity then mark.face.BackgroundTransparency=1-opacity;mark.opacity=opacity end
 end
-local function cursor(parent)
- local base=part(parent,'SelectorCursor')
- local gui=surface(base,Enum.NormalId.Top,Vector2.new(64,64))
- local shapes={{.41,0,.18,1},{0,.41,.41,.18},{.59,.41,.41,.18}}
- for _,shape in ipairs(shapes) do
-  local stroke=frame(gui)
-  stroke.Position=UDim2.fromScale(shape[1],shape[2])
-  stroke.Size=UDim2.fromScale(shape[3],shape[4])
-  stroke.BackgroundColor3=previewColor
- end
- return {base=base,gui=gui}
-end
-local function showCursor(mark,point,dt,instant)
- mark.gui.Enabled=point~=nil
- if not point then mark.goal=nil;return end
- if mark.goal~=point then
-  local from=mark.position
-  mark.from=mark.goal and from and (from-point).Magnitude<=8 and from or point
-  mark.goal=point;mark.age=0
- end
- mark.age=math.min(snapTime,mark.age+dt)
- local t=instant and 1 or mark.age/snapTime
- local bump=math.sin(math.pi*t)*(1-t)
- mark.position=mark.from:Lerp(point,1-(1-t)^3)
- mark.base.Position=mark.position+Vector3.yAxis*(.13+.34*bump)
- mark.base.Size=Vector3.new(1.55+.62*bump,.02,1.55+.62*bump)
-end
-
-local function walls(parent,name)
- local folder=Instance.new('Folder');folder.Name=name;folder.Parent=parent
- local mark={folder=folder,sides={}}
- for i=1,4 do
-  local plane=part(folder,'ForcefieldWall')
-  local faces={}
-  for _,normal in ipairs({Enum.NormalId.Front,Enum.NormalId.Back}) do
-   local f=frame(surface(plane,normal,Vector2.new(256,192)))
-   local gradient=Instance.new('UIGradient')
-   gradient.Rotation=90;gradient.Transparency=wallFade;gradient.Parent=f
-   table.insert(faces,f)
-  end
-  local edge=part(folder,'WallParticleEdge')
-  local sparks=Instance.new('ParticleEmitter');sparks.Name='RisingEdgeSparks'
-  sparks.Texture='rbxasset://textures/particles/SquareParticle.png'
-  sparks.Enabled=false;sparks.Rate=0;sparks.LockedToPart=false
-  sparks.EmissionDirection=Enum.NormalId.Top;sparks.Shape=Enum.ParticleEmitterShape.Box
-  sparks.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
-  sparks.LightEmission=.78;sparks.LightInfluence=0;sparks.Brightness=1.3
-  sparks.Lifetime=NumberRange.new(.68,1.24);sparks.Speed=NumberRange.new(4,10)
-  sparks.Drag=2;sparks.Acceleration=Vector3.yAxis*.8;sparks.SpreadAngle=Vector2.new(24,24)
-  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18,.08),
-   NumberSequenceKeypoint.new(.58,.13),NumberSequenceKeypoint.new(1,.035)})
-  sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),
-   NumberSequenceKeypoint.new(.32,.18),NumberSequenceKeypoint.new(1,1)})
-  sparks.Parent=edge
-  mark.sides[i]={part=plane,faces=faces,edge=edge,sparks=sparks}
- end
- return mark
-end
-local function setVisibility(side,opacity)
- if side.opacity==opacity then return end
- side.opacity=opacity
- for _,f in ipairs(side.faces) do
-  f.BackgroundTransparency=1-opacity
-  f.Parent.Enabled=opacity>0
- end
-end
-local function showWalls(mark,point,width,color,dt,instant,cameraPosition,lowFlash,reduced,opening)
- if not point then
-  for _,side in ipairs(mark.sides) do setVisibility(side,0) end
-  return
- end
- local moved=point~=mark.point or width~=mark.width
- if moved or opening then mark.age=0;mark.emitted=false end
- local age=mark.age
- local remaining=instant and 0 or 1-math.clamp(age/riseTime,0,1)
- local height=wallHeight*(1-.86*remaining^4)
- local sizeChanged=height~=mark.height or width~=mark.width
- local distance=cameraPosition and (cameraPosition-point).Magnitude or 0
- local far=math.clamp((distance-42)/28,0,1)
- local idle=.33+.20*far
- -- Hit full intensity, hold it, then fade linearly to the visible wall.
- local flash=1-math.clamp((age-wallHold)/wallFadeTime,0,1)
- local opacity=idle+((lowFlash and .60 or .94)-idle)*flash
- opacity=math.round(opacity*128)/128
- local tint=color:Lerp(white,flash*(lowFlash and .12 or .38))
- local emit=not reduced and not mark.emitted and age+dt>=.07
- for i,side in ipairs(mark.sides) do
-  local plane=side.part
-  if moved or sizeChanged then
-   local sideFrame=CFrame.new(point+Vector3.yAxis*(height*.5+.03))*CFrame.Angles(0,(i-1)*math.pi*.5,0)
-   plane.Size=Vector3.new(width,height,.02)
-   plane.CFrame=sideFrame*CFrame.new(0,0,-width*.5)
-  end
-  if tint~=mark.tint then for _,f in ipairs(side.faces) do f.BackgroundColor3=tint end end
-  setVisibility(side,opacity)
-  if emit then
-   local edge=side.edge
-   edge.Size=Vector3.new(width,.10,.10)
-   edge.CFrame=CFrame.new(point+Vector3.yAxis*(wallHeight*.61))*CFrame.Angles(0,(i-1)*math.pi*.5,0)*CFrame.new(0,0,-width*.5)
-   side.sparks.Color=ColorSequence.new(white,color)
-   side.sparks:Emit(lowFlash and 5 or math.clamp(math.round(width*.37),8,16))
-  end
- end
- mark.emitted=mark.emitted or emit
- mark.age=math.min(wallHold+wallFadeTime,age+dt)
- mark.point=point;mark.width=width;mark.height=height;mark.tint=tint
-end
-
 function V.new(options)
- return setmetatable({options=options,cues={},clock=0},V)
+ return setmetatable({options=options,cues={}},V)
 end
 function V:aim(ray)
  local o=self.options
@@ -16182,9 +16068,7 @@ function V:commit(ray)
   return true
  end
  local requestId=game:GetService('HttpService'):GenerateGUID(false)
- self.pending={draft=draft,at=os.clock(),requestId=requestId,
-  samePin=self.options.player:GetAttribute('MA_Selector')==draft.point
-   and self.options.player:GetAttribute('MA_SelectorField')==draft.field}
+ self.pending={draft=draft,at=os.clock(),requestId=requestId}
  self.options.command:FireServer('PlaceSelector',{fieldId=draft.field,position=draft.point,runId=draft.runId,
   leadId=draft.leadId,requestId=requestId})
  return true
@@ -16202,7 +16086,6 @@ function V:reply(state)
  if state.status=='accepted' and not pending.dismissed then
   self.draft=nil
   self.click=pending.draft;self.click.at=os.clock()
-  self.click.reopen=pending.samePin
  end
  return true
 end
@@ -16222,22 +16105,19 @@ function V:flashState()
  local peak=self.options.player:GetAttribute('ReducedFlashing')==true and .29 or .68
  return click,peak*(1-math.clamp((age-.045)/(flashTime-.045),0,1))
 end
-function V:showAim(dt,ray)
+function V:step(dt)
  local o=self.options
  local profile=o.profile()
  local visible=profile and not o.hidden()
  local pin=profile and not (o.hidePin or o.hidden)() and o.player:GetAttribute('MA_Selector') or nil
- if not self.pinned and profile and o.world.Map:FindFirstChild('CrystalRun') then
-  self.pinned=walls(o.parent,'MiningSelector')
+ if not self.activeFloor and profile and o.world.Map:FindFirstChild('CrystalRun') then
   self.flash=fill(o.parent,'SelectorClickFill')
-  self.aimCursor=cursor(o.parent)
   self.previewEdge=outline(o.parent,'SelectorPreviewOutline')
   self.previewFloor=fill(o.parent,'SelectorPreviewFill')
   self.activeEdge=outline(o.parent,'SelectorOutline')
   self.activeFloor=fill(o.parent,'SelectorFootprint')
  end
- if not self.pinned then return end
- if not o.player:GetAttribute('MA_Selector') then self.pinned.point=nil end
+ if not self.activeFloor then return end
  local width=profile and Workshop.selectorWidth(profile) or 0
  if self.pending and os.clock()-self.pending.at>3 then self.pending=nil end
  local draft=self.draft
@@ -16249,28 +16129,15 @@ function V:showAim(dt,ray)
    self:cancelPreview()
   else draft.age=math.min(previewTime,draft.age+dt) end
  end
- self.clock+=dt
- if not visible or not ray then self.aimPoint=nil;self.clock=.033
- elseif self.clock>=.033 then
-  self.clock=0
-  local point,_,_,inRange=self:aim(ray)
-  self.aimPoint=inRange and point or nil
- end
  local color=o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor
- local camera=workspace.CurrentCamera
- local instant=o.reducedMotion()
  local lowFlash=o.player:GetAttribute('ReducedFlashing')==true
  local pinWidth=o.player:GetAttribute('MA_SelectorWidth') or width
  local click,flashStrength=self:flashState()
- local opening=click and click.reopen and click.point==pin and click.field==o.player:GetAttribute('MA_SelectorField')
- if opening then click.reopen=nil end
- showWalls(self.pinned,pin,pinWidth,color,dt,instant,camera and camera.CFrame.Position,lowFlash,instant or BeamVFX.reduced(),opening)
  showOutline(self.activeEdge,pin,pinWidth,color)
  showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,color,.04)
  local preview,previewWidth,strength=self:previewState()
  showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor)
  showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,previewColor,.065)
- showCursor(self.aimCursor,not preview and self.aimPoint or nil,dt,instant)
  showFill(self.flash,click and click.point,click and click.width or width,flashStrength*.86,white,.09)
 end
 
@@ -16309,9 +16176,8 @@ function V:updateHealing(now)
  end
 end
 function V:destroy()
- if self.pinned then
-  self.pinned.folder:Destroy()
-  for _,mark in ipairs({self.flash,self.aimCursor,self.previewEdge,self.previewFloor,self.activeEdge,self.activeFloor}) do mark.base:Destroy() end
+ if self.activeFloor then
+  for _,mark in ipairs({self.flash,self.previewEdge,self.previewFloor,self.activeEdge,self.activeFloor}) do mark.base:Destroy() end
  end
  for _,cue in ipairs(self.cues) do cue.gui:Destroy() end
 end
@@ -18200,25 +18066,7 @@ local function assignField(target)
  end
 end
 local mouse=player:GetMouse()
-connect(RunService.RenderStepped,function(dt)
- local camera=workspace.CurrentCamera
- local ray
- if camera and not menusVisible() then
-  local touch=selectorView.touch
-  local input=UIS:GetLastInputType()
-  if touch and touch.active then
-   local point=touch.input.Position
-   if not tacticalHUD:blocksPoint(point) then ray=camera:ScreenPointToRay(point.X,point.Y) end
-  elseif input.Name:match('^Gamepad') then
-   local size=camera.ViewportSize
-   ray=camera:ViewportPointToRay(size.X*.5,size.Y*.5)
-  elseif UIS.MouseEnabled and input~=Enum.UserInputType.Touch then
-   local point=UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
-   if not tacticalHUD:blocksPoint(point) then ray=mouse.UnitRay end
-  end
- end
- selectorView:showAim(dt,ray)
-end)
+connect(RunService.RenderStepped,function(dt) selectorView:step(dt) end)
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end

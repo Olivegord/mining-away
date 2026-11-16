@@ -1,5 +1,5 @@
 -- Native Edit component check. Bundle Mining, RockModifierView and SelectorView
--- with Workshop.selectorWidth returning 30 and BeamVFX.reduced returning false.
+-- with Workshop.selectorWidth returning 30.
 local root=Instance.new('Folder');root.Name='TemporarySelectorChecks';root.Parent=workspace
 local map=Instance.new('Folder');map.Name='Map';map.Parent=root
 local run=Instance.new('Folder');run.Name='CrystalRun';run.Parent=map
@@ -24,7 +24,6 @@ local sent,requests=nil,0
 local view=SelectorView.new({parent=fx,world=root,player=player,profile=function() return {run={id='test'}} end,
  command={FireServer=function(_,action,payload) assert(action=='PlaceSelector');sent=payload;requests+=1 end},
  hidden=function() return false end,reducedMotion=function() return false end})
-local camera=workspace.CurrentCamera;local before=camera.CFrame
 local report={}
 local ok,err=xpcall(function()
  local ray={Origin=cosmetic.Position+Vector3.yAxis*10,Direction=-Vector3.yAxis}
@@ -36,36 +35,27 @@ local ok,err=xpcall(function()
  local shallow={Origin=center+Vector3.new(0,8,0),Direction=Vector3.new(0,-5,30).Unit}
  local point,field,lead,inRange=view:aim(shallow)
  assert(point==center+Vector3.zAxis*30 and field==1 and lead=='test' and inRange,'shallow rock hit lost the bed')
+ view:step(.08)
+ assert(#fx:GetChildren()==5 and not view.activeFloor.gui.Enabled and not view.previewFloor.gui.Enabled
+  and not view.flash.gui.Enabled,'an unselected bed had a visible marker')
+ for _,mark in ipairs(fx:GetChildren()) do
+  assert(mark:IsA('BasePart') and mark:FindFirstChildOfClass('SurfaceGui').Face==Enum.NormalId.Top,
+   'selector created a cursor or raised effect')
+ end
  player:SetAttribute('MA_Selector',center)
  player:SetAttribute('MA_SelectorField',1)
- camera.CFrame=CFrame.new(center+Vector3.yAxis*15)
- view:showAim(.08,ray)
- local side=view.pinned.sides[1]
- local peak=side.opacity;local startHeight=side.part.Size.Y
- view:showAim(.05,ray)
- assert(side.opacity==peak and side.part.Size.Y>3.7 and startHeight<2,'wall did not rise sharply and hold its flash')
- assert(side.edge.Size.X==30 and side.sparks.Lifetime.Max>=1.2 and view.pinned.emitted,'edge burst did not arm')
- view:showAim(.22,ray);local early=side.opacity
- view:showAim(.22,ray);local late=side.opacity
- view:showAim(.44,ray);local idle=side.opacity
- assert(math.abs(side.part.Size.Y-20/3)<.001,'wall height was not reduced by one third')
- assert(peak>.9 and early>late and late>idle and idle>=.32,'wall lost its brightness floor')
- assert(view.pinned.point==center and view.activeFloor.width==30 and view.activeFloor.gui.Enabled,'pin did not fill the entire base')
- assert(view.aimCursor.goal==hovered and not view.previewFloor.gui.Enabled and not view.flash.gui.Enabled,'hover was not cursor-only')
- local nearRay={Origin=ray.Origin+Vector3.xAxis*2.4,Direction=ray.Direction}
- view:showAim(.04,nearRay);view:showAim(.04,nearRay)
- assert(view.aimCursor.goal==hovered+Vector3.xAxis*2 and view.aimCursor.position~=view.aimCursor.goal,'stud snap did not ease toward the grid')
- view:showAim(.16,nearRay)
- assert(view.aimCursor.position==view.aimCursor.goal,'cursor did not settle at the snapped point')
+ view:step(.08)
+ assert(view.activeFloor.point==center and view.activeFloor.width==30 and view.activeFloor.gui.Enabled,
+  'confirmed pin did not fill the entire base')
  assert(view:commit(ray) and view:commit(shallow) and requests==0,'first click or click outside the preview submitted an order')
- view:showAim(.04,nil)
+ view:step(.04)
  local earlyWidth=view.previewFloor.width
- assert(earlyWidth>1 and earlyWidth<30 and not view.aimCursor.gui.Enabled,'first click did not expand from the frozen cursor')
- view:showAim(.26,nil)
+ assert(earlyWidth>1 and earlyWidth<30,'first click did not expand from the selected point')
+ view:step(.26)
  local draft,width,previewStrength=view:previewState()
  assert(draft.point==point and width==30 and view.previewFloor.width==30 and view.previewEdge.point==point,
   'moving away changed the preview or prevented full expansion')
- assert(view.pinned.point==center and not view.flash.gui.Enabled,'preview moved the pin or flashed the walls')
+ assert(view.activeFloor.point==center and not view.flash.gui.Enabled,'preview moved the pin or showed the confirmation wash')
  local rendered=rock:Clone();rendered.Parent=fx
  rendered.Color=Color3.fromRGB(81,76,72);local stone=rendered.Color
  local neighbor=rock:Clone();neighbor.Position+=Vector3.xAxis*20;neighbor:SetAttribute('FullPosition',neighbor.Position);neighbor.Parent=zone
@@ -85,22 +75,24 @@ local ok,err=xpcall(function()
  assert(view:reply({requestId=sent.requestId,status='rejected'}) and view.draft==draft and not view:flashState(),'reject discarded or flashed the preview')
  assert(view:commit(confirmRay) and requests==2 and view:reply({requestId=sent.requestId,status='accepted'}),'retry did not confirm')
  player:SetAttribute('MA_Selector',point)
- view:showAim(.08,nil)
+ view:step(.08)
  local click,strength=view:flashState()
- assert(view.flash.gui.Enabled and view.pinned.point==point and view.pinned.emitted and not view.previewFloor.gui.Enabled,
-  'accepted placement did not open the walls, emit sparks and swap the preview for the wash')
+ assert(view.flash.gui.Enabled and view.activeFloor.point==point and not view.previewFloor.gui.Enabled,
+  'accepted placement did not swap the preview for the wash')
  RockModifierView.clearSelectionFlash(records[1])
  RockModifierView.attackOutlines(records,nil,100,false,click,strength)
  assert(rendered.Color.R>previewRed and not records[1].rockOutline,'confirmation did not brighten the preview rock')
  click.at-=.5
- view:showAim(.5,nil)
+ view:step(.5)
  assert(not view.flash.gui.Enabled and view.activeFloor.gui.Enabled,'fading the wash removed the footprint')
  records[1].lastBeamAt=100
  RockModifierView.clearSelectionFlash(records[1])
  RockModifierView.attackOutlines(records,nil,100.3,false)
  assert(rendered.Color==stone and records[1].rockOutline.FillTransparency==1 and records[1].rockOutline.OutlineTransparency<1,'selection failed to restore the rock or interrupted its attack outline')
  assert(view:commit(ray) and view:cancelPreview() and requests==2 and not view:previewState(),'cancelling a draft sent a command')
- report={nearWallFloor=idle,peak=peak,edgeLifetime=side.sparks.Lifetime.Max,previewStrength=previewStrength,clickFlash=strength}
+ player:SetAttribute('MA_Selector',nil);view:step(.016)
+ assert(not view.activeFloor.gui.Enabled and not view.activeEdge.gui.Enabled,'recall left a footprint')
+ report={groundMarkers=5,previewStrength=previewStrength,clickFlash=strength}
 end,debug.traceback)
-camera.CFrame=before;view:destroy();root:Destroy();player:Destroy();assert(ok,err)
+view:destroy();root:Destroy();player:Destroy();assert(ok,err)
 return report

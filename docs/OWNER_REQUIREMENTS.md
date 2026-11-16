@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 15 — ground-only selection and delayed teamwork
+
+Remove the custom selection cursor and the rising walls with their particles. Keep the two-click selection, expanding preview, rock highlights, confirmation wash, and full confirmed footprint.
+
+Drones still seek weaker rocks first. When every available rock already has a worker, idle drones can join cuts after a few seconds. This applies while multiple rocks remain, including a crew of ten working three high-health rocks.
+
 ## November 15 — two-click selection and last-rock teamwork
 
 Before selecting, the pointer controls a small plus that eases between stud-grid cells. The first click anchors an expanding square and highlights the rocks inside it. The second click confirms the area, opens the walls with edge particles, and brightens the rocks as the temporary wash fades. The confirmed footprint keeps a fill over its entire base.

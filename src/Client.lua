@@ -1813,25 +1813,7 @@ local function assignField(target)
  end
 end
 local mouse=player:GetMouse()
-connect(RunService.RenderStepped,function(dt)
- local camera=workspace.CurrentCamera
- local ray
- if camera and not menusVisible() then
-  local touch=selectorView.touch
-  local input=UIS:GetLastInputType()
-  if touch and touch.active then
-   local point=touch.input.Position
-   if not tacticalHUD:blocksPoint(point) then ray=camera:ScreenPointToRay(point.X,point.Y) end
-  elseif input.Name:match('^Gamepad') then
-   local size=camera.ViewportSize
-   ray=camera:ViewportPointToRay(size.X*.5,size.Y*.5)
-  elseif UIS.MouseEnabled and input~=Enum.UserInputType.Touch then
-   local point=UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
-   if not tacticalHUD:blocksPoint(point) then ray=mouse.UnitRay end
-  end
- end
- selectorView:showAim(dt,ray)
-end)
+connect(RunService.RenderStepped,function(dt) selectorView:step(dt) end)
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end

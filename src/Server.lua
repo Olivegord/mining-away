@@ -143,7 +143,7 @@ local function updateSlots(r)
  end
 end
 local function sameRockType(d,r,allowCrewAssist: boolean?)
- -- Last-rock assignments and Aftershock may span roles within one crew.
+ -- Shared pin assignments and Aftershock may span roles within one crew.
  local role=DroneRoles.canonical(d.role)
  if r.clusterShot and r.clusterShot.drone~=d then return false end
  if role=='Nomad' and r.kind=='Geode' then return false end
@@ -174,13 +174,13 @@ local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: bool
  if d.specialJob and d.target and not d.target.paid and d.target.part:GetAttribute('EffectDrone')==d.id then
   d.target.part:SetAttribute('EffectCancelledSerial',d.specialJob.serial);d.target.part:SetAttribute('EffectType',nil)
  end
- if d.specialRecovery and d.specialRecovery.part.Parent then
+ if d.specialRecovery and d.specialRecovery.part.Parent and d.specialRecovery.part:GetAttribute('EffectDrone')==d.id then
   local part=d.specialRecovery.part
   part:SetAttribute('EffectPausedAt',0);part:SetAttribute('EffectCancelledSerial',d.specialRecovery.serial)
  end
  d.specialJob=nil;d.specialRecovery=nil;d.specialPausedAt=nil;d.obstructedAt=nil;d.manualTarget=nil
  d.specialClear=nil;d.specialQueryAt=nil
- d.resumeResourceId=nil;d.resumePin=nil;d.chargedPin=nil
+ d.resumeResourceId=nil;d.resumePin=nil;d.chargedPin=nil;d.squareHelpAt=nil
  d.chargeSite=nil
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
  d.target=nil;d.squareJob=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
@@ -752,16 +752,6 @@ end
 function scene.respawnEarlier(a,b) return a.at<b.at end
 function scene.rockInSquare(square,rock)
  return square.field==rock.field and Mining.selectorContains(square.center,square.half,rock.position)
-end
-function scene.lastSquareRock(square)
- local last
- for _,r in ipairs(square.field.resources) do
-  if not r.paid and r.hp>0 and r.part.Parent and scene.rockInSquare(square,r) then
-   if last then return nil end
-   last=r
-  end
- end
- return last
 end
 function scene.stepRockModifiers(field)
  local random=scene.modifierRandom
@@ -1706,8 +1696,10 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  end
  if special then
   job.impacted=true
-  r.part:SetAttribute('EffectContactPoint',hitSurface.point);r.part:SetAttribute('EffectContactNormal',hitSurface.normal)
-  r.part:SetAttribute('EffectDepleted',broken);r.part:SetAttribute('EffectDoneAt',now)
+  if r.part:GetAttribute('EffectDrone')==d.id then
+   r.part:SetAttribute('EffectContactPoint',hitSurface.point);r.part:SetAttribute('EffectContactNormal',hitSurface.normal)
+   r.part:SetAttribute('EffectDepleted',broken);r.part:SetAttribute('EffectDoneAt',now)
+  end
  end
  r.stage=nextStage
  if r.stage~=previous or shapeChanged then
@@ -1988,7 +1980,8 @@ function scene.nomadTargetScore(d,rock,distance)
 end
 local function chooseResource(d: any,field: any,square: any?)
  local best,score,bestPriority=nil,math.huge,-math.huge
- local last=square and scene.lastSquareRock(square)
+ local bestUsed,hasHelp=math.huge,false
+ local helpReady=square and d.squareHelpAt and now>=d.squareHelpAt
  local definition=DroneCatalog.Types[d.role]
  local chunkCycle=square and field.cfg.SelectionOnly and definition and not definition.Projectile
   and DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
@@ -1997,8 +1990,11 @@ local function chooseResource(d: any,field: any,square: any?)
    and (not square or scene.rockInSquare(square,r)) then
    local used=0
    for _ in pairs(r.slots) do used+=1 end
-   local capacity=if r==last then 5 elseif square then 1 else r.limit
-   if used<capacity and sameRockType(d,r,r==last) then
+   if square and best and (used>bestUsed or used==bestUsed and r.hp>best.hp) then continue end
+   local helping=square~=nil and used>0
+   local capacity=if square then 10 else r.limit
+   if used<capacity and sameRockType(d,r,helping) then
+    if helping and not helpReady then hasHelp=true;continue end
     local neighbors=0
     if Mining.kind(d.owned.type)=='Green' then
      for _,other in ipairs(field.resources) do
@@ -2018,21 +2014,24 @@ local function chooseResource(d: any,field: any,square: any?)
      elseif d.role=='Striker' and not field.junk then
      distance+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
-    -- Within a pin, clear the least remaining work first. Equal-health rocks
-    -- still use the lead, resume preference and each drone's own scoring.
+    -- Spread spare workers by reservation count. With equal crews, favor the
+    -- least remaining health so weaker cuts finish first.
     local priority=0
     if square and r.cargoProduced then priority=-1
     elseif square and square.leadId==r.id then priority=3
     elseif square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
      priority=(d.resumePin==square and d.resumeResourceId==r.id) and 2 or 1
     end
-    local equalWork=not square or best and r.hp==best.hp
-    if not best or (square and r.hp<best.hp) or equalWork and
-     (priority>bestPriority or priority==bestPriority and value<score) then
-     best=r;score=value;bestPriority=priority
+    if not best or (square and (used<bestUsed or r.hp<best.hp))
+     or priority>bestPriority or priority==bestPriority and value<score then
+     best=r;score=value;bestPriority=priority;bestUsed=used
     end
    end
   end
+ end
+ if square then
+  if best or not hasHelp then d.squareHelpAt=nil
+  elseif not d.squareHelpAt then d.squareHelpAt=now+2.15+(d.slot%7)*.12 end
  end
  if best then
   local occupied={};for _,slot in pairs(best.slots) do occupied[slot]=true end
@@ -2194,19 +2193,9 @@ function scene.squareStep(p,d)
  local square=p.miningSquare
  if d.resumePin~=square then d.resumePin=nil;d.resumeResourceId=nil end
  if d.squareJob and d.squareJob~=square and not scene.committedWork(d) then scene.releaseSquareApproach(d);d.field=nil end
- local target,job=d.target,d.squareJob
- if job and target and d.targetSlot>1 then
-  local hasEarlier=false
-  for _,slot in pairs(target.slots) do
-   if slot<d.targetSlot then hasEarlier=true;break end
-  end
-  -- Keep one worker on this rock when another grows or enters the footprint.
-  if hasEarlier and scene.lastSquareRock(job)~=target then
-   scene.releaseSquareApproach(d);d.field=nil
-  end
- end
  if not square or d.target or d.breaker or d.specialRecovery then return end
  d.field=nil;d.autoField=nil
+ if d.squareSearched~=square then d.squareHelpAt=nil end
  if now<(d.squareSearchAt or 0) and d.squareSearched==square then return end
  d.squareSearchAt=now+.22;d.squareSearched=square
  if chooseResource(d,square.field,square) then
@@ -2567,8 +2556,10 @@ local function committedStation(d,r)
   end
   if r.field.cfg.SelectionOnly and d.targetSlot>1
    and (not definition or not definition.Projectile or RoleConfig.DownwardGunDepth[d.role]) then
-   local angle=(d.targetSlot-1.5)*math.pi*.5
-   d.workStation+=Vector3.new(math.cos(angle)*4.5,0,math.sin(angle)*4.5)
+   local inner=d.targetSlot<=5
+   local angle=if inner then (d.targetSlot-1.5)*math.pi*.5 else (d.targetSlot-6)*2*math.pi/5
+   local radius=inner and 4.5 or 9.2
+   d.workStation+=Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius)
   end
  end
  return d.workStation
@@ -3379,9 +3370,11 @@ local function setMotionPaused(p: any,paused: boolean)
    local effectJob=d.specialJob or d.specialRecovery
    local effectPart=d.specialJob and d.target and d.target.part or d.specialRecovery and d.specialRecovery.part
    if effectPart and not effectPart.Parent then effectJob=nil;effectPart=nil end
+   local ownsEffect=effectPart and effectPart:GetAttribute('EffectDrone')==d.id
    if paused then
     if effectJob and effectPart and not d.specialPausedAt then
-     d.specialPausedAt=now;effectPart:SetAttribute('EffectPausedAt',now)
+     d.specialPausedAt=now
+     if ownsEffect then effectPart:SetAttribute('EffectPausedAt',now) end
      if effectJob.projectile and effectJob.projectile.Parent then effectJob.projectile:SetAttribute('PausedAt',now) end
     end
     d.model:SetAttribute('Mining',false);d.model:SetAttribute('Firing',false)
@@ -3393,8 +3386,10 @@ local function setMotionPaused(p: any,paused: boolean)
      if effectJob.projectile and effectJob.projectile.Parent then
       effectJob.projectile:SetAttribute('StartedAt',effectJob.startedAt);effectJob.projectile:SetAttribute('PausedAt',0)
      end
-     if effectJob.impacted then effectPart:SetAttribute('EffectDoneAt',(effectPart:GetAttribute('EffectDoneAt') or now)+pausedFor) end
-     effectPart:SetAttribute('EffectStartedAt',effectJob.startedAt);effectPart:SetAttribute('EffectPausedAt',0)
+     if ownsEffect then
+      if effectJob.impacted then effectPart:SetAttribute('EffectDoneAt',(effectPart:GetAttribute('EffectDoneAt') or now)+pausedFor) end
+      effectPart:SetAttribute('EffectStartedAt',effectJob.startedAt);effectPart:SetAttribute('EffectPausedAt',0)
+     end
      if d.specialRecovery then
       local retired=resources[effectPart:GetAttribute('ResourceId')]
       if retired and retired.removeAt then retired.removeAt+=pausedFor end

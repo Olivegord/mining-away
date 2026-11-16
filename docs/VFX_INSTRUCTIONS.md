@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — ground-only selection
+
+The two-click preview still expands on the ground and highlights the stones inside it. Confirmation flashes the rocks and leaves the full footprint visible after the floor wash fades. The owner removed the custom hovering cursor, selection walls and wall particles, superseding the older selection effects below.
+
 ## November 14 — one continuous reel and a crystal-colored seating impact
 
 A visible Roblox RopeConstraint follows the claw and hull. The approach and reel position the endpoints on the render clock so a physics handoff cannot tug them away from the visible drone. The confirmed grab starts the reel from the last drawn claw pose and carries the ore's resting rotation into the cradle. A small burst samples the mineral color at seating. It lasts up to 1.2 seconds and survives rope cleanup. Needler and Ballcaster load vertically and fire at the rock from overhead. Their original shot timing and flight recoil remain. Cut selection walls to two thirds of their former height while keeping their flash, visible floor, and edge sparks.

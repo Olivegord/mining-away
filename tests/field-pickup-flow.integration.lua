@@ -66,59 +66,100 @@ miner.state=previousState
 do
  field.model=zone;field.center=center;field.color=bed.Color;field.respawnClock=now
  field.cfg.Key='Quartz';field.cfg.AlwaysUnlocked=true;field.cfg.Turrets=0;field.cfg.Respawn=8
- local strong=makeResource(field,center,'Crystal',210,10,3,3)
- local weak=makeResource(field,center+Vector3.xAxis*10,'Crystal',60,5,2,3)
+ local strong=makeResource(field,center,'Crystal',5410,10,3,3)
+ local weak=makeResource(field,center+Vector3.xAxis*10,'Crystal',2110,5,2,3)
+ local medium=makeResource(field,center-Vector3.xAxis*10,'Crystal',3810,7,2.5,3)
+ strong.readyAt=now;weak.readyAt=now;medium.readyAt=now
+ local crew={};local originalCount=#p.drones
  local gun
- for _,worker in ipairs(p.drones) do if worker.role=='Needler' then gun=worker;break end end
- local second=p.drones[2]
- assert(gun and second.role=='Striker')
- strong.readyAt=now;weak.readyAt=now
- miner.pos=strong.position;second.pos=strong.position
- local function choose(leadId)
-  scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center,leadId=leadId})
+ for _,worker in ipairs(p.drones) do
+  if DroneRoles.isWorker(worker.role) then table.insert(crew,worker) end
+  if worker.role=='Needler' then gun=worker end
  end
- now+=.25;choose(strong.id)
- scene.squareStep(p,miner);scene.squareStep(p,second);scene.squareStep(p,gun)
- assert(miner.target==weak and second.target==strong and not gun.target,
-  'fresh assignments must prefer weak rocks and split while others stand')
- miner.pos=committedStation(miner,weak)
- assert(hitResource(miner,weak,1000) and weak.paid)
+ while #crew<10 do
+  local owned=Pro.clone(miner.owned);owned.id='assist-test:'..#crew
+  table.insert(crew,spawnDrone(p,owned,#p.drones+1))
+ end
+ local function searchAll()
+  for _,worker in ipairs(crew) do scene.squareStep(p,worker) end
+ end
+ local function assigned()
+  local total=0
+  for _,worker in ipairs(crew) do if worker.target then total+=1 end end
+  return total
+ end
+ local function count(rock)
+  local total=0
+  for _ in pairs(rock.slots) do total+=1 end
+  return total
+ end
+ miner.pos=strong.position
  now+=.25
- scene.squareStep(p,miner);scene.squareStep(p,gun)
- assert(miner.target==strong and gun.target==strong and gun.targetSlot==3,'last rock did not accept crew reinforcement across roles')
- local a,b,c=committedStation(second,strong),committedStation(miner,strong),committedStation(gun,strong)
- assert((a-b).Magnitude>=4.49 and (a-c).Magnitude>=4.49 and (b-c).Magnitude>=4.49,'last-rock stations overlapped')
+ scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center,leadId=strong.id})
+ local started=now
+ searchAll()
+ assert(assigned()==3 and miner.target==weak and crew[2].target==medium and crew[3].target==strong,
+  'new assignments did not spread across rocks in remaining-health order')
+ now=started+1.95;searchAll()
+ assert(assigned()==3,'helpers joined before the delay')
+ now=started+2.35;searchAll()
+ assert(assigned()>3 and assigned()<10,'helpers did not stagger their departures')
+ now=started+3.15;searchAll()
+ assert(assigned()==10 and count(weak)==4 and count(medium)==3 and count(strong)==3,
+  'three healthy rocks did not use the full crew across balanced cuts')
+ local sharedRock=gun.target
+ local laser
+ for _,worker in ipairs(crew) do
+  worker.pos=committedStation(worker,worker.target)
+  if worker.target==sharedRock and worker.role=='Striker' then laser=worker end
+ end
+ assert(laser and (laser.pos-gun.pos).Magnitude>=4.49,'mixed-role stations overlapped')
  local rival=player(98761);players.PlayerAdded:Fire(rival)
  local rivalProfile=profiles[rival.UserId]
  rival.Character:PivotTo(CFrame.new(hr.Position))
  scene.placeSquare(rivalProfile,{runId=data(rivalProfile).run.id,fieldId=field.id,position=center})
  scene.squareStep(rivalProfile,rivalProfile.drones[1])
- assert(not rivalProfile.drones[1].target,'another crew joined the shared crystal')
+ now+=3.2;scene.squareStep(rivalProfile,rivalProfile.drones[1])
+ assert(not rivalProfile.drones[1].target,'another crew joined a claimed crystal')
  players.PlayerRemoving:Fire(rival)
- second.pos=a;miner.pos=b;gun.pos=c
- second.mining=true;miner.mining=true
+ laser.mining=true
+ local before=sharedRock.hp
+ gun.specialJob={targetId=sharedRock.id,serial=1,startedAt=now-1,duration=1,impact=.5,damage=20,contact=sharedRock.part.Position}
+ sharedRock.part:SetAttribute('EffectDrone',laser.id);sharedRock.part:SetAttribute('EffectDoneAt',0)
+ assert(hitResource(laser,sharedRock,20) and hitResource(gun,sharedRock,20,false,nil,nil,'Special') and sharedRock.hp<before-30,
+  'mixed-role reservations prevented real contacts on a shared rock')
+ assert(sharedRock.part:GetAttribute('EffectDoneAt')==0,'a supporting shot overwrote another drone’s effect receipt')
  scene.publishSquareStatus(p)
  assert(pl:GetAttribute('MA_SelectorStatus')=='SharedCut','shared cutting did not reach the HUD')
- local before=strong.hp
- gun.specialJob={targetId=strong.id,serial=1,startedAt=now-1,duration=1,impact=.5,damage=20,contact=strong.part.Position}
- assert(hitResource(second,strong,20) and hitResource(gun,strong,20,false,nil,nil,'Special') and strong.hp<before-30,
-  'mixed-role reservations prevented real contacts on the final rock')
- local regrowth=makeResource(field,weak.position,'Crystal',55,5,2,3)
- scene.squareStep(p,miner);scene.squareStep(p,gun)
- assert(second.target==strong and not miner.target and not gun.target,'growing alternative did not stop the collaboration')
+ local regrowth=makeResource(field,weak.position+Vector3.zAxis*8,'Crystal',55,5,2,3)
  regrowth.readyAt=now
- now+=.25
- scene.squareStep(p,miner);scene.squareStep(p,gun)
- assert(miner.target==regrowth and not gun.target,'workers did not spread when the replacement became ready')
- miner.pos=committedStation(miner,regrowth)
- assert(hitResource(miner,regrowth,1000) and hitResource(second,strong,1000) and strong.paid and not next(strong.slots))
- assert(not hitResource(second,strong,1000),'a depleted shared rock accepted a second payout contact')
+ scene.squareStep(p,laser)
+ assert(assigned()==10 and laser.target==sharedRock,'a new rock interrupted active collaboration')
+ local idle=crew[#crew];release(idle)
+ scene.squareStep(p,idle)
+ assert(idle.target==regrowth,'an available worker did not prioritize the newly ready rock')
+ for _,worker in ipairs(crew) do release(worker) end
+ for _,other in ipairs({weak,medium,regrowth}) do other.paid=true end
+ now+=.25;searchAll()
+ assert(assigned()==1,'only one worker should launch immediately at the last rock')
+ now+=3.15;searchAll()
+ assert(assigned()==10 and count(strong)==10,'the final healthy rock left spare workers idle')
+ for i,worker in ipairs(crew) do
+  worker.pos=committedStation(worker,strong)
+  for j=1,i-1 do assert((worker.pos-crew[j].pos).Magnitude>=4.49,'shared stations overlapped') end
+ end
+ assert(hitResource(miner,strong,10000) and strong.paid and not next(strong.slots),'depletion did not retire every worker')
+ assert(not hitResource(miner,strong,10000),'a depleted shared rock accepted a second payout contact')
  for id,drop in pairs(pickups) do drop.part:Destroy();pickups[id]=nil end
  for _,rock in ipairs(field.resources) do resources[rock.id]=nil;rock.part:Destroy() end
  table.clear(field.resources);table.clear(field.respawnQueue)
  for _,worker in ipairs(p.drones) do release(worker);worker.lingerUntil=nil end
+ for i=#p.drones,originalCount+1,-1 do
+  local worker=p.drones[i]
+  drones[worker.id]=nil;worker.model:Destroy();table.remove(p.drones,i)
+ end
 end
-print('PASS weak-first dispatch, final-rock mixed-role sharing, foreign claim protection, and redistribution on regrowth')
+print('PASS weak-first dispatch, 10 workers across 3 rocks, staggered sharing, mixed contacts, and foreign claim protection')
 
 do
  local destination=Vector3.new(-48,9,0)
