@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — sequential sale breaks and gem particles
+
+Each sale rock shrinks and fades in about 65 milliseconds. The grid advances only after that rock is gone, including when the renderer has a slow frame. The existing gem reveal's colored discs and four-point glints replace the sale's square particles. Sale particles use a smaller spread in world space and live for 0.6 to 1.17 seconds, independent of the rock. The reward amounts still pause before flying to the HUD.
+
 ## November 15 — selling anticipation and gem reveal
 
 A sale opens a large grid and waits for E. After server confirmation, hold the grid for 0.38 seconds, then cascade through it. Each sale has an impact pose, a camera beat, colored particles and its own crack. Reward icons hold for 0.38 seconds before departing. Courier and automatic transactions retain compact notifications. Reduced Motion removes the shake and particles.

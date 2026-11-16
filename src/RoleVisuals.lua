@@ -310,11 +310,12 @@ local impactStyles={
  GemReward={speed=NumberRange.new(9,22),spread=72,lift=-12,count=20,dust=0},
  Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
 }
-function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?)
+function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?,saleParent: Instance?)
  local prism=kind=='PrismBlast'
  if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
  root.Name=kind..'Particles';root.Transparency=1;root.Size=Vector3.one*.04;root.Position=position
+ if saleParent then root.Parent=saleParent end
  if normal then root.CFrame=CFrame.lookAt(position,position+normal) end
  if prism then
   prismImpactCount+=1;root.Destroying:Connect(function() prismImpactCount-=1 end)
@@ -337,6 +338,12 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  sparks.Lifetime=crystal and NumberRange.new(.16,.48) or residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
  sparks.Speed=style and style.speed or prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
  sparks.Acceleration=Vector3.new(0,style and style.lift or residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
+ if saleParent then
+  -- The same gem reveal discs and glints, scaled for the camera-facing sale grid.
+  sparks.Speed=NumberRange.new(sparks.Speed.Min*.15,sparks.Speed.Max*.15)
+  sparks.Acceleration=Vector3.new(0,-1.7,0)
+  sparks.Lifetime=NumberRange.new(.6,1)
+ end
  sparks.Parent=root;sparks:Emit(style and style.count or prism and 20 or residual and 9 or orbital and 10 or crystal and 15 or 8)
  -- Keep impact signatures distinct: cuts have a short directional snap;
  -- mineral and ice release pinpricks; heavy attacks shed dark debris.
@@ -347,6 +354,11 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  if not crystal then
   local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
    mode,sparks.EmissionDirection,fast and spread*.66 or spread)
+  if saleParent then
+   accent.Speed=NumberRange.new(.5,1.5)
+   accent.Acceleration=Vector3.new(0,-.35,0)
+   accent.Lifetime=NumberRange.new(.76,1.17)
+  end
   accent:Emit(prism and 4 or dark and 5 or 3)
  end
  if crystal then

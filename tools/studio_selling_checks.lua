@@ -7,7 +7,10 @@ local function module(name,nextName)
  local finish=assert(source:find('\nlocal '..nextName..' = (function()',start,true))
  return source:sub(start,finish-1)
 end
-local W,Finish,Sale=assert(loadstring(module('Workshop','Shops')..module('Shops','Feel')..module('RockFinish','WorkEffects')..module('SaleView','CommandView')..'\nreturn Workshop,RockFinish,SaleView'))()
+local W,Finish,Sale=assert(loadstring(
+ module('EnergyDisc','Workshop')..module('Workshop','Shops')..module('Shops','Feel')..module('RockFinish','WorkEffects')
+ ..'\nlocal BeamVFX={reduced=function() return false end,near=function() return true end}\n'
+ ..module('RoleVisuals','NomadView')..module('SaleView','CommandView')..'\nreturn Workshop,RockFinish,SaleView'))()
 local HUD=assert(loadstring(game.ReplicatedStorage.Shared.TacticalHUD.Source))()
 Finish.Gems.prepare()
 local core=game:GetService('CoreGui')
@@ -70,13 +73,30 @@ local ok,err=xpcall(function()
  local reward=view.flights[1];assert(reward.hold>=.35 and reward.view.Text=='+$1')
  local initialReward=reward.view.Position
  view:update(1/60);assert((reward.view.Position.X.Offset-initialReward.X.Offset)^2<1,'reward departed before holding at the rock')
- first.hitAt=os.clock()-.10;view:update(1/60);assert(first.sold)
- view.cascadeAt=os.clock()-2;view:update(1/60);assert(view.active and beats==10)
+ local burst=assert(fx:FindFirstChild('GemRewardParticles'))
+ assert(burst.AirborneSparks.Lifetime.Min>=.59 and burst.ImpactAccent.Lifetime.Max>1,'gem particles need a visible tail')
+ view.cascadeAt=os.clock()-4
+ view.lastBreakAt=os.clock()-1
+ view:update(1/60)
+ assert(not first.sold and not view.tiles[2].hitAt and beats==1,'a stalled schedule began the next rock prematurely')
+ for index=1,#view.tiles do
+  local tile=view.tiles[index]
+  assert(tile.hitAt and not tile.sold)
+  tile.hitAt=os.clock()-.09;view.lastBreakAt=os.clock()-.14
+  view:update(1/60)
+  assert(tile.sold)
+  if index<#view.tiles then
+   assert(view.tiles[index+1].hitAt and beats==index+1)
+   assert(not view.tiles[index+2] or not view.tiles[index+2].hitAt)
+  end
+  if index==1 then assert(burst.Parent==fx,'breaking the next rock cleared the prior gem particles') end
+ end
+ assert(view.active and beats==10)
  for _,flight in ipairs(view.flights) do flight.at=os.clock()-2 end
- for _,spark in ipairs(view.sparks) do spark.at=os.clock()-2 end
- view.cascadeAt=os.clock()-4;view:update(1/60)
- assert(not view.active and not view.focus and #view.flights==0 and #view.sparks==0 and cues.sale_credit)
+ view.tiles[10].hitAt=os.clock()-1.1;view:update(1/60)
+ assert(not view.active and not view.focus and #view.flights==0 and cues.sale_credit)
  report.sortedObjects=10;report.screenBeats=beats;report.currencyArrivals=true;report.cleanup=true
+ report.sequentialBreaks=true;report.sharedGemParticles=true
  reduced=true
  local steady=table.clone(receipt);steady.id='reduced';view:receive(steady);view:update(1/60)
  view.cascadeAt=os.clock()-3;view:update(1/60);assert(beats==10,'reduced motion shook camera')

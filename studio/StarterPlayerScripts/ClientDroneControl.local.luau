@@ -7742,11 +7742,12 @@ local impactStyles={
  GemReward={speed=NumberRange.new(9,22),spread=72,lift=-12,count=20,dust=0},
  Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
 }
-function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?)
+function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?,saleParent: Instance?)
  local prism=kind=='PrismBlast'
  if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
  root.Name=kind..'Particles';root.Transparency=1;root.Size=Vector3.one*.04;root.Position=position
+ if saleParent then root.Parent=saleParent end
  if normal then root.CFrame=CFrame.lookAt(position,position+normal) end
  if prism then
   prismImpactCount+=1;root.Destroying:Connect(function() prismImpactCount-=1 end)
@@ -7769,6 +7770,12 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  sparks.Lifetime=crystal and NumberRange.new(.16,.48) or residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
  sparks.Speed=style and style.speed or prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
  sparks.Acceleration=Vector3.new(0,style and style.lift or residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
+ if saleParent then
+  -- The same gem reveal discs and glints, scaled for the camera-facing sale grid.
+  sparks.Speed=NumberRange.new(sparks.Speed.Min*.15,sparks.Speed.Max*.15)
+  sparks.Acceleration=Vector3.new(0,-1.7,0)
+  sparks.Lifetime=NumberRange.new(.6,1)
+ end
  sparks.Parent=root;sparks:Emit(style and style.count or prism and 20 or residual and 9 or orbital and 10 or crystal and 15 or 8)
  -- Keep impact signatures distinct: cuts have a short directional snap;
  -- mineral and ice release pinpricks; heavy attacks shed dark debris.
@@ -7779,6 +7786,11 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  if not crystal then
   local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
    mode,sparks.EmissionDirection,fast and spread*.66 or spread)
+  if saleParent then
+   accent.Speed=NumberRange.new(.5,1.5)
+   accent.Acceleration=Vector3.new(0,-.35,0)
+   accent.Lifetime=NumberRange.new(.76,1.17)
+  end
   accent:Emit(prism and 4 or dark and 5 or 3)
  end
  if crystal then
@@ -16032,7 +16044,8 @@ local Input=game:GetService('UserInputService')
 local Actions=game:GetService('ContextActionService')
 local CONFIRM_ACTION='MiningAwayConfirmSale'
 local FIRST_HIT=.38
-local HIT_HOLD=.085
+local BREAK_TIME=.065
+local FINISH_HOLD=.95
 local ICON_HOLD=.38
 local GOLD=Color3.fromRGB(255,218,104)
 local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
@@ -16043,7 +16056,7 @@ local function label(parent,text,color,size)
  return v
 end
 function Sale.new(refs)
- local self=setmetatable({refs=refs,queue={},seen={},seenOrder={},flights={},sparks={},tiles={},closed=false},Sale)
+ local self=setmetatable({refs=refs,queue={},seen={},seenOrder={},flights={},tiles={},closed=false},Sale)
  local gui=Instance.new('ScreenGui');gui.Name='OreSaleCascade';gui.ResetOnSpawn=false
  gui.ScreenInsets=Enum.ScreenInsets.DeviceSafeInsets;gui.DisplayOrder=13;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.Parent=refs.player.PlayerGui
  self.gui=gui
@@ -16177,13 +16190,14 @@ function Sale:start(receipt,now)
   focus.NearIntensity=0;focus.FarIntensity=0;focus.Parent=Lighting;self.focus=focus
   self.blocker.Visible=true;self:bindInput()
  end
- self.stepTime=receipt.full and math.clamp(1.65/#receipt.items,.055,.15) or .045
+ self.breakIndex=1;self.lastBreakAt=nil
+ self.breakInterval=receipt.full and math.clamp(1.25/#receipt.items,.085,.13) or .085
  local count=0
  for i,item in ipairs(receipt.items) do
   local ore,gem=self:makeOre(item)
   local caption=label(self.gui,item.units>1 and item.name..' ×'..item.units or item.name,Color3.fromRGB(table.unpack(item.color)),14)
   count+=item.units
-  self.tiles[i]={item=item,ore=ore,gem=gem,caption=caption,size=ore.Size,at=FIRST_HIT+(i-1)*self.stepTime}
+  self.tiles[i]={item=item,ore=ore,gem=gem,caption=caption,size=ore.Size,transparency=ore.Transparency}
  end
  self.title.Text='Backpack  ·  '..count..' ore'
  self.title.Visible=receipt.full
@@ -16196,12 +16210,12 @@ function Sale:fly(key,amount,from,color,now)
  icon.Position=UDim2.fromOffset(from.X,from.Y)
  table.insert(self.flights,{view=icon,key=key,from=from,at=now,hold=self.active.full and ICON_HOLD or .10,duration=.42})
 end
-function Sale:burst(tile,point,now)
+function Sale:breakRock(tile,index,point,now,cameraUp)
  local item=tile.item;local color=Color3.fromRGB(table.unpack(item.color))
  self:fly('Money',item.cash*item.units,point,GOLD,now)
  if item.resource then self:fly(item.resource,item.dust*item.units,point+Vector2.new(15,21),color,now+.025) end
  if item.stoneUnits>0 then self:fly('Stone',item.stoneUnits*item.units,point+Vector2.new(-12,43),Color3.fromRGB(226,214,192),now+.045) end
- if self.refs.audio then self.refs.audio:play(item.stone and 'sale_stone' or 'sale_gem',nil,{pitch=.89+(tile.index%8)*.045}) end
+ if self.refs.audio then self.refs.audio:play(item.stone and 'sale_stone' or 'sale_gem',nil,{pitch=.89+(index%8)*.045}) end
  if not self.refs.reducedMotion() then
   if self.active.full then
    local character=self.refs.player.Character
@@ -16209,15 +16223,12 @@ function Sale:burst(tile,point,now)
    self.refs.presentation:cameraBeat('Sale',root and root.Position or tile.ore.Position,workspace:GetServerTimeNow(),item.stone and .8 or 1.2)
   end
   if self.refs.player:GetAttribute('ReducedEffects')~=true then
-   for i=1,item.stone and 10 or 17 do
-    local shard=Instance.new('Frame');shard.AnchorPoint=Vector2.new(.5,.5);shard.Size=UDim2.fromOffset(4+i%2*2,4+i%2*2)
-    shard.BorderSizePixel=0;shard.BackgroundColor3=i%2==0 and GOLD or color;shard.Rotation=i*37;shard.Parent=self.gui
-    local angle=i*2.399
-    self.sparks[#self.sparks+1]={view=shard,from=point,velocity=Vector2.new(math.cos(angle),math.sin(angle))*(68+(i%6)*24),at=now}
-   end
+   local size=tile.ore.Size
+   local scale=math.clamp(math.max(size.X,size.Y,size.Z)*.19,.06,.26)
+   RoleVisuals.ImpactParticles(tile.ore.Position,color,scale,'GemReward',cameraUp,nil,self.refs.parent)
   end
  end
- tile.hitAt=now
+ tile.hitAt=now;self.lastBreakAt=now
 end
 function Sale:clearGrid()
  for _,tile in ipairs(self.tiles) do if not tile.sold then tile.ore:Destroy();tile.caption:Destroy() end end
@@ -16229,7 +16240,7 @@ function Sale:clearGrid()
  end
  if self.focus then self.focus:Destroy();self.focus=nil end
 end
-function Sale:update(dt)
+function Sale:update()
  if self.closed then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local now=os.clock();local reduced=self.refs.reducedMotion()
@@ -16253,8 +16264,11 @@ function Sale:update(dt)
   local cell=math.min(full and viewport.Y*.46 or 55,(viewport.X-40)/columns,(viewport.Y*(full and .65 or .48))/rows)
   local center=full and Vector2.new(viewport.X*.5,viewport.Y*.465) or Vector2.new(viewport.X*.5,viewport.Y*.24)
   self.title.Position=UDim2.fromOffset(center.X,math.max(35,center.Y-rows*cell*.5-13))
-  local lastHit=FIRST_HIT+(count-1)*self.stepTime
-  if self.focus then self.focus.FarIntensity=.34*smooth(age/.22)*(1-smooth(((cascadeAge or 0)-(lastHit+.50))/.24)) end
+  local lastHit=self.tiles[count].hitAt
+  if self.focus then
+   local fade=lastHit and smooth((now-lastHit-.52)/.25) or 0
+   self.focus.FarIntensity=.34*smooth(age/.22)*(1-fade)
+  end
   local depth=4;local unitsPerPixel=2*depth*math.tan(math.rad(camera.FieldOfView*.5))/viewport.Y
   for i,tile in ipairs(self.tiles) do if not tile.sold then
    local row=math.floor((i-1)/columns);local column=(i-1)%columns
@@ -16263,21 +16277,25 @@ function Sale:update(dt)
    point+=Vector2.new(0,(1-rise)*65)
    local ray=camera:ViewportPointToRay(point.X,point.Y)
    local position=ray.Origin+ray.Direction*(depth/math.max(.1,ray.Direction:Dot(camera.CFrame.LookVector)))
-   local hit=tile.hitAt and math.clamp((now-tile.hitAt)/HIT_HOLD,0,1) or 0
+   local hit=tile.hitAt and math.clamp((now-tile.hitAt)/BREAK_TIME,0,1) or 0
    local scale=cell*(full and .88 or .70)*unitsPerPixel/math.max(tile.size.X,tile.size.Y,tile.size.Z)
-   if tile.hitAt and not reduced then scale*=1+.11*(1-hit) end
+   if tile.hitAt and not reduced then scale*=1-.40*hit end
    tile.ore.Size=tile.size*scale*(.7+.3*rise)
    tile.ore.CFrame=CFrame.new(position)*camera.CFrame.Rotation*CFrame.Angles(.16,(reduced and .3 or age*.45)+i*.6,.12)
-   if tile.gem then RockFinish.Gems.update(tile.ore,rise,camera.CFrame.Position) end
+   if tile.gem then RockFinish.Gems.update(tile.ore,rise*(1-hit),camera.CFrame.Position) end
+   if tile.hitAt then tile.ore.Transparency=tile.transparency+(1-tile.transparency)*hit end
    tile.caption.Position=UDim2.fromOffset(point.X,point.Y+cell*.43)
-   tile.caption.TextSize=cell<56 and 12 or full and 17 or 14;tile.caption.TextTransparency=1-rise
+   tile.caption.TextSize=cell<56 and 12 or full and 17 or 14;tile.caption.TextTransparency=1-rise*(1-hit)
    if tile.hitAt and hit>=1 then
     tile.ore:Destroy();tile.caption:Destroy();tile.sold=true
-   elseif not tile.hitAt and cascadeAge and cascadeAge>=tile.at then
-    tile.index=i;self:burst(tile,point,now)
+    self.breakIndex+=1
+   elseif i==self.breakIndex and not tile.hitAt and cascadeAge and cascadeAge>=FIRST_HIT
+    and (not self.lastBreakAt or now-self.lastBreakAt>=self.breakInterval) then
+    -- Advance only after the prior rock is gone, even when a frame stalls.
+    self:breakRock(tile,i,point,now,camera.CFrame.UpVector)
    end
   end end
-  if cascadeAge and cascadeAge>lastHit+.98 then self:clearGrid() end
+  if lastHit and now-lastHit>FINISH_HOLD then self:clearGrid() end
  end
  for i=#self.flights,1,-1 do
   local f=self.flights[i];local t=math.clamp((now-f.at-f.hold)/f.duration,0,1)
@@ -16293,18 +16311,10 @@ function Sale:update(dt)
    self.refs.hud:currencyHit(f.key);f.view:Destroy();table.remove(self.flights,i)
   end
  end
- for i=#self.sparks,1,-1 do
-  local s=self.sparks[i];local age=now-s.at;local t=age/.53
-  if t>=1 then s.view:Destroy();table.remove(self.sparks,i)
-  else
-   local p=s.from+s.velocity*age+Vector2.new(0,80*age*age)
-   s.view.Position=UDim2.fromOffset(p.X,p.Y);s.view.BackgroundTransparency=t;s.view.Rotation+=dt*110
-  end
- end
 end
 function Sale:destroy()
  if self.closed then return end;self.closed=true;self:clearGrid()
- self.gui:Destroy();self.queue={};self.flights={};self.sparks={}
+ self.gui:Destroy();self.queue={};self.flights={}
 end
 return Sale
 

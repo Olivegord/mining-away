@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 15 — one sale break at a time
+
+Break the rocks in order, one at a time. Keep each break animation fast and let the particles linger. Reuse the particle system from a gem reveal.
+
 ## November 15 — preview and confirm the sale, recognizable gem rewards
 
 Show the backpack contents before selling. Fill the screen with substantially larger rocks. Offer **E to sell** from that view. After confirmation, give the sale a short pause, screen shake, particles and sounds. Let each reward linger near its rock before flying to its counter.
