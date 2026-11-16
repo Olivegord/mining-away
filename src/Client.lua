@@ -214,7 +214,6 @@ local cargoTrack=frame(hud,UDim2.fromOffset(50,53),UDim2.new(1,-164,0,4),palette
 local cargoFill=frame(cargoTrack,UDim2.fromScale(0,0),UDim2.fromScale(0,1),palette.mineral);corner(cargoFill,3)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
 local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',13,palette.text,true);notice.TextXAlignment=Enum.TextXAlignment.Center
-local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() if not (logisticsView and logisticsView:recall()) then command:FireServer('Recall') end end,Color3.fromRGB(66,177,91));recall.Name='Recall'
 local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),palette.panel,14);context.Name='ContextAction';context.Active=true;context.Visible=false
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
 local fleetView
@@ -225,6 +224,10 @@ local selectorView=SelectorView.new({world=world,player=player,parent=localFX,co
  notify=function(message) notice.Text=message;noticeUntil=os.clock()+2 end,
  hidePin=menusVisible,
  hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
+local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function()
+ selectorView:cancelPreview()
+ if not (logisticsView and logisticsView:recall()) then command:FireServer('Recall') end
+end,Color3.fromRGB(66,177,91));recall.Name='Recall'
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
 local modalEmblem=U.icon(sheet,'cards',UDim2.fromOffset(20,19),UDim2.fromOffset(54,54),palette.mineral)
@@ -1686,8 +1689,12 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
  rockDamage.feedback:applyTints(now)
- local click,flash=selectorView:flashState()
- RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,click,flash)
+ do
+  local click,flash=selectorView:flashState()
+  local draft,width,strength=selectorView:previewState()
+  RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,
+   click or draft,click and flash or strength,not click and width or nil)
+ end
  presentation:update(dt,now)
  laserShowcase:step(now,dt)
  if logisticsView then logisticsView:step(now,dt) end
@@ -1710,6 +1717,7 @@ enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,context=context,enemy=enemyHUD,toast=toast,
  cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible,
  packReadyToOpen=function() return packView.openReady end,
+ selectorPreview=function() return selectorView.draft~=nil end,
  starterReachable=function() return selectorView:canReachStarterPlot() end,
  depotApproach=function(pin)
   local character=player.Character
@@ -1845,6 +1853,7 @@ connect(UIS.InputBegan,function(input,processed)
  if toolView and toolView:input(input,processed) then return end
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
+ if input.KeyCode==Enum.KeyCode.Escape and selectorView:cancelPreview() then return end
  if processed or UIS:GetFocusedTextBox() then return end
  if input.UserInputType==Enum.UserInputType.Touch then
   if selectorView.touch then selectorView.touch.active=false
@@ -1862,7 +1871,9 @@ connect(UIS.InputBegan,function(input,processed)
  local key=input.KeyCode
  if menusVisible() and not modal.Visible then return end
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
- elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then if not logisticsView:recall() then command:FireServer('Recall') end
+ elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then
+  local cancelled=selectorView:cancelPreview()
+  if (not cancelled or key~=Enum.KeyCode.ButtonB) and not logisticsView:recall() then command:FireServer('Recall') end
  elseif not modal.Visible and key==Enum.KeyCode.U then cargoAction()
  elseif not modal.Visible and key==Enum.KeyCode.L then command:FireServer('LaunchStorage')
  elseif not modal.Visible and key==Enum.KeyCode.C then logisticsView:cycle()

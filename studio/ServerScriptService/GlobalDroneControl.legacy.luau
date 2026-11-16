@@ -247,7 +247,6 @@ W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_T
 W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.DEEP_CUT_HARDNESS=1.75
-W.PAIRED_CUT_HARDNESS=27
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
  for _,card in ipairs(p.run.cards) do total+=card.effects[key] or 0 end
@@ -9666,11 +9665,13 @@ local function nearMiningField(position,field)
 end
 local function updateSlots(r)
  local count=0;for _ in pairs(r.slots) do count=count+1 end
- if r.part and r.part.Parent then r.part:SetAttribute('SlotsUsed',count) end
+ if r.part and r.part.Parent then
+  r.part:SetAttribute('SlotsUsed',count)
+  r.part:SetAttribute('SlotCapacity',math.max(r.limit or 1,count))
+ end
 end
 local function sameRockType(d,r,allowCrewAssist: boolean?)
- -- A rock hosts one drone type at a time, even when a boulder has spare
- -- slots. An Aftershock assist never takes a worker slot.
+ -- Last-rock assignments and Aftershock may span roles within one crew.
  local role=DroneRoles.canonical(d.role)
  if r.clusterShot and r.clusterShot.drone~=d then return false end
  if role=='Nomad' and r.kind=='Geode' then return false end
@@ -9698,7 +9699,7 @@ local function sameRockType(d,r,allowCrewAssist: boolean?)
 end
 local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: boolean?): ()
  if d.specialJob and d.specialJob.projectile and not d.specialJob.impacted then d.specialJob.projectile:Destroy() end
- if d.specialJob and d.target and not d.target.paid then
+ if d.specialJob and d.target and not d.target.paid and d.target.part:GetAttribute('EffectDrone')==d.id then
   d.target.part:SetAttribute('EffectCancelledSerial',d.specialJob.serial);d.target.part:SetAttribute('EffectType',nil)
  end
  if d.specialRecovery and d.specialRecovery.part.Parent then
@@ -10279,6 +10280,16 @@ end
 function scene.respawnEarlier(a,b) return a.at<b.at end
 function scene.rockInSquare(square,rock)
  return square.field==rock.field and Mining.selectorContains(square.center,square.half,rock.position)
+end
+function scene.lastSquareRock(square)
+ local last
+ for _,r in ipairs(square.field.resources) do
+  if not r.paid and r.hp>0 and r.part.Parent and scene.rockInSquare(square,r) then
+   if last then return nil end
+   last=r
+  end
+ end
+ return last
 end
 function scene.stepRockModifiers(field)
  local random=scene.modifierRandom
@@ -11030,7 +11041,7 @@ local function clusterEligible(d,p,rock,field)
  return rock.field==field and not rock.paid and rock.hp>0 and not rock.clusterShot
   and rock.part.Parent and now>=rock.readyAt and rock.kind~='Geode'
   and (not d.squareJob or scene.rockInSquare(d.squareJob,rock))
-  and playerCanMine(p,rock.field) and sameRockType(d,rock)
+  and playerCanMine(p,rock.field) and sameRockType(d,rock,d.squareJob~=nil and d.target==rock and rock.slots[d.id]~=nil)
 end
 function scene.prismTrace(d,primary,station,stopAtPrimary)
  local p=profiles[d.owner]
@@ -11083,7 +11094,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local square=if clusterFinish then shot.square else d.squareJob
  if square and not scene.rockInSquare(square,r) then return false end
  if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not clusterFinish and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
- if contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r,assist) then return false end
+ local shared=square~=nil and not secondary and d.target==r and r.slots[d.id]~=nil
+ if contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r,assist or shared) then return false end
  local recipient=d
  local job=d.specialJob
  local special=contactKind=='Special' and DroneCatalog.Types[d.role] and r.kind~='Geode' and job and not job.impacted and job.targetId==r.id and now>=job.startedAt+job.duration*job.impact
@@ -11337,7 +11349,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
      worker.mineBreakContact={at=now,untilTime=math.max(now+.3,(r.splitAt or now)+.19),primaryId=r.id,secondaryId='',beamSince=worker.beamSince}
      keepContact=true
     end
-    if worker.specialJob and not special then
+    if worker.specialJob and worker~=d and r.part:GetAttribute('EffectDrone')==worker.id then
      r.part:SetAttribute('EffectCancelledSerial',worker.specialJob.serial);r.part:SetAttribute('EffectType',nil)
     end
     retireTarget(worker,keepContact)
@@ -11504,17 +11516,17 @@ function scene.nomadTargetScore(d,rock,distance)
 end
 local function chooseResource(d: any,field: any,square: any?)
  local best,score,bestPriority=nil,math.huge,-math.huge
+ local last=square and scene.lastSquareRock(square)
  local definition=DroneCatalog.Types[d.role]
  local chunkCycle=square and field.cfg.SelectionOnly and definition and not definition.Projectile
   and DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
  for _,r in ipairs(field.resources) do
   if not r.paid and r.hp>0 and not r.clusterShot and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
    and (not square or scene.rockInSquare(square,r)) then
-   local used=0;local foreign=false
-   for id in pairs(r.slots) do used+=1;if not drones[id] or drones[id].owner~=d.owner then foreign=true end end
-   local paired=square and square.pairId==r.id and not r.cargoProduced
-   local capacity=paired and (DroneRoles.isMiner(d.role) and 2 or 0) or r.limit
-   if used<capacity and not foreign and sameRockType(d,r) then
+   local used=0
+   for _ in pairs(r.slots) do used+=1 end
+   local capacity=if r==last then 5 elseif square then 1 else r.limit
+   if used<capacity and sameRockType(d,r,r==last) then
     local neighbors=0
     if Mining.kind(d.owned.type)=='Green' then
      for _,other in ipairs(field.resources) do
@@ -11534,15 +11546,17 @@ local function chooseResource(d: any,field: any,square: any?)
      elseif d.role=='Striker' and not field.junk then
      distance+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
-    -- A paired cut takes two lasers. An ordinary lead gets one assignment.
-    -- Resume ore-bearing work before dispatching an idle drone to clear an empty shell.
+    -- Within a pin, clear the least remaining work first. Equal-health rocks
+    -- still use the lead, resume preference and each drone's own scoring.
     local priority=0
     if square and r.cargoProduced then priority=-1
-    elseif paired or square and square.leadId==r.id then priority=3
+    elseif square and square.leadId==r.id then priority=3
     elseif square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
      priority=(d.resumePin==square and d.resumeResourceId==r.id) and 2 or 1
     end
-    if priority>bestPriority or (priority==bestPriority and value<score) then
+    local equalWork=not square or best and r.hp==best.hp
+    if not best or (square and r.hp<best.hp) or equalWork and
+     (priority>bestPriority or priority==bestPriority and value<score) then
      best=r;score=value;bestPriority=priority
     end
    end
@@ -11648,20 +11662,18 @@ function scene.publishSquareStatus(p)
  local working,moving,arrived,holdingTravel=false,false,false,false
  local finishing
  local available,recharging=0,0
- local pair=resources[square.pairId]
- local cuttingPair=0
- if pair and not pair.paid then
-  for id in pairs(pair.slots) do
-   local worker=drones[id]
-   if worker and worker.owner==p.player.UserId and worker.mining then cuttingPair+=1 end
-  end
- end
+ local cutting,shared={},false
  for _,d in ipairs(p.drones) do
   if d.hp<=0 or d.carrierId or not DroneRoles.isWorker(d.role) then continue end
   available+=1
   if d.recharging then recharging+=1 end
   if scene.committedWork(d) then
-   if d.squareJob==square then working=true
+   if d.squareJob==square then
+    working=true
+    if d.mining or d.specialJob or d.breaker then
+     shared=shared or cutting[d.target]==true
+     cutting[d.target]=true
+    end
    elseif d.squareJob then finishing=finishing or d.squareJob end
   elseif d.squareJob==square and d.target then moving=true
   elseif d.state=='HoldSelector' and d.holdPin==square and d.intentGoal then
@@ -11688,7 +11700,7 @@ function scene.publishSquareStatus(p)
   elseif scene.shiftReady(p) then 'SurgeReady'
   elseif p.compactor and now<(p.compactor.pressUntil or 0) then 'Pressing'
   elseif p.pinOreOutOfReach==square then 'LooseOre'
-  elseif cuttingPair>=2 then 'PairCut'
+  elseif shared then 'SharedCut'
   elseif working then 'Working'
   elseif finishing then 'FinishingCut'
   elseif moving then 'Moving'
@@ -11710,6 +11722,17 @@ function scene.squareStep(p,d)
  local square=p.miningSquare
  if d.resumePin~=square then d.resumePin=nil;d.resumeResourceId=nil end
  if d.squareJob and d.squareJob~=square and not scene.committedWork(d) then scene.releaseSquareApproach(d);d.field=nil end
+ local target,job=d.target,d.squareJob
+ if job and target and d.targetSlot>1 then
+  local hasEarlier=false
+  for _,slot in pairs(target.slots) do
+   if slot<d.targetSlot then hasEarlier=true;break end
+  end
+  -- Keep one worker on this rock when another grows or enters the footprint.
+  if hasEarlier and scene.lastSquareRock(job)~=target then
+   scene.releaseSquareApproach(d);d.field=nil
+  end
+ end
  if not square or d.target or d.breaker or d.specialRecovery then return end
  d.field=nil;d.autoField=nil
  if now<(d.squareSearchAt or 0) and d.squareSearched==square then return end
@@ -12048,14 +12071,6 @@ local function committedStation(d,r)
   elseif definition and RoleConfig.DownwardGunDepth[d.role] and r.kind~='Geode' then
    local target=r.part.Position
    d.workStation=Vector3.new(target.X,math.max(d.workStation.Y,target.Y+8),target.Z)
-  elseif r.field.cfg.SelectionOnly and d.targetSlot==2 and not (definition and definition.Projectile=='Prism') then
-   local base=d.workStation
-   for turn=0,3 do
-    local angle=d.slot*2.4+turn*math.pi/2
-    local side=base+Vector3.new(math.cos(angle)*3.2,0,math.sin(angle)*3.2)
-    if turn==0 then d.workStation=side end
-    if los(side,r.position,r.part,{droneFolder}) then d.workStation=side;break end
-   end
   elseif definition and definition.Projectile then
    local direction=d.slot*2.4
    local approach=d.pos-r.position
@@ -12077,6 +12092,11 @@ local function committedStation(d,r)
      end
     elseif los(station,r.position,r.part,{droneFolder}) then d.workStation=station;break end
    end
+  end
+  if r.field.cfg.SelectionOnly and d.targetSlot>1
+   and (not definition or not definition.Projectile or RoleConfig.DownwardGunDepth[d.role]) then
+   local angle=(d.targetSlot-1.5)*math.pi*.5
+   d.workStation+=Vector3.new(math.cos(angle)*4.5,0,math.sin(angle)*4.5)
   end
  end
  return d.workStation
@@ -12169,6 +12189,10 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  if now-d.warmAt<warmup then return end
  if not d.specialJob then
   if projectile=='Prism' and now<(d.prismReadyAt or 0) or projectile=='Nomad' and now<(d.nomadReadyAt or 0) then return end
+  if not projectile then
+   local active=drones[r.part:GetAttribute('EffectDrone')]
+   if active and active~=d and active.target==r and active.specialJob then return end
+  end
   d.workShotStarted=true
   local cycle=DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
   if not cycle then return end
@@ -13540,51 +13564,6 @@ function scene.buyStarUpgrade(p,payload)
   scene.applyWalkSpeed(p);notice(p,result.title..' · '..result.level..'×');p.publishDirty=true
  end)
 end
-function scene.canPairCut(p,r)
- if r.hardness<Workshop.PAIRED_CUT_HARDNESS then return false end
- for id in pairs(r.slots) do
-  local worker=drones[id]
-  if not worker or worker.owner~=p.player.UserId or not DroneRoles.isMiner(worker.role) then return false end
- end
- local miners=0
- for _,d in ipairs(p.drones) do
-  if d.hp>0 and not d.carrierId and DroneRoles.isMiner(d.role) then
-   miners+=1
-   if miners==2 then return true end
-  end
- end
- return false
-end
-function scene.prioritizeSquareApproach(p,square)
- local focus=resources[square.pairId or square.leadId]
- if not focus then return end
- local needed=square.pairId and 2 or 1
- for _ in pairs(focus.slots) do needed-=1 end
- if needed<=0 then return end
- local approaches={}
- for _,d in ipairs(p.drones) do
-  if d.hp<=0 or d.carrierId or d.recharging or (d.stats.batteryCapacity>0 and d.battery<=0)
-   or not DroneRoles.isWorker(d.role) or (square.pairId and not DroneRoles.isMiner(d.role))
-   or (focus.blockedUntil and now<(focus.blockedUntil[d.id] or 0)) or not sameRockType(d,focus) then continue end
-  if not d.target and not d.breaker and not d.specialRecovery then
-   needed-=1
-   d.squareSearchAt=nil
-  elseif d.target~=focus and d.squareJob and not scene.committedWork(d) then
-   if d.squareJob==square then
-    table.insert(approaches,{drone=d,time=(d.pos-focus.position).Magnitude/travelSpeed(d)})
-   else
-    -- An obsolete approach will release itself on the next worker tick.
-    needed-=1
-    d.squareSearchAt=nil
-   end
-  end
- end
- if needed<=0 then return end
- table.sort(approaches,function(a,b) return a.time==b.time and a.drone.slot<b.drone.slot or a.time<b.time end)
- for i=1,math.min(needed,#approaches) do
-  scene.releaseSquareApproach(approaches[i].drone)
- end
-end
 function scene.moveSquareWork(p,current,square)
  if not current then return end
  -- A new destination can redirect an unfinished flight from the depot.
@@ -13613,8 +13592,7 @@ function scene.moveSquareWork(p,current,square)
  for _,d in ipairs(p.drones) do
   local target=d.target
   if d.squareJob==current and staysInSquare(target) and not (target.clusterShot and target.clusterShot.drone==d) then
-   local changingPair=current.pairId==target.id and square.pairId~=target.id
-   if scene.committedWork(d) or not changingPair then d.squareJob=square end
+   d.squareJob=square
   end
   if d.resumePin==current and staysInSquare(resources[d.resumeResourceId]) then d.resumePin=square end
  end
@@ -13644,8 +13622,7 @@ function scene.placeSquare(p,payload)
  local lead=type(leadId)=='string' and #leadId<=128 and resources[leadId]
  if lead and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
   and scene.rockInSquare(square,lead) then
-  if scene.canPairCut(p,lead) then square.pairId=leadId;square.focusId=leadId
-  elseif not next(lead.slots) then square.leadId=leadId;square.focusId=leadId
+  if not next(lead.slots) then square.leadId=leadId;square.focusId=leadId
   else
    for id in pairs(lead.slots) do
     local worker=drones[id]
@@ -13661,15 +13638,13 @@ function scene.placeSquare(p,payload)
  -- This is a command to the fleet within a validated bed and walking range.
  -- Mining itself still checks the worker's contact path and target ownership.
  if samePin then
-  current.leadId=square.leadId;current.pairId=square.pairId;current.focusId=square.focusId
-  scene.prioritizeSquareApproach(p,current)
+  current.leadId=square.leadId;current.focusId=square.focusId
   scene.publishSquareFocus(p,current)
   commandReply(p.player,payload,'accepted');return
  end
  scene.moveSquareWork(p,current,square)
  p.previousSquare=p.previousSquare or current
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
- scene.prioritizeSquareApproach(p,square)
  scene.publishSquareStatus(p)
  p.player:SetAttribute('MA_SelectorField',field.id)
  p.player:SetAttribute('MA_SelectorWidth',square.half*2)

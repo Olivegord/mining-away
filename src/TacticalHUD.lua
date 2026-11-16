@@ -91,7 +91,7 @@ local minerals={'Quartz','Ruby','Cobalt','Violet','Emerald'}
 local mineralColors={Color3.fromRGB(180,225,213),Color3.fromRGB(246,112,143),Color3.fromRGB(114,177,255),Color3.fromRGB(198,154,255),Color3.fromRGB(100,229,165)}
 local selectorText={
  Working='Mining at pin', FinishingCut='Finishing prior cut', Moving='Miners on the way',
- PairCut='Two lasers cutting',
+ SharedCut='Crew working together',
  Recharging='Miners recharging', Waiting='Waiting at pin', NoMiners='Waiting for miners', Paused='Mining paused',
  BagFull='Backpack full', LooseOre='Move closer to ore', Pressing='Compactor pressing', Surge='Crew surge · +50%', SurgeReady='Surge ready',
  Refilling='Plot refilling', Growing='Crystals growing', Claimed='Other crew mining', NoCrystals='Move pin to crystals',
@@ -197,9 +197,14 @@ function HUD.nextStationHint(profile: any, pinned: boolean?, depotApproach: bool
 end
 function HUD.firstCutHint(input: Enum.UserInputType, reachable: boolean): string
  if not reachable then return 'Follow the Crystal Run signs' end
- if input==Enum.UserInputType.Touch then return 'Tap crystals to pin' end
- if input.Name:match('^Gamepad') then return 'Pin crystals [RB]' end
- return 'Click crystals to pin'
+ if input==Enum.UserInputType.Touch then return 'Tap to preview' end
+ if input.Name:match('^Gamepad') then return 'Preview field [RB]' end
+ return 'Click to preview'
+end
+function HUD.confirmCutHint(input: Enum.UserInputType): string
+ if input==Enum.UserInputType.Touch then return 'Tap inside to pin' end
+ if input.Name:match('^Gamepad') then return 'Pin field [RB]' end
+ return 'Click inside to pin'
 end
 function HUD.packHoldHint(input: Enum.UserInputType): string
  if input==Enum.UserInputType.Touch then return 'Hold to open pack' end
@@ -261,7 +266,8 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
    guidance=HUD.firstCutHint(self.input,r.starterReachable())
   end
  end
- local statusText=guidance or (pinned and type(status)=='string' and selectorText[status]) or nil
+ local statusText=r.selectorPreview and r.selectorPreview() and HUD.confirmCutHint(self.input)
+  or guidance or (pinned and type(status)=='string' and selectorText[status]) or nil
  local showRecall=working>0 or delivering>0 or pinned
  local showStatusRow=showRecall or statusText~=nil
  self.dock.Visible=not hidden and (showStatusRow or fighting)
@@ -275,7 +281,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  r.evade.Visible=fighting;r.evade.Position=UDim2.fromOffset(0,showStatusRow and buttonHeight or 0);r.evade.Size=UDim2.fromOffset(width,buttonHeight)
  self.selectorStatus.Visible=statusText~=nil
  self.selectorStatus.Text=statusText or ''
- self.selectorStatus.TextColor3=(guidance or status=='Working' or status=='PairCut' or status=='BagFull' or status=='Surge' or status=='SurgeReady') and C.gold or C.text
+ self.selectorStatus.TextColor3=(guidance or status=='Working' or status=='SharedCut' or status=='BagFull' or status=='Surge' or status=='SurgeReady') and C.gold or C.text
  local statusX=showRecall and recallWidth+4 or 0
  self.selectorStatus.Position=UDim2.fromOffset(statusX,0)
  self.selectorStatus.Size=UDim2.fromOffset(math.max(0,dockWidth-statusX),buttonHeight)

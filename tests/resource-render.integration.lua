@@ -96,9 +96,13 @@ fixed:SetAttribute('HP',12);fixedRecord.dirty=true
 renderResource(fixedRecord,86)
 local shaded=fixedRecord.view.Color
 local facing=fixedRecord.restPose.LookVector
-RockModifierView.attackOutlines(records,camera,86,false,click,.90)
-assert(fixedRecord.view.Color.R>.9 and fixedRecord.view.Color.G>.89 and fixedRecord.rockOutline.FillTransparency==1,
- 'selected surface should flash white independently of the active attack outline')
+RockModifierView.attackOutlines(records,camera,86,false,click,.31,24)
+local preview=fixedRecord.view.Color
+assert(preview.G>shaded.G,'preview did not brighten the visible crystal')
+RockModifierView.clearSelectionFlash(fixedRecord)
+RockModifierView.attackOutlines(records,camera,86,false,click,.68)
+assert(fixedRecord.view.Color.G>preview.G+.3 and fixedRecord.rockOutline.FillTransparency==1,
+ 'confirmation should brighten the preview independently of the active attack outline')
 RockModifierView.clearSelectionFlash(fixedRecord)
 assert(fixedRecord.view.Color==shaded,'selection left a permanent tint')
 fixed:SetAttribute('HP',0);fixed:SetAttribute('BreakSerial',1);fixedRecord.dirty=true

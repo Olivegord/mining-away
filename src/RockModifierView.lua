@@ -31,18 +31,18 @@ function V.clearSelectionFlash(r)
  if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,r.view.Transparency) end
 end
 
-function V.attackOutlines(records,_camera,now,steady,click,flash)
+function V.attackOutlines(records,_camera,now,steady,selection,strength,width)
  for _,r in pairs(records) do
   local outline=r.rockOutline
   local visible=not r.visual.broken and r.view.Parent and r.view.Transparency<1
    and (r.view.LocalTransparencyModifier or 0)<1
   local attacked=visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
-  local selected=visible and click and r.source:GetAttribute('FieldId')==click.field
-   and Mining.selectorContains(click.point,click.width*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
-  if selected and flash>0 then
+  local selected=visible and selection and r.source:GetAttribute('FieldId')==selection.field
+   and Mining.selectorContains(selection.point,(width or selection.width)*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
+  if selected and strength>0 then
    r.selectionColor=r.view.Color
-   r.view.Color=r.selectionColor:Lerp(Color3.new(1,1,1),flash)
-   if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,math.max(r.view.Transparency,flash)) end
+   r.view.Color=r.selectionColor:Lerp(white,strength)
+   if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,math.max(r.view.Transparency,strength)) end
   end
   if not attacked then
    if outline then outline:Destroy();r.rockOutline=nil end

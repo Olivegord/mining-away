@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 15 — two-click selection and last-rock teamwork
+
+Before selecting, the pointer controls a small plus that eases between stud-grid cells. The first click anchors an expanding square and highlights the rocks inside it. The second click confirms the area, opens the walls with edge particles, and brightens the rocks as the temporary wash fades. The confirmed footprint keeps a fill over its entire base.
+
+Drones choose the weakest available rock first by remaining health. They work separate rocks while more than one is standing inside the selection and can share the last one with their own crew. A replacement rock growing inside the footprint ends that shared assignment.
+
 ## November 14 — varied stone poses, shorter walls, and guns overhead
 
 Give both mineable rocks and loose ore more orientation variety. Cut the selection wall height by about one third. Smooth the Emptier's grapple and make seating feel like a solid catch, with small crystal-colored particles that linger. Restore Needler and Ballcaster to the regular Studio starter crew. Mount their guns underneath so they fire downward. This supersedes the earlier Studio-only exclusion of the starter guns.

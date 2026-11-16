@@ -34,11 +34,9 @@ function V:update(dt,now)
   if ok and type(list)=='table' then for index,id in ipairs(list) do self.queued[id]=index end end
  end
  local working={}
- local lasers=0
  for source in pairs(ctx.drones) do
   if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
    local id=source:GetAttribute('TargetId');if id and id~='' then working[id]=true end
-   if source:GetAttribute('Role')=='Striker' and not source:GetAttribute('CarrierId') then lasers+=1 end
   end
  end
  local hover;local camera=workspace.CurrentCamera
@@ -68,7 +66,9 @@ function V:update(dt,now)
  local phase,ordered=(player:GetAttribute('MA_SelectorFocus') or ''):match('^(%a+):(.+)$')
  local hovered=hover and records[hover]
  local zone=hovered and hovered.source.Parent
- if zone and zone.Parent and zone.Parent.Name=='CrystalRun' then self:endDrag() end
+ if zone and zone.Parent and zone.Parent.Name=='CrystalRun' then
+  self:endDrag();hover=nil;hovered=nil
+ end
  if not visible then self:endDrag() end
  if self.dragging and hover and records[hover] and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
   self.nextPaint=os.clock()+.12;self:request(hover,true)
@@ -134,11 +134,9 @@ function V:update(dt,now)
    else ''
   self.title.Text=tostring(name)..label
   local order=if ordered and focused==records[ordered] then orderText[phase] else nil
-  local pair=not order and value~=nil and lasers>=2 and usedSlots==0 and not extracted and now>=(s:GetAttribute('ReadyAt') or 0)
-   and (s:GetAttribute('Hardness') or 0)>=Workshop.PAIRED_CUT_HARDNESS
-  local showOrder=order~=nil or pair
+  local showOrder=order~=nil
   self.meter.Size=UDim2.fromOffset(value and 188 or ore and 176 or 132,showOrder and 35 or 22)
-  self.order.Visible=showOrder;self.order.Text=order or '2 lasers'
+  self.order.Visible=showOrder;self.order.Text=order or ''
   self.order.TextColor3=order and (phase=='Cutting' and GREEN or phase=='Claimed' and RED or GOLD) or GOLD
  elseif self.meter then self.meter.Enabled=false end
 end

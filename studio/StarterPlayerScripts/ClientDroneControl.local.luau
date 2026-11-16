@@ -334,7 +334,6 @@ W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_T
 W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.DEEP_CUT_HARDNESS=1.75
-W.PAIRED_CUT_HARDNESS=27
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
  for _,card in ipairs(p.run.cards) do total+=card.effects[key] or 0 end
@@ -14205,18 +14204,18 @@ function V.clearSelectionFlash(r)
  if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,r.view.Transparency) end
 end
 
-function V.attackOutlines(records,_camera,now,steady,click,flash)
+function V.attackOutlines(records,_camera,now,steady,selection,strength,width)
  for _,r in pairs(records) do
   local outline=r.rockOutline
   local visible=not r.visual.broken and r.view.Parent and r.view.Transparency<1
    and (r.view.LocalTransparencyModifier or 0)<1
   local attacked=visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
-  local selected=visible and click and r.source:GetAttribute('FieldId')==click.field
-   and Mining.selectorContains(click.point,click.width*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
-  if selected and flash>0 then
+  local selected=visible and selection and r.source:GetAttribute('FieldId')==selection.field
+   and Mining.selectorContains(selection.point,(width or selection.width)*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
+  if selected and strength>0 then
    r.selectionColor=r.view.Color
-   r.view.Color=r.selectionColor:Lerp(Color3.new(1,1,1),flash)
-   if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,math.max(r.view.Transparency,flash)) end
+   r.view.Color=r.selectionColor:Lerp(white,strength)
+   if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,math.max(r.view.Transparency,strength)) end
   end
   if not attacked then
    if outline then outline:Destroy();r.rockOutline=nil end
@@ -15477,11 +15476,9 @@ function V:update(dt,now)
   if ok and type(list)=='table' then for index,id in ipairs(list) do self.queued[id]=index end end
  end
  local working={}
- local lasers=0
  for source in pairs(ctx.drones) do
   if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
    local id=source:GetAttribute('TargetId');if id and id~='' then working[id]=true end
-   if source:GetAttribute('Role')=='Striker' and not source:GetAttribute('CarrierId') then lasers+=1 end
   end
  end
  local hover;local camera=workspace.CurrentCamera
@@ -15511,7 +15508,9 @@ function V:update(dt,now)
  local phase,ordered=(player:GetAttribute('MA_SelectorFocus') or ''):match('^(%a+):(.+)$')
  local hovered=hover and records[hover]
  local zone=hovered and hovered.source.Parent
- if zone and zone.Parent and zone.Parent.Name=='CrystalRun' then self:endDrag() end
+ if zone and zone.Parent and zone.Parent.Name=='CrystalRun' then
+  self:endDrag();hover=nil;hovered=nil
+ end
  if not visible then self:endDrag() end
  if self.dragging and hover and records[hover] and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
   self.nextPaint=os.clock()+.12;self:request(hover,true)
@@ -15577,11 +15576,9 @@ function V:update(dt,now)
    else ''
   self.title.Text=tostring(name)..label
   local order=if ordered and focused==records[ordered] then orderText[phase] else nil
-  local pair=not order and value~=nil and lasers>=2 and usedSlots==0 and not extracted and now>=(s:GetAttribute('ReadyAt') or 0)
-   and (s:GetAttribute('Hardness') or 0)>=Workshop.PAIRED_CUT_HARDNESS
-  local showOrder=order~=nil or pair
+  local showOrder=order~=nil
   self.meter.Size=UDim2.fromOffset(value and 188 or ore and 176 or 132,showOrder and 35 or 22)
-  self.order.Visible=showOrder;self.order.Text=order or '2 lasers'
+  self.order.Visible=showOrder;self.order.Text=order or ''
   self.order.TextColor3=order and (phase=='Cutting' and GREEN or phase=='Claimed' and RED or GOLD) or GOLD
  elseif self.meter then self.meter.Enabled=false end
 end
@@ -15909,7 +15906,8 @@ local activeColor=Color3.fromRGB(255,147,61)
 local clearColor=Color3.fromRGB(85,243,148)
 local white=Color3.new(1,1,1)
 local riseTime,wallHeight=.32,10*2/3
-local wallHold,wallFadeTime,flashTime=.12,.46,.27
+local wallHold,wallFadeTime,flashTime=.12,.46,.38
+local previewTime,snapTime=.26,.15
 local wallFade=NumberSequence.new({
  NumberSequenceKeypoint.new(0,.62),NumberSequenceKeypoint.new(.36,.51),
  NumberSequenceKeypoint.new(.80,.26),NumberSequenceKeypoint.new(1,0),
@@ -15933,8 +15931,8 @@ local function frame(parent)
  return f
 end
 
-local function outline(parent)
- local base=part(parent,'SelectorOutline');base.Size=Vector3.one
+local function outline(parent,name)
+ local base=part(parent,name);base.Size=Vector3.one
  local gui=surface(base,Enum.NormalId.Top,Vector2.new(512,512))
  local edges={}
  for i=1,4 do
@@ -15950,10 +15948,10 @@ local function showOutline(mark,point,width,color)
   for _,edge in ipairs(mark.edges) do edge.BackgroundColor3=color;edge.BackgroundTransparency=.22 end
   mark.color=color
  end
- if mark.point~=point then mark.base.Position=point+Vector3.yAxis*.055;mark.point=point end
+ if mark.point~=point then mark.base.Position=point+Vector3.yAxis*.11;mark.point=point end
  if mark.width~=width then
   mark.base.Size=Vector3.new(width,.02,width);mark.width=width
-  local t=.55/width
+  local t=math.min(.24,.46/width)
   -- Two full edges and two inset edges meet flush without double-bright corners.
   mark.edges[1].Size=UDim2.fromScale(1,t)
   mark.edges[2].Position=UDim2.fromScale(0,1-t);mark.edges[2].Size=UDim2.fromScale(1,t)
@@ -15967,12 +15965,40 @@ local function fill(parent,name)
  local face=frame(gui);face.BackgroundColor3=white
  return {base=base,gui=gui,face=face}
 end
-local function showFill(mark,point,width,opacity)
+local function showFill(mark,point,width,opacity,color,lift)
  mark.gui.Enabled=point~=nil and opacity>0
  if not mark.gui.Enabled then return end
- mark.base.Position=point+Vector3.yAxis*.04
- mark.base.Size=Vector3.new(width,.02,width)
- mark.face.BackgroundTransparency=1-opacity
+ if mark.point~=point then mark.base.Position=point+Vector3.yAxis*lift;mark.point=point end
+ if mark.width~=width then mark.base.Size=Vector3.new(width,.02,width);mark.width=width end
+ if mark.color~=color then mark.face.BackgroundColor3=color;mark.color=color end
+ if mark.opacity~=opacity then mark.face.BackgroundTransparency=1-opacity;mark.opacity=opacity end
+end
+local function cursor(parent)
+ local base=part(parent,'SelectorCursor')
+ local gui=surface(base,Enum.NormalId.Top,Vector2.new(64,64))
+ local shapes={{.41,0,.18,1},{0,.41,.41,.18},{.59,.41,.41,.18}}
+ for _,shape in ipairs(shapes) do
+  local stroke=frame(gui)
+  stroke.Position=UDim2.fromScale(shape[1],shape[2])
+  stroke.Size=UDim2.fromScale(shape[3],shape[4])
+  stroke.BackgroundColor3=previewColor
+ end
+ return {base=base,gui=gui}
+end
+local function showCursor(mark,point,dt,instant)
+ mark.gui.Enabled=point~=nil
+ if not point then mark.goal=nil;return end
+ if mark.goal~=point then
+  local from=mark.position
+  mark.from=mark.goal and from and (from-point).Magnitude<=8 and from or point
+  mark.goal=point;mark.age=0
+ end
+ mark.age=math.min(snapTime,mark.age+dt)
+ local t=instant and 1 or mark.age/snapTime
+ local bump=math.sin(math.pi*t)*(1-t)
+ mark.position=mark.from:Lerp(point,1-(1-t)^3)
+ mark.base.Position=mark.position+Vector3.yAxis*(.13+.34*bump)
+ mark.base.Size=Vector3.new(1.55+.62*bump,.02,1.55+.62*bump)
 end
 
 local function walls(parent,name)
@@ -16013,13 +16039,13 @@ local function setVisibility(side,opacity)
   f.Parent.Enabled=opacity>0
  end
 end
-local function showWalls(mark,point,width,color,dt,instant,cameraPosition,lowFlash,reduced)
+local function showWalls(mark,point,width,color,dt,instant,cameraPosition,lowFlash,reduced,opening)
  if not point then
   for _,side in ipairs(mark.sides) do setVisibility(side,0) end
   return
  end
  local moved=point~=mark.point or width~=mark.width
- if moved then mark.age=0;mark.emitted=false end
+ if moved or opening then mark.age=0;mark.emitted=false end
  local age=mark.age
  local remaining=instant and 0 or 1-math.clamp(age/riseTime,0,1)
  local height=wallHeight*(1-.86*remaining^4)
@@ -16131,27 +16157,69 @@ end
 function V:commit(ray)
  local point,id,leadId,inRange=self:aim(ray)
  local profile=self.options.profile()
- if not point or not id or not profile or not profile.run then return false end
+ if self.pending then return point~=nil end
+ if not point or not id or not profile or not profile.run then
+  self:cancelPreview()
+  return false
+ end
  if not inRange then
   if self.options.notify then self.options.notify('Move closer to select that area.') end
   return true
  end
+ local width=Workshop.selectorWidth(profile)
+ local draft=self.draft
+ if not draft or draft.field~=id or draft.runId~=profile.run.id or draft.width~=width
+  or not Mining.selectorContains(draft.point,width*.5,point) then
+  self.draft={point=point,field=id,width=width,leadId=leadId,runId=profile.run.id,
+   character=self.options.player.Character,age=0}
+  return true
+ end
+ local character=self.options.player.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ if character~=draft.character or not root or not Mining.selectorInRange(root.Position,draft.point) then
+  self:cancelPreview()
+  if self.options.notify then self.options.notify('Move closer to select that area.') end
+  return true
+ end
  local requestId=game:GetService('HttpService'):GenerateGUID(false)
- self.click={point=point,field=id,width=Workshop.selectorWidth(profile),at=os.clock(),requestId=requestId}
- self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id,leadId=leadId,requestId=requestId})
+ self.pending={draft=draft,at=os.clock(),requestId=requestId,
+  samePin=self.options.player:GetAttribute('MA_Selector')==draft.point
+   and self.options.player:GetAttribute('MA_SelectorField')==draft.field}
+ self.options.command:FireServer('PlaceSelector',{fieldId=draft.field,position=draft.point,runId=draft.runId,
+  leadId=draft.leadId,requestId=requestId})
  return true
 end
+function V:cancelPreview()
+ local hadDraft=self.draft~=nil
+ self.draft=nil
+ if self.pending then self.pending.dismissed=true end
+ return hadDraft
+end
 function V:reply(state)
- if not self.click or self.click.requestId~=state.requestId then return false end
- if state.status=='rejected' then self.click=nil end
+ local pending=self.pending
+ if not pending or pending.requestId~=state.requestId then return false end
+ self.pending=nil
+ if state.status=='accepted' and not pending.dismissed then
+  self.draft=nil
+  self.click=pending.draft;self.click.at=os.clock()
+  self.click.reopen=pending.samePin
+ end
  return true
+end
+function V:previewState()
+ local draft=self.draft
+ if not draft or self.options.hidden() then return nil,0,0 end
+ local t=self.options.reducedMotion() and 1 or math.clamp(draft.age/previewTime,0,1)
+ local expansion=1-(1-t)^3
+ local lowFlash=self.options.player:GetAttribute('ReducedFlashing')==true
+ return draft,math.max(1,draft.width*expansion),(lowFlash and .18 or .31)*expansion
 end
 function V:flashState()
  local click=self.click
  if not click or self.options.hidden() then return nil,0 end
  local age=os.clock()-click.at
  if age>=flashTime then return nil,0 end
- local peak=self.options.player:GetAttribute('ReducedFlashing')==true and .34 or .90
+ local peak=self.options.player:GetAttribute('ReducedFlashing')==true and .29 or .68
  return click,peak*(1-math.clamp((age-.045)/(flashTime-.045),0,1))
 end
 function V:showAim(dt,ray)
@@ -16162,12 +16230,25 @@ function V:showAim(dt,ray)
  if not self.pinned and profile and o.world.Map:FindFirstChild('CrystalRun') then
   self.pinned=walls(o.parent,'MiningSelector')
   self.flash=fill(o.parent,'SelectorClickFill')
-  self.aimEdge=outline(o.parent)
-  self.activeEdge=outline(o.parent)
+  self.aimCursor=cursor(o.parent)
+  self.previewEdge=outline(o.parent,'SelectorPreviewOutline')
+  self.previewFloor=fill(o.parent,'SelectorPreviewFill')
+  self.activeEdge=outline(o.parent,'SelectorOutline')
+  self.activeFloor=fill(o.parent,'SelectorFootprint')
  end
  if not self.pinned then return end
  if not o.player:GetAttribute('MA_Selector') then self.pinned.point=nil end
  local width=profile and Workshop.selectorWidth(profile) or 0
+ if self.pending and os.clock()-self.pending.at>3 then self.pending=nil end
+ local draft=self.draft
+ if draft then
+  local character=o.player.Character
+  local root=character and character:FindFirstChild('HumanoidRootPart')
+  if not visible or not profile.run or profile.run.id~=draft.runId or width~=draft.width
+   or character~=draft.character or not root or not Mining.selectorInRange(root.Position,draft.point) then
+   self:cancelPreview()
+  else draft.age=math.min(previewTime,draft.age+dt) end
+ end
  self.clock+=dt
  if not visible or not ray then self.aimPoint=nil;self.clock=.033
  elseif self.clock>=.033 then
@@ -16180,11 +16261,17 @@ function V:showAim(dt,ray)
  local instant=o.reducedMotion()
  local lowFlash=o.player:GetAttribute('ReducedFlashing')==true
  local pinWidth=o.player:GetAttribute('MA_SelectorWidth') or width
- showWalls(self.pinned,pin,pinWidth,color,dt,instant,camera and camera.CFrame.Position,lowFlash,instant or BeamVFX.reduced())
+ local click,flashStrength=self:flashState()
+ local opening=click and click.reopen and click.point==pin and click.field==o.player:GetAttribute('MA_SelectorField')
+ if opening then click.reopen=nil end
+ showWalls(self.pinned,pin,pinWidth,color,dt,instant,camera and camera.CFrame.Position,lowFlash,instant or BeamVFX.reduced(),opening)
  showOutline(self.activeEdge,pin,pinWidth,color)
- showOutline(self.aimEdge,self.aimPoint~=pin and self.aimPoint or nil,width,previewColor)
- local flash,strength=self:flashState()
- showFill(self.flash,flash and flash.point or nil,flash and flash.width or width,strength)
+ showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,color,.04)
+ local preview,previewWidth,strength=self:previewState()
+ showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor)
+ showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,previewColor,.065)
+ showCursor(self.aimCursor,not preview and self.aimPoint or nil,dt,instant)
+ showFill(self.flash,click and click.point,click and click.width or width,flashStrength*.86,white,.09)
 end
 
 function V:heal(view,now)
@@ -16224,7 +16311,7 @@ end
 function V:destroy()
  if self.pinned then
   self.pinned.folder:Destroy()
-  for _,mark in ipairs({self.flash,self.aimEdge,self.activeEdge}) do mark.base:Destroy() end
+  for _,mark in ipairs({self.flash,self.aimCursor,self.previewEdge,self.previewFloor,self.activeEdge,self.activeFloor}) do mark.base:Destroy() end
  end
  for _,cue in ipairs(self.cues) do cue.gui:Destroy() end
 end
@@ -16514,7 +16601,6 @@ local cargoTrack=frame(hud,UDim2.fromOffset(50,53),UDim2.new(1,-164,0,4),palette
 local cargoFill=frame(cargoTrack,UDim2.fromScale(0,0),UDim2.fromScale(0,1),palette.mineral);corner(cargoFill,3)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
 local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',13,palette.text,true);notice.TextXAlignment=Enum.TextXAlignment.Center
-local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() if not (logisticsView and logisticsView:recall()) then command:FireServer('Recall') end end,Color3.fromRGB(66,177,91));recall.Name='Recall'
 local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),palette.panel,14);context.Name='ContextAction';context.Active=true;context.Visible=false
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
 local fleetView
@@ -16525,6 +16611,10 @@ local selectorView=SelectorView.new({world=world,player=player,parent=localFX,co
  notify=function(message) notice.Text=message;noticeUntil=os.clock()+2 end,
  hidePin=menusVisible,
  hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
+local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function()
+ selectorView:cancelPreview()
+ if not (logisticsView and logisticsView:recall()) then command:FireServer('Recall') end
+end,Color3.fromRGB(66,177,91));recall.Name='Recall'
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
 local modalEmblem=U.icon(sheet,'cards',UDim2.fromOffset(20,19),UDim2.fromOffset(54,54),palette.mineral)
@@ -17986,8 +18076,12 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
  rockDamage.feedback:applyTints(now)
- local click,flash=selectorView:flashState()
- RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,click,flash)
+ do
+  local click,flash=selectorView:flashState()
+  local draft,width,strength=selectorView:previewState()
+  RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,
+   click or draft,click and flash or strength,not click and width or nil)
+ end
  presentation:update(dt,now)
  laserShowcase:step(now,dt)
  if logisticsView then logisticsView:step(now,dt) end
@@ -18010,6 +18104,7 @@ enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,context=context,enemy=enemyHUD,toast=toast,
  cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible,
  packReadyToOpen=function() return packView.openReady end,
+ selectorPreview=function() return selectorView.draft~=nil end,
  starterReachable=function() return selectorView:canReachStarterPlot() end,
  depotApproach=function(pin)
   local character=player.Character
@@ -18145,6 +18240,7 @@ connect(UIS.InputBegan,function(input,processed)
  if toolView and toolView:input(input,processed) then return end
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
+ if input.KeyCode==Enum.KeyCode.Escape and selectorView:cancelPreview() then return end
  if processed or UIS:GetFocusedTextBox() then return end
  if input.UserInputType==Enum.UserInputType.Touch then
   if selectorView.touch then selectorView.touch.active=false
@@ -18162,7 +18258,9 @@ connect(UIS.InputBegan,function(input,processed)
  local key=input.KeyCode
  if menusVisible() and not modal.Visible then return end
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
- elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then if not logisticsView:recall() then command:FireServer('Recall') end
+ elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then
+  local cancelled=selectorView:cancelPreview()
+  if (not cancelled or key~=Enum.KeyCode.ButtonB) and not logisticsView:recall() then command:FireServer('Recall') end
  elseif not modal.Visible and key==Enum.KeyCode.U then cargoAction()
  elseif not modal.Visible and key==Enum.KeyCode.L then command:FireServer('LaunchStorage')
  elseif not modal.Visible and key==Enum.KeyCode.C then logisticsView:cycle()
