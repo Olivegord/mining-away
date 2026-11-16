@@ -496,7 +496,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local shell=kind=='Geode';local size=visualSize or (reference and 3 or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1))
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  if cut then fullSize*=CrystalCuts.proportions(cut,original) end
- if mineral and mineral.large then fullSize=CrystalCuts.fieldSize(fullSize,mineral.large,mineral.spire) end
+ if mineral and mineral.large then fullSize=CrystalCuts.fieldSize(fullSize,mineral.large,mineral.spire,mineral.landmark) end
  local variedPose=field.cfg.ContinuousCrystals==true and kind=='Crystal' and not junk
  if variedPose then part:SetAttribute('VariedRockPose',true) end
  local steady=field.cfg.ContinuousCrystals==true and (modifiers==Mining.ROCK_MODIFIERS.Massive
@@ -536,7 +536,9 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   r.spawnAt=now+.18*(junk.order-1)
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
  end
- part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference,steady,variedPose)
+ local frame,top=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference,steady,variedPose)
+ part.CFrame=frame
+ if mineral and mineral.landmark then r.landmarkTop=top end
  if cut then
   r.cutOffset=cut.ExtentsCFrame.Position/cut.Size
   part.CFrame*=CFrame.new(-fullSize*r.cutOffset)
@@ -550,6 +552,13 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  resources[r.id]=r;table.insert(field.resources,r)
  for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageCount=r.stageCount,Mineral=field.cfg.Material or field.cfg.Key,StageSeed=r.stageSeed,SpawnAt=r.spawnAt,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,ReferenceCrystal=reference,GroundY=ground,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
  return r
+end
+function scene.resourceStation(r,slot,quarry)
+ local station=Feel.mineGoal(r.position,slot,r.limit>1,r.fullSize,r.referenceCrystal,quarry or r.landmarkTop~=nil)
+ if r.landmarkTop and station.Y<r.landmarkTop+4.5 then
+  return Vector3.new(station.X,r.landmarkTop+4.5,station.Z)
+ end
+ return station
 end
 function scene.junkLandingOccupied(position,radius)
  for _,pl in ipairs(Players:GetPlayers()) do
@@ -617,7 +626,7 @@ function scene.replenishJunk(field)
  end
 end
 scene.modifierRandom=Random.new()
-local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOnly,regrowPosition)
+local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOnly,vacancy)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((not field.cfg.SelectionOnly and field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
@@ -629,9 +638,10 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  clearance.FilterDescendantsInstances=excluded
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
  local continuous=reference and field.cfg.ContinuousCrystals
- local mineral=plan and plan.mineral
+ local landmark=vacancy and vacancy.landmark
+ local mineral=plan and plan.mineral or vacancy and vacancy.landmarkMineral
  if not mineral then
-  local roll=seed:NextInteger(50,100)
+  local roll=seed:NextInteger(landmark and 97 or 50,100)
   mineral=if continuous then Mining.fieldCrystal(roll,field.cfg.Hardness,field.cfg.Ore,field.cfg.Cracks or 3)
    elseif reference and field.cfg.SelectionOnly and field.cfg.Hardness>1 then Mining.deepCrystal(roll,field.cfg.Hardness,field.cfg.Ore)
    else Mining.resource(roll,kind,field.cfg.Hardness)
@@ -639,6 +649,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
    mineral.large=math.clamp((roll-74)/26,0,1)
    mineral.spire=roll%3==0
    mineral.poseSeed=seed:NextInteger(1,1000000)
+   mineral.landmark=landmark and landmark.shape
    if scene.classicCrystal and scene.crystalCuts then
     local available=scene.crystalCuts.variants
     local choices=CrystalCuts.mineralCuts[field.cfg.Material or field.cfg.Key] or available
@@ -648,7 +659,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
   end
  end
  local ordinarySize=reference and not continuous and (not field.cfg.SelectionOnly or field.cfg.Hardness<=1) and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
- local massive=if plan then plan.massive else not ordinaryOnly and field.cfg.RockModifiers and kind=='Crystal'
+ local massive=if plan then plan.massive else not landmark and not ordinaryOnly and field.cfg.RockModifiers and kind=='Crystal'
   and scene.modifierRandom:NextNumber()<Mining.MASSIVE_CHANCE
  local visualSize=ordinarySize*(massive and Mining.MASSIVE_SCALE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
@@ -656,13 +667,13 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  if continuous then
   local cut=mineral.cut and scene.crystalCuts[mineral.cut]
   if cut then dimensions*=CrystalCuts.proportions(cut,original) end
-  dimensions=CrystalCuts.fieldSize(dimensions,mineral.large,mineral.spire)
+  dimensions=CrystalCuts.fieldSize(dimensions,mineral.large,mineral.spire,mineral.landmark)
  end
  local radius=if continuous then ResourcePlacement.leaningRadius(dimensions.X,dimensions.Y,dimensions.Z,Feel.rockLean(mineral.poseSeed))
   else ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,reference)
  local patch=field.part
- local preferred,bounds
- if plan then
+ local preferred,bounds=landmark,nil
+ if plan and not preferred then
   local p=patch.CFrame:PointToObjectSpace(plan.spot)
   preferred={x=p.X,z=p.Z}
  end
@@ -675,21 +686,25 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
   bounds={minX=center.X-x,maxX=center.X+x,minZ=center.Z-z,maxZ=center.Z+z}
  end
  local occupied={}
- for _,r in ipairs(field.resources) do if not r.paid or (r.splitAt or 0)>now then
+ for _,r in ipairs(field.resources) do
+  if r.landmark or (r.paid and (r.splitAt or 0)<=now) then continue end
   local p=patch.CFrame:PointToObjectSpace(r.position)
   local reserved=r.placementRadius
   if not reserved and (not reference or continuous or field.cfg.SelectionOnly and field.cfg.Hardness>1) then
    reserved=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,reference)
   end
   occupied[#occupied+1]={x=p.X,z=p.Z,radius=reserved}
- end end
+ end
+ for site,reservation in pairs(field.landmarkReserves or {}) do
+  if site~=landmark then table.insert(occupied,reservation) end
+ end
  for _,t in ipairs(field.turrets) do
   local p=patch.CFrame:PointToObjectSpace(t.body.Position)
   occupied[#occupied+1]={x=p.X,z=p.Z,radius=math.max(4,ResourcePlacement.radius(t.body.Size.X,t.body.Size.Y,t.body.Size.Z))}
  end
  local integerGrid=reference and not continuous
  if continuous and not field.crystalLayout then
-  field.crystalLayout=ResourcePlacement.crystalLayout(patch.Size.X,patch.Size.Z,field.id)
+  field.crystalLayout=ResourcePlacement.crystalLayout(patch.Size.X,patch.Size.Z,patch:GetAttribute('CrystalZone') or 1)
  end
  local layout=continuous and field.crystalLayout or nil
  local function draw(a,b)
@@ -700,23 +715,24 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
    local candidate=patch.CFrame:PointToWorldSpace(Vector3.new(x,0,z))
    if nearPin and not Mining.selectorContains(nearPin.center,nearPin.half,candidate) then return false end
    -- Sample the rock's turn clearance against authored fixtures and scenery.
+   local height=field.cfg.SelectionOnly and math.max(20,dimensions.Y+radius+1) or 64
    for _,offset in ipairs({Vector3.zero,Vector3.new(-.707,0,-.707),Vector3.new(.707,0,-.707),Vector3.new(-.707,0,.707),Vector3.new(.707,0,.707)}) do
-    local origin=Vector3.new(candidate.X,field.center.Y+(field.cfg.SelectionOnly and 20 or 64),candidate.Z)+offset*radius
+    local origin=Vector3.new(candidate.X,field.center.Y+height,candidate.Z)+offset*radius
     if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
-    if field.cfg.SelectionOnly and workspace:Raycast(Vector3.new(origin.X,fieldTop-.05,origin.Z),Vector3.new(0,19,0),clearance) then return false end
+    if field.cfg.SelectionOnly and workspace:Raycast(Vector3.new(origin.X,fieldTop-.05,origin.Z),Vector3.new(0,height-1,0),clearance) then return false end
    end
    return true
  end
  local selected
- if layout and regrowPosition and not preferred then
-  local p=patch.CFrame:PointToObjectSpace(regrowPosition)
+ if layout and vacancy and vacancy.position and not preferred then
+  local p=patch.CFrame:PointToObjectSpace(vacancy.position)
   selected=ResourcePlacement.sample(patch.Size.X,patch.Size.Z,radius,occupied,draw,clear,
    {x=p.X,z=p.Z},false,nil,nil,layout)
  end
  selected=selected or ResourcePlacement.sample(patch.Size.X,patch.Size.Z,radius,occupied,draw,clear,preferred,integerGrid,nil,bounds,layout)
  local spot=selected and patch.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
  if not spot then
-  if massive and not plan then return spawnResource(field,kind,prepareOnly,nil,nearPin,true,regrowPosition) end
+  if massive and not plan then return spawnResource(field,kind,prepareOnly,nil,nearPin,true,vacancy) end
   return false
  end
  if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral,massive=massive} end
@@ -725,6 +741,10 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or mineral.stages or field.cfg.Cracks or 3,nil,
   massive and Mining.ROCK_MODIFIERS.Massive or nil,mineral)
  if continuous then resource.placementRadius=radius end
+ if landmark then
+  field.landmarkReserves[landmark]=selected
+  resource.landmark=landmark;resource.landmarkMineral=mineral
+ end
  return true,kind=='Geode' and 5 or 1,resource
 end
 function scene.respawnEarlier(a,b) return a.at<b.at end
@@ -779,8 +799,8 @@ function scene.replacementSquare(field,vacancy)
  return nil
 end
 function scene.spawnReplacement(field,kind,vacancy)
+ if vacancy.landmark then return spawnResource(field,'Crystal',false,nil,nil,true,vacancy) end
  local square=scene.replacementSquare(field,vacancy)
- local regrowPosition=vacancy and vacancy.position
  if square then
   -- Give a cleared pin two cuts to return to. Once it has mature work,
   -- replenish the rest of the field through ordinary placement.
@@ -788,13 +808,13 @@ function scene.spawnReplacement(field,kind,vacancy)
   for _,r in ipairs(field.resources) do
    if not r.paid and r.part.Parent and scene.rockInSquare(square,r) then
     growing+=1
-    if now>=r.readyAt or growing>=2 then return spawnResource(field,kind,false,nil,nil,nil,regrowPosition) end
+    if now>=r.readyAt or growing>=2 then return spawnResource(field,kind,false,nil,nil,nil,vacancy) end
    end
   end
-  local spawned,cost=spawnResource(field,kind,false,nil,square,nil,regrowPosition)
+  local spawned,cost=spawnResource(field,kind,false,nil,square,nil,vacancy)
   if spawned then return true,cost end
  end
- return spawnResource(field,kind,false,nil,nil,nil,regrowPosition)
+ return spawnResource(field,kind,false,nil,nil,nil,vacancy)
 end
 local function seedField(field)
  for _,r in ipairs(field.resources) do
@@ -802,6 +822,14 @@ local function seedField(field)
   resources[r.id]=nil;r.part:Destroy()
  end
  field.resources={};field.respawnQueue={};field.respawnClock=now
+ if field.cfg.ContinuousCrystals then
+  local patch=field.part
+  field.crystalLayout=ResourcePlacement.crystalLayout(patch.Size.X,patch.Size.Z,patch:GetAttribute('CrystalZone') or 1)
+  field.landmarkReserves={}
+  for _,site in ipairs(field.crystalLayout.landmarks) do
+   spawnResource(field,'Crystal',false,nil,nil,true,{landmark=site})
+  end
+ end
  local budget=field.cfg.Count*(field.cfg.ContinuousCrystals and 2 or 1)
  for _=1,budget do
   if nodeUsage(field)>=field.cfg.Count then break end
@@ -1551,11 +1579,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   local primary=d.target
   -- The synchronous primary resolver alone can retain its contact through a
   -- final hit. No saved state/remote can authorize an echo from a retired node.
-  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-(d.workStation or Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize,primary.referenceCrystal))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-(d.workStation or scene.resourceStation(primary,d.targetSlot))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
   if assist and primary.processingPrimary~=d.id then return false end
  elseif not clusterFinish then
   local released=special and job.launched
-  local station=d.workStation or Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal)
+  local station=d.workStation or scene.resourceStation(r,d.targetSlot)
   if d.target~=r or (d.pos-station).Magnitude>(released and 3 or 1)
    or (not clusterHit and not los(released and job.from or d.pos,released and job.contact or r.position,r.part,{droneFolder})) then return false end
  end
@@ -1728,6 +1756,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     -- minimum delay on the server clock for both natural and planted rocks.
     local vacancy={at=respawnClock+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn}
     if r.field.cfg.ContinuousCrystals then vacancy.position=r.position end
+    vacancy.landmark=r.landmark;vacancy.landmarkMineral=r.landmarkMineral
     if r.field.cfg.SelectionOnly and d.squareJob and d.squareJob==p.miningSquare then
      vacancy.owner=d.owner;vacancy.position=r.position
     end
@@ -2479,7 +2508,7 @@ end
 local function committedStation(d,r)
  if d.workTargetId~=r.id then
   d.workTargetId=r.id
-  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal,r.field.cfg.ContinuousCrystals)
+ d.workStation=scene.resourceStation(r,d.targetSlot,r.field.cfg.ContinuousCrystals)
   local definition=DroneCatalog.Types[d.role]
   if definition and definition.Projectile=='Nomad' then
    local approach=r.position-d.pos
@@ -2698,7 +2727,7 @@ local function growerDrone(d,p,hr,dt)
  local field=square and square.field or workingField(p,hr)
  if d.growSquare~=square then d.growSquare=square;d.growPlan=nil;d.growAt=nil end
  local vacancy=field and field.respawnQueue[1]
- if not vacancy or now<(vacancy.regrowAt or 0) or nodeUsage(field)>=field.cfg.Count then
+ if not vacancy or vacancy.landmark or now<(vacancy.regrowAt or 0) or nodeUsage(field)>=field.cfg.Count then
   d.growPlan=nil;d.growAt=nil;d.field=nil;followRole(d,p,hr,dt);return
  end
  d.field=field.id

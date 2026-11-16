@@ -10,13 +10,15 @@ C.mineralCuts={
  Emerald={'Outcrop','Needle'},RunEmerald={'Outcrop','Needle'},
 }
 C.inset=CrystalVeins.carve
-function C.fieldScales(large,spire)
- local width=1.25+large*(spire and .09 or .38)
- local height=.70+large*(spire and .54 or .19)
+function C.fieldScales(large,spire,landmark)
+ if landmark=='spire' then return 1.48,1.98 end
+ if landmark=='boulder' then return 2.70,1.02 end
+ local width=1.13+large*(spire and .15 or .38)
+ local height=.70+large*(spire and .40 or .19)
  return width,height
 end
-function C.fieldSize(size,large,spire)
- local width,height=C.fieldScales(large,spire)
+function C.fieldSize(size,large,spire,landmark)
+ local width,height=C.fieldScales(large,spire,landmark)
  return size*Vector3.new(width,height,width)
 end
 local clusters={

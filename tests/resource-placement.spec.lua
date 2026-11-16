@@ -78,50 +78,61 @@ check('seeded field populations preserve random positions without overlap',funct
   assert(successes>=16,'starter-sized field cannot populate after bounded retries: '..seed)
  end
 end)
-check('Crystal Run fills Voronoi banks around connected paths across regrowth',function()
+check('Crystal Run keeps connected winding paths and grows landmark clusters',function()
  local width,depth=216,64
- local totalSpires,totalBoulders=0,0
- for seed=1,30 do
-  local random=rng(seed)
-  local layout=P.crystalLayout(width,depth,seed%5+1)
-  local occupied={}
-  local clustered,spires,boulders=0,0,0
-  for _=1,156 do
-   local roll=math.floor(random(50,101))
-   local wide=math.clamp((roll-74)/26,0,1)
-   local spire=roll%3==0
-   local size=Mining.fieldCrystal(roll,1,10,3).size/3
-   local breadth,height=Cuts.fieldScales(wide,spire)
-   local x,y,z=3.135*size*breadth*.82,6.567*size*height,4.487*size*breadth*.75
-   local radius=P.leaningRadius(x,y,z,Feel.rockLean(math.floor(random(1,1000001))))
-   local sample=P.sample(width,depth,radius,occupied,random,nil,nil,false,nil,nil,layout)
-   if sample then
-    assert(P.crystalPathClear(layout,sample.x,sample.z,radius))
-    assert(P.fits(sample.x,sample.z,width,depth,radius,occupied))
-    for _,center in ipairs(layout.clumps) do
-     if ((sample.x-center.x)/center.wide)^2+((sample.z-center.z)/center.deep)^2<=1 then
-      clustered+=1;break
+ local widestCutDepth={1,1,.85,.81,.77}
+ local entrance
+ for zone=1,5 do
+  local layout=P.crystalLayout(width,depth,zone)
+  if entrance then assert(layout.paths[1].x==entrance) end
+  local exit=layout.paths[4]
+  entrance=exit.x+exit.dx
+  assert(math.abs(layout.paths[2].dx)+math.abs(layout.paths[3].dx)>=30,'through route has no lateral bend')
+  for seed=1,6 do
+   local random=rng(seed*113+zone)
+   local occupied={}
+   local clustered=0
+   local function footprint(roll,landmark)
+    local width,height=Cuts.fieldScales(math.clamp((roll-74)/26,0,1),roll%3==0,landmark)
+    local size=Mining.fieldCrystal(roll,1,10,3).size/3
+    local x,y,z=3.135*size*width,6.567*size*height,4.487*size*width*widestCutDepth[zone]
+    return P.leaningRadius(x,y,z,Feel.rockLean(math.floor(random(1,1000001)))),y,z
+   end
+   for _,site in ipairs(layout.landmarks) do
+    local radius,y,z=footprint(99,site.shape)
+    local spot=P.sample(width,depth,radius,occupied,random,nil,site,false,nil,nil,layout)
+    assert(spot,string.format('landmark %s at %d,%d could not fit in bed %d with radius %.1f',site.shape,site.x,site.z,zone,radius))
+    assert(if site.shape=='spire' then y>17 else z>12)
+    table.insert(occupied,spot);clustered+=1
+   end
+   assert(#occupied==4)
+   for _=1,128 do
+    local radius=footprint(math.floor(random(50,101)))
+    local spot=P.sample(width,depth,radius,occupied,random,nil,nil,false,nil,nil,layout)
+    if spot then
+     assert(P.crystalPathClear(layout,spot.x,spot.z,radius))
+     assert(P.fits(spot.x,spot.z,width,depth,radius,occupied))
+     for _,center in ipairs(layout.clumps) do
+      if ((spot.x-center.x)/center.wide)^2+((spot.z-center.z)/center.deep)^2<=1 then
+       clustered+=1;break
+      end
      end
+     table.insert(occupied,spot)
+     if #occupied==64 then break end
     end
-    if spire and y>9 then spires+=1 end
-    if not spire and z>7 then boulders+=1 end
-    table.insert(occupied,sample)
-    if #occupied==78 then break end
+   end
+   assert(#occupied==64 and clustered>=49,
+    string.format('bed %d seed %d filled %d, clustered %d',zone,seed,#occupied,clustered))
+   local former=table.remove(occupied,1)
+   local noRandom=function() error('exact regrowth rerolled') end
+   local regrown=P.sample(width,depth,former.radius,occupied,noRandom,nil,former,false,nil,nil,layout)
+   assert(regrown and regrown.x==former.x and regrown.z==former.z)
+   for _,path in ipairs(layout.paths) do
+    local point={x=path.x+path.dx*.5,z=path.z+path.dz*.5}
+    assert(not P.sample(width,depth,1,{},noRandom,nil,point,false,nil,nil,layout))
    end
   end
-  assert(#occupied==78 and clustered>=58,
-   string.format('seed %d filled %d, clustered %d, spires %d, boulders %d',seed,#occupied,clustered,spires,boulders))
-  totalSpires+=spires;totalBoulders+=boulders
-  local vacant=table.remove(occupied,16)
-  local noRandom=function() error('exact regrowth rerolled') end
-  local regrown=P.sample(width,depth,vacant.radius,occupied,noRandom,nil,vacant,false,nil,nil,layout)
-  assert(regrown and regrown.x==vacant.x and regrown.z==vacant.z)
-  assert(not P.sample(width,depth,vacant.radius,occupied,noRandom,nil,{x=0,z=20},false,nil,nil,layout))
-  assert(not P.sample(width,depth,vacant.radius,occupied,noRandom,nil,{x=96,z=layout.bendZ},false,nil,nil,layout))
-  local spur=layout.spurs[1][1]
-  assert(not P.sample(width,depth,vacant.radius,{},noRandom,nil,spur,false,nil,nil,layout))
  end
- assert(totalSpires>=50 and totalBoulders>=50)
 end)
 check('invalid dimensions and coordinates cannot produce an invalid spawn',function()
  assert(not P.radius(0,2,2) and not P.radius(0/0,2,2) and not P.radius(2,math.huge,2))
