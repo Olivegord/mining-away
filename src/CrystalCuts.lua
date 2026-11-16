@@ -10,8 +10,14 @@ C.mineralCuts={
  Emerald={'Outcrop','Needle'},RunEmerald={'Outcrop','Needle'},
 }
 C.inset=CrystalVeins.carve
-function C.fieldSize(size)
- return size*Vector3.new(1.25,.70,1.25)
+function C.fieldScales(large,spire)
+ local width=1.25+large*(spire and .09 or .38)
+ local height=.70+large*(spire and .54 or .19)
+ return width,height
+end
+function C.fieldSize(size,large,spire)
+ local width,height=C.fieldScales(large,spire)
+ return size*Vector3.new(width,height,width)
 end
 local clusters={
  Triad={core='Spear',width=.92,height=1, feet={{-.45,.14,.56,-.28},{.49,-.15,.44,.33},{.04,.52,.25,-.21}}},

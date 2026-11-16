@@ -1,8 +1,16 @@
 # Shared project context
 
-Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
+Last substantive handoff: **November 15, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
 **Current implementation:** New Crystal Run players start with two Laser Miners, Inkbeam, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly and sell it one item per trip. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
+
+## November 15 — Voronoi rock clusters and connected paths
+
+Crystal Run rocks favor eight deposit centers per bed. The Voronoi boundary between neighboring deposits creates narrow side paths that meet a wider, bent crosswalk and a straight route through all five beds. New growth tries the emptied spot first when it still fits. Tilt-aware clearance protects the routes and neighboring rocks throughout growth and staged cuts. Upper-end rolls now produce a mix of taller spires and broader outcrops using the existing mineral cuts. Mining work, yields, population limits and regrowth timing use the existing rules.
+
+Shared **DRONEREVOLUTION** was already open and remains in Edit, place **124078027733625**, universe **10774898335**. All three Script Sync roots reported `Errored` after disk export. A guarded Script Editor install updated the two controllers after matching all seven starting hashes to `39bd95b`. Team Create save **337** succeeded. All seven installed Sources matched canonical **build/DRONE_GAME.rbxl** after save, SHA-256 **68fa14d9864641f40764ae1f3c3595670ae8c0b189f3a41eaac1d76ce9d56be0**. The next shared Play loads the new layouts. **No Roblox publication.**
+
+The native Edit component check used the actual five bed bounds, existing crystal template, native transforms and scenery raycasts with representative cut proportions. It fit 78 sampled deposits in every bed, with 57–64 inside the core clusters, and checked path clearance and exact-position regrowth. The focused placement, pickup and mining-flight suites passed. No Play session was started. In-game appearance, traversal and multiplayer remain for Play testing. Reproduce with `/private/tmp/drone-luau/luau tests/resource-placement.spec.lua`, `python3 tools/test_field_pickup_flow.py` and `python3 tools/build.py --previous-commit 39bd95b`.
 
 ## November 14 — restored rock splits and selection flashes
 
