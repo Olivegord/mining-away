@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 15 — cable slack and E interactions
+
+Start the winch as soon as the Emptier grabs the rock. The cable begins loose, and taking up the slack should create the ground drag before the shortening cable lifts the rock.
+
+Clicking on a bed positions or moves the plot preview. Confirm it with E and show the active action at the bottom of the screen. Players also press E to pick up reachable loose rocks.
+
 ## November 15 — natural gaps and giant outcrops
 
 Keep the clustered rock direction. Break up the single wide, winding corridor so players find several smaller ways through the rocks and the beds look organic. Make the mineable clusters bigger and sharper. Add giant unmineable rock formations between the beds.

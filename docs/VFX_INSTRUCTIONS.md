@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — reel from the moment of capture
+
+The cable begins slack and shortens continuously from the grip. The cargo starts to slide as the flying Emptier takes up that slack. The shortening cable lifts the rock once it can no longer reach the ground. The standard clear test route begins lifting around two seconds. Seating still plays the mineral chips.
+
 ## November 15 — the rock trails on the ground before the reel
 
 The grappling claw pulls the rock along a checked ground path behind the moving Emptier. The returning hull keeps turning and climbing during the two-second drag. The winch then draws the rock up to its moving cradle, where the existing seating chips play. The return arc keeps its exit velocity into regular delivery flight.

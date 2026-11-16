@@ -1728,7 +1728,6 @@ enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,context=context,enemy=enemyHUD,toast=toast,
  cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible,
  packReadyToOpen=function() return packView.openReady end,
- selectorPreview=function() return selectorView.draft~=nil end,
  starterReachable=function() return selectorView:canReachStarterPlot() end,
  depotApproach=function(pin)
   local character=player.Character
@@ -1824,13 +1823,53 @@ local function assignField(target)
  end
 end
 local mouse=player:GetMouse()
+;(function()
+ local prompts={}
+ local service=game:GetService('ProximityPromptService')
+ connect(service.PromptShown,function(prompt) prompts[prompt]=true end)
+ connect(service.PromptHidden,function(prompt) prompts[prompt]=nil end)
+ local function available()
+  if menusVisible() or not profile or UIS:GetFocusedTextBox() or (toolView and toolView:selected()~=nil)
+   or (logisticsView and logisticsView.selected~=nil) then return end
+  for prompt in pairs(prompts) do
+   if prompt.Enabled and prompt:IsDescendantOf(workspace) and prompt.KeyboardKeyCode==Enum.KeyCode.E then return end
+  end
+  if selectorView.draft then
+   if not selectorView.pending then return 'Confirm plot' end
+  elseif player:GetAttribute('MA_OrePickup') then return 'Pick up rock' end
+ end
+ selectorView.performFieldAction=function()
+  local action=available()
+  if action=='Confirm plot' then return selectorView:confirm() end
+  if action=='Pick up rock' then
+   command:FireServer('PickupOre',player:GetAttribute('MA_OrePickup'))
+   return true
+  end
+  return false
+ end
+ local prompt=button(safeRoot,UDim2.new(.5,0,1,-68),UDim2.fromOffset(174,38),'',selectorView.performFieldAction,palette.paper)
+ prompt.Name='FieldInteraction';prompt.AnchorPoint=Vector2.new(.5,1);prompt.Visible=false;prompt.Active=true
+ connect(RunService.RenderStepped,function()
+  local action=available()
+  prompt.Visible=action~=nil
+  if not action then return end
+  local hotbar=toolView and toolView.gui
+  local bottom=hotbar and hotbar.Visible and math.max(68,safeRoot.AbsolutePosition.Y+safeRoot.AbsoluteSize.Y-hotbar.AbsolutePosition.Y+10) or 68
+  local position=UDim2.new(.5,0,1,-bottom)
+  if prompt.Position~=position then prompt.Position=position end
+  local input=UIS:GetLastInputType()
+  local prefix=input==Enum.UserInputType.Touch and '' or input.Name:match('^Gamepad') and '[X]  ' or '[E]  '
+  local caption=prefix..action
+  if prompt.Text~=caption then prompt.Text=caption end
+ end)
+end)()
 connect(RunService.RenderStepped,function(dt) selectorView:step(dt) end)
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
- if selectorView:commit(ray) then return end
+ if selectorView:aimPreview(ray) then return end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params)
  if hit then assignField(hit.Instance) end
@@ -1856,13 +1895,14 @@ connect(UIS.InputBegan,function(input,processed)
  if input.UserInputType==Enum.UserInputType.MouseButton1 then
   local point=UIS:GetMouseLocation()
   if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
-   if selectorView:commit(mouse.UnitRay) then return end
+   if selectorView:aimPreview(mouse.UnitRay) then return end
    commandView:beginDrag();assignField(mouse.Target)
   end
   return
  end
  local key=input.KeyCode
  if menusVisible() and not modal.Visible then return end
+ if (key==Enum.KeyCode.E or key==Enum.KeyCode.ButtonX) and selectorView.performFieldAction() then return end
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
  elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then
   local cancelled=selectorView:cancelPreview()
@@ -1874,7 +1914,7 @@ connect(UIS.InputBegan,function(input,processed)
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then command:FireServer('TestLoadout')
  elseif key==Enum.KeyCode.ButtonR1 and not menusVisible() then
   local camera=workspace.CurrentCamera
-  if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);if selectorView:commit(ray) then return end;local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
+  if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);if selectorView:aimPreview(ray) then return end;local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
  elseif not modal.Visible then
   -- Number keys belong to the custom tool hotbar. Field commands use rocks.
  end

@@ -201,11 +201,6 @@ function HUD.firstCutHint(input: Enum.UserInputType, reachable: boolean): string
  if input.Name:match('^Gamepad') then return 'Preview field [RB]' end
  return 'Click to preview'
 end
-function HUD.confirmCutHint(input: Enum.UserInputType): string
- if input==Enum.UserInputType.Touch then return 'Tap inside to pin' end
- if input.Name:match('^Gamepad') then return 'Pin field [RB]' end
- return 'Click inside to pin'
-end
 function HUD.packHoldHint(input: Enum.UserInputType): string
  if input==Enum.UserInputType.Touch then return 'Hold to open pack' end
  if input.Name:match('^Gamepad') then return 'Hold X to open pack' end
@@ -266,8 +261,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
    guidance=HUD.firstCutHint(self.input,r.starterReachable())
   end
  end
- local statusText=r.selectorPreview and r.selectorPreview() and HUD.confirmCutHint(self.input)
-  or guidance or (pinned and type(status)=='string' and selectorText[status]) or nil
+ local statusText=guidance or (pinned and type(status)=='string' and selectorText[status]) or nil
  local showRecall=working>0 or delivering>0 or pinned
  local showStatusRow=showRecall or statusText~=nil
  self.dock.Visible=not hidden and (showStatusRow or fighting)

@@ -47,7 +47,7 @@ local ok,err=xpcall(function()
  view:step(.08)
  assert(view.activeFloor.point==center and view.activeFloor.width==30 and view.activeFloor.gui.Enabled,
   'confirmed pin did not fill the entire base')
- assert(view:commit(ray) and view:commit(shallow) and requests==0,'first click or click outside the preview submitted an order')
+ assert(view:aimPreview(ray) and view:aimPreview(shallow) and requests==0,'first click or click outside the preview submitted an order')
  view:step(.04)
  local earlyWidth=view.previewFloor.width
  assert(earlyWidth>1 and earlyWidth<30,'first click did not expand from the selected point')
@@ -69,11 +69,13 @@ local ok,err=xpcall(function()
  assert(previewRed>stone.R and neighborView.Color==neighbor.Color,'preview tint missed the footprint boundary')
  assert(records[2].rockOutline.FillTransparency==1 and records[2].rockOutline.OutlineTransparency<.1,'rock outside the zone lost its attack outline')
  local confirmRay={Origin=point+Vector3.new(4,30,0),Direction=-Vector3.yAxis}
- assert(view:commit(confirmRay) and sent.fieldId==1 and sent.position==point and sent.requestId and requests==1,
-  'second click moved the draft or did not send one command')
- assert(view:commit(confirmRay) and requests==1 and not view:flashState(),'pending placement retriggered the command or flash')
- assert(view:reply({requestId=sent.requestId,status='rejected'}) and view.draft==draft and not view:flashState(),'reject discarded or flashed the preview')
- assert(view:commit(confirmRay) and requests==2 and view:reply({requestId=sent.requestId,status='accepted'}),'retry did not confirm')
+ assert(view:aimPreview(confirmRay) and requests==0 and view.draft.point==point+Vector3.xAxis*4,
+  'click inside the preview did not reposition it locally')
+ assert(view:aimPreview(shallow) and view:confirm() and sent.fieldId==1 and sent.position==point and sent.requestId and requests==1,
+  'confirm did not place the current preview')
+ assert(view:aimPreview(confirmRay) and requests==1 and not view:flashState(),'pending placement retriggered the command or flash')
+ assert(view:reply({requestId=sent.requestId,status='rejected'}) and view.draft.point==point and not view:flashState(),'reject discarded or flashed the preview')
+ assert(view:confirm() and requests==2 and view:reply({requestId=sent.requestId,status='accepted'}),'retry did not confirm')
  player:SetAttribute('MA_Selector',point)
  view:step(.08)
  local click,strength=view:flashState()
@@ -89,7 +91,7 @@ local ok,err=xpcall(function()
  RockModifierView.clearSelectionFlash(records[1])
  RockModifierView.attackOutlines(records,nil,100.3,false)
  assert(rendered.Color==stone and records[1].rockOutline.FillTransparency==1 and records[1].rockOutline.OutlineTransparency<1,'selection failed to restore the rock or interrupted its attack outline')
- assert(view:commit(ray) and view:cancelPreview() and requests==2 and not view:previewState(),'cancelling a draft sent a command')
+ assert(view:aimPreview(ray) and view:cancelPreview() and requests==2 and not view:previewState(),'cancelling a draft sent a command')
  player:SetAttribute('MA_Selector',nil);view:step(.016)
  assert(not view.activeFloor.gui.Enabled and not view.activeEdge.gui.Enabled,'recall left a footprint')
  report={groundMarkers=5,previewStrength=previewStrength,clickFlash=strength}

@@ -140,7 +140,7 @@ function V:canReachStarterPlot()
  local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
  return point~=nil and Mining.selectorInRange(root.Position,point)
 end
-function V:commit(ray)
+function V:aimPreview(ray)
  local point,id,leadId,inRange=self:aim(ray)
  local profile=self.options.profile()
  if self.pending then return point~=nil end
@@ -154,10 +154,21 @@ function V:commit(ray)
  end
  local width=Workshop.selectorWidth(profile)
  local draft=self.draft
- if not draft or draft.field~=id or draft.runId~=profile.run.id or draft.width~=width
-  or not Mining.selectorContains(draft.point,width*.5,point) then
+ if not draft or draft.field~=id or draft.point~=point or draft.leadId~=leadId
+  or draft.runId~=profile.run.id or draft.width~=width then
   self.draft={point=point,field=id,width=width,leadId=leadId,runId=profile.run.id,
    character=self.options.player.Character,age=0}
+ end
+ return true
+end
+function V:confirm()
+ local draft=self.draft
+ if not draft then return false end
+ if self.pending then return true end
+ local profile=self.options.profile()
+ if self.options.hidden() or not profile or not profile.run or profile.run.id~=draft.runId
+  or Workshop.selectorWidth(profile)~=draft.width then
+  self:cancelPreview()
   return true
  end
  local character=self.options.player.Character

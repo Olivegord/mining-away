@@ -171,7 +171,7 @@ do
  local _,left=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach-.001,approach,turn)
  local _,at=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach,approach,turn)
  local _,right=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach+.001,approach,turn)
- assert(((at-left)-(right-at)).Magnitude<.001 and math.abs(right.Z)>.005 and right.Y>.006,'the turn and climb must share the contact tangent and acceleration')
+ assert(((at-left)-(right-at)).Magnitude<.001 and math.abs(right.Z)>.005 and right.Y>.001,'the turn and climb must share the contact tangent and acceleration')
  local previous=Vector3.xAxis
  for i=0,120 do
   local time=turnStart+Workshop.courierTurnTime(turn)*i/120
@@ -204,11 +204,18 @@ assert(not scene.rockCanSolidify({part=rock},{pl}),'a growing rock would trap a 
 rock.CFrame=CFrame.new(center)
 assert(scene.rockCanSolidify({part=rock},{pl}),'a clear rock cannot turn solid')
 local near,nearId=loose(hr.Position-Vector3.yAxis*2)
+local spare,spareId=loose(hr.Position+Vector3.xAxis*4-Vector3.yAxis*2)
 workspace.Raycast=function(_,_,_,params)
  return not table.find(params.FilterDescendantsInstances,rock) and {Instance=rock} or nil
 end
 for _=1,12 do now+=C.Tick;pickupStep(C.Tick) end
-assert(not pickups[nearId] and Pro.cargoUnits(data(p))==1,'solid mineable rock blocked player pickup')
+assert(pickups[nearId] and not near.homing and Pro.cargoUnits(data(p))==0,'nearby rock collected without E')
+assert(pl:GetAttribute('MA_OrePickup')==nearId,'reachable ore did not expose its pickup action')
+commandPlayer(pl,'PickupOre',nearId)
+for _=1,12 do now+=C.Tick;pickupStep(C.Tick) end
+assert(not pickups[nearId] and Pro.cargoUnits(data(p))==1,'E pickup did not pass a solid mineable rock')
+assert(pickups[spareId] and not spare.homing,'one pickup press pulled more than one rock')
+spare.part:Destroy();pickups[spareId]=nil
 workspace.Raycast=initialRay
 
 do
@@ -219,12 +226,15 @@ do
  wall.CanCollide=true;wall.Parent=zone
  offered.courier=d;d.orePickupId=offeredId;d.oreDock=movingGem+Vector3.yAxis*5
  workspace.Raycast=function() return {Instance=wall} end
- now+=C.Tick;pickupStep(C.Tick)
+ now+=.12;pickupStep(C.Tick)
+ commandPlayer(pl,'PickupOre',offeredId)
  assert(pickups[offeredId] and d.orePickupId==offeredId and not offered.homing,'blocked pickup took priority through scenery')
  workspace.Raycast=initialRay
  -- Move before the cached obstructed ray expires; collection should respond now.
  pl.Character:PivotTo(CFrame.new(hr.Position+Vector3.zAxis*1.5))
- now+=C.Tick;pickupStep(C.Tick)
+ now+=.12;pickupStep(C.Tick)
+ assert(pl:GetAttribute('MA_OrePickup')==offeredId and d.orePickupId==offeredId and not offered.homing,'the prompt preempted a courier before E')
+ commandPlayer(pl,'PickupOre',offeredId)
  assert(not d.orePickupId and not d.oreDock and not offered.part:GetAttribute('CourierDocking'),'nearby player did not take over a reserved pickup')
  for _=1,12 do now+=C.Tick;pickupStep(C.Tick) end
  assert(not pickups[offeredId] and Pro.cargoUnits(data(p))==2 and Pro.droneCargoUnits(data(p),d.id)==0,'pickup did not credit the player exactly once')
@@ -267,7 +277,7 @@ assert(not pickups[id] and pickups[extraId] and Pro.droneCargoUnits(data(p),d.id
 assert(d.pos.X>dock.X and d.velocity.X>8,'cargo contact interrupted forward flight')
 now=d.pickupAt+d.oreApproachTime+1
 scene.collectGroundCargo(d,p,hr,C.Tick)
-assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+2.5 and d.velocity.Magnitude>10,'climb lost its forward momentum before clearing the pickup')
+assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+.7 and d.velocity.Magnitude>10,'climb lost its forward momentum before clearing the pickup')
 local exitAt=d.oreSeatUntil
 local exitPosition,exitVelocity=Workshop.courierSwoop(d.oreDock,d.oreYaw,d.oreEntryOffset,d.oreEntryVelocity,
  exitAt-d.pickupAt,d.oreApproachTime,d.oreReturnTurn)

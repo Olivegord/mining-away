@@ -32,25 +32,30 @@ local ok,err=xpcall(function()
  end
  assert(minUp<.89 and maxUp>.98,'seeded stone lean did not vary')
  local contact=CFrame.new(0,0,0)
- local velocity=Vector3.xAxis*11
- local function frame(t) return CFrame.new(11*t,5+2*t,.4*t) end
- local duration=Workshop.COURIER_DRAG_TIME+Workshop.COURIER_REEL_TIME
- local function slide(t)
-  return Workshop.courierDragOffset(-math.pi/2,0,math.min(t,Workshop.COURIER_DRAG_TIME+.16))
+ local velocity=Vector3.xAxis*Workshop.COURIER_SWEEP_SPEED
+ local duration=Workshop.COURIER_REEL_WINDOW
+ local function reel(t)
+  local hull=Workshop.courierSwoop(Vector3.yAxis*Workshop.COURIER_HOOK_DROP,-math.pi/2,Vector3.zero,velocity,1+t,1,0)
+  local anchor=hull-Vector3.yAxis*.48
+  local cradle=CFrame.new(hull-Vector3.yAxis*1.14)
+  return Workshop.grappleReel(contact,cradle,anchor,t,Workshop.courierDragOffset(-math.pi/2,0,t))
  end
- local first=Workshop.grappleReel(contact,frame(0),velocity,0,false,slide(0))
- local last,seated=Workshop.grappleReel(contact,frame(duration),velocity,duration,false,slide(duration))
+ local first,_,length=reel(0)
  local previous=first
- local maxStep=0
+ local maxStep,dragDistance,liftAt=0,0,nil
  for tick=1,math.ceil(duration*144) do
   local t=math.min(tick/144,duration)
-  local pose=Workshop.grappleReel(contact,frame(t),velocity,t,false,slide(t))
-  if t<=Workshop.COURIER_DRAG_TIME then assert(pose.Position.Y==0 and pose.Position.X>=previous.Position.X) end
+  local pose,_,nextLength=reel(t)
+  assert(nextLength<=length,'winch paid out during the pull')
+  length=nextLength
+  if not liftAt and pose.Position.Y>.02 then liftAt=t;dragDistance=previous.Position.X end
   maxStep=math.max(maxStep,(pose.Position-previous.Position).Magnitude)
   previous=pose
  end
- assert(first==contact and seated and (last.Position-frame(duration).Position).Magnitude<.001)
- assert(maxStep<.31,'ground pull or reel snapped between neighboring frames')
+ local _,seated=reel(duration)
+ assert(first==contact and seated and liftAt and liftAt>1.7 and liftAt<2.4 and dragDistance>9,
+  'the rock did not slide on the ground until the shortening cable lifted it')
+ assert(maxStep<.65,'the cable pull snapped between neighboring frames')
  local dock=Vector3.zero
  local destination=Vector3.new(-48,9,0)
  local yaw=-math.pi/2
@@ -64,9 +69,7 @@ local ok,err=xpcall(function()
  assert((late-position).Magnitude>1.7 and tangent:Dot(lateVelocity)>120,'exit stalled between snapshots')
  assert((regular-position):Dot(tangent.Unit)>.17 and tangent.Unit:Dot(regularVelocity)>10.5,'delivery did not inherit the exit tangent')
  report.leanDotRange={minUp,maxUp};report.maximumReelStep=maxStep
- local groundPull=Workshop.grappleReel(contact,frame(2),velocity,2,false,slide(2)).Position
- assert(groundPull.Y==0 and groundPull.X>15,'two-second ground pull did not keep the rock moving')
- report.dragDistance=(groundPull-contact.Position).Magnitude
+ report.dragDistance=dragDistance;report.liftAt=liftAt
  report.exitSpeed=tangent.Magnitude;report.firstDeliverySpeed=regularVelocity.Magnitude
 end,debug.traceback)
 root:Destroy()

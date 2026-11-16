@@ -49,8 +49,8 @@ W.COURIER_SWEEP_SPEED=11
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
 W.COURIER_HOOK_DROP=4.8
-W.COURIER_DRAG_TIME=2
-W.COURIER_REEL_TIME=.68
+W.COURIER_REEL_WINDOW=3.12
+local cableRestGap,cableSlack=3.76,4.65
 local courierTurnRelease=.32
 local function easeClaw(t)
  t=math.clamp(t,0,1)
@@ -64,15 +64,22 @@ function W.oreOrientation(seed,packed)
  local lean=math.rad(14+n*173%39)
  return math.cos(bearing)*lean,yaw,math.sin(bearing)*lean
 end
-function W.grappleReel(contact,cradle,velocity,elapsed,reduced,slide)
- local duration=reduced and .43 or W.COURIER_REEL_TIME
- if elapsed>=W.COURIER_DRAG_TIME+duration then return cradle,true end
- local t=math.clamp((elapsed-W.COURIER_DRAG_TIME)/duration,0,1)
- -- Match the moving cradle instead of stopping in world space at seating.
- local drift=Vector3.new(velocity.X,0,velocity.Z)
- if drift.Magnitude>12 then drift=drift.Unit*12 end
- local swing=reduced and Vector3.zero or -drift*(math.sin(t*math.pi)^2*.045)
- return (contact+(slide or Vector3.zero)):Lerp(cradle,easeClaw(t))+swing,false
+function W.grappleCableLength(elapsed)
+ local age=math.clamp(elapsed,0,W.COURIER_REEL_WINDOW)
+ return math.max(.12,cableRestGap+cableSlack-.62*age-.03*age^5)
+end
+function W.grappleReel(contact,cradle,anchor,elapsed,slide)
+ local length=W.grappleCableLength(elapsed)
+ local eye=Vector3.yAxis*.56
+ local seatedLength=math.max(.14,(anchor-(cradle.Position+eye)).Magnitude)
+ if length<=seatedLength then return cradle,true,length,1 end
+ local grounded=contact+(slide or Vector3.zero)
+ -- Pay in cable throughout the pull. As the gap grows, the rock leaves the
+ -- floor when that cable can no longer reach ground level.
+ local height=anchor.Y-grounded.Position.Y-eye.Y
+ local t=math.clamp((height-length)/math.max(.12,height-seatedLength),0,1)
+ local lift=t*t*(3-2*t)
+ return grounded:Lerp(cradle,lift),false,length,lift
 end
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
@@ -138,7 +145,7 @@ function W.courierTurnTime(turn)
  return math.abs(turn)*W.COURIER_TURN_RADIUS/W.COURIER_SWEEP_SPEED
 end
 function W.courierReturnDuration(turn)
- return math.max(W.COURIER_DRAG_TIME+W.COURIER_REEL_TIME+.12,W.courierTurnTime(turn)+courierTurnRelease)
+ return math.max(W.COURIER_REEL_WINDOW,W.courierTurnTime(turn)+courierTurnRelease)
 end
 local function courierPlanar(yaw,turn,travel)
  local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
@@ -163,14 +170,17 @@ local function courierPlanar(yaw,turn,travel)
  return position,velocity,bend
 end
 function W.courierDragOffset(yaw,turn,elapsed)
- -- Accelerate the grounded payload into a trailing path behind the hull.
- local travel=.86*(elapsed-.27*(1-math.exp(-elapsed/.27)))
+ -- The moving hull takes up the initial slack before the rock slides.
+ local cable=W.grappleCableLength(elapsed)
+ local looseReach=math.sqrt(math.max(0,cable*cable-cableRestGap*cableRestGap))
+ local tensionTime=math.max(0,elapsed-looseReach/W.COURIER_SWEEP_SPEED)
+ local travel=.79*(tensionTime-.24*(1-math.exp(-tensionTime/.24)))
  return (courierPlanar(yaw,turn,travel))
 end
 function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
  approachTime=approachTime or W.COURIER_CONTACT
  turn=turn or 0
- local riseTime=1.20
+ local riseTime=2.42
  local travel=math.max(0,age-approachTime)
  local planar,tangent,bend=courierPlanar(yaw,turn,travel)
  if age<approachTime then
@@ -10759,6 +10769,35 @@ function scene.cargoInSquare(square,position)
  local reach=square.half+8
  return math.abs(position.X-square.center.X)<=reach and math.abs(position.Z-square.center.Z)<=reach
 end
+function scene.playerCanPickOre(p,drop,id,hr,from,reach)
+ local press=p.compactor
+ return drop.raw and drop.owner==p.player.UserId and drop.runId==data(p).run.id
+  and drop.part.Parent and drop.units>0 and not drop.pressSocket
+  and not (press and p.compactorTarget and p.compactorTarget.id==id and (press.pressDock
+   or (press.pos-p.compactorTarget.position).Magnitude<1.1))
+  and not (drop.homing and drop.dronePull) and OreDrops.collectible(drop)
+  and now>=(drop.launchAt or 0) and not OreDrops.expired(drop.refreshedAt or drop.spawnAt,now,drop.returnUntil)
+  and (hr.Position-from).Magnitude<=reach and scene.orePullClear(drop,from,hr.Position,hr.Parent)
+end
+function scene.requestOrePickup(p,id)
+ if not R.finite(id) or id%1~=0 then return end
+ local drop=pickups[id]
+ local hr=characterRoot(p)
+ if not drop or not hr or p.player:GetAttribute('MA_OrePickup')~=id
+  or Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) then return end
+ local from=Vector3.new(drop.x,drop.y,drop.z)
+ local reach=(p.cargoReach or OreDrops.CARGO_REACH)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
+ drop.queryAt=0
+ if not scene.playerCanPickOre(p,drop,id,hr,from,reach) then return end
+ drop.playerPickup=true
+ p.player:SetAttribute('MA_OrePickup',nil)
+ local courier=drop.courier
+ if courier and courier.orePickupId==id then
+  courier.orePickupId=nil;courier.oreDock=nil;courier.oreYaw=nil;courier.pickupAt=nil
+  drop.part:SetAttribute('CourierDocking',nil)
+ end
+ drop.courier=nil
+end
 local function pickupStep(dt)
  scene.pressOutputs=scene.pressOutputs or {}
  for i=#scene.pressOutputs,1,-1 do
@@ -10773,8 +10812,11 @@ local function pickupStep(dt)
   end
  end
  local activePresses={}
+ local updatePrompt=now>=(scene.orePromptAt or 0)
+ if updatePrompt then scene.orePromptAt=now+.10 end
  for _,p in pairs(profiles) do
   p.pinOreOutOfReach=nil
+  if updatePrompt then p.orePromptId=nil;p.orePromptDistance=math.huge end
   if p.vacuum then
    p.previousVacuumTargetId=p.vacuumTarget and p.vacuumTarget.id
    p.vacuumTarget=nil;p.vacuumScore=math.huge
@@ -10802,9 +10844,7 @@ local function pickupStep(dt)
    local search=not inputs and now>=(press.pressSearchAt or 0)
    if search then press.pressSearchAt=now+.15 end
    if not inputs and not search and not previous then continue end
-   local hasRoom=Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
-   activePresses[press.owner]={profile=p,playerRoot=hasRoom and not inputs and hr or nil,
-    groups=search and {},previous=previous and previous.id}
+   activePresses[press.owner]={profile=p,groups=search and {},previous=previous and previous.id}
   end
  end
  if next(activePresses) then
@@ -10812,7 +10852,7 @@ local function pickupStep(dt)
   if now<(drop.launchAt or 0) then continue end
    local active=activePresses[drop.owner]
    local p=active and active.profile
-   if not p or not drop.raw or drop.compacted or drop.pressSocket or not drop.landed or drop.age<.40
+   if not p or not drop.raw or drop.compacted or drop.playerPickup or drop.pressSocket or not drop.landed or drop.age<.40
     or now<(drop.pressBlockedUntil or 0) or OreDrops.expired(drop.spawnAt,now+Workshop.COMPACTOR_WAIT+1,drop.returnUntil)
     or now<(drop.relayUntil or 0) or drop.part:GetAttribute('CourierDocking')
     or drop.runId~=data(p).run.id or drop.fieldPart~=p.miningSquare.field.part then continue end
@@ -10821,14 +10861,6 @@ local function pickupStep(dt)
    if not active.groups and not press.pressDock and id~=active.previous then continue end
    if press.pressMaterial and (press.pressMaterial~=drop.tierMaterial or press.pressInputValue+drop.value>1000000) then continue end
    local square=p.miningSquare
-   -- Let the player's backpack take nearby ore before starting another
-   -- batch. A press already loaded can finish with the next matching rock.
-   local hr=active.playerRoot
-   if hr and not drop.homing then
-    local from=Vector3.new(drop.x,drop.y,drop.z)
-    local reach=p.cargoReach+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
-    if (hr.Position-from).Magnitude<=reach and scene.orePullClear(drop,from,hr.Position,hr.Parent) then continue end
-   end
    local position=Vector3.new(drop.x,drop.floor+3.2,drop.z)
    if not scene.cargoInSquare(square,position) then continue end
    local distance=((press.pressDock or press.pos)-position).Magnitude
@@ -10905,7 +10937,7 @@ local function pickupStep(dt)
    local docking=courier and courier.orePickupId==id and courier.oreDock~=nil and courier.hp>0
    local dockingId=docking and courier.id or nil
    if drop.part:GetAttribute('CourierDocking')~=dockingId then drop.part:SetAttribute('CourierDocking',dockingId) end
-   local pressing=assignedToPress
+   local pressing=press and assignedToPress
     and (press.pressDock or (press.pos-p.compactorTarget.position).Magnitude<1.1)
    local socket=pressing and #(press.pressInputs or {})+1
    local relay=Workshop.VACUUM_ENABLED and now<(drop.relayUntil or 0)
@@ -10913,16 +10945,16 @@ local function pickupStep(dt)
    local vacuumApproaching=false
    local relayReach=p.vacuumReach+12
    local reach=relay and math.max(relayReach,naturalReach) or naturalReach
-   local playerPull=hasSpace and not pressing and drop.raw and OreDrops.collectible(drop) and (target-from).Magnitude<=naturalReach
-    and scene.orePullClear(drop,from,target,hr.Parent)
-   if playerPull then
-    -- A reachable loose gem belongs to the player until a worker has
-    -- actually grabbed it. Release the approach before stepping either claim.
-    if docking then
-     courier.orePickupId=nil;courier.oreDock=nil;courier.oreYaw=nil;courier.pickupAt=nil
-     drop.courier=nil;docking=false
-     drop.part:SetAttribute('CourierDocking',nil)
+   local withinReach=hasSpace and (drop.playerPickup or updatePrompt) and scene.playerCanPickOre(p,drop,id,hr,from,naturalReach)
+   local playerPull=drop.playerPickup and withinReach
+   if drop.playerPickup and not playerPull then drop.playerPickup=nil end
+   if updatePrompt and withinReach and not playerPull then
+    local distance=(target-from).Magnitude
+    if distance<p.orePromptDistance or distance==p.orePromptDistance and id<p.orePromptId then
+     p.orePromptId=id;p.orePromptDistance=distance
     end
+   end
+   if playerPull then
     reach=naturalReach
    elseif pressing then
     target=scene.pressSocket(press,socket);reach=13
@@ -10944,7 +10976,8 @@ local function pickupStep(dt)
      else vacuumApproaching=true end
     end
    end
-   local canCollect=not docking and (pressing or hasSpace) and (target-from).Magnitude<=reach
+   local canCollect=not docking and (pressing or vacuuming or hasSpace and (playerPull or not drop.raw or relay))
+    and (target-from).Magnitude<=reach
    local targetModel=pressing and press.model or vacuuming and vacuum.model or hr and hr.Parent
    if canCollect then
     canCollect=scene.orePullClear(drop,from,target,targetModel)
@@ -10952,7 +10985,8 @@ local function pickupStep(dt)
    end
    local square=p.miningSquare
    if not p.pinOreOutOfReach and square and drop.raw and drop.fieldPart==square.field.part
-    and drop.landed and drop.age>=OreDrops.SCATTER_TIME and hasSpace and not canCollect and not assignedToPress and not vacuumApproaching
+    and drop.landed and drop.age>=OreDrops.SCATTER_TIME and hasSpace and not canCollect
+    and (target-from).Magnitude>naturalReach and not assignedToPress and not vacuumApproaching
     and scene.cargoInSquare(square,from) then
     p.pinOreOutOfReach=square
    end
@@ -11001,6 +11035,12 @@ local function pickupStep(dt)
     end
    end
    if pickups[id] and now>=(drop.snapshotAt or 0) then scene.snapshotOrePickup(drop) end
+  end
+ end
+ if updatePrompt then
+  for _,p in pairs(profiles) do
+   local candidate=pickups[p.orePromptId] and p.orePromptId
+   if p.player:GetAttribute('MA_OrePickup')~=candidate then p.player:SetAttribute('MA_OrePickup',candidate) end
   end
  end
 end
@@ -12477,7 +12517,7 @@ function scene.emptierReady(d,profile)
 end
 function scene.emptierCanCollect(p,drop,id,hr)
  if not drop or drop.owner~=p.player.UserId or drop.runId~=data(p).run.id
-  or not drop.raw or not Workshop.crystalCargo(drop.material) or not OreDrops.collectible(drop)
+  or drop.playerPickup or not drop.raw or not Workshop.crystalCargo(drop.material) or not OreDrops.collectible(drop)
   or drop.homing or drop.pressSocket or not drop.part.Parent
   or OreDrops.expired(drop.spawnAt,now,drop.returnUntil)
   or (p.compactorTarget and p.compactorTarget.id==id) then return false end
@@ -12578,11 +12618,6 @@ function scene.collectGroundCargo(d,p,hr,dt)
  local dock=d.oreDock or gem-hookOffset
  if not d.oreDock then
   local ignore={pickupFolder,droneFolder,hr.Parent}
-  local reach=(p.cargoReach or OreDrops.CARGO_REACH)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
-  if (hr.Position-position).Magnitude<=reach and Pro.cargoUnits(profile)<Ca.capacity(profile,previewPerks(p))
-   and scene.orePullClear(drop,position,hr.Position,hr.Parent) then
-   d.orePickupId=nil;d.oreYaw=nil;return false
-  end
   local entryVelocity=d.velocity or Vector3.zero
   local offset=d.pos-dock
   local approachTime=Workshop.courierApproachTime(offset)
@@ -12606,8 +12641,8 @@ function scene.collectGroundCargo(d,p,hr,dt)
   local bed=drop.fieldPart
   local lastGround=gem
   d.oreDragUntil=0
-  for i=1,18 do
-   local pullTime=(Workshop.COURIER_DRAG_TIME+.16)*i/18
+  for i=1,22 do
+   local pullTime=Workshop.COURIER_REEL_WINDOW*i/22
    local nextGround=gem+Workshop.courierDragOffset(yaw,turn,pullTime)
    local edge=bed and bed.CFrame:PointToObjectSpace(nextGround)
    if edge and (math.abs(edge.X)>bed.Size.X*.5 or math.abs(edge.Z)>bed.Size.Z*.5)
@@ -13750,6 +13785,8 @@ local function commandPlayer(pl: any,action: any,payload: any)
   scene.buyStarUpgrade(p,payload)
  elseif action=='PlaceSelector' then
   scene.placeSquare(p,payload)
+ elseif action=='PickupOre' then
+  scene.requestOrePickup(p,payload)
  elseif action=='DevFillBag' then
   if not RunService:IsStudio() then return end
   local field=p.workField and patches[p.workField] or patches[1]

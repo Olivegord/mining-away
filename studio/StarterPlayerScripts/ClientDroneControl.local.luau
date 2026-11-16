@@ -136,8 +136,8 @@ W.COURIER_SWEEP_SPEED=11
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
 W.COURIER_HOOK_DROP=4.8
-W.COURIER_DRAG_TIME=2
-W.COURIER_REEL_TIME=.68
+W.COURIER_REEL_WINDOW=3.12
+local cableRestGap,cableSlack=3.76,4.65
 local courierTurnRelease=.32
 local function easeClaw(t)
  t=math.clamp(t,0,1)
@@ -151,15 +151,22 @@ function W.oreOrientation(seed,packed)
  local lean=math.rad(14+n*173%39)
  return math.cos(bearing)*lean,yaw,math.sin(bearing)*lean
 end
-function W.grappleReel(contact,cradle,velocity,elapsed,reduced,slide)
- local duration=reduced and .43 or W.COURIER_REEL_TIME
- if elapsed>=W.COURIER_DRAG_TIME+duration then return cradle,true end
- local t=math.clamp((elapsed-W.COURIER_DRAG_TIME)/duration,0,1)
- -- Match the moving cradle instead of stopping in world space at seating.
- local drift=Vector3.new(velocity.X,0,velocity.Z)
- if drift.Magnitude>12 then drift=drift.Unit*12 end
- local swing=reduced and Vector3.zero or -drift*(math.sin(t*math.pi)^2*.045)
- return (contact+(slide or Vector3.zero)):Lerp(cradle,easeClaw(t))+swing,false
+function W.grappleCableLength(elapsed)
+ local age=math.clamp(elapsed,0,W.COURIER_REEL_WINDOW)
+ return math.max(.12,cableRestGap+cableSlack-.62*age-.03*age^5)
+end
+function W.grappleReel(contact,cradle,anchor,elapsed,slide)
+ local length=W.grappleCableLength(elapsed)
+ local eye=Vector3.yAxis*.56
+ local seatedLength=math.max(.14,(anchor-(cradle.Position+eye)).Magnitude)
+ if length<=seatedLength then return cradle,true,length,1 end
+ local grounded=contact+(slide or Vector3.zero)
+ -- Pay in cable throughout the pull. As the gap grows, the rock leaves the
+ -- floor when that cable can no longer reach ground level.
+ local height=anchor.Y-grounded.Position.Y-eye.Y
+ local t=math.clamp((height-length)/math.max(.12,height-seatedLength),0,1)
+ local lift=t*t*(3-2*t)
+ return grounded:Lerp(cradle,lift),false,length,lift
 end
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
@@ -225,7 +232,7 @@ function W.courierTurnTime(turn)
  return math.abs(turn)*W.COURIER_TURN_RADIUS/W.COURIER_SWEEP_SPEED
 end
 function W.courierReturnDuration(turn)
- return math.max(W.COURIER_DRAG_TIME+W.COURIER_REEL_TIME+.12,W.courierTurnTime(turn)+courierTurnRelease)
+ return math.max(W.COURIER_REEL_WINDOW,W.courierTurnTime(turn)+courierTurnRelease)
 end
 local function courierPlanar(yaw,turn,travel)
  local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
@@ -250,14 +257,17 @@ local function courierPlanar(yaw,turn,travel)
  return position,velocity,bend
 end
 function W.courierDragOffset(yaw,turn,elapsed)
- -- Accelerate the grounded payload into a trailing path behind the hull.
- local travel=.86*(elapsed-.27*(1-math.exp(-elapsed/.27)))
+ -- The moving hull takes up the initial slack before the rock slides.
+ local cable=W.grappleCableLength(elapsed)
+ local looseReach=math.sqrt(math.max(0,cable*cable-cableRestGap*cableRestGap))
+ local tensionTime=math.max(0,elapsed-looseReach/W.COURIER_SWEEP_SPEED)
+ local travel=.79*(tensionTime-.24*(1-math.exp(-tensionTime/.24)))
  return (courierPlanar(yaw,turn,travel))
 end
 function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
  approachTime=approachTime or W.COURIER_CONTACT
  turn=turn or 0
- local riseTime=1.20
+ local riseTime=2.42
  local travel=math.max(0,age-approachTime)
  local planar,tangent,bend=courierPlanar(yaw,turn,travel)
  if age<approachTime then
@@ -4102,19 +4112,22 @@ end
 local function destroyGrapple(fx)
  if fx.grapple then fx.grapple.root:Destroy();fx.grapple=nil end
 end
-local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,reduced,velocity,now,elapsed)
+local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,now,elapsed)
  if age<.24 and not loadedId then return nil end
  local hook=fx.grapple
  if not hook then
   local root=Instance.new('Folder');root.Name='CourierGrapple';root.Parent=fx.root
   local anchor=part(root,'WinchOrigin')
   local payload=part(root,'GrapplePayload');payload.Size=Vector3.one*.56
-  local start=Instance.new('Attachment');start.Parent=anchor
-  local eye=Instance.new('Attachment');eye.Position=Vector3.yAxis*.56;eye.Parent=payload
+  local start=Instance.new('Attachment');start.Axis=-Vector3.yAxis;start.Parent=anchor
+  local eye=Instance.new('Attachment');eye.Position=Vector3.yAxis*.56;eye.Axis=Vector3.yAxis;eye.Parent=payload
   local rope=Instance.new('RopeConstraint');rope.Name='GrappleRope'
   rope.Attachment0=start;rope.Attachment1=eye;rope.Visible=true;rope.Thickness=.075;rope.Restitution=0
   rope.Parent=root
-  hook={root=root,anchor=anchor,payload=payload,rope=rope,clock=0,lastAt=now}
+  local slack=Instance.new('Beam');slack.Name='SlackCable';slack.Attachment0=start;slack.Attachment1=eye
+  slack.Enabled=false;slack.FaceCamera=true;slack.Segments=12;slack.Width0=.075;slack.Width1=.075
+  slack.Color=ColorSequence.new(Color3.fromRGB(132,136,142));slack.Parent=anchor
+  hook={root=root,anchor=anchor,payload=payload,rope=rope,slack=slack,clock=0,lastAt=now}
   fx.grapple=hook
  end
  local anchor,payload,rope=hook.anchor,hook.payload,hook.rope
@@ -4125,20 +4138,31 @@ local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,pause
  -- physics solver previously fought the rendered pivot on every frame.
  local target=CFrame.new(groundPose and groundPose.Position or ground)*cradle.Rotation
  if loadedId and not hook.ore then
-  hook.ore=loadedId;hook.contact=hook.shown or target;hook.velocity=velocity
+  hook.ore=loadedId;hook.contact=hook.shown or target
   hook.clock=elapsed or 0
  elseif hook.ore and not paused then
   hook.clock=elapsed or hook.clock+dt
  end
- local seated=false
+ local seated,paid=false,nil
  if hook.ore then
   local slide=fx.dragUntil and Workshop.courierDragOffset(fx.dragYaw,fx.dragTurn,math.min(hook.clock,fx.dragUntil))
-  payload.CFrame,seated=Workshop.grappleReel(hook.contact,cradle,hook.velocity,hook.clock,reduced,slide)
+  payload.CFrame,seated,paid,hook.lift=Workshop.grappleReel(hook.contact,cradle,anchor.Position,hook.clock,slide)
  else
   payload.CFrame=cradle:Lerp(target,reach^3*(10+reach*(-15+6*reach)))
  end
  hook.shown=payload.CFrame
- rope.Length=math.max(.04,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude)
+ local gap=(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude
+ local loose=paid and math.max(0,paid-gap) or 0
+ rope.Length=math.max(.04,gap,paid or 0)
+ rope.WinchEnabled=paid~=nil and not paused
+ if paid then
+  rope.WinchTarget=paid;rope.WinchSpeed=.62+.15*hook.clock^4
+ end
+ hook.slack.Enabled=loose>.10;rope.Visible=not hook.slack.Enabled
+ if hook.slack.Enabled then
+  local curve=math.min(4,math.sqrt(loose*(loose+gap))*.68)
+  hook.slack.CurveSize0=curve;hook.slack.CurveSize1=curve
+ end
  if seated then
   fx.grappleDone=hook.ore;destroyGrapple(fx)
   return cradle,true
@@ -4303,7 +4327,7 @@ function W:courier(drone,record,now)
   local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
   local carryAge=drone.pickupAge and drone.pickupAge-Workshop.COURIER_CONTACT or loadAge
   local loadingSlot
-  if loadedId and loadedId>0 and (loadAge<.55 or grappling and carryAge<Workshop.COURIER_DRAG_TIME+Workshop.COURIER_REEL_TIME+.45) and not unload then
+  if loadedId and loadedId>0 and (loadAge<.55 or grappling and carryAge<Workshop.COURIER_REEL_WINDOW+.45) and not unload then
    for i=math.min(parcelUnits,6),1,-1 do
     if fx.load[i]==loadedMaterial then loadingSlot=i;break end
    end
@@ -4367,7 +4391,7 @@ function W:courier(drone,record,now)
    if hooked then
     local elapsed=docking and source:GetAttribute('CourierApproachTime') and math.max(0,pickupAge-Workshop.COURIER_CONTACT) or nil
     local hookPose,seated=grappleFrame(fx,pivot,cargoFrame,ground,fx.grappleOrePose,pickupAge,
-     not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,velocity,now,elapsed)
+     not beforeContact and i==loadingSlot and loadedId or nil,paused,now,elapsed)
     if hookPose then cargoFrame=hookPose end
     seatImpact=seated
    end
@@ -4425,7 +4449,7 @@ function W:courier(drone,record,now)
     local rotation=cargoFrame.Rotation
     if i==loadingSlot and fx.grappleOrePose then
      local incoming=fx.grappleOrePose.Rotation
-     local mountBlend=hooked and fx.grapple and math.clamp((fx.grapple.clock-Workshop.COURIER_DRAG_TIME)/.48,0,1) or 1
+     local mountBlend=hooked and fx.grapple and (fx.grapple.lift or 0) or 1
      rotation=incoming:Lerp(rotation,mountBlend*mountBlend*(3-2*mountBlend))
     end
     if seatImpact then
@@ -16067,7 +16091,7 @@ function V:canReachStarterPlot()
  local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
  return point~=nil and Mining.selectorInRange(root.Position,point)
 end
-function V:commit(ray)
+function V:aimPreview(ray)
  local point,id,leadId,inRange=self:aim(ray)
  local profile=self.options.profile()
  if self.pending then return point~=nil end
@@ -16081,10 +16105,21 @@ function V:commit(ray)
  end
  local width=Workshop.selectorWidth(profile)
  local draft=self.draft
- if not draft or draft.field~=id or draft.runId~=profile.run.id or draft.width~=width
-  or not Mining.selectorContains(draft.point,width*.5,point) then
+ if not draft or draft.field~=id or draft.point~=point or draft.leadId~=leadId
+  or draft.runId~=profile.run.id or draft.width~=width then
   self.draft={point=point,field=id,width=width,leadId=leadId,runId=profile.run.id,
    character=self.options.player.Character,age=0}
+ end
+ return true
+end
+function V:confirm()
+ local draft=self.draft
+ if not draft then return false end
+ if self.pending then return true end
+ local profile=self.options.profile()
+ if self.options.hidden() or not profile or not profile.run or profile.run.id~=draft.runId
+  or Workshop.selectorWidth(profile)~=draft.width then
+  self:cancelPreview()
   return true
  end
  local character=self.options.player.Character
@@ -18008,7 +18043,6 @@ enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,context=context,enemy=enemyHUD,toast=toast,
  cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible,
  packReadyToOpen=function() return packView.openReady end,
- selectorPreview=function() return selectorView.draft~=nil end,
  starterReachable=function() return selectorView:canReachStarterPlot() end,
  depotApproach=function(pin)
   local character=player.Character
@@ -18104,13 +18138,53 @@ local function assignField(target)
  end
 end
 local mouse=player:GetMouse()
+;(function()
+ local prompts={}
+ local service=game:GetService('ProximityPromptService')
+ connect(service.PromptShown,function(prompt) prompts[prompt]=true end)
+ connect(service.PromptHidden,function(prompt) prompts[prompt]=nil end)
+ local function available()
+  if menusVisible() or not profile or UIS:GetFocusedTextBox() or (toolView and toolView:selected()~=nil)
+   or (logisticsView and logisticsView.selected~=nil) then return end
+  for prompt in pairs(prompts) do
+   if prompt.Enabled and prompt:IsDescendantOf(workspace) and prompt.KeyboardKeyCode==Enum.KeyCode.E then return end
+  end
+  if selectorView.draft then
+   if not selectorView.pending then return 'Confirm plot' end
+  elseif player:GetAttribute('MA_OrePickup') then return 'Pick up rock' end
+ end
+ selectorView.performFieldAction=function()
+  local action=available()
+  if action=='Confirm plot' then return selectorView:confirm() end
+  if action=='Pick up rock' then
+   command:FireServer('PickupOre',player:GetAttribute('MA_OrePickup'))
+   return true
+  end
+  return false
+ end
+ local prompt=button(safeRoot,UDim2.new(.5,0,1,-68),UDim2.fromOffset(174,38),'',selectorView.performFieldAction,palette.paper)
+ prompt.Name='FieldInteraction';prompt.AnchorPoint=Vector2.new(.5,1);prompt.Visible=false;prompt.Active=true
+ connect(RunService.RenderStepped,function()
+  local action=available()
+  prompt.Visible=action~=nil
+  if not action then return end
+  local hotbar=toolView and toolView.gui
+  local bottom=hotbar and hotbar.Visible and math.max(68,safeRoot.AbsolutePosition.Y+safeRoot.AbsoluteSize.Y-hotbar.AbsolutePosition.Y+10) or 68
+  local position=UDim2.new(.5,0,1,-bottom)
+  if prompt.Position~=position then prompt.Position=position end
+  local input=UIS:GetLastInputType()
+  local prefix=input==Enum.UserInputType.Touch and '' or input.Name:match('^Gamepad') and '[X]  ' or '[E]  '
+  local caption=prefix..action
+  if prompt.Text~=caption then prompt.Text=caption end
+ end)
+end)()
 connect(RunService.RenderStepped,function(dt) selectorView:step(dt) end)
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
- if selectorView:commit(ray) then return end
+ if selectorView:aimPreview(ray) then return end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params)
  if hit then assignField(hit.Instance) end
@@ -18136,13 +18210,14 @@ connect(UIS.InputBegan,function(input,processed)
  if input.UserInputType==Enum.UserInputType.MouseButton1 then
   local point=UIS:GetMouseLocation()
   if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
-   if selectorView:commit(mouse.UnitRay) then return end
+   if selectorView:aimPreview(mouse.UnitRay) then return end
    commandView:beginDrag();assignField(mouse.Target)
   end
   return
  end
  local key=input.KeyCode
  if menusVisible() and not modal.Visible then return end
+ if (key==Enum.KeyCode.E or key==Enum.KeyCode.ButtonX) and selectorView.performFieldAction() then return end
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
  elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then
   local cancelled=selectorView:cancelPreview()
@@ -18154,7 +18229,7 @@ connect(UIS.InputBegan,function(input,processed)
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then command:FireServer('TestLoadout')
  elseif key==Enum.KeyCode.ButtonR1 and not menusVisible() then
   local camera=workspace.CurrentCamera
-  if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);if selectorView:commit(ray) then return end;local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
+  if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);if selectorView:aimPreview(ray) then return end;local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
  elseif not modal.Visible then
   -- Number keys belong to the custom tool hotbar. Field commands use rocks.
  end

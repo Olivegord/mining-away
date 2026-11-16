@@ -612,11 +612,11 @@ check('courier draws a dotted guide overhead, then closes the claw at contact',f
  assert(not work:courier(drone,record,720+Workshop.COURIER_CONTACT+.04))
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)
-check('courier drags the ore along the floor before reeling and leaves colored chips at seating',function()
+check('courier reels from the grab and cable slack creates a ground drag before lift',function()
  local source=Instance.new('Folder');source:SetAttribute('Role','Courier');source:SetAttribute('State','Pickup')
  source:SetAttribute('DeliverySlots',1);source:SetAttribute('CourierDock',Vector3.new(0,9,0))
  source:SetAttribute('CourierGrappling',true);source:SetAttribute('CourierPickupPoint',Vector3.new(0,4.2,0))
- source:SetAttribute('CourierApproachTime',1.2);source:SetAttribute('CourierDragUntil',2.16)
+ source:SetAttribute('CourierApproachTime',1.2);source:SetAttribute('CourierDragUntil',Workshop.COURIER_REEL_WINDOW)
  source:SetAttribute('CourierDockYaw',-math.pi/2);source:SetAttribute('CourierReturnTurn',0)
  local model=Instance.new('Model');model.Parent=root
  local emitter=Instance.new('Part');emitter.CFrame=CFrame.new(0,9,0);emitter.Parent=model;model.PrimaryPart=emitter
@@ -631,28 +631,34 @@ check('courier drags the ore along the floor before reeling and leaves colored c
  drone.pickupAge=Workshop.COURIER_CONTACT
  work:courier(drone,record,740.4)
  assert((hook.payload.Position-before).Magnitude<.001,'confirmed grab teleported the claw')
- drone.pickupAge=Workshop.COURIER_CONTACT+1.99
- emitter.CFrame=CFrame.new(21.89,9,0);drone.pos=emitter.Position
- work:courier(drone,record,742.39)
- assert(hook.payload.Position.X>before.X+14 and math.abs(hook.payload.Position.Y-before.Y)<.001,'rock lifted before two seconds of ground drag')
- local beforeReel=hook.rope.Length
- drone.pickupAge=Workshop.COURIER_CONTACT+2.42
- emitter.CFrame=CFrame.new(26.62,9,0);drone.pos=emitter.Position
- work:courier(drone,record,742.82)
- assert(hook.rope.Length<beforeReel,'reel did not close the gap')
+ local startLength=hook.rope.WinchTarget
+ assert(hook.rope.WinchEnabled and hook.slack.Enabled,'winch did not start with visible slack')
+ drone.pickupAge=Workshop.COURIER_CONTACT+.18
+ emitter.CFrame=CFrame.new(1.98,9,0);drone.pos=emitter.Position
+ work:courier(drone,record,740.58)
+ assert(hook.rope.WinchTarget<startLength and (hook.payload.Position-before).Magnitude<.001,'rope did not shorten through the slack')
+ drone.pickupAge=Workshop.COURIER_CONTACT+1.72
+ emitter.CFrame=CFrame.new(18.92,10.8,0);drone.pos=emitter.Position
+ work:courier(drone,record,742.12)
+ local groundLength=hook.rope.WinchTarget
+ assert(not hook.slack.Enabled and hook.payload.Position.X>before.X+8 and math.abs(hook.payload.Position.Y-before.Y)<.001,'taut rope did not drag the rock')
+ drone.pickupAge=Workshop.COURIER_CONTACT+2.5
+ emitter.CFrame=CFrame.new(27.5,12.5,0);drone.pos=emitter.Position
+ work:courier(drone,record,742.9)
+ assert(hook.rope.WinchTarget<groundLength and hook.payload.Position.Y>before.Y+1,'shortening rope did not lift the rock')
  local pausedAt=hook.payload.Position
  assert(drone.cargoMount and drone.cargoMount.id==23 and (drone.cargoMount.frame.Position-hook.payload.Position).Magnitude<.001)
  source:SetAttribute('WorkPaused',true)
  work:courier(drone,record,743)
  assert((hook.payload.Position-pausedAt).Magnitude<.001,'reel clock advanced during a pause')
  source:SetAttribute('WorkPaused',false)
- drone.pickupAge=Workshop.COURIER_CONTACT+2.69
- work:courier(drone,record,743.09)
+ drone.pickupAge=Workshop.COURIER_CONTACT+3.1
+ work:courier(drone,record,743.5)
  assert(not record.courier.grapple and not hook.root.Parent,'spent rope was not cleaned up')
  local impact=assert(root:FindFirstChild('GrappleSeatImpact'))
  local chips=assert(impact:FindFirstChild('OreSeatChips'))
  assert(chips.Lifetime.Max>=1 and chips.Emitted>0,'seating lost its lingering particles')
- work:courier(drone,record,743.13)
+ work:courier(drone,record,743.54)
  assert(#work.bursts==1 and impact.Parent==root,'seating particles were duplicated or removed with the rope')
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)
