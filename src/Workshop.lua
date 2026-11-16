@@ -219,33 +219,93 @@ W.RESOURCE_COLORS={Stone={171,164,151},Amber={255,175,65},Ruby={245,91,128},Quar
 W.CRYSTAL_CHANCE=.12
 W.PITY_PERCENT=7
 function W.resourceKey(material) return material:gsub('^Run','') end
-function W.saleCargo(material,value,stone,resource,stoneUnits)
+-- These flags match Mining.ROCK_MODIFIERS. Only payout-relevant effects
+-- appear as a second arithmetic beat, while the full mask keeps the look.
+local payoutMods={
+ {bit=2,name='Charged',cash=.15}, {bit=4,name='Frosted',dust=.30},
+ {bit=8,name='Big',cash=.10}, {bit=1,name='Massive',cash=.20}, {bit=16,name='Titan',cash=.35},
+}
+local function payoutBonus(base,dust,mask)
+ local moneyRate,dustRate=0,0
+ for _,mod in ipairs(payoutMods) do
+  if bit32.btest(mask,mod.bit) then moneyRate+=mod.cash or 0;dustRate+=mod.dust or 0 end
+ end
+ local money=moneyRate>0 and math.max(1,math.floor(base*moneyRate+.5)) or 0
+ local material=dustRate>0 and math.max(1,math.floor(dust*dustRate+.5)) or 0
+ return math.min(money,1000000-base),math.min(material,1000000-dust)
+end
+function W.saleCargo(material,value,stone,resource,stoneUnits,mask,cut,cashBonus,dustBonus,bonusMask)
  assert(W.CRYSTAL_BY_MATERIAL[material] and value>=1 and value<=1000000 and value%1==0)
  assert(resource>=1 and resource<=1000000 and resource%1==0 and stoneUnits>=0 and stoneUnits<=1000000 and stoneUnits%1==0)
- return (stone and 'Stone:' or 'Gem:')..material..':'..value..':'..resource..':'..stoneUnits
+ local key=(stone and 'Stone:' or 'Gem:')..material..':'..value..':'..resource..':'..stoneUnits
+ if not mask and not cut then return key end
+ mask=mask or 0;cut=cut or 'Original'
+ assert(mask>=0 and mask<=31 and mask%1==0 and #cut<=8 and cut:match('^%a+$'))
+ if cashBonus==nil then cashBonus,dustBonus=payoutBonus(value,resource,mask) end
+ assert(cashBonus>=0 and cashBonus%1==0 and value+cashBonus<=1000000)
+ assert(dustBonus>=0 and dustBonus%1==0 and resource+dustBonus<=1000000)
+ local cargo=key..':'..mask..':'..cut..':'..cashBonus..':'..dustBonus
+ if bonusMask then
+  assert(bonusMask>=0 and bonusMask<=31 and bonusMask%1==0)
+  cargo..=':M'..bonusMask
+ end
+ return cargo
 end
 function W.crystalCargo(key)
- local form,material,cash,dust,stone
- if type(key)=='string' then form,material,cash,dust,stone=key:match('^(%a+):(%a+):(%d+):(%d+):(%d+)$') end
+ if type(key)~='string' then return nil end
+ local cargo,bonusMask=key:match('^(.-):M(%d+)$')
+ local form,material,cash,dust,stone,mask,cut,cashBonus,dustBonus=(cargo or key):match('^(%a+):(%a+):(%d+):(%d+):(%d+):(%d+):(%a+):(%d+):(%d+)$')
+ if not form then form,material,cash,dust,stone=key:match('^(%a+):(%a+):(%d+):(%d+):(%d+)$') end
  if form=='Stone' or form=='Gem' then
   cash,dust,stone=tonumber(cash),tonumber(dust),tonumber(stone)
-  if W.CRYSTAL_BY_MATERIAL[material] and cash and cash>=1 and cash<=1000000 and dust>=1 and dust<=1000000 and stone<=1000000 then
-   return material,cash,false,form=='Stone',dust,stone
+  mask,cashBonus,dustBonus=tonumber(mask) or 0,tonumber(cashBonus) or 0,tonumber(dustBonus) or 0
+  bonusMask=tonumber(bonusMask) or mask
+  if W.CRYSTAL_BY_MATERIAL[material] and cash and cash>=1 and cash+cashBonus<=1000000 and dust>=1 and dust+dustBonus<=1000000
+   and stone<=1000000 and mask<=31 and bonusMask<=31 and (not cut or #cut<=8) then
+   return material,cash+cashBonus,false,form=='Stone',dust+dustBonus,stone,mask,cut,cashBonus,dustBonus,bonusMask
   end
   return nil
  end
  return legacyCrystalCargo(key)
 end
 function W.saleItem(key)
- local material,cash,_,stone,dust,stoneUnits=W.crystalCargo(key)
+ local material,cash,pressed,stone,dust,stoneUnits,mask,cut,cashBonus,dustBonus,bonusMask=W.crystalCargo(key)
  material=material or key
  local tier=W.CRYSTAL_BY_MATERIAL[material]
  if not tier then return nil end
  local resource=W.resourceKey(material)
  local rank=1;for i,t in ipairs(W.CRYSTAL_TIERS) do if t.material==material then rank=i;break end end
+ local cashMods,dustMods={},{}
+ for _,mod in ipairs(payoutMods) do
+  if bit32.btest(bonusMask or 0,mod.bit) then
+   if mod.cash then cashMods[#cashMods+1]=mod.name end
+   if mod.dust then dustMods[#dustMods+1]=mod.name end
+  end
+ end
  return {key=key,material=material,cash=cash or tier.value,stone=stone==true,resource=resource,
   dust=dust or 100,stoneUnits=stoneUnits or 0,rank=stone and rank or 10+rank,
-  name=stone and (tier.name..' rock') or tier.name,color=W.RESOURCE_COLORS[resource] or W.RESOURCE_COLORS.Stone}
+  name=stone and (tier.name..' rock') or tier.name,color=W.RESOURCE_COLORS[resource] or W.RESOURCE_COLORS.Stone,
+  pressed=pressed,mask=mask or 0,cut=cut,bonusMask=bonusMask or 0,cashBonus=cashBonus or 0,dustBonus=dustBonus or 0,
+  cashMods=table.concat(cashMods,' + '),dustMods=table.concat(dustMods,' + ')}
+end
+function W.starterCargo(seed)
+ local bag={}
+ local state=seed%2147483646+1
+ local function roll(n) state=state*16807%2147483647;return state%n+1 end
+ local cuts={'Crown','Oblique','Spear'}
+ local maskOptions={0,0,1,2,4,6,10}
+ for i=1,6 do
+  local material=roll(4)==1 and 'RunRuby' or 'Amber'
+  local gem=i==6 and roll(3)==1
+  if gem then material='Amber' end
+  local mask=i==1 and (roll(2)==1 and 2 or 4) or maskOptions[roll(#maskOptions)]
+  local cut=gem and 'Original' or cuts[roll(#cuts)]
+  local mass=roll(2)
+  local key=W.saleCargo(material,gem and 5 or (material=='Amber' and 1 or 2),not gem,
+   mass*(gem and 100 or W.PITY_PERCENT),gem and 0 or mass*100,mask,cut)
+  bag[key]=(bag[key] or 0)+1
+ end
+ return bag
 end
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={

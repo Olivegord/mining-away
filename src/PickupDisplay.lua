@@ -23,7 +23,7 @@ local function glowImage(parent,name,size)
  return image
 end
 
-function Display.new(parent,slot)
+function Display.new(parent,slot,stone)
  local base=Instance.new('Part');base.Name='OreDisplay';base.Anchored=true
  base.Transparency=1;base.CastShadow=false;base.CanCollide=false;base.CanTouch=false;base.CanQuery=false
  local surface=Instance.new('SurfaceGui');surface.Name='GroundGlow';surface.Face=Enum.NormalId.Top
@@ -34,29 +34,31 @@ function Display.new(parent,slot)
  local outline=Instance.new('Highlight');outline.Name='OreOutline';outline.DepthMode=Enum.HighlightDepthMode.Occluded
  outline.FillTransparency=1;outline.Enabled=false;outline.Parent=base
  local points,curves,motes={},{},{}
- for i=1,SEGMENTS+1 do
-  local point=Instance.new('Attachment');point.Name='OreStrandPoint';point.Parent=base;points[i]=point
- end
- for i=1,SEGMENTS do
-  local beam=Instance.new('Beam');beam.Name='OreStrand';beam.Attachment0=points[i];beam.Attachment1=points[i+1]
-  beam.FaceCamera=true;beam.Segments=9;beam.LightEmission=.9;beam.LightInfluence=0
-  beam.Enabled=false;beam.Parent=base;curves[i]=beam
- end
- for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
  local rays={}
- for i=1,3 do
-  local a=Instance.new('Attachment');a.Name='DiamondRayStart';a.Parent=base
-  local b=Instance.new('Attachment');b.Name='DiamondRayEnd';b.Parent=base
-  local beam=Instance.new('Beam');beam.Name='DiamondPrismRay';beam.Attachment0=a;beam.Attachment1=b
-  beam.FaceCamera=true;beam.LightEmission=1;beam.LightInfluence=0;beam.Segments=1
-  beam.Texture=SOFT_GLOW;beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=0
-  beam.Color=ColorSequence.new(WHITE,RAY_COLORS[i])
-  beam.Width0=.22;beam.Width1=.018;beam.Enabled=false;beam.Parent=base
-  local flare=Instance.new('BillboardGui');flare.Name='DiamondFacetGlow';flare.Size=UDim2.fromOffset(28,28)
-  flare.AlwaysOnTop=false;flare.LightInfluence=0;flare.Brightness=2;flare.Enabled=false;flare.Parent=a
-  local glow=glowImage(flare,'ColoredFlare',1);glow.ImageColor3=RAY_COLORS[i]
-  local star=glowImage(flare,'FacetStar',.68);star.Image='rbxassetid://77624818077620';star.ImageColor3=WHITE
-  rays[i]={a=a,b=b,beam=beam,flare=flare,glow=glow,star=star}
+ if not stone then
+  for i=1,SEGMENTS+1 do
+   local point=Instance.new('Attachment');point.Name='OreStrandPoint';point.Parent=base;points[i]=point
+  end
+  for i=1,SEGMENTS do
+   local beam=Instance.new('Beam');beam.Name='OreStrand';beam.Attachment0=points[i];beam.Attachment1=points[i+1]
+   beam.FaceCamera=true;beam.Segments=9;beam.LightEmission=.9;beam.LightInfluence=0
+   beam.Enabled=false;beam.Parent=base;curves[i]=beam
+  end
+  for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
+  for i=1,3 do
+   local a=Instance.new('Attachment');a.Name='DiamondRayStart';a.Parent=base
+   local b=Instance.new('Attachment');b.Name='DiamondRayEnd';b.Parent=base
+   local beam=Instance.new('Beam');beam.Name='DiamondPrismRay';beam.Attachment0=a;beam.Attachment1=b
+   beam.FaceCamera=true;beam.LightEmission=1;beam.LightInfluence=0;beam.Segments=1
+   beam.Texture=SOFT_GLOW;beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=0
+   beam.Color=ColorSequence.new(WHITE,RAY_COLORS[i])
+   beam.Width0=.22;beam.Width1=.018;beam.Enabled=false;beam.Parent=base
+   local flare=Instance.new('BillboardGui');flare.Name='DiamondFacetGlow';flare.Size=UDim2.fromOffset(28,28)
+   flare.AlwaysOnTop=false;flare.LightInfluence=0;flare.Brightness=2;flare.Enabled=false;flare.Parent=a
+   local glow=glowImage(flare,'ColoredFlare',1);glow.ImageColor3=RAY_COLORS[i]
+   local star=glowImage(flare,'FacetStar',.68);star.Image='rbxassetid://77624818077620';star.ImageColor3=WHITE
+   rays[i]={a=a,b=b,beam=beam,flare=flare,glow=glow,star=star}
+  end
  end
  base.Parent=parent
  -- Separate overlapping translucent ground sprites by a small, stable depth.
@@ -76,10 +78,11 @@ end
 function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffects)
  local tint=record.effectColor or record.color
  if record.stone then reducedEffects=true end
- if rig.record~=record or rig.tint~=tint then
+ local displayScale=record.displayScale or (record.physical and 1 or .73)
+ if rig.record~=record or rig.tint~=tint or math.abs(rig.scale-displayScale)>.008 then
   rig.record=record
   rig.tint=tint
-  rig.scale=record.physical and 1 or .73
+  rig.scale=displayScale
   rig.base.Size=Vector3.new(5.7,.02,5.7)*rig.scale
   rig.outline.Adornee=record.view
   rig.outline.OutlineColor=tint:Lerp(WHITE,.25)
@@ -107,7 +110,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
 
  -- Three short facet rays, attached to Diamond's body, with staggered slow
  -- breaths. Reused with the display pool and disabled by Reduced Effects.
- local diamond=record.view:GetAttribute('GemKind')=='Diamond'
+ local diamond=kind=='Diamond'
  if diamond and not rig.light then
   local light=Instance.new('PointLight');light.Name='DiamondSpill';light.Color=Color3.fromRGB(203,236,255);light.Range=5;light.Shadows=false;light.Parent=rig.rays[1].a;rig.light=light
  end
@@ -120,7 +123,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local point=record.view:GetAttribute('GemFlare'..i) or Vector3.new(math.cos(angle)*.23,(i-2)*.22,math.sin(angle)*.23)
    local start=record.view.CFrame:PointToWorldSpace(record.view.Size*point)
    ray.a.Position=start-ground
-   ray.b.Position=ray.a.Position+Vector3.new(math.cos(angle),.22*(i-2),math.sin(angle))*(1.15+i*.2)
+   ray.b.Position=ray.a.Position+Vector3.new(math.cos(angle),.22*(i-2),math.sin(angle))*((1.15+i*.2)*scale)
    local power=strength*(reducedMotion and .58 or (.42+.30*(.5+.5*math.sin(now*.9+i*2.1))^3))
    ray.glow.ImageTransparency=1-power*.70;ray.star.ImageTransparency=1-power*.88
    ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.16,1-power),NumberSequenceKeypoint.new(1,1)})

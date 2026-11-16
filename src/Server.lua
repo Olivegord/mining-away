@@ -59,7 +59,7 @@ local store=Persistence.new(adapter,{
  owner=instanceId,now=os.time,wait=task.wait,leaseSeconds=180,maxAttempts=3,
  newProfile=function(uid)
   local profile=Pro.new(uid,seed:NextInteger(1,2147483000),scene.runStart and RoleConfig or nil)
-  -- Studio starts with the real earned Quartz economy; no free workshop money.
+  if scene.runStart then profile.run.cargo=Workshop.starterCargo(profile.seed) end
   return profile
  end,
  migrate=function(data,uid) return Pro.migrate(data,uid) end,validate=Pro.validate,
@@ -475,6 +475,19 @@ if scene.runStart and scene.classicCrystal then
  local stoneShape=(scene.crystalCuts.Crown or scene.classicCrystal):Clone()
  for _,child in ipairs(stoneShape:GetChildren()) do child:Destroy() end
  stoneShape.Name='CargoStone';stoneShape.Parent=net
+ local cuts=folder(net,'CargoStoneCuts')
+ for _,name in ipairs(scene.crystalCuts.variants) do
+  local template=scene.crystalCuts[name] or scene.classicCrystal
+  local copy=template:Clone()
+  for _,child in ipairs(copy:GetChildren()) do child:Destroy() end
+  copy.Name=name;copy.Color=template.Color;copy.Parent=cuts
+ end
+ local palette=folder(net,'CargoFieldColors')
+ for _,field in ipairs(scene.fields) do
+  if Workshop.CRYSTAL_BY_MATERIAL[field.cfg.Material] then
+   palette:SetAttribute(field.cfg.Material,Color3.fromRGB(table.unpack(field.cfg.Color)))
+  end
+ end
 end
 scene.chargeIndicator=scene.chargingStation and scene.chargingStation.Parent:FindFirstChild('ChargeIndicator')
 local resourceSerial=0
@@ -1076,8 +1089,10 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
    position=Vector3.new(position.X,fieldTop+.27,position.Z)
    vx,vy,vz=out.X*4.5,16,out.Z*4.5
   end
+  local cut=not crystal and (r.part:GetAttribute('CrystalCut') or 'Original') or 'Original'
+  local cargo=Workshop.saleCargo(material,value,not crystal,dust,stoneUnits,r.modifiers or 0,cut)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,
-   material=Workshop.saleCargo(material,value,not crystal,dust,stoneUnits),tierMaterial=material,value=value,
+   material=cargo,tierMaterial=material,value=Workshop.saleItem(cargo).cash,
    stone=not crystal,rareGem=crystal,units=1,raw=true,oreArc=true,finishing=not extraction,
    floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14,modifiers=r.modifiers},
    position,Vector3.new(vx,vy,vz),r.field.color)
@@ -1178,7 +1193,9 @@ function scene.finishPress(press,drops)
   floor=job.floor,fieldPart=first.fieldPart,modifiers=job.modifiers}
  local a,b=Workshop.saleItem(first.material),Workshop.saleItem(second.material)
  if a and b then
-  output.material=Workshop.saleCargo(first.tierMaterial,value,first.stone,a.dust+b.dust,a.stoneUnits+b.stoneUnits)
+  local cashBonus,dustBonus=a.cashBonus+b.cashBonus,a.dustBonus+b.dustBonus
+  output.material=Workshop.saleCargo(first.tierMaterial,value-cashBonus,first.stone,a.dust+b.dust-dustBonus,
+   a.stoneUnits+b.stoneUnits,job.modifiers,a.cut or 'Original',cashBonus,dustBonus,bit32.bor(a.bonusMask,b.bonusMask))
  end
  local from=job.position+job.direction*1.5-Vector3.yAxis*1.25
  local velocity=job.direction*7.3+Vector3.yAxis*29

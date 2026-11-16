@@ -1,7 +1,7 @@
-"""Authoritative sale rewards and real server flows using API doubles, not gameplay QA."""
+"""Authoritative sale rewards and client receipt flow using API doubles."""
 import subprocess,sys,tempfile
 from pathlib import Path
-from build import ROOT,bundle,client_bundle
+from build import ROOT,bundle,client_bundle,module_bundle
 luau=Path(sys.argv[1] if len(sys.argv)>1 else '/private/tmp/drone-luau')
 for spec in ['selling','workshop','persistence']:
  subprocess.run([str(luau/'luau'),str(ROOT/'tests'/f'{spec}.spec.lua')],check=True)
@@ -15,3 +15,15 @@ with tempfile.TemporaryDirectory(prefix='selling-') as directory:
    ';(function()\n'+(ROOT/'tests'/f'{fixture}.integration.lua').read_text()+'\nend)()'])
   path=Path(directory)/(fixture+'.lua');path.write_text(source)
   subprocess.run([str(luau/'luau'),str(path)],check=True)
+ receipt=(ROOT/'src/SaleLedger.lua').read_text()
+ sale=(ROOT/'src/SaleView.lua').read_text().replace("require('./SaleLedger')",'Ledger')
+ client_services="""do
+ local get=game.GetService
+ local empty={GuiService={},UserInputService={},ContextActionService={},TextService={}}
+ function game:GetService(name) return empty[name] or get(self,name) end
+end"""
+ source='\n'.join(((ROOT/'tests/mock-roblox.lua').read_text(),client_services,module_bundle(('Shops',)),
+  'local Ledger=(function()\n'+receipt+'\nend)()','local SaleView=(function()\n'+sale+'\nend)()',
+  (ROOT/'tests/sale-ledger.integration.lua').read_text()))
+ path=Path(directory)/'sale-ledger.lua';path.write_text(source)
+ subprocess.run([str(luau/'luau'),str(path)],check=True)

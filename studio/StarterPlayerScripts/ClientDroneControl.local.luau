@@ -309,33 +309,93 @@ W.RESOURCE_COLORS={Stone={171,164,151},Amber={255,175,65},Ruby={245,91,128},Quar
 W.CRYSTAL_CHANCE=.12
 W.PITY_PERCENT=7
 function W.resourceKey(material) return material:gsub('^Run','') end
-function W.saleCargo(material,value,stone,resource,stoneUnits)
+-- These flags match Mining.ROCK_MODIFIERS. Only payout-relevant effects
+-- appear as a second arithmetic beat, while the full mask keeps the look.
+local payoutMods={
+ {bit=2,name='Charged',cash=.15}, {bit=4,name='Frosted',dust=.30},
+ {bit=8,name='Big',cash=.10}, {bit=1,name='Massive',cash=.20}, {bit=16,name='Titan',cash=.35},
+}
+local function payoutBonus(base,dust,mask)
+ local moneyRate,dustRate=0,0
+ for _,mod in ipairs(payoutMods) do
+  if bit32.btest(mask,mod.bit) then moneyRate+=mod.cash or 0;dustRate+=mod.dust or 0 end
+ end
+ local money=moneyRate>0 and math.max(1,math.floor(base*moneyRate+.5)) or 0
+ local material=dustRate>0 and math.max(1,math.floor(dust*dustRate+.5)) or 0
+ return math.min(money,1000000-base),math.min(material,1000000-dust)
+end
+function W.saleCargo(material,value,stone,resource,stoneUnits,mask,cut,cashBonus,dustBonus,bonusMask)
  assert(W.CRYSTAL_BY_MATERIAL[material] and value>=1 and value<=1000000 and value%1==0)
  assert(resource>=1 and resource<=1000000 and resource%1==0 and stoneUnits>=0 and stoneUnits<=1000000 and stoneUnits%1==0)
- return (stone and 'Stone:' or 'Gem:')..material..':'..value..':'..resource..':'..stoneUnits
+ local key=(stone and 'Stone:' or 'Gem:')..material..':'..value..':'..resource..':'..stoneUnits
+ if not mask and not cut then return key end
+ mask=mask or 0;cut=cut or 'Original'
+ assert(mask>=0 and mask<=31 and mask%1==0 and #cut<=8 and cut:match('^%a+$'))
+ if cashBonus==nil then cashBonus,dustBonus=payoutBonus(value,resource,mask) end
+ assert(cashBonus>=0 and cashBonus%1==0 and value+cashBonus<=1000000)
+ assert(dustBonus>=0 and dustBonus%1==0 and resource+dustBonus<=1000000)
+ local cargo=key..':'..mask..':'..cut..':'..cashBonus..':'..dustBonus
+ if bonusMask then
+  assert(bonusMask>=0 and bonusMask<=31 and bonusMask%1==0)
+  cargo..=':M'..bonusMask
+ end
+ return cargo
 end
 function W.crystalCargo(key)
- local form,material,cash,dust,stone
- if type(key)=='string' then form,material,cash,dust,stone=key:match('^(%a+):(%a+):(%d+):(%d+):(%d+)$') end
+ if type(key)~='string' then return nil end
+ local cargo,bonusMask=key:match('^(.-):M(%d+)$')
+ local form,material,cash,dust,stone,mask,cut,cashBonus,dustBonus=(cargo or key):match('^(%a+):(%a+):(%d+):(%d+):(%d+):(%d+):(%a+):(%d+):(%d+)$')
+ if not form then form,material,cash,dust,stone=key:match('^(%a+):(%a+):(%d+):(%d+):(%d+)$') end
  if form=='Stone' or form=='Gem' then
   cash,dust,stone=tonumber(cash),tonumber(dust),tonumber(stone)
-  if W.CRYSTAL_BY_MATERIAL[material] and cash and cash>=1 and cash<=1000000 and dust>=1 and dust<=1000000 and stone<=1000000 then
-   return material,cash,false,form=='Stone',dust,stone
+  mask,cashBonus,dustBonus=tonumber(mask) or 0,tonumber(cashBonus) or 0,tonumber(dustBonus) or 0
+  bonusMask=tonumber(bonusMask) or mask
+  if W.CRYSTAL_BY_MATERIAL[material] and cash and cash>=1 and cash+cashBonus<=1000000 and dust>=1 and dust+dustBonus<=1000000
+   and stone<=1000000 and mask<=31 and bonusMask<=31 and (not cut or #cut<=8) then
+   return material,cash+cashBonus,false,form=='Stone',dust+dustBonus,stone,mask,cut,cashBonus,dustBonus,bonusMask
   end
   return nil
  end
  return legacyCrystalCargo(key)
 end
 function W.saleItem(key)
- local material,cash,_,stone,dust,stoneUnits=W.crystalCargo(key)
+ local material,cash,pressed,stone,dust,stoneUnits,mask,cut,cashBonus,dustBonus,bonusMask=W.crystalCargo(key)
  material=material or key
  local tier=W.CRYSTAL_BY_MATERIAL[material]
  if not tier then return nil end
  local resource=W.resourceKey(material)
  local rank=1;for i,t in ipairs(W.CRYSTAL_TIERS) do if t.material==material then rank=i;break end end
+ local cashMods,dustMods={},{}
+ for _,mod in ipairs(payoutMods) do
+  if bit32.btest(bonusMask or 0,mod.bit) then
+   if mod.cash then cashMods[#cashMods+1]=mod.name end
+   if mod.dust then dustMods[#dustMods+1]=mod.name end
+  end
+ end
  return {key=key,material=material,cash=cash or tier.value,stone=stone==true,resource=resource,
   dust=dust or 100,stoneUnits=stoneUnits or 0,rank=stone and rank or 10+rank,
-  name=stone and (tier.name..' rock') or tier.name,color=W.RESOURCE_COLORS[resource] or W.RESOURCE_COLORS.Stone}
+  name=stone and (tier.name..' rock') or tier.name,color=W.RESOURCE_COLORS[resource] or W.RESOURCE_COLORS.Stone,
+  pressed=pressed,mask=mask or 0,cut=cut,bonusMask=bonusMask or 0,cashBonus=cashBonus or 0,dustBonus=dustBonus or 0,
+  cashMods=table.concat(cashMods,' + '),dustMods=table.concat(dustMods,' + ')}
+end
+function W.starterCargo(seed)
+ local bag={}
+ local state=seed%2147483646+1
+ local function roll(n) state=state*16807%2147483647;return state%n+1 end
+ local cuts={'Crown','Oblique','Spear'}
+ local maskOptions={0,0,1,2,4,6,10}
+ for i=1,6 do
+  local material=roll(4)==1 and 'RunRuby' or 'Amber'
+  local gem=i==6 and roll(3)==1
+  if gem then material='Amber' end
+  local mask=i==1 and (roll(2)==1 and 2 or 4) or maskOptions[roll(#maskOptions)]
+  local cut=gem and 'Original' or cuts[roll(#cuts)]
+  local mass=roll(2)
+  local key=W.saleCargo(material,gem and 5 or (material=='Amber' and 1 or 2),not gem,
+   mass*(gem and 100 or W.PITY_PERCENT),gem and 0 or mass*100,mask,cut)
+  bag[key]=(bag[key] or 0)+1
+ end
+ return bag
 end
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={
@@ -15082,7 +15142,7 @@ function V.rock(record,now,lowFlash,eventKind)
  else ambient(view,state,now,lowFlash,false) end
 end
 
-function V.drop(record,now,landingAge,lowFlash)
+function V.drop(record,now,landingAge,lowFlash,displayScale)
  local state=record.modifierFX
  if not state then
   state={random=Random.new(record.seed)}
@@ -15090,7 +15150,7 @@ function V.drop(record,now,landingAge,lowFlash)
  end
  local view=record.view
  if state.mask~=record.modifiers then
-  prepare(view,state,record.modifiers,.65)
+  prepare(view,state,record.modifiers,.65*(displayScale or 1))
   state.mask=record.modifiers
  end
  if not state.landed then
@@ -15155,7 +15215,7 @@ local function glowImage(parent,name,size)
  return image
 end
 
-function Display.new(parent,slot)
+function Display.new(parent,slot,stone)
  local base=Instance.new('Part');base.Name='OreDisplay';base.Anchored=true
  base.Transparency=1;base.CastShadow=false;base.CanCollide=false;base.CanTouch=false;base.CanQuery=false
  local surface=Instance.new('SurfaceGui');surface.Name='GroundGlow';surface.Face=Enum.NormalId.Top
@@ -15166,29 +15226,31 @@ function Display.new(parent,slot)
  local outline=Instance.new('Highlight');outline.Name='OreOutline';outline.DepthMode=Enum.HighlightDepthMode.Occluded
  outline.FillTransparency=1;outline.Enabled=false;outline.Parent=base
  local points,curves,motes={},{},{}
- for i=1,SEGMENTS+1 do
-  local point=Instance.new('Attachment');point.Name='OreStrandPoint';point.Parent=base;points[i]=point
- end
- for i=1,SEGMENTS do
-  local beam=Instance.new('Beam');beam.Name='OreStrand';beam.Attachment0=points[i];beam.Attachment1=points[i+1]
-  beam.FaceCamera=true;beam.Segments=9;beam.LightEmission=.9;beam.LightInfluence=0
-  beam.Enabled=false;beam.Parent=base;curves[i]=beam
- end
- for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
  local rays={}
- for i=1,3 do
-  local a=Instance.new('Attachment');a.Name='DiamondRayStart';a.Parent=base
-  local b=Instance.new('Attachment');b.Name='DiamondRayEnd';b.Parent=base
-  local beam=Instance.new('Beam');beam.Name='DiamondPrismRay';beam.Attachment0=a;beam.Attachment1=b
-  beam.FaceCamera=true;beam.LightEmission=1;beam.LightInfluence=0;beam.Segments=1
-  beam.Texture=SOFT_GLOW;beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=0
-  beam.Color=ColorSequence.new(WHITE,RAY_COLORS[i])
-  beam.Width0=.22;beam.Width1=.018;beam.Enabled=false;beam.Parent=base
-  local flare=Instance.new('BillboardGui');flare.Name='DiamondFacetGlow';flare.Size=UDim2.fromOffset(28,28)
-  flare.AlwaysOnTop=false;flare.LightInfluence=0;flare.Brightness=2;flare.Enabled=false;flare.Parent=a
-  local glow=glowImage(flare,'ColoredFlare',1);glow.ImageColor3=RAY_COLORS[i]
-  local star=glowImage(flare,'FacetStar',.68);star.Image='rbxassetid://77624818077620';star.ImageColor3=WHITE
-  rays[i]={a=a,b=b,beam=beam,flare=flare,glow=glow,star=star}
+ if not stone then
+  for i=1,SEGMENTS+1 do
+   local point=Instance.new('Attachment');point.Name='OreStrandPoint';point.Parent=base;points[i]=point
+  end
+  for i=1,SEGMENTS do
+   local beam=Instance.new('Beam');beam.Name='OreStrand';beam.Attachment0=points[i];beam.Attachment1=points[i+1]
+   beam.FaceCamera=true;beam.Segments=9;beam.LightEmission=.9;beam.LightInfluence=0
+   beam.Enabled=false;beam.Parent=base;curves[i]=beam
+  end
+  for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
+  for i=1,3 do
+   local a=Instance.new('Attachment');a.Name='DiamondRayStart';a.Parent=base
+   local b=Instance.new('Attachment');b.Name='DiamondRayEnd';b.Parent=base
+   local beam=Instance.new('Beam');beam.Name='DiamondPrismRay';beam.Attachment0=a;beam.Attachment1=b
+   beam.FaceCamera=true;beam.LightEmission=1;beam.LightInfluence=0;beam.Segments=1
+   beam.Texture=SOFT_GLOW;beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=0
+   beam.Color=ColorSequence.new(WHITE,RAY_COLORS[i])
+   beam.Width0=.22;beam.Width1=.018;beam.Enabled=false;beam.Parent=base
+   local flare=Instance.new('BillboardGui');flare.Name='DiamondFacetGlow';flare.Size=UDim2.fromOffset(28,28)
+   flare.AlwaysOnTop=false;flare.LightInfluence=0;flare.Brightness=2;flare.Enabled=false;flare.Parent=a
+   local glow=glowImage(flare,'ColoredFlare',1);glow.ImageColor3=RAY_COLORS[i]
+   local star=glowImage(flare,'FacetStar',.68);star.Image='rbxassetid://77624818077620';star.ImageColor3=WHITE
+   rays[i]={a=a,b=b,beam=beam,flare=flare,glow=glow,star=star}
+  end
  end
  base.Parent=parent
  -- Separate overlapping translucent ground sprites by a small, stable depth.
@@ -15208,10 +15270,11 @@ end
 function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffects)
  local tint=record.effectColor or record.color
  if record.stone then reducedEffects=true end
- if rig.record~=record or rig.tint~=tint then
+ local displayScale=record.displayScale or (record.physical and 1 or .73)
+ if rig.record~=record or rig.tint~=tint or math.abs(rig.scale-displayScale)>.008 then
   rig.record=record
   rig.tint=tint
-  rig.scale=record.physical and 1 or .73
+  rig.scale=displayScale
   rig.base.Size=Vector3.new(5.7,.02,5.7)*rig.scale
   rig.outline.Adornee=record.view
   rig.outline.OutlineColor=tint:Lerp(WHITE,.25)
@@ -15239,7 +15302,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
 
  -- Three short facet rays, attached to Diamond's body, with staggered slow
  -- breaths. Reused with the display pool and disabled by Reduced Effects.
- local diamond=record.view:GetAttribute('GemKind')=='Diamond'
+ local diamond=kind=='Diamond'
  if diamond and not rig.light then
   local light=Instance.new('PointLight');light.Name='DiamondSpill';light.Color=Color3.fromRGB(203,236,255);light.Range=5;light.Shadows=false;light.Parent=rig.rays[1].a;rig.light=light
  end
@@ -15252,7 +15315,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local point=record.view:GetAttribute('GemFlare'..i) or Vector3.new(math.cos(angle)*.23,(i-2)*.22,math.sin(angle)*.23)
    local start=record.view.CFrame:PointToWorldSpace(record.view.Size*point)
    ray.a.Position=start-ground
-   ray.b.Position=ray.a.Position+Vector3.new(math.cos(angle),.22*(i-2),math.sin(angle))*(1.15+i*.2)
+   ray.b.Position=ray.a.Position+Vector3.new(math.cos(angle),.22*(i-2),math.sin(angle))*((1.15+i*.2)*scale)
    local power=strength*(reducedMotion and .58 or (.42+.30*(.5+.5*math.sin(now*.9+i*2.1))^3))
    ray.glow.ImageTransparency=1-power*.70;ray.star.ImageTransparency=1-power*.88
    ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.16,1-power),NumberSequenceKeypoint.new(1,1)})
@@ -16039,6 +16102,149 @@ return V
 end)()
 local SaleView = (function()
 -- A committed sale is a cosmetic receipt. Animation never grants or spends money.
+local SaleLedger=(function()
+-- The receipt is presentation. Only the committed server sale moves money.
+local Ledger={};Ledger.__index=Ledger
+local WHITE=Color3.fromRGB(249,247,240)
+local MUTED=Color3.fromRGB(178,184,180)
+local MONEY=Color3.fromRGB(113,246,146)
+local function text(parent,contents,size,color,align)
+ local label=Instance.new('TextLabel');label.BackgroundTransparency=1
+ label.Text=contents;label.TextSize=size;label.TextColor3=color;label.Font=Enum.Font.SourceSansBold
+ label.TextXAlignment=align or Enum.TextXAlignment.Left
+ label.TextTruncate=Enum.TextTruncate.AtEnd;label.ZIndex=3;label.Parent=parent
+ return label
+end
+local function format(key,n)
+ if key=='Money' then return '$'..tostring(n) end
+ return (string.format('%.2f',n/100):gsub('0+$',''):gsub('%.$',''))
+end
+local function rowFor(parent,key)
+ local cash=key=='Money'
+ local color=cash and MONEY or Color3.fromRGB(table.unpack(Workshop.RESOURCE_COLORS[key]))
+ local root=Instance.new('Frame');root.Name='Currency_'..key
+ root.BackgroundColor3=Color3.fromRGB(19,24,25);root.BackgroundTransparency=.16;root.BorderSizePixel=0
+ root.ZIndex=2;root.ClipsDescendants=true;root.Parent=parent
+ local rounding=Instance.new('UICorner');rounding.CornerRadius=UDim.new(0,8);rounding.Parent=root
+ local icon=text(root,cash and '$' or '◆',21,color,Enum.TextXAlignment.Center)
+ icon.Name='CurrencyIcon';icon.Position=UDim2.fromOffset(7,4);icon.Size=UDim2.fromOffset(24,24)
+ if cash then
+  icon.BackgroundColor3=Color3.fromRGB(36,76,52);icon.BackgroundTransparency=.18
+  local rim=Instance.new('UICorner');rim.CornerRadius=UDim.new(.5,0);rim.Parent=icon
+ end
+ local title=text(root,cash and 'Money' or Workshop.RESOURCE_NAMES[key],16,color)
+ title.Position=UDim2.fromOffset(36,5);title.Size=UDim2.new(1,-45,0,22)
+ local rule=Instance.new('Frame');rule.BackgroundColor3=color;rule.BackgroundTransparency=.5;rule.BorderSizePixel=0
+ rule.Position=UDim2.new(0,9,1,-31);rule.Size=UDim2.new(1,-18,0,1);rule.ZIndex=3;rule.Parent=root
+ local caption=text(root,'Total',14,MUTED)
+ caption.Position=UDim2.new(0,10,1,-29);caption.Size=UDim2.fromOffset(40,28)
+ local total=text(root,format(key,0),29,WHITE,Enum.TextXAlignment.Right);total.Name='RunningTotal'
+ total.Position=UDim2.new(0,48,1,-30);total.Size=UDim2.new(1,-59,0,30)
+ local terms=Instance.new('Frame');terms.BackgroundTransparency=1;terms.ClipsDescendants=true
+ terms.Position=UDim2.fromOffset(7,28);terms.Size=UDim2.new(1,-18,1,-60);terms.ZIndex=3;terms.Parent=root
+ return {key=key,root=root,terms=terms,total=total,color=color,history={},amount=0}
+end
+function Ledger.new(gui,items)
+ local keys={Money=true}
+ for _,item in ipairs(items) do
+  if item.resource and item.dust>0 then keys[item.resource]=true end
+  if item.stoneUnits>0 then keys.Stone=true end
+ end
+ local panel=Instance.new('Frame');panel.Name='SaleReceipt';panel.BackgroundTransparency=1;panel.ZIndex=2;panel.Parent=gui
+ local header=text(panel,'Sale receipt',29,WHITE);header.Size=UDim2.new(1,0,0,31)
+ local progress=text(panel,'Review your backpack',16,MUTED);progress.Position=UDim2.fromOffset(0,33);progress.Size=UDim2.new(1,0,0,21)
+ local cards=Instance.new('ScrollingFrame');cards.Name='Currencies';cards.BackgroundTransparency=1
+ cards.BorderSizePixel=0;cards.ScrollBarThickness=4;cards.ScrollBarImageColor3=MUTED;cards.ScrollingDirection=Enum.ScrollingDirection.Y
+ cards.Position=UDim2.fromOffset(0,56);cards.Size=UDim2.new(1,0,1,-56);cards.ZIndex=2;cards.Parent=panel
+ local self=setmetatable({panel=panel,header=header,progress=progress,cards=cards,rows={},order={},count=#items,added=0},Ledger)
+ for _,key in ipairs({'Money',table.unpack(Workshop.RESOURCE_ORDER)}) do
+  if keys[key] then
+   local row=rowFor(cards,key)
+   self.rows[key]=row;self.order[#self.order+1]=row
+  end
+ end
+ return self
+end
+function Ledger:layout(x,y,width,height)
+ self.panel.Position=UDim2.fromOffset(x,y);self.panel.Size=UDim2.fromOffset(width,height)
+ local cols=(width>=285 and #self.order>2) and 2 or 1
+ local bands=1+math.ceil((#self.order-1)/cols)
+ local cardHeight=math.clamp(math.floor((height-56-(bands-1)*7)/bands),105,140)
+ self.cards.CanvasSize=UDim2.fromOffset(0,bands*(cardHeight+7)-7)
+ local columnWidth=(width-6-(cols-1)*8)/cols
+ for i,row in ipairs(self.order) do
+  local col=i==1 and 0 or (i-2)%cols
+  local band=i==1 and 0 or 1+math.floor((i-2)/cols)
+  row.root.Position=UDim2.fromOffset(col*(columnWidth+8),band*(cardHeight+7))
+  row.root.Size=UDim2.fromOffset(i==1 and width-6 or columnWidth,cardHeight)
+  row.lineHeight=math.clamp(math.floor((cardHeight-60)/2),21,25)
+ end
+end
+function Ledger:stage(terms,now)
+ for _,term in ipairs(terms) do
+  local row=self.rows[term.key]
+  if not row then continue end
+  local history=row.history
+  local nextLine=text(row.terms,'+ '..format(term.key,term.base),18,row.color,Enum.TextXAlignment.Right)
+  nextLine.Name='AdditionTerm'
+  local previous=history[1]
+  if previous and previous.effective then
+   previous.view.Text=previous.effective;previous.view.TextSize=18;previous.view.TextColor3=row.color
+   previous.view.TextScaled=false
+  end
+  table.insert(history,1,{view=nextLine,y=8,at=now,from=8,effective='+ '..format(term.key,term.base+term.bonus)})
+  if #history>3 then table.remove(history).view:Destroy() end
+  for _,line in ipairs(history) do line.from=line.y;line.at=now end
+ end
+end
+function Ledger:applyModifier(terms,now)
+ for _,term in ipairs(terms) do
+  local row=self.rows[term.key]
+  if term.bonus>0 and row then
+   local line=row.history[1].view
+   line.Text=term.modifier..' +'..format(term.key,term.bonus)..'  →  + '..format(term.key,term.base+term.bonus)
+   line.TextColor3=WHITE;line.TextScaled=true;row.modifierAt=now
+   local size=Instance.new('UITextSizeConstraint');size.MinTextSize=12;size.MaxTextSize=18;size.Parent=line
+  end
+ end
+end
+function Ledger:add(terms,now)
+ for _,term in ipairs(terms) do
+  local row=self.rows[term.key]
+  if row then
+   row.amount+=term.base+term.bonus;row.total.Text=format(row.key,row.amount);row.hitAt=now
+  end
+ end
+ self.added+=1;self.progress.Text=self.added..' / '..self.count..' added'
+end
+function Ledger:finish(receipt,now)
+ for _,row in ipairs(self.order) do
+  row.amount=row.key=='Money' and (receipt.cash or 0) or ((receipt.resources or {})[row.key] or 0)
+  row.total.Text=format(row.key,row.amount);row.hitAt=now
+ end
+ self.progress.Text='Sale complete'
+end
+function Ledger:update(now,reduced)
+ for _,row in ipairs(self.order) do
+  local height=row.lineHeight or 16
+  for i,line in ipairs(row.history) do
+   local t=reduced and 1 or math.clamp((now-line.at)/.17,0,1)
+   line.y=line.from+(-(i-1)*height-line.from)*(1-(1-t)^3)
+   line.view.Size=UDim2.new(1,0,0,height)
+   line.view.Position=UDim2.new(0,0,1,line.y-height)
+   line.view.TextTransparency=i==1 and 0 or i==2 and .22 or .57
+  end
+  local impact=1-math.clamp((now-(row.hitAt or -100))/.24,0,1)
+  local bonus=1-math.clamp((now-(row.modifierAt or -100))/.16,0,1)
+  row.total.TextSize=28+(reduced and 0 or math.floor(impact*4))
+  row.total.TextColor3=WHITE:Lerp(row.color,impact)
+  row.root.BackgroundTransparency=.16-.12*bonus
+ end
+end
+function Ledger:destroy() self.panel:Destroy() end
+return Ledger
+
+end)()
 local Sale={};Sale.__index=Sale
 local Lighting=game:GetService('Lighting')
 local GuiService=game:GetService('GuiService')
@@ -16089,6 +16295,7 @@ function Sale:isOpen()
  return self.active and self.active.full==true
 end
 function Sale:confirm()
+ if self.finished then self:clearGrid();return end
  local active=self.active
  if not active or active.kind~='preview' or self.pendingAt or os.clock()-self.started<.24 then return end
  self.pendingAt=os.clock()
@@ -16108,7 +16315,8 @@ function Sale:bindInput()
  self.promptsEnabled=service.Enabled;service.Enabled=false
  Actions:BindActionAtPriority(CONFIRM_ACTION,function(_,state,input)
   if state==Enum.UserInputState.Begin then
-   if input.KeyCode==Enum.KeyCode.Escape or input.KeyCode==Enum.KeyCode.ButtonB then self:cancel()
+   if input.KeyCode==Enum.KeyCode.Escape or input.KeyCode==Enum.KeyCode.ButtonB then
+    if self.finished then self:clearGrid() else self:cancel() end
    else self:confirm() end
   end
   return Enum.ContextActionResult.Sink
@@ -16152,6 +16360,7 @@ function Sale:receive(receipt)
  receipt=table.clone(receipt)
  if not preview and self.active and self.active.kind=='preview' and receipt.id==self.active.id then
   receipt.items=self.active.items;self.active=receipt
+  self.ledger.progress.Text='Adding the payouts'
   self:registerPayout(receipt)
   self.pendingAt=nil;self.cascadeAt=os.clock();self.prompt.Visible=false;self.back.Visible=false
   return
@@ -16189,6 +16398,8 @@ end
 function Sale:makeOre(item)
  local net=game:GetService('ReplicatedStorage'):FindFirstChild('MiningAway')
  local source=net and net:FindFirstChild(item.stone and 'CargoStone' or 'CargoCrystal')
+ local cuts=net and net:FindFirstChild('CargoStoneCuts')
+ if item.stone and item.cut and cuts then source=cuts:FindFirstChild(item.cut) or source end
  local folder=self.refs.world:FindFirstChild('Resources')
  if not source and folder then for _,p in ipairs(folder:GetChildren()) do if p:IsA('BasePart') then source=p;break end end end
  if not source then
@@ -16200,27 +16411,31 @@ function Sale:makeOre(item)
  for _,child in ipairs(proxy:GetChildren()) do child:Destroy() end
  for key in pairs(proxy:GetAttributes()) do proxy:SetAttribute(key,nil) end
  proxy:SetAttribute('Mineral',item.key);proxy:SetAttribute('StoneCargo',item.stone)
- proxy.Size=Vector3.new(1,.82,1);proxy.Color=Color3.fromRGB(88,84,81):Lerp(Color3.fromRGB(table.unpack(item.color)),.32)
- proxy.Material=Enum.Material.Slate;proxy.MaterialVariant='';proxy.Reflectance=0
+ proxy:SetAttribute('RockModifiers',item.mask or 0)
+ local palette=net and net:FindFirstChild('CargoFieldColors')
+ local fieldTint=palette and item.material and palette:GetAttribute(item.material) or Color3.fromRGB(table.unpack(item.color))
+ proxy.Size=Vector3.new(table.unpack(item.pressed and Workshop.BLOCK_SIZE or Workshop.ROCK_SIZE))*Mining.ORE_SIZE_SCALE[Mining.sizeTier(item.mask)]
+ proxy.Color=item.stone and Color3.fromRGB(88,84,81):Lerp(fieldTint,.32) or fieldTint
+ proxy.Material=item.stone and Enum.Material.Slate or item.pressed and Enum.Material.Metal or Enum.Material.SmoothPlastic
+ proxy.MaterialVariant='';proxy.Reflectance=(item.stone or item.pressed) and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
+ if item.pressed then proxy.Name='PressedCargo' end
  if proxy:IsA('PartOperation') then proxy.UsePartColor=true end
  local ore,gem=RockFinish.Gems.clone(proxy);proxy:Destroy()
  ore.Name='Selling_'..item.name;ore.Anchored=true;ore.CanCollide=false;ore.CanTouch=false;ore.CanQuery=false;ore.CastShadow=false
  ore.LocalTransparencyModifier=0;ore.Transparency=gem and 1-(ore:GetAttribute('GemOpacity') or .8) or 0
  ore.Parent=self.refs.parent
- local outline
- if item.stone then
-  outline=Instance.new('Highlight');outline.Adornee=ore;outline.FillTransparency=1
-  outline.OutlineColor=Color3.fromRGB(table.unpack(item.color));outline.OutlineTransparency=.1
-  outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.Parent=ore
- end
+
  return ore,gem
 end
 function Sale:start(receipt,now)
  self.active=receipt;self.started=now;self.tiles={}
+ self.finished=false;self.pendingTerms=nil
  self.cascadeAt=receipt.kind~='preview' and now or nil
  if receipt.full then
   local focus=Instance.new('DepthOfFieldEffect');focus.Name='SellingFocus';focus.FocusDistance=4;focus.InFocusRadius=2.5
   focus.NearIntensity=0;focus.FarIntensity=0;focus.Parent=Lighting;self.focus=focus
+  self.ledger=SaleLedger.new(self.gui,receipt.items)
+  if receipt.kind~='preview' then self.ledger.progress.Text='Adding the payouts' end
   self.blocker.Visible=true;self:bindInput()
  end
  self.breakIndex=1;self.lastBreakAt=nil
@@ -16232,7 +16447,11 @@ function Sale:start(receipt,now)
   local ore,gem=self:makeOre(item)
   local caption=label(self.gui,item.units>1 and item.name..' ×'..item.units or item.name,Color3.fromRGB(table.unpack(item.color)),14)
   count+=item.units
-  self.tiles[i]={item=item,ore=ore,gem=gem,caption=caption,size=ore.Size,transparency=ore.Transparency}
+  local tint=gem and RockFinish.Gems.tint(item.key) or ore.Color
+  local effect=RockModifierView.glow(item.mask or 0) or (item.stone and Color3.fromRGB(table.unpack(item.color))) or tint
+  local drop={view=ore,seed=i,physical=true,stone=item.stone,modifiers=item.mask or 0,color=tint,effectColor=effect}
+  self.tiles[i]={item=item,ore=ore,gem=gem,caption=caption,size=ore.Size,transparency=ore.Transparency,
+   display=receipt.full and PickupDisplay.new(self.refs.parent,i,item.stone) or nil,drop=drop}
  end
  self.title.Text='Backpack  ·  '..count..' ore'
  self.title.Visible=receipt.full
@@ -16304,12 +16523,50 @@ function Sale:payout(key,amount,from,line,width,now)
  end
 end
 
+local function saleTerms(item)
+ local terms={}
+ local function push(key,paid,bonus,modifier)
+  if paid<=0 then return end
+  terms[#terms+1]={key=key,base=(paid-bonus)*item.units,bonus=bonus*item.units,modifier=modifier}
+ end
+ push('Money',item.cash,item.cashBonus or 0,item.cashMods)
+ if item.resource then push(item.resource,item.dust,item.dustBonus or 0,item.dustMods) end
+ push('Stone',item.stoneUnits,0,'')
+ return terms
+end
+function Sale:updateLedger(now,reduced)
+ local ledger=self.ledger
+ local pending=self.pendingTerms
+ if pending then
+  if pending.modifierAt and now>=pending.modifierAt then
+   ledger:applyModifier(pending.terms,now)
+   pending.modifierAt=nil;pending.addAt=now+.22
+   if self.refs.audio then self.refs.audio:play('sale_dust_credit',nil,{pitch=.84}) end
+  elseif not pending.modifierAt and now>=pending.addAt then
+   ledger:add(pending.terms,now)
+   for _,term in ipairs(pending.terms) do
+    self.refs.hud:currencyHit(self.active.id,term.key,term.base+term.bonus,reduced)
+   end
+   if self.refs.audio then self.refs.audio:play('sale_credit') end
+   self.pendingTerms=nil
+  end
+ end
+ ledger:update(now,reduced)
+end
 function Sale:breakRock(tile,index,point,now,cameraUp,width)
- local item=tile.item;local color=Color3.fromRGB(table.unpack(item.color))
- self:payout('Money',item.cash*item.units,point,0,width,now)
- if item.resource then self:payout(item.resource,item.dust*item.units,point,1,width,now) end
- if item.stoneUnits>0 then self:payout('Stone',item.stoneUnits*item.units,point,2,width,now) end
- if index==#self.tiles then self.active.dustAt=now+(self.active.full and .56 or .30) end
+ local item=tile.item;local color=tile.drop.effectColor
+ if self.active.full then
+  local terms=saleTerms(item)
+  local hasBonus=false
+  for _,term in ipairs(terms) do if term.bonus>0 then hasBonus=true;break end end
+  self.ledger:stage(terms,now)
+  self.pendingTerms={terms=terms,addAt=now+.16,modifierAt=hasBonus and now+.15 or nil}
+ else
+  self:payout('Money',item.cash*item.units,point,0,width,now)
+  if item.resource then self:payout(item.resource,item.dust*item.units,point,1,width,now) end
+  if item.stoneUnits>0 then self:payout('Stone',item.stoneUnits*item.units,point,2,width,now) end
+  if index==#self.tiles then self.active.dustAt=now+.30 end
+ end
  if self.refs.audio then self.refs.audio:play(item.stone and 'sale_stone' or 'sale_gem',nil,{pitch=.90+(index%7)*.043,level=item.stone and .9 or 1.18}) end
  if not self.refs.reducedMotion() then
   if self.active.full then
@@ -16325,11 +16582,17 @@ function Sale:breakRock(tile,index,point,now,cameraUp,width)
  end
  tile.hitAt=now;self.lastBreakAt=now
 end
+local function removeTile(tile)
+ tile.ore:Destroy();tile.caption:Destroy();tile.sold=true
+ if tile.display then tile.display.base:Destroy() end
+end
 function Sale:clearGrid()
  if self.active and (self.active.tokensRemaining or 0)>0 and not self.active.dustAt then
   self.active.dustAt=os.clock()+.24
  end
- for _,tile in ipairs(self.tiles) do if not tile.sold then tile.ore:Destroy();tile.caption:Destroy() end end
+ for _,tile in ipairs(self.tiles) do if not tile.sold then removeTile(tile) end end
+ if self.ledger then self.ledger:destroy();self.ledger=nil end
+ self.finished=false;self.pendingTerms=nil
  self.tiles={};self.active=nil;self.title.Visible=false;self.pendingAt=nil;self.cascadeAt=nil
  self.prompt.Visible=false;self.back.Visible=false;self.blocker.Visible=false
  if self.bound then
@@ -16347,29 +16610,39 @@ function Sale:update()
   local age=now-self.started;local count=#self.tiles;local full=self.active.full
   local preview=self.active.kind=='preview'
   if preview and (age>44 or (self.pendingAt and now-self.pendingAt>15)) then self:clearGrid();return end
-  if preview then
+  if self.ledger then self:updateLedger(now,reduced) end
+  if preview or self.finished then
    local input=Input:GetLastInputType()
-   self.prompt.Text=self.pendingAt and 'Selling…' or input==Enum.UserInputType.Touch and 'Sell ore'
-    or input.Name:match('^Gamepad') and 'X   Sell ore' or 'E   Sell ore'
-   self.prompt.Visible=age>=.24;self.back.Visible=self.prompt.Visible and not self.pendingAt
+   local action=self.finished and 'Close' or 'Sell ore'
+   self.prompt.Text=self.pendingAt and 'Selling…' or input==Enum.UserInputType.Touch and action
+    or input.Name:match('^Gamepad') and 'X   '..action or 'E   '..action
+   self.prompt.Visible=age>=.24;self.back.Visible=preview and self.prompt.Visible and not self.pendingAt
   end
   local viewport=camera.ViewportSize
-  local limit=full and (viewport.X<600 and 5 or 8) or 4
-  local aspect=math.clamp(viewport.X/math.max(1,viewport.Y),.55,1.85)
-  local columns=math.min(limit,count,math.max(1,math.ceil(math.sqrt(count*aspect))))
+  local stacked=full and viewport.X<650
+  local gridWidth=full and viewport.X*(stacked and .84 or .40) or viewport.X-40
+  local gridHeight=full and viewport.Y*(stacked and .24 or .48) or viewport.Y*.48
+  local limit=full and (stacked and 6 or 5) or 4
+  local columns=math.min(limit,count,math.max(1,math.ceil(math.sqrt(count*(stacked and 1.65 or 1.15)))))
   local rows=math.ceil(count/columns)
-  local cell=math.min(full and viewport.Y*.46 or 55,(viewport.X-40)/columns,(viewport.Y*(full and .65 or .48))/rows)
-  local center=full and Vector2.new(viewport.X*.5,viewport.Y*.465) or Vector2.new(viewport.X*.5,viewport.Y*.24)
-  self.title.Position=UDim2.fromOffset(center.X,math.max(35,center.Y-rows*cell*.5-13))
+  local cell=math.min(full and 108 or 55,gridWidth/columns,gridHeight/rows)
+  local center=full and Vector2.new(viewport.X*(stacked and .5 or .275),viewport.Y*(stacked and .205 or .50))
+   or Vector2.new(viewport.X*.5,viewport.Y*.24)
+  self.title.Position=UDim2.fromOffset(center.X,math.max(44,center.Y-rows*cell*.5-23))
+  if self.ledger then
+   local left=viewport.X*(stacked and .06 or .52)
+   local top=viewport.Y*(stacked and .36 or .13)
+   self.ledger:layout(left,top,viewport.X-left-viewport.X*.055,math.max(100,viewport.Y-top-85))
+  end
   local lastHit=self.tiles[count].hitAt
   if self.focus then
    local fade=lastHit and smooth((now-lastHit-.77)/.38) or 0
-   self.focus.FarIntensity=.34*smooth(age/.22)*(1-fade)
+   self.focus.FarIntensity=.34*smooth(age/.22)*(1-.36*fade)
   end
   local scheduledIndex=self.breakIndex
   local nextTile=self.tiles[scheduledIndex]
   local breakAt
-  if self.cascadeAt and nextTile then
+  if self.cascadeAt and nextTile and not self.pendingTerms then
    breakAt=self.lastBreakAt and self.lastBreakAt+self.breakInterval or self.cascadeAt+self.firstHit
    if not nextTile.item.stone then breakAt+=self.gemWindup end
   end
@@ -16382,7 +16655,8 @@ function Sale:update()
    local ray=camera:ViewportPointToRay(point.X,point.Y)
    local position=ray.Origin+ray.Direction*(depth/math.max(.1,ray.Direction:Dot(camera.CFrame.LookVector)))
    local hit=tile.hitAt and math.clamp((now-tile.hitAt)/BREAK_TIME,0,1) or 0
-   local scale=cell*(full and .88 or .70)*unitsPerPixel/math.max(tile.size.X,tile.size.Y,tile.size.Z)
+   local familySize=Mining.ORE_SIZE_SCALE[Mining.sizeTier(tile.item.mask)]
+   local scale=cell*(full and .60*math.min(1.36,familySize^.36) or .70)*unitsPerPixel/math.max(tile.size.X,tile.size.Y,tile.size.Z)
    local winding=not reduced and full and breakAt and i==self.breakIndex and not tile.hitAt
    local anticipation=winding and smooth((now-breakAt+.15)/.15) or 0
    if tile.hitAt and not reduced then scale*=1-.46*hit end
@@ -16391,16 +16665,32 @@ function Sale:update()
    if tile.gem then RockFinish.Gems.update(tile.ore,rise*(1-hit),camera.CFrame.Position) end
    if tile.hitAt then tile.ore.Transparency=tile.transparency+(1-tile.transparency)*hit end
    tile.caption.Position=UDim2.fromOffset(point.X,point.Y+cell*.43)
-   tile.caption.TextSize=cell<56 and 12 or full and 17 or 14;tile.caption.TextTransparency=1-rise*(1-hit)
+   tile.caption.TextSize=cell<56 and 12 or 14;tile.caption.TextTransparency=1-rise*(1-hit)
+   if tile.display and not tile.hitAt then
+    local effects=self.refs.player:GetAttribute('ReducedEffects')==true
+    tile.drop.displayScale=math.max(.08,scale)*familySize
+    PickupDisplay.draw(tile.display,tile.drop,(tile.ore.CFrame*CFrame.new(0,-tile.ore.Size.Y*.48,0)).Position,
+     now,rise,reduced,effects)
+    if tile.drop.modifiers~=0 and not effects and not reduced then
+     RockModifierView.drop(tile.drop,now,1,self.refs.player:GetAttribute('ReducedFlashing')==true,tile.drop.displayScale)
+    end
+   elseif tile.display then PickupDisplay.hide(tile.display) end
    if tile.hitAt and hit>=1 then
-    tile.ore:Destroy();tile.caption:Destroy();tile.sold=true
+    removeTile(tile)
     self.breakIndex+=1
    elseif i==scheduledIndex and i==self.breakIndex and not tile.hitAt and breakAt and now>=breakAt then
     -- Advance only after the prior rock is gone, even when a frame stalls.
     self:breakRock(tile,i,point,now,camera.CFrame.UpVector,math.clamp(cell*.98,84,282))
    end
   end end
-  if lastHit and now-lastHit>(full and FINISH_HOLD or .90) then self:clearGrid() end
+  if lastHit and not self.pendingTerms and now-lastHit>(full and FINISH_HOLD or .90) then
+   if full then
+    if not self.finished then
+     self.finished=true;self.ledger:finish(self.active,now)
+     if self.refs.audio then self.refs.audio:play('sale_finish') end
+    end
+   else self:clearGrid() end
+  end
  end
  self:updatePayouts(now,reduced)
 end

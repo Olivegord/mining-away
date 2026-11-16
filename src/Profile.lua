@@ -52,11 +52,14 @@ end
 local function bagUnits(bag)
  local total=0;for _,units in pairs(bag or {}) do total=total+units end;return total
 end
+local function validCargoKey(key)
+ return type(key)=='string' and (#key<=40 or (#key<=64 and Workshop.crystalCargo(key)~=nil))
+end
 local function validBag(bag)
  if type(bag)~='table' then return false end
  local total=0
  for material,units in pairs(bag) do
-  if type(material)~='string' or #material>40 or not integer(units) then return false end
+  if not validCargoKey(material) or not integer(units) then return false end
   total=total+units;if not integer(total) then return false end
  end
  return true
@@ -504,7 +507,7 @@ function P.reconcileCargo(p,eligibleDroneIds,keepLoaded)
  return changed
 end
 function P.addCargo(p,material,units,capacity)
- if type(material)~='string' or #material>40 or not integer(units) or not finite(capacity) or capacity<0 then return 0 end
+ if not validCargoKey(material) or not integer(units) or not finite(capacity) or capacity<0 then return 0 end
  local accepted=math.min(units,math.max(0,math.floor(capacity)-P.cargoUnits(p)))
  p.run.cargo[material]=(p.run.cargo[material] or 0)+accepted;return accepted
 end
@@ -512,7 +515,7 @@ end
 -- a sale before any further mining; never erase a hard-earned core at the cap.
 -- The caller supplies a bounded server-authored node yield, not client input.
 function P.addMiningCargo(p,material,units,capacity,droneId)
- if type(material)~='string' or #material>40 or not integer(units) or not finite(capacity) or capacity<1 then return 0 end
+ if not validCargoKey(material) or not integer(units) or not finite(capacity) or capacity<1 then return 0 end
  if droneId~=nil and not cargoId(p,droneId) then return 0 end
  local held=bagUnits(p.run.cargo)
  if held>=math.floor(capacity) or P.cargoUnits(p)+units>=1e14 then return 0 end

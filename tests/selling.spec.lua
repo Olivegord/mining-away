@@ -38,4 +38,28 @@ for _,tier in ipairs(W.CRYSTAL_TIERS) do
  assert(pity.dust/actual.dust>=.04 and pity.dust/actual.dust<=.10)
  assert(actual.cash>=pity.cash*8);assert(pity.rank<actual.rank)
 end
+local modified=W.saleCargo('RunRuby',20,true,7,100,6,'Crown')
+local enriched=W.saleItem(modified)
+eq(enriched.cash,23);eq(enriched.cashBonus,3);eq(enriched.cashMods,'Charged')
+eq(enriched.dust,9);eq(enriched.dustBonus,2);eq(enriched.dustMods,'Frosted')
+eq(enriched.cut,'Crown');eq(enriched.mask,6)
+local pair=W.saleItem(W.saleCargo('RunRuby',40,true,14,200,14,'Crown',6,4,6))
+eq(pair.cash,enriched.cash*2);eq(pair.dust,enriched.dust*2)
+eq(pair.cashMods,'Charged');eq(pair.mask,14)
+local rich=W.saleCargo('RunRuby',999980,false,999980,0,20,'Original')
+eq(#rich>40,true);eq(W.saleItem(rich).cash,1000000)
+local demo=P.new(49,43);demo.run.cargo={[modified]=2,[rich]=1}
+demo=assert(P.migrate(demo,49));eq(demo.run.cargo[rich],1)
+local saleOk,payout=P.sell(demo,{},'modified-sale',demo.run.id);assert(saleOk)
+eq(payout.quartz,1000046);eq(demo.run.resources.Ruby,1000018);eq(demo.run.resources.Stone,200)
+local signatures={}
+for seed=1,25 do
+ local bag=W.starterCargo(seed);local units=0;local hasModifier=false;local keys={}
+ for key,count in pairs(bag) do
+  local item=assert(W.saleItem(key));units+=count;hasModifier=hasModifier or item.cashBonus>0 or item.dustBonus>0
+  eq(count,W.starterCargo(seed)[key]);keys[#keys+1]=key
+ end
+ eq(units,6);assert(hasModifier);table.sort(keys);signatures[table.concat(keys,'|')]=true
+end
+assert(next(signatures,next(signatures)),'starter cargo should vary by seed')
 print('PASS selling: mixed rewards, exact 7% dust, replay safety, courier parity, reload, migration, fail-closed validation, atomic overflow and merge conservation')

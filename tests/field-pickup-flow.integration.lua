@@ -11,6 +11,8 @@ local d
 for _,worker in ipairs(p.drones) do if worker.role=='Courier' then d=worker;break end end
 assert(d)
 local run=data(p).run
+assert(Pro.cargoUnits(data(p))==6,'new Crystal Run profile should have six starter drops')
+table.clear(run.cargo) -- Isolate field pickup counts from the starter backpack.
 inStudio=true
 local studioCrew=scene.runtimeFleet(p)
 inStudio=false

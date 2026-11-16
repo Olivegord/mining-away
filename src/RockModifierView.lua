@@ -408,7 +408,7 @@ function V.rock(record,now,lowFlash,eventKind)
  else ambient(view,state,now,lowFlash,false) end
 end
 
-function V.drop(record,now,landingAge,lowFlash)
+function V.drop(record,now,landingAge,lowFlash,displayScale)
  local state=record.modifierFX
  if not state then
   state={random=Random.new(record.seed)}
@@ -416,7 +416,7 @@ function V.drop(record,now,landingAge,lowFlash)
  end
  local view=record.view
  if state.mask~=record.modifiers then
-  prepare(view,state,record.modifiers,.65)
+  prepare(view,state,record.modifiers,.65*(displayScale or 1))
   state.mask=record.modifiers
  end
  if not state.landed then

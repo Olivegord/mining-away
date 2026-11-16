@@ -222,33 +222,93 @@ W.RESOURCE_COLORS={Stone={171,164,151},Amber={255,175,65},Ruby={245,91,128},Quar
 W.CRYSTAL_CHANCE=.12
 W.PITY_PERCENT=7
 function W.resourceKey(material) return material:gsub('^Run','') end
-function W.saleCargo(material,value,stone,resource,stoneUnits)
+-- These flags match Mining.ROCK_MODIFIERS. Only payout-relevant effects
+-- appear as a second arithmetic beat, while the full mask keeps the look.
+local payoutMods={
+ {bit=2,name='Charged',cash=.15}, {bit=4,name='Frosted',dust=.30},
+ {bit=8,name='Big',cash=.10}, {bit=1,name='Massive',cash=.20}, {bit=16,name='Titan',cash=.35},
+}
+local function payoutBonus(base,dust,mask)
+ local moneyRate,dustRate=0,0
+ for _,mod in ipairs(payoutMods) do
+  if bit32.btest(mask,mod.bit) then moneyRate+=mod.cash or 0;dustRate+=mod.dust or 0 end
+ end
+ local money=moneyRate>0 and math.max(1,math.floor(base*moneyRate+.5)) or 0
+ local material=dustRate>0 and math.max(1,math.floor(dust*dustRate+.5)) or 0
+ return math.min(money,1000000-base),math.min(material,1000000-dust)
+end
+function W.saleCargo(material,value,stone,resource,stoneUnits,mask,cut,cashBonus,dustBonus,bonusMask)
  assert(W.CRYSTAL_BY_MATERIAL[material] and value>=1 and value<=1000000 and value%1==0)
  assert(resource>=1 and resource<=1000000 and resource%1==0 and stoneUnits>=0 and stoneUnits<=1000000 and stoneUnits%1==0)
- return (stone and 'Stone:' or 'Gem:')..material..':'..value..':'..resource..':'..stoneUnits
+ local key=(stone and 'Stone:' or 'Gem:')..material..':'..value..':'..resource..':'..stoneUnits
+ if not mask and not cut then return key end
+ mask=mask or 0;cut=cut or 'Original'
+ assert(mask>=0 and mask<=31 and mask%1==0 and #cut<=8 and cut:match('^%a+$'))
+ if cashBonus==nil then cashBonus,dustBonus=payoutBonus(value,resource,mask) end
+ assert(cashBonus>=0 and cashBonus%1==0 and value+cashBonus<=1000000)
+ assert(dustBonus>=0 and dustBonus%1==0 and resource+dustBonus<=1000000)
+ local cargo=key..':'..mask..':'..cut..':'..cashBonus..':'..dustBonus
+ if bonusMask then
+  assert(bonusMask>=0 and bonusMask<=31 and bonusMask%1==0)
+  cargo..=':M'..bonusMask
+ end
+ return cargo
 end
 function W.crystalCargo(key)
- local form,material,cash,dust,stone
- if type(key)=='string' then form,material,cash,dust,stone=key:match('^(%a+):(%a+):(%d+):(%d+):(%d+)$') end
+ if type(key)~='string' then return nil end
+ local cargo,bonusMask=key:match('^(.-):M(%d+)$')
+ local form,material,cash,dust,stone,mask,cut,cashBonus,dustBonus=(cargo or key):match('^(%a+):(%a+):(%d+):(%d+):(%d+):(%d+):(%a+):(%d+):(%d+)$')
+ if not form then form,material,cash,dust,stone=key:match('^(%a+):(%a+):(%d+):(%d+):(%d+)$') end
  if form=='Stone' or form=='Gem' then
   cash,dust,stone=tonumber(cash),tonumber(dust),tonumber(stone)
-  if W.CRYSTAL_BY_MATERIAL[material] and cash and cash>=1 and cash<=1000000 and dust>=1 and dust<=1000000 and stone<=1000000 then
-   return material,cash,false,form=='Stone',dust,stone
+  mask,cashBonus,dustBonus=tonumber(mask) or 0,tonumber(cashBonus) or 0,tonumber(dustBonus) or 0
+  bonusMask=tonumber(bonusMask) or mask
+  if W.CRYSTAL_BY_MATERIAL[material] and cash and cash>=1 and cash+cashBonus<=1000000 and dust>=1 and dust+dustBonus<=1000000
+   and stone<=1000000 and mask<=31 and bonusMask<=31 and (not cut or #cut<=8) then
+   return material,cash+cashBonus,false,form=='Stone',dust+dustBonus,stone,mask,cut,cashBonus,dustBonus,bonusMask
   end
   return nil
  end
  return legacyCrystalCargo(key)
 end
 function W.saleItem(key)
- local material,cash,_,stone,dust,stoneUnits=W.crystalCargo(key)
+ local material,cash,pressed,stone,dust,stoneUnits,mask,cut,cashBonus,dustBonus,bonusMask=W.crystalCargo(key)
  material=material or key
  local tier=W.CRYSTAL_BY_MATERIAL[material]
  if not tier then return nil end
  local resource=W.resourceKey(material)
  local rank=1;for i,t in ipairs(W.CRYSTAL_TIERS) do if t.material==material then rank=i;break end end
+ local cashMods,dustMods={},{}
+ for _,mod in ipairs(payoutMods) do
+  if bit32.btest(bonusMask or 0,mod.bit) then
+   if mod.cash then cashMods[#cashMods+1]=mod.name end
+   if mod.dust then dustMods[#dustMods+1]=mod.name end
+  end
+ end
  return {key=key,material=material,cash=cash or tier.value,stone=stone==true,resource=resource,
   dust=dust or 100,stoneUnits=stoneUnits or 0,rank=stone and rank or 10+rank,
-  name=stone and (tier.name..' rock') or tier.name,color=W.RESOURCE_COLORS[resource] or W.RESOURCE_COLORS.Stone}
+  name=stone and (tier.name..' rock') or tier.name,color=W.RESOURCE_COLORS[resource] or W.RESOURCE_COLORS.Stone,
+  pressed=pressed,mask=mask or 0,cut=cut,bonusMask=bonusMask or 0,cashBonus=cashBonus or 0,dustBonus=dustBonus or 0,
+  cashMods=table.concat(cashMods,' + '),dustMods=table.concat(dustMods,' + ')}
+end
+function W.starterCargo(seed)
+ local bag={}
+ local state=seed%2147483646+1
+ local function roll(n) state=state*16807%2147483647;return state%n+1 end
+ local cuts={'Crown','Oblique','Spear'}
+ local maskOptions={0,0,1,2,4,6,10}
+ for i=1,6 do
+  local material=roll(4)==1 and 'RunRuby' or 'Amber'
+  local gem=i==6 and roll(3)==1
+  if gem then material='Amber' end
+  local mask=i==1 and (roll(2)==1 and 2 or 4) or maskOptions[roll(#maskOptions)]
+  local cut=gem and 'Original' or cuts[roll(#cuts)]
+  local mass=roll(2)
+  local key=W.saleCargo(material,gem and 5 or (material=='Amber' and 1 or 2),not gem,
+   mass*(gem and 100 or W.PITY_PERCENT),gem and 0 or mass*100,mask,cut)
+  bag[key]=(bag[key] or 0)+1
+ end
+ return bag
 end
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={
@@ -4392,11 +4452,14 @@ end
 local function bagUnits(bag)
  local total=0;for _,units in pairs(bag or {}) do total=total+units end;return total
 end
+local function validCargoKey(key)
+ return type(key)=='string' and (#key<=40 or (#key<=64 and Workshop.crystalCargo(key)~=nil))
+end
 local function validBag(bag)
  if type(bag)~='table' then return false end
  local total=0
  for material,units in pairs(bag) do
-  if type(material)~='string' or #material>40 or not integer(units) then return false end
+  if not validCargoKey(material) or not integer(units) then return false end
   total=total+units;if not integer(total) then return false end
  end
  return true
@@ -4844,7 +4907,7 @@ function P.reconcileCargo(p,eligibleDroneIds,keepLoaded)
  return changed
 end
 function P.addCargo(p,material,units,capacity)
- if type(material)~='string' or #material>40 or not integer(units) or not finite(capacity) or capacity<0 then return 0 end
+ if not validCargoKey(material) or not integer(units) or not finite(capacity) or capacity<0 then return 0 end
  local accepted=math.min(units,math.max(0,math.floor(capacity)-P.cargoUnits(p)))
  p.run.cargo[material]=(p.run.cargo[material] or 0)+accepted;return accepted
 end
@@ -4852,7 +4915,7 @@ end
 -- a sale before any further mining; never erase a hard-earned core at the cap.
 -- The caller supplies a bounded server-authored node yield, not client input.
 function P.addMiningCargo(p,material,units,capacity,droneId)
- if type(material)~='string' or #material>40 or not integer(units) or not finite(capacity) or capacity<1 then return 0 end
+ if not validCargoKey(material) or not integer(units) or not finite(capacity) or capacity<1 then return 0 end
  if droneId~=nil and not cargoId(p,droneId) then return 0 end
  local held=bagUnits(p.run.cargo)
  if held>=math.floor(capacity) or P.cargoUnits(p)+units>=1e14 then return 0 end
@@ -9686,7 +9749,7 @@ local store=Persistence.new(adapter,{
  owner=instanceId,now=os.time,wait=task.wait,leaseSeconds=180,maxAttempts=3,
  newProfile=function(uid)
   local profile=Pro.new(uid,seed:NextInteger(1,2147483000),scene.runStart and RoleConfig or nil)
-  -- Studio starts with the real earned Quartz economy; no free workshop money.
+  if scene.runStart then profile.run.cargo=Workshop.starterCargo(profile.seed) end
   return profile
  end,
  migrate=function(data,uid) return Pro.migrate(data,uid) end,validate=Pro.validate,
@@ -10102,6 +10165,19 @@ if scene.runStart and scene.classicCrystal then
  local stoneShape=(scene.crystalCuts.Crown or scene.classicCrystal):Clone()
  for _,child in ipairs(stoneShape:GetChildren()) do child:Destroy() end
  stoneShape.Name='CargoStone';stoneShape.Parent=net
+ local cuts=folder(net,'CargoStoneCuts')
+ for _,name in ipairs(scene.crystalCuts.variants) do
+  local template=scene.crystalCuts[name] or scene.classicCrystal
+  local copy=template:Clone()
+  for _,child in ipairs(copy:GetChildren()) do child:Destroy() end
+  copy.Name=name;copy.Color=template.Color;copy.Parent=cuts
+ end
+ local palette=folder(net,'CargoFieldColors')
+ for _,field in ipairs(scene.fields) do
+  if Workshop.CRYSTAL_BY_MATERIAL[field.cfg.Material] then
+   palette:SetAttribute(field.cfg.Material,Color3.fromRGB(table.unpack(field.cfg.Color)))
+  end
+ end
 end
 scene.chargeIndicator=scene.chargingStation and scene.chargingStation.Parent:FindFirstChild('ChargeIndicator')
 local resourceSerial=0
@@ -10703,8 +10779,10 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
    position=Vector3.new(position.X,fieldTop+.27,position.Z)
    vx,vy,vz=out.X*4.5,16,out.Z*4.5
   end
+  local cut=not crystal and (r.part:GetAttribute('CrystalCut') or 'Original') or 'Original'
+  local cargo=Workshop.saleCargo(material,value,not crystal,dust,stoneUnits,r.modifiers or 0,cut)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,
-   material=Workshop.saleCargo(material,value,not crystal,dust,stoneUnits),tierMaterial=material,value=value,
+   material=cargo,tierMaterial=material,value=Workshop.saleItem(cargo).cash,
    stone=not crystal,rareGem=crystal,units=1,raw=true,oreArc=true,finishing=not extraction,
    floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14,modifiers=r.modifiers},
    position,Vector3.new(vx,vy,vz),r.field.color)
@@ -10805,7 +10883,9 @@ function scene.finishPress(press,drops)
   floor=job.floor,fieldPart=first.fieldPart,modifiers=job.modifiers}
  local a,b=Workshop.saleItem(first.material),Workshop.saleItem(second.material)
  if a and b then
-  output.material=Workshop.saleCargo(first.tierMaterial,value,first.stone,a.dust+b.dust,a.stoneUnits+b.stoneUnits)
+  local cashBonus,dustBonus=a.cashBonus+b.cashBonus,a.dustBonus+b.dustBonus
+  output.material=Workshop.saleCargo(first.tierMaterial,value-cashBonus,first.stone,a.dust+b.dust-dustBonus,
+   a.stoneUnits+b.stoneUnits,job.modifiers,a.cut or 'Original',cashBonus,dustBonus,bit32.bor(a.bonusMask,b.bonusMask))
  end
  local from=job.position+job.direction*1.5-Vector3.yAxis*1.25
  local velocity=job.direction*7.3+Vector3.yAxis*29

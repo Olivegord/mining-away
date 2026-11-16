@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 16 — sale receipt and compact ore grid
+
+Manual sales keep the backdrop in the world. The compact grid uses the pickup renderer for the field shade, cut, outline, glints and modifier effects. Portrait screens stack the receipt below the rocks. Each roughly 80 ms break triggers the shared gem particles, and the next rock waits for the current addend to post. The first beat shows the base amount. A modified payout gets a named bonus and adjusted amount, then a short pause before that number joins the running total. Prior addends slide up. The payout chime and HUD balance tick coincide with the addition. The completed receipt remains visible until **E** or the Close button. Automatic sales keep the compact token flights.
+
 ## November 15 — sale pacing and larger payout text
 
 The strongest cue should explain the action and its value. Kao and colleagues found in their action RPG experiment that success-dependent feedback helped, while stronger amplification alone reduced the measured motives. Fabre and colleagues found that animated text conveyed feedback reliably in their experiment with text and particle effects. Lin and colleagues identified hit stops, coherent sounds and camera control as important candidates for impact in their observational study. The working interpretation for selling is to put the amount at the center of the break, use a brief windup, and save the strongest accents for gems and the final counter arrival. [CHI feedback experiment](https://people.csail.mit.edu/dkao/pdf/3613904.3642656.pdf), [Juicy Text](https://arxiv.org/abs/2512.13695), [impact-feedback study](https://arxiv.org/abs/2208.06155).

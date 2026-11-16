@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 16 — sale arithmetic and a starter backpack
+
+Keep the break sequence and gem particles. Put much smaller drops in a padded grid on the left, with the same cut, tint, outlines and effects as the drops in the field. Put the receipt on the right. Each currency has its own icon, a column of addends that move up with each break, and a readable total. Show the base reward and play a separate beat for any modifier before adding the adjusted number. Keep the final totals open until the player presses **E**. Give new players a backpack containing randomized rocks and modifiers.
+
 ## November 15 — larger payouts and slower sale pacing
 
 The owner likes the currency animation but reports that the entire sale is too fast, the text is too small, and the result still lacks impact. Research how to make the sale more satisfying. Give the boosts time to read and feel while keeping the individual rock break quick.
