@@ -2,7 +2,7 @@
 
 ## November 15 — occasional field and sell-route music
 
-The six user-confirmed Downloads tracks replace the continuous Toolbox
+Gameplay revision **d4ca089**. The six user-confirmed Downloads tracks replace the continuous Toolbox
 playlist. Music starts enabled with the existing toggle. Each Crystal Run
 field has its own track that qualifies after 75–120 seconds of local crew
 work while the player is inside that bed. Up to 12 seconds between jobs
