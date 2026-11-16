@@ -1,5 +1,17 @@
 # Shared project context
 
+## November 15 — sale preview, gem reveal, and Ballcaster cues
+
+Gameplay revision **4679617**, based on soundtrack handoff **6715079**. Using SELL ORE opens the backpack grid before selling. The rocks fill most of the screen. **E** or the on-screen Sell button confirms, and Cancel closes the preview. The server checks the run, station range and exact backpack again. Changed cargo refreshes the preview for review. Backpack sales pause after confirmation, then each rock gets a short impact hold, camera shake, particles and a crack. Money and material amounts linger near the rock for 0.38 seconds before flying to the top-left counters. Auto Sell and Emptiers keep a compact receipt. The soundtrack enters its selling context only after a committed sale.
+
+Ordinary rocks hop immediately from near the ground and give a muted clack. Rare gems keep the taller arc and gain a distinct reveal sound, a colored particle burst and an additional landing cue. Ballcaster uses a dedicated windup, the existing imported release and a separate heavier impact. The existing drop odds, payouts and card progression remain in place.
+
+Studio was already open and remains in Edit at **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**. Script Sync exported both controllers. All three roots reported `Errored`, so the controllers were installed via a guarded Script Editor update after comparing all seven baseline hashes. Team Create save **355** succeeded, and all seven installed Sources matched canonical **build/DRONE_GAME.rbxl**, SHA-256 **61dc987d1ada865db2bc1db79aa5b91e6ba608d4e0db6dbf0dd7c66334954e44**. The next Studio Play loads these changes. **No Roblox publication.**
+
+Native Edit checks confirmed the sale waited for a confirmation, held each reward, hit the HUD targets, and cleaned up. The capture showed the full-size world-space models. The temporary GUI was checked through its properties and was outside the Edit capture. The selling, field pickup, pickup renderer and crystal contact clock suites passed, including stale quotes, opposite drop branches and all three Ballcaster phase cues. The broader legacy pickup fixture still has its previously documented baseline failure. No Play session was started. Live HUD placement, sound balance and multiplayer remain for gameplay verification.
+
+Reproduce with `python3 tools/test_selling.py`, `python3 tools/test_field_pickup_flow.py`, `python3 tools/test_pickups.py /private/tmp/drone-luau`, and `python3 tools/test_gadgets.py /private/tmp/drone-luau crystal-clock`. The Edit check is `tools/studio_selling_checks.lua`. Refresh the preceding canonical snapshot with `python3 tools/build.py --previous-commit 6715079`.
+
 ## November 15 — occasional field and sell-route music
 
 Gameplay revision **d4ca089**. The six user-confirmed Downloads tracks replace the continuous Toolbox
