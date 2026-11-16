@@ -1,5 +1,15 @@
 # Shared project context
 
+## November 15 — weighted currency tokens and HUD count-up
+
+Gameplay revision **f2d070e** shows a colored payout beside each rock for 0.92 seconds. Green coins and mineral-colored flecks burst out independently, slow as they drift, then carry their motion into a curved pull. Coins pull first. Material types follow in separate waves once the last rock has broken. The token hits the actual balance digits, plays a currency-specific cue, and adds its exact share to the displayed total. The gem particle system still handles the shatter itself.
+
+The server includes recent committed sale receipts in the private profile update as well as its sale event. The client only plays each receipt once, and reconciles pending display credits with the authoritative balance in either arrival order. This is presentation state. Sales, spending and saved balances still use the existing server transactions.
+
+Studio was already open and remains in Edit at **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**. Script Sync exported the controllers and TacticalHUD. All roots reported `Errored`, so the guarded Script Editor installer updated those three Sources. Team Create save **357** succeeded. All seven installed Sources matched **build/DRONE_GAME.rbxl**, SHA-256 **1d8b566ae10986932e9fd2bbc434c80ae1b5c32e6d163998dfeac757d805e8bb**. The next Studio Play loads this revision. **No Roblox publication.**
+
+The native Edit fixture verified lingering colored amounts, distinct token shapes, decelerating motion, money-first pulls, separate material waves, arrival cues and exact HUD credit with either replication order. The selling and field pickup suites passed. The temporary fixture was removed. Live sound balance, readability in motion and multiplayer remain unverified. Reproduce with `python3 tools/test_selling.py`, `python3 tools/test_field_pickup_flow.py`, and `python3 tools/build.py --previous-commit 3603be8` on the preceding canonical snapshot.
+
 ## November 15 — sequential sale breaks and lingering gem particles
 
 Gameplay revision **4b07989** advances through the sorted grid one rock at a time. Each rock shrinks and fades in about 65 milliseconds. A slow frame cannot start the next break until the current rock is gone. The sale uses the same colored sparks and four-point glints as the mined gem reveal, with slower motion at camera distance and particle lifetimes of 0.6–1.17 seconds. The particles survive the rocks that emit them. Reward flight retains its existing pause.
