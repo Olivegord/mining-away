@@ -33,29 +33,25 @@ local ok,err=xpcall(function()
  assert(minUp<.89 and maxUp>.98,'seeded stone lean did not vary')
  local contact=CFrame.new(0,0,0)
  local velocity=Vector3.xAxis*Workshop.COURIER_SWEEP_SPEED
- local duration=Workshop.COURIER_REEL_WINDOW
+ local duration=Workshop.COURIER_REEL_TIME
  local function reel(t)
   local hull=Workshop.courierSwoop(Vector3.yAxis*Workshop.COURIER_HOOK_DROP,-math.pi/2,Vector3.zero,velocity,1+t,1,0)
-  local anchor=hull-Vector3.yAxis*.48
   local cradle=CFrame.new(hull-Vector3.yAxis*1.14)
-  return Workshop.grappleReel(contact,cradle,anchor,t,Workshop.courierDragOffset(-math.pi/2,0,t))
+  return Workshop.grappleReel(contact,cradle,t,false)
  end
- local first,_,length=reel(0)
+ local first=reel(0)
  local previous=first
- local maxStep,dragDistance,liftAt=0,0,nil
+ local maxStep,firstLift=0,nil
  for tick=1,math.ceil(duration*144) do
   local t=math.min(tick/144,duration)
-  local pose,_,nextLength=reel(t)
-  assert(nextLength<=length,'winch paid out during the pull')
-  length=nextLength
-  if not liftAt and pose.Position.Y>.02 then liftAt=t;dragDistance=previous.Position.X end
+  local pose=reel(t)
+  if not firstLift and pose.Position.Y>.02 then firstLift=t end
   maxStep=math.max(maxStep,(pose.Position-previous.Position).Magnitude)
   previous=pose
  end
  local _,seated=reel(duration)
- assert(first==contact and seated and liftAt and liftAt>1.7 and liftAt<2.4 and dragDistance>9,
-  'the rock did not slide on the ground until the shortening cable lifted it')
- assert(maxStep<.65,'the cable pull snapped between neighboring frames')
+ assert(first==contact and seated and firstLift and firstLift<.1,'the reel kept the rock on the ground')
+ assert(maxStep<.31,'the direct reel snapped between neighboring frames')
  local dock=Vector3.zero
  local destination=Vector3.new(-48,9,0)
  local yaw=-math.pi/2
@@ -69,7 +65,7 @@ local ok,err=xpcall(function()
  assert((late-position).Magnitude>1.7 and tangent:Dot(lateVelocity)>120,'exit stalled between snapshots')
  assert((regular-position):Dot(tangent.Unit)>.17 and tangent.Unit:Dot(regularVelocity)>10.5,'delivery did not inherit the exit tangent')
  report.leanDotRange={minUp,maxUp};report.maximumReelStep=maxStep
- report.dragDistance=dragDistance;report.liftAt=liftAt
+ report.liftAt=firstLift
  report.exitSpeed=tangent.Magnitude;report.firstDeliverySpeed=regularVelocity.Magnitude
 end,debug.traceback)
 root:Destroy()

@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 15 — direct reel
+
+Remove the slack and ground drag. The Emptier should lift the rock into the cradle as soon as it grabs it.
+
 ## November 15 — cable slack and E interactions
 
 Start the winch as soon as the Emptier grabs the rock. The cable begins loose, and taking up the slack should create the ground drag before the shortening cable lifts the rock.

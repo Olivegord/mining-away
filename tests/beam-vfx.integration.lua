@@ -612,11 +612,11 @@ check('courier draws a dotted guide overhead, then closes the claw at contact',f
  assert(not work:courier(drone,record,720+Workshop.COURIER_CONTACT+.04))
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)
-check('courier reels from the grab and cable slack creates a ground drag before lift',function()
+check('courier lifts the ore directly after the grab and keeps a taut cable',function()
  local source=Instance.new('Folder');source:SetAttribute('Role','Courier');source:SetAttribute('State','Pickup')
  source:SetAttribute('DeliverySlots',1);source:SetAttribute('CourierDock',Vector3.new(0,9,0))
  source:SetAttribute('CourierGrappling',true);source:SetAttribute('CourierPickupPoint',Vector3.new(0,4.2,0))
- source:SetAttribute('CourierApproachTime',1.2);source:SetAttribute('CourierDragUntil',Workshop.COURIER_REEL_WINDOW)
+ source:SetAttribute('CourierApproachTime',1.2)
  source:SetAttribute('CourierDockYaw',-math.pi/2);source:SetAttribute('CourierReturnTurn',0)
  local model=Instance.new('Model');model.Parent=root
  local emitter=Instance.new('Part');emitter.CFrame=CFrame.new(0,9,0);emitter.Parent=model;model.PrimaryPart=emitter
@@ -631,34 +631,26 @@ check('courier reels from the grab and cable slack creates a ground drag before 
  drone.pickupAge=Workshop.COURIER_CONTACT
  work:courier(drone,record,740.4)
  assert((hook.payload.Position-before).Magnitude<.001,'confirmed grab teleported the claw')
- local startLength=hook.rope.WinchTarget
- assert(hook.rope.WinchEnabled and hook.slack.Enabled,'winch did not start with visible slack')
+ assert(hook.rope.Visible and not hook.root:FindFirstChild('SlackCable',true),'grab rendered a slack effect')
  drone.pickupAge=Workshop.COURIER_CONTACT+.18
- emitter.CFrame=CFrame.new(1.98,9,0);drone.pos=emitter.Position
+ emitter.CFrame=CFrame.new(1.98,9.25,0);drone.pos=emitter.Position
  work:courier(drone,record,740.58)
- assert(hook.rope.WinchTarget<startLength and (hook.payload.Position-before).Magnitude<.001,'rope did not shorten through the slack')
- drone.pickupAge=Workshop.COURIER_CONTACT+1.72
- emitter.CFrame=CFrame.new(18.92,10.8,0);drone.pos=emitter.Position
- work:courier(drone,record,742.12)
- local groundLength=hook.rope.WinchTarget
- assert(not hook.slack.Enabled and hook.payload.Position.X>before.X+8 and math.abs(hook.payload.Position.Y-before.Y)<.001,'taut rope did not drag the rock')
- drone.pickupAge=Workshop.COURIER_CONTACT+2.5
- emitter.CFrame=CFrame.new(27.5,12.5,0);drone.pos=emitter.Position
- work:courier(drone,record,742.9)
- assert(hook.rope.WinchTarget<groundLength and hook.payload.Position.Y>before.Y+1,'shortening rope did not lift the rock')
+ assert(hook.payload.Position.Y>before.Y+.35,'reel left the captured rock on the ground')
+ local length=(hook.anchor.Position-hook.payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude
+ assert(math.abs(length-hook.rope.Length)<.001,'cable had more length than its endpoint separation')
  local pausedAt=hook.payload.Position
  assert(drone.cargoMount and drone.cargoMount.id==23 and (drone.cargoMount.frame.Position-hook.payload.Position).Magnitude<.001)
  source:SetAttribute('WorkPaused',true)
- work:courier(drone,record,743)
+ work:courier(drone,record,740.78)
  assert((hook.payload.Position-pausedAt).Magnitude<.001,'reel clock advanced during a pause')
  source:SetAttribute('WorkPaused',false)
- drone.pickupAge=Workshop.COURIER_CONTACT+3.1
- work:courier(drone,record,743.5)
+ drone.pickupAge=Workshop.COURIER_CONTACT+.70
+ work:courier(drone,record,741.32)
  assert(not record.courier.grapple and not hook.root.Parent,'spent rope was not cleaned up')
  local impact=assert(root:FindFirstChild('GrappleSeatImpact'))
  local chips=assert(impact:FindFirstChild('OreSeatChips'))
  assert(chips.Lifetime.Max>=1 and chips.Emitted>0,'seating lost its lingering particles')
- work:courier(drone,record,743.54)
+ work:courier(drone,record,741.36)
  assert(#work.bursts==1 and impact.Parent==root,'seating particles were duplicated or removed with the rope')
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)

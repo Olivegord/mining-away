@@ -397,22 +397,19 @@ end
 local function destroyGrapple(fx)
  if fx.grapple then fx.grapple.root:Destroy();fx.grapple=nil end
 end
-local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,now,elapsed)
+local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,reduced,now,elapsed)
  if age<.24 and not loadedId then return nil end
  local hook=fx.grapple
  if not hook then
   local root=Instance.new('Folder');root.Name='CourierGrapple';root.Parent=fx.root
   local anchor=part(root,'WinchOrigin')
   local payload=part(root,'GrapplePayload');payload.Size=Vector3.one*.56
-  local start=Instance.new('Attachment');start.Axis=-Vector3.yAxis;start.Parent=anchor
-  local eye=Instance.new('Attachment');eye.Position=Vector3.yAxis*.56;eye.Axis=Vector3.yAxis;eye.Parent=payload
+  local start=Instance.new('Attachment');start.Parent=anchor
+  local eye=Instance.new('Attachment');eye.Position=Vector3.yAxis*.56;eye.Parent=payload
   local rope=Instance.new('RopeConstraint');rope.Name='GrappleRope'
   rope.Attachment0=start;rope.Attachment1=eye;rope.Visible=true;rope.Thickness=.075;rope.Restitution=0
   rope.Parent=root
-  local slack=Instance.new('Beam');slack.Name='SlackCable';slack.Attachment0=start;slack.Attachment1=eye
-  slack.Enabled=false;slack.FaceCamera=true;slack.Segments=12;slack.Width0=.075;slack.Width1=.075
-  slack.Color=ColorSequence.new(Color3.fromRGB(132,136,142));slack.Parent=anchor
-  hook={root=root,anchor=anchor,payload=payload,rope=rope,slack=slack,clock=0,lastAt=now}
+  hook={root=root,anchor=anchor,payload=payload,rope=rope,clock=0,lastAt=now}
   fx.grapple=hook
  end
  local anchor,payload,rope=hook.anchor,hook.payload,hook.rope
@@ -428,26 +425,14 @@ local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,pause
  elseif hook.ore and not paused then
   hook.clock=elapsed or hook.clock+dt
  end
- local seated,paid=false,nil
+ local seated=false
  if hook.ore then
-  local slide=fx.dragUntil and Workshop.courierDragOffset(fx.dragYaw,fx.dragTurn,math.min(hook.clock,fx.dragUntil))
-  payload.CFrame,seated,paid,hook.lift=Workshop.grappleReel(hook.contact,cradle,anchor.Position,hook.clock,slide)
+  payload.CFrame,seated,hook.lift=Workshop.grappleReel(hook.contact,cradle,hook.clock,reduced)
  else
   payload.CFrame=cradle:Lerp(target,reach^3*(10+reach*(-15+6*reach)))
  end
  hook.shown=payload.CFrame
- local gap=(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude
- local loose=paid and math.max(0,paid-gap) or 0
- rope.Length=math.max(.04,gap,paid or 0)
- rope.WinchEnabled=paid~=nil and not paused
- if paid then
-  rope.WinchTarget=paid;rope.WinchSpeed=.62+.15*hook.clock^4
- end
- hook.slack.Enabled=loose>.10;rope.Visible=not hook.slack.Enabled
- if hook.slack.Enabled then
-  local curve=math.min(4,math.sqrt(loose*(loose+gap))*.68)
-  hook.slack.CurveSize0=curve;hook.slack.CurveSize1=curve
- end
+ rope.Length=math.max(.04,(anchor.Position-payload.CFrame:PointToWorldSpace(Vector3.yAxis*.56)).Magnitude)
  if seated then
   fx.grappleDone=hook.ore;destroyGrapple(fx)
   return cradle,true
@@ -536,15 +521,11 @@ function W:courier(drone,record,now)
  local ground=source:GetAttribute('CourierPickupPoint')
  local scanAge=drone.pickupAge
  local grappling=state=='Pickup' and source:GetAttribute('CourierGrappling')==true and typeof(ground)=='Vector3'
- if grappling then
-  fx.grappleGround=ground
-  fx.dragUntil=source:GetAttribute('CourierDragUntil')
-  fx.dragYaw=source:GetAttribute('CourierDockYaw') or 0
-  fx.dragTurn=source:GetAttribute('CourierReturnTurn') or 0
+ if grappling then fx.grappleGround=ground
  elseif state=='Deliver' and fx.grapple and fx.grapple.ore then
   grappling=true;ground=fx.grappleGround
  else
-  destroyGrapple(fx);fx.grappleDone=nil;fx.grappleGround=nil;fx.dragUntil=nil
+  destroyGrapple(fx);fx.grappleDone=nil;fx.grappleGround=nil
  end
  local scanning=state=='Pickup' and not paused and typeof(ground)=='Vector3' and scanAge~=nil
   and scanAge>=0 and scanAge<Workshop.COURIER_SCAN+.17 and not grappling
@@ -612,7 +593,7 @@ function W:courier(drone,record,now)
   local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
   local carryAge=drone.pickupAge and drone.pickupAge-Workshop.COURIER_CONTACT or loadAge
   local loadingSlot
-  if loadedId and loadedId>0 and (loadAge<.55 or grappling and carryAge<Workshop.COURIER_REEL_WINDOW+.45) and not unload then
+  if loadedId and loadedId>0 and (loadAge<.55 or grappling and carryAge<Workshop.COURIER_REEL_TIME+.45) and not unload then
    for i=math.min(parcelUnits,6),1,-1 do
     if fx.load[i]==loadedMaterial then loadingSlot=i;break end
    end
@@ -676,7 +657,7 @@ function W:courier(drone,record,now)
    if hooked then
     local elapsed=docking and source:GetAttribute('CourierApproachTime') and math.max(0,pickupAge-Workshop.COURIER_CONTACT) or nil
     local hookPose,seated=grappleFrame(fx,pivot,cargoFrame,ground,fx.grappleOrePose,pickupAge,
-     not beforeContact and i==loadingSlot and loadedId or nil,paused,now,elapsed)
+     not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,now,elapsed)
     if hookPose then cargoFrame=hookPose end
     seatImpact=seated
    end

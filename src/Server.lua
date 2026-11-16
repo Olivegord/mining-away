@@ -3066,17 +3066,6 @@ function scene.collectGroundCargo(d,p,hr,dt)
    d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.oreYaw=nil;p.nextEmptierPlan=nil
    return false
   end
-  local bed=drop.fieldPart
-  local lastGround=gem
-  d.oreDragUntil=0
-  for i=1,22 do
-   local pullTime=Workshop.COURIER_REEL_WINDOW*i/22
-   local nextGround=gem+Workshop.courierDragOffset(yaw,turn,pullTime)
-   local edge=bed and bed.CFrame:PointToObjectSpace(nextGround)
-   if edge and (math.abs(edge.X)>bed.Size.X*.5 or math.abs(edge.Z)>bed.Size.Z*.5)
-    or not los(lastGround,nextGround,d.model,ignore,true) then break end
-   d.oreDragUntil=pullTime;lastGround=nextGround
-  end
   d.oreDock=dock;d.oreYaw=yaw;d.oreEntryOffset=offset;d.oreEntryVelocity=entryVelocity
   d.oreApproachTime=approachTime;d.oreReturnTurn=turn;d.oreReturnGoal=deliveryGoal;d.pickupAt=now;d.oreHookPoint=gem
   d.lastMoveFormation=false;d.descentOrigin=nil
@@ -3389,7 +3378,6 @@ local function snapshotDrone(d)
   CourierEntryOffset=d.oreDock and d.oreEntryOffset or Vector3.zero,
   CourierEntryVelocity=d.oreDock and d.oreEntryVelocity or false,
   CourierApproachTime=d.oreDock and d.oreApproachTime or false,CourierReturnTurn=d.oreDock and d.oreReturnTurn or false,
-  CourierDragUntil=d.oreDock and d.oreDragUntil or false,
   CourierPacked=groundCargo and groundCargo.compacted==true or false,
   CourierLoadedOre=d.oreLoadedId or 0,CourierLoadedMaterial=d.oreLoadedMaterial or '',CourierLoadedAt=d.oreLoadedVisualAt or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,

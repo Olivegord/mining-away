@@ -46,8 +46,7 @@ W.COURIER_SWEEP_SPEED=11
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
 W.COURIER_HOOK_DROP=4.8
-W.COURIER_REEL_WINDOW=3.12
-local cableRestGap,cableSlack=3.76,4.65
+W.COURIER_REEL_TIME=.68
 local courierTurnRelease=.32
 local function easeClaw(t)
  t=math.clamp(t,0,1)
@@ -61,22 +60,11 @@ function W.oreOrientation(seed,packed)
  local lean=math.rad(14+n*173%39)
  return math.cos(bearing)*lean,yaw,math.sin(bearing)*lean
 end
-function W.grappleCableLength(elapsed)
- local age=math.clamp(elapsed,0,W.COURIER_REEL_WINDOW)
- return math.max(.12,cableRestGap+cableSlack-.62*age-.03*age^5)
-end
-function W.grappleReel(contact,cradle,anchor,elapsed,slide)
- local length=W.grappleCableLength(elapsed)
- local eye=Vector3.yAxis*.56
- local seatedLength=math.max(.14,(anchor-(cradle.Position+eye)).Magnitude)
- if length<=seatedLength then return cradle,true,length,1 end
- local grounded=contact+(slide or Vector3.zero)
- -- Pay in cable throughout the pull. As the gap grows, the rock leaves the
- -- floor when that cable can no longer reach ground level.
- local height=anchor.Y-grounded.Position.Y-eye.Y
- local t=math.clamp((height-length)/math.max(.12,height-seatedLength),0,1)
- local lift=t*t*(3-2*t)
- return grounded:Lerp(cradle,lift),false,length,lift
+function W.grappleReel(contact,cradle,elapsed,reduced)
+ local duration=reduced and .43 or W.COURIER_REEL_TIME
+ if elapsed>=duration then return cradle,true,1 end
+ local lift=easeClaw(elapsed/duration)
+ return contact:Lerp(cradle,lift),false,lift
 end
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
@@ -142,7 +130,7 @@ function W.courierTurnTime(turn)
  return math.abs(turn)*W.COURIER_TURN_RADIUS/W.COURIER_SWEEP_SPEED
 end
 function W.courierReturnDuration(turn)
- return math.max(W.COURIER_REEL_WINDOW,W.courierTurnTime(turn)+courierTurnRelease)
+ return math.max(1.1,W.courierTurnTime(turn)+courierTurnRelease)
 end
 local function courierPlanar(yaw,turn,travel)
  local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
@@ -166,18 +154,10 @@ local function courierPlanar(yaw,turn,travel)
  end
  return position,velocity,bend
 end
-function W.courierDragOffset(yaw,turn,elapsed)
- -- The moving hull takes up the initial slack before the rock slides.
- local cable=W.grappleCableLength(elapsed)
- local looseReach=math.sqrt(math.max(0,cable*cable-cableRestGap*cableRestGap))
- local tensionTime=math.max(0,elapsed-looseReach/W.COURIER_SWEEP_SPEED)
- local travel=.79*(tensionTime-.24*(1-math.exp(-tensionTime/.24)))
- return (courierPlanar(yaw,turn,travel))
-end
 function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
  approachTime=approachTime or W.COURIER_CONTACT
  turn=turn or 0
- local riseTime=2.42
+ local riseTime=.72
  local travel=math.max(0,age-approachTime)
  local planar,tangent,bend=courierPlanar(yaw,turn,travel)
  if age<approachTime then

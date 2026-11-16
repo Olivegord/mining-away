@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — direct reel on capture
+
+Use a taut cable and lift the rock straight into the cradle on capture. The courier keeps climbing and turning while reeling in. The owner removed the slack and dragging effect.
+
 ## November 15 — reel from the moment of capture
 
 The cable begins slack and shortens continuously from the grip. The cargo starts to slide as the flying Emptier takes up that slack. The shortening cable lifts the rock once it can no longer reach the ground. The standard clear test route begins lifting around two seconds. Seating still plays the mineral chips.

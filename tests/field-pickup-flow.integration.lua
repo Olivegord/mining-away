@@ -171,7 +171,7 @@ do
  local _,left=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach-.001,approach,turn)
  local _,at=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach,approach,turn)
  local _,right=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach+.001,approach,turn)
- assert(((at-left)-(right-at)).Magnitude<.001 and math.abs(right.Z)>.005 and right.Y>.001,'the turn and climb must share the contact tangent and acceleration')
+ assert(((at-left)-(right-at)).Magnitude<.001 and math.abs(right.Z)>.005 and right.Y>.015,'the turn and climb must share the contact tangent and acceleration')
  local previous=Vector3.xAxis
  for i=0,120 do
   local time=turnStart+Workshop.courierTurnTime(turn)*i/120
@@ -260,7 +260,6 @@ assert(d.state=='Pickup' and #idle>0 and #idle<#p.drones,'active couriers should
 assert(math.abs((idle[1].intentGoal.Z+idle[#idle].intentGoal.Z)*.5-center.Z)<.001,'working drones left a hole in the line')
 snapshotDrone(d)
 assert((d.model:GetAttribute('CourierPickupPoint')-gem).Magnitude<.01)
-assert(d.model:GetAttribute('CourierDragUntil')>=2,'the planned grab did not include a full two-second ground pull')
 scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center+Vector3.xAxis*36})
 assert(p.miningSquare.center.X==36)
 pl.Character:PivotTo(CFrame.new(center+Vector3.new(56,3,0)))
@@ -277,7 +276,7 @@ assert(not pickups[id] and pickups[extraId] and Pro.droneCargoUnits(data(p),d.id
 assert(d.pos.X>dock.X and d.velocity.X>8,'cargo contact interrupted forward flight')
 now=d.pickupAt+d.oreApproachTime+1
 scene.collectGroundCargo(d,p,hr,C.Tick)
-assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+.7 and d.velocity.Magnitude>10,'climb lost its forward momentum before clearing the pickup')
+assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+4 and d.velocity.Magnitude>10,'climb lost its forward momentum before clearing the pickup')
 local exitAt=d.oreSeatUntil
 local exitPosition,exitVelocity=Workshop.courierSwoop(d.oreDock,d.oreYaw,d.oreEntryOffset,d.oreEntryVelocity,
  exitAt-d.pickupAt,d.oreApproachTime,d.oreReturnTurn)
