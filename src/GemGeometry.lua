@@ -16,7 +16,7 @@ G.definitions={
 }
 function G.key(value)
  value=type(value)=='string' and value or 'Amber'
- value=value:match('^Rock:(%a+):') or value:match('^Block:(%a+):') or value
+ value=value:match('^Gem:(%a+):') or value:match('^Stone:(%a+):') or value:match('^Rock:(%a+):') or value:match('^Block:(%a+):') or value
  value=value:gsub('^Run','')
  return G.definitions[value] and value or 'Amber'
 end

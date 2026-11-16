@@ -166,7 +166,7 @@ function Gem.prepare()
 end
 function Gem.clone(source)
  local template=templates[Gem.key(source:GetAttribute('Mineral'))..(source:GetAttribute('GemCut')=='Compact' and 'Compact' or '')]
- if not template or source.Name=='PressedCargo' then return source:Clone(),false end
+ if source:GetAttribute('StoneCargo')==true or not template or source.Name=='PressedCargo' then return source:Clone(),false end
  local p=template:Clone();p.Size=source.Size*template:GetAttribute('GemAspect');p.CFrame=source.CFrame
  for k,v in pairs(source:GetAttributes()) do p:SetAttribute(k,v) end
  Gem.update(p,1)

@@ -29,6 +29,7 @@ end
 local droneFolder=root:FindFirstChild('Drones') or folder(root,'Drones')
 local net=folder(RS,'MiningAway')
 local command=Instance.new('RemoteEvent');command.Name='Command';command.Parent=net
+do local event=Instance.new('RemoteEvent');event.Name='Sale';event.Parent=net end
 -- Runtime entity graphs are mutually recursive. Keep their dynamic Roblox
 -- boundaries explicit rather than expanding an unbounded inferred table type.
 local profiles: {[number]: any}={}
@@ -463,6 +464,9 @@ if scene.runStart and scene.classicCrystal then
  local cargoShape=(scene.crystalCuts.Gem or scene.classicCrystal):Clone()
  for _,child in ipairs(cargoShape:GetChildren()) do child:Destroy() end
  cargoShape.Name='CargoCrystal';cargoShape.Parent=net
+ local stoneShape=(scene.crystalCuts.Crown or scene.classicCrystal):Clone()
+ for _,child in ipairs(stoneShape:GetChildren()) do child:Destroy() end
+ stoneShape.Name='CargoStone';stoneShape.Parent=net
 end
 scene.chargeIndicator=scene.chargingStation and scene.chargingStation.Parent:FindFirstChild('ChargeIndicator')
 local resourceSerial=0
@@ -949,13 +953,13 @@ end
 function scene.spawnOrePickup(template,drop,position,velocity,color)
  pickupSerial+=1
  local launchAt=now
- if drop.finishing then
+ if drop.finishing and not drop.instant then
   local splitAt=template:GetAttribute('CrystalSplitAt') or now
   launchAt=splitAt+OreDrops.REWARD_DELAY
  end
  drop.launchAt=launchAt
  if drop.oreArc and not drop.compacted then
-  template=scene.crystalCuts and scene.crystalCuts.Gem or template
+  if not drop.stone then template=scene.crystalCuts and scene.crystalCuts.Gem or template end
   local arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
   local landing=Vector3.new(arc.landX,arc.floor,arc.landZ)
   if drop.fieldPart and scene.outsidePickupBed(drop.fieldPart,landing) then
@@ -975,7 +979,9 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Position=position
  chip.Color=color
  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
- chip.MaterialVariant='';chip.Reflectance=drop.compacted and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
+ chip:SetAttribute('StoneCargo',drop.stone==true);chip:SetAttribute('InstantDrop',drop.instant==true)
+ if drop.stone then chip.Color=drop.oreArc and color or Color3.fromRGB(88,84,81):Lerp(color,.32);chip.Material=Enum.Material.Slate end
+ chip.MaterialVariant='';chip.Reflectance=(drop.compacted or drop.stone) and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
  if drop.raw then
   chip:SetAttribute('PhysicalCargo',true)
   chip:SetAttribute('CargoValue',drop.value)
@@ -993,6 +999,10 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Parent=pickupFolder
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
  drop.vx=velocity.X;drop.vy=velocity.Y;drop.vz=velocity.Z;drop.age=0;drop.spawnAt=launchAt
+ if drop.instant then
+  drop.landed=true;drop.firstLandedAge=0
+  chip:SetAttribute('GroundImpactAt',launchAt)
+ end
  drop.publishedPosition=position;drop.publishedVelocity=velocity
  drop.publishedHoming=false;drop.publishedFloor=drop.floor
  pickups[pickupSerial]=drop
@@ -1044,8 +1054,12 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
   local specialist=specialistCut and DroneCatalog.Types[d.role]
   local amount=r.ore*(specialist and specialist.Yield or 1)*d.stats.yieldMultiplier*tier.value+(profile.run.yieldRemainders[material] or 0)
-  local value=math.max(1,math.floor(amount))
-  profile.run.yieldRemainders[material]=math.max(0,amount-value)
+  local crystal=math.random()<Workshop.CRYSTAL_CHANCE
+  local mass=math.max(1,math.floor(amount/tier.value+.5))
+  local dust=math.min(1000000,mass*(crystal and 100 or Workshop.PITY_PERCENT))
+  local stoneUnits=crystal and 0 or math.min(1000000,mass*100)
+  local value=math.clamp(math.floor(amount*(crystal and 8 or .3)),1,1000000)
+  profile.run.yieldRemainders[material]=amount-math.floor(amount)
   r.cargoProduced=true;r.extractedOre=r.ore;r.part:SetAttribute('ExtractedOre',r.ore)
   local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
   local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
@@ -1053,9 +1067,13 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   -- The reward emerges from the split. Early extraction still clears a living rock.
   local edge=extraction and Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42 or .24
   local position=r.part.Position+out*edge+Vector3.yAxis*(r.part.Size.Y*.18+.18)
-  scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,
-   units=1,raw=true,oreArc=true,finishing=not extraction,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14,
-   modifiers=r.modifiers},position,Vector3.new(vx,vy,vz),r.field.color)
+  -- Ordinary field stone appears immediately at rest; only rare crystals launch.
+  if not crystal then position=Vector3.new(position.X,fieldTop+.22,position.Z) end
+  scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,
+   material=Workshop.saleCargo(material,value,not crystal,dust,stoneUnits),tierMaterial=material,value=value,
+   stone=not crystal,instant=not crystal,units=1,raw=true,oreArc=crystal,finishing=not extraction,
+   floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14,modifiers=r.modifiers},
+   position,crystal and Vector3.new(vx,vy,vz) or Vector3.zero,r.field.color)
   p.dirty=true;p.publishDirty=true;return
  end
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
@@ -1149,8 +1167,12 @@ function scene.finishPress(press,drops)
  local first,second=drops[1],drops[2]
  local value=first.value+second.value
  local output={owner=first.owner,runId=first.runId,nodeId=first.nodeId,tierMaterial=first.tierMaterial,
-  material=Workshop.cargoKey(first.tierMaterial,value),value=value,units=1,raw=true,oreArc=true,
+  material=Workshop.cargoKey(first.tierMaterial,value),stone=first.stone,value=value,units=1,raw=true,oreArc=true,
   floor=job.floor,fieldPart=first.fieldPart,modifiers=job.modifiers}
+ local a,b=Workshop.saleItem(first.material),Workshop.saleItem(second.material)
+ if a and b then
+  output.material=Workshop.saleCargo(first.tierMaterial,value,first.stone,a.dust+b.dust,a.stoneUnits+b.stoneUnits)
+ end
  local from=job.position+job.direction*1.5-Vector3.yAxis*1.25
  local velocity=job.direction*7.3+Vector3.yAxis*29
  scene.spawnOrePickup(first.part,output,from,velocity,first.part.Color)
@@ -1240,8 +1262,10 @@ function scene.planPress(p,press,candidates)
   for j=i+1,#candidates do
    local b=candidates[j]
    if b.tier~=a.tier then break end
-   if a.drop.tierMaterial~=b.drop.tierMaterial or a.drop.value+b.drop.value>1000000
+   if a.drop.tierMaterial~=b.drop.tierMaterial or (a.drop.stone==true)~=(b.drop.stone==true) or a.drop.value+b.drop.value>1000000
     or (a.position-b.position).Magnitude>Workshop.COMPACTOR_REACH then continue end
+   local itemA,itemB=Workshop.saleItem(a.drop.material),Workshop.saleItem(b.drop.material)
+   if itemA and itemB and (itemA.dust+itemB.dust>1000000 or itemA.stoneUnits+itemB.stoneUnits>1000000) then continue end
    probes+=1
    if probes>24 then return end
    local position,yaw,direction,floor=scene.pressClearing(press,p.miningSquare,a,b,p.player.Character)
@@ -3822,6 +3846,7 @@ local function serviceDeliveries(p: any)
      worker.collectAfter=now+(scene.runStart and Workshop.emptierCooldown(RoleConfig.Courier.PickupCooldown,data(p)) or RoleConfig.Courier.PickupCooldown)
     end
     if scene.runStart then
+     RS.MiningAway.Sale:FireClient(p.player,{id=tx,runId=result.runId,cargo=result.cargo,resources=result.resources,cash=result.quartz,full=false})
      local proceeds=result.quartz>0 and (' · +'..result.quartz..' Quartz') or ''
      if (p.shiftSeconds or 0)>0 then
       p.shiftReadyRun=result.runId
@@ -3879,6 +3904,7 @@ local function sellBackpack(p: any,automatic: boolean?)
   if ok then return result end;return nil,result
  end,function(result)
   p.nextEmptierPlan=nil
+  RS.MiningAway.Sale:FireClient(p.player,{id=tx,runId=result.runId,cargo=result.cargo,resources=result.resources,cash=result.quartz,full=true})
   local amounts={}
   for _,key in ipairs(Shops.ORDER) do
    local n=key=='Quartz' and result.quartz or result.cargo[key]

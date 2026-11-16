@@ -162,14 +162,15 @@ local function sample(r,source,now)
   r.mineralKey=key
   local material=Workshop.crystalCargo(key) or key
   local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
-  r.mineral=tier and tier.name or material or 'Ore'
+  r.mineral=(tier and tier.name or material or 'Ore')..(r.stone and ' rock' or '')
   if r.label then r.label.Mineral.Text=r.mineral end
  end
  local modifiers=source:GetAttribute('RockModifiers') or 0
  if r.modifiers~=modifiers then
   r.modifiers=modifiers
   if r.label then r.label:Destroy();r.label=nil end
-  r.effectColor=RockModifierView.glow(modifiers) or r.color
+  local item=r.stone and Workshop.saleItem(r.mineralKey)
+  r.effectColor=RockModifierView.glow(modifiers) or (item and Color3.fromRGB(table.unpack(item.color))) or r.color
  end
  local at=source:GetAttribute('SnapshotAt') or now
  if r.sampleAt and at<=r.sampleAt then return end
@@ -278,7 +279,7 @@ function V.new(root,parent,audio,reducedMotion)
   source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,faceted=faceted,gemOpacity=view:GetAttribute('GemOpacity') or .76,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
-   samples={},owner=source:GetAttribute('Owner'),
+   stone=source:GetAttribute('StoneCargo')==true,instant=source:GetAttribute('InstantDrop')==true,samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
   local velocity=source:GetAttribute('OreLaunchVelocity')
@@ -584,11 +585,11 @@ function V:update(dt,now)
     RockModifierView.drop(r,now,landingAge,reducedFlashing)
    end
    local canGlint=landingAge and ((landingAge<.24 and (live or r.collectAt)) or (live and not seated and not pulling))
-   if (r.arc or r.physical) and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
+   if not r.stone and (r.arc or r.physical) and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
     local distanceFade=math.clamp((72-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
     updateGlint(self,r,landingAge,canGlint and glintStrength*distanceFade*opacity or 0,now)
    else removeIdle(self,r) end
-   if (r.physical or r.hasArc) and cameraPosition then
+   if not r.instant and (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
     local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)
@@ -606,6 +607,7 @@ function V:update(dt,now)
  updateDisplays(self,now,reducedMotion,reducedEffects)
 end
 function V:destroy()
+ if self.sales then self.sales:destroy() end
  if self.closed then return end;self.closed=true
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for source,r in pairs(self.records) do

@@ -1751,6 +1751,7 @@ local enemyHealth=frame(enemyHUD,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color
 local enemyFill=frame(enemyHealth,UDim2.fromScale(0,0),UDim2.fromScale(1,1),palette.danger);enemyFill.Name='Fill';corner(enemyFill,3);U.gradient(enemyFill)
 enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,context=context,enemy=enemyHUD,toast=toast,
+ resourceOrder=Workshop.RESOURCE_ORDER,resourceNames=Workshop.RESOURCE_NAMES,resourceColors=Workshop.RESOURCE_COLORS,
  cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible,
  packReadyToOpen=function() return packView.openReady end,
  starterReachable=function() return selectorView:canReachStarterPlot() end,
@@ -1761,6 +1762,10 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
   return hr and counter and Mining.onDepotApproach(hr.Position,pin,counter,
    world:GetAttribute('DepotFloorFrame'),world:GetAttribute('DepotFloorSize'))
  end})
+pickupView.sales=SaleView.new({hud=tacticalHUD,player=player,world=world,parent=localFX,presentation=presentation,
+ reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible})
+connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt) pickupView.sales:receive(receipt) end)
+connect(RunService.RenderStepped,function(dt) pickupView.sales:update(dt) end)
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,

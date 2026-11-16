@@ -75,6 +75,7 @@ end
 
 function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffects)
  local tint=record.effectColor or record.color
+ if record.stone then reducedEffects=true end
  if rig.record~=record or rig.tint~=tint then
   rig.record=record
   rig.tint=tint

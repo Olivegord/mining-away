@@ -37,6 +37,7 @@ S.CATALOG={
 S.BY_ID={};for _,entry in ipairs(S.CATALOG) do S.BY_ID[entry.id]=entry end
 local function integer(n) return type(n)=='number' and n==n and n>=0 and n<1e14 and n%1==0 end
 function S.fresh(run)
+ run.resources={}
  run.wallet={};for _,key in ipairs(S.ORDER) do run.wallet[key]=0 end
  run.shops={Quartz=true};run.shopLevels={}
 end
@@ -44,6 +45,8 @@ function S.validate(run)
  if type(run.wallet)~='table' or type(run.shops)~='table' or type(run.shopLevels)~='table' then return false,'Missing mineral shop state' end
  for _,key in ipairs(S.ORDER) do if not integer(run.wallet[key]) then return false,'Invalid '..key..' balance' end end
  for key in pairs(run.wallet) do if not S.COLORS[key] then return false,'Unknown currency' end end
+ if type(run.resources)~='table' then return false,'Missing sale resources' end
+ for key,n in pairs(run.resources) do if not Workshop.RESOURCE_NAMES[key] or not integer(n) then return false,'Invalid sale resource' end end
  if run.shops.Quartz~=true then return false,'Quartz shop missing' end
  for key,value in pairs(run.shops) do if not S.COLORS[key] or value~=true then return false,'Invalid shop unlock' end end
  local locked=false
@@ -147,18 +150,27 @@ function S.quartzValue(material)
 end
 -- Validate the complete mixed bag before touching any balance.
 function S.deposit(run,bag)
- local deposit={}
+ local deposit,resources={},{}
  for key,n in pairs(bag) do
   local quartz=S.quartzValue(key)
   if (not quartz and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
   local currency=quartz and 'Quartz' or key
   deposit[currency]=(deposit[currency] or 0)+n*(quartz or 1)
+  local item=Workshop.saleItem(key)
+  if item then
+   resources[item.resource]=(resources[item.resource] or 0)+item.dust*n
+   resources.Stone=(resources.Stone or 0)+item.stoneUnits*n
+  end
  end
  for key,n in pairs(deposit) do
   if not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end
  end
+ for key,n in pairs(resources) do
+  if not integer((run.resources[key] or 0)+n) then return false,'Resource limit exceeded' end
+ end
  for key,n in pairs(deposit) do run.wallet[key]+=n end
- return true,deposit.Quartz or 0
+ for key,n in pairs(resources) do run.resources[key]=(run.resources[key] or 0)+n end
+ return true,deposit.Quartz or 0,resources
 end
 function S.buy(p,id,level,tx,expectedRun,context)
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid transaction ID' end

@@ -204,13 +204,48 @@ function W.cargoKey(material,quartz,pressed)
  assert(W.CRYSTAL_BY_MATERIAL[material] and quartz>=1 and quartz<=1000000 and quartz%1==0,'Invalid crystal cargo')
  return (pressed and 'Block:' or 'Rock:')..material..':'..quartz
 end
-function W.crystalCargo(key)
+local function legacyCrystalCargo(key)
  if type(key)~='string' then return nil end
  local form,material,digits=key:match('^(%a+):(%a+):(%d+)$')
  if (form~='Rock' and form~='Block') or not W.CRYSTAL_BY_MATERIAL[material] then return nil end
  local value=tonumber(digits)
  if not value or value<1 or value>1000000 or tostring(value)~=digits then return nil end
  return material,value,form=='Block'
+end
+-- Resource balances use hundredths, so a 7% stone reward never rounds away.
+W.RESOURCE_ORDER={'Stone','Amber','Ruby','Quartz','Violet','Diamond','Cobalt','Emerald'}
+W.RESOURCE_NAMES={Stone='Stone',Amber='Amber chips',Ruby='Ruby shards',Quartz='Quartz dust',Violet='Violet shards',Diamond='Diamond dust',Cobalt='Cobalt flakes',Emerald='Emerald shards'}
+W.RESOURCE_COLORS={Stone={171,164,151},Amber={255,175,65},Ruby={245,91,128},Quartz={119,198,235},Violet={188,122,244},Diamond={178,232,241},Cobalt={88,150,235},Emerald={95,216,158}}
+W.CRYSTAL_CHANCE=.12
+W.PITY_PERCENT=7
+function W.resourceKey(material) return material:gsub('^Run','') end
+function W.saleCargo(material,value,stone,resource,stoneUnits)
+ assert(W.CRYSTAL_BY_MATERIAL[material] and value>=1 and value<=1000000 and value%1==0)
+ assert(resource>=1 and resource<=1000000 and resource%1==0 and stoneUnits>=0 and stoneUnits<=1000000 and stoneUnits%1==0)
+ return (stone and 'Stone:' or 'Gem:')..material..':'..value..':'..resource..':'..stoneUnits
+end
+function W.crystalCargo(key)
+ local form,material,cash,dust,stone
+ if type(key)=='string' then form,material,cash,dust,stone=key:match('^(%a+):(%a+):(%d+):(%d+):(%d+)$') end
+ if form=='Stone' or form=='Gem' then
+  cash,dust,stone=tonumber(cash),tonumber(dust),tonumber(stone)
+  if W.CRYSTAL_BY_MATERIAL[material] and cash and cash>=1 and cash<=1000000 and dust>=1 and dust<=1000000 and stone<=1000000 then
+   return material,cash,false,form=='Stone',dust,stone
+  end
+  return nil
+ end
+ return legacyCrystalCargo(key)
+end
+function W.saleItem(key)
+ local material,cash,_,stone,dust,stoneUnits=W.crystalCargo(key)
+ material=material or key
+ local tier=W.CRYSTAL_BY_MATERIAL[material]
+ if not tier then return nil end
+ local resource=W.resourceKey(material)
+ local rank=1;for i,t in ipairs(W.CRYSTAL_TIERS) do if t.material==material then rank=i;break end end
+ return {key=key,material=material,cash=cash or tier.value,stone=stone==true,resource=resource,
+  dust=dust or 100,stoneUnits=stoneUnits or 0,rank=stone and rank or 10+rank,
+  name=stone and (tier.name..' rock') or tier.name,color=W.RESOURCE_COLORS[resource] or W.RESOURCE_COLORS.Stone}
 end
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={

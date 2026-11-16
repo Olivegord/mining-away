@@ -1101,6 +1101,7 @@ end
 -- Short camera translations driven by the same events as sound and particles.
 -- Keep routine feedback in its own budget so clustered hits cannot drown out a blast.
 local cameraBeats={
+ Sale={.055,.12,.010},
  NeedleFire={.014,.070,.008}, BallFire={.073,.15,.025},
  NeedleHit={.015,.075,.009}, BallHit={.080,.165,.026},
  Fracture={.032,.14,.023}, Split={.18,.29,.024}, HeavySplit={.49,.52,.021,true}, CompactorGrip={.125,.19,.017}, CompactorPress={.26,.29,.021,true}, CompactorEject={.32,.32,.016,true},

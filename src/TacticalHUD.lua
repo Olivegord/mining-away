@@ -105,11 +105,13 @@ function HUD.new(refs: any)
  interfaceKit=refs.interface
  local self: any=setmetatable({refs=refs,input=UIS:GetLastInputType(),wallets={}},HUD)
  plain(refs.resources)
- for i,key in ipairs(minerals) do
+ local keys={'Money'};for _,key in ipairs(refs.resourceOrder or {}) do table.insert(keys,key) end
+ for i,key in ipairs(keys) do
   local row=frame(refs.resources,'Wallet_'..key,C.panel);plain(row)
-  local name=text(row,'MineralName',0,0,78,24,18,mineralColors[i]);name.Text=key
-  local value=text(row,'Balance',78,0,82,24,20,C.text);value.TextXAlignment=Enum.TextXAlignment.Right
-  self.wallets[i]={tile=row,name=name,value=value}
+  local color=key=='Money' and C.gold or Color3.fromRGB(table.unpack(refs.resourceColors[key]))
+  local name=text(row,'MineralName',0,0,116,24,17,color);name.Text=key=='Money' and '$ Money' or refs.resourceNames[key]
+  local value=text(row,'Balance',116,0,64,24,20,C.text);value.TextXAlignment=Enum.TextXAlignment.Right
+  self.wallets[i]={key=key,tile=row,name=name,value=value,untilAt=0,last=0}
  end
  self.cargo=frame(refs.resources,'CargoCounter',C.panel);plain(self.cargo)
  local name=text(self.cargo,'Caption',0,0,78,24,18,C.muted);name.Text='Backpack'
@@ -211,17 +213,41 @@ function HUD.needsFirstCutHint(profile: any, pinned: boolean): boolean
  if not run then return false end
  return not pinned and run.index==1 and run.packIndex==0 and run.quartzEarnings==0
 end
+function HUD:revealSale(resources,duration)
+ for _,entry in ipairs(self.wallets) do
+  if (resources[entry.key] or 0)>0 then entry.untilAt=math.max(entry.untilAt,os.clock()+duration) end
+ end
+end
+function HUD:currencyTarget(key)
+ for _,entry in ipairs(self.wallets) do
+  if entry.key==key then return entry.value.AbsolutePosition+entry.value.AbsoluteSize*.5 end
+ end
+end
+function HUD:currencyHit(key)
+ for _,entry in ipairs(self.wallets) do
+  if entry.key==key then entry.pulseUntil=os.clock()+.16;entry.untilAt=math.max(entry.untilAt,os.clock()+3) end
+ end
+end
 function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local r=self.refs;local w=view.X
  local hidden=r.hidden()
  local p=r.profile();local wallet=p and p.run and p.run.wallet or {}
- local width=160;local rowHeight=24;local shown=0
- for i,entry in ipairs(self.wallets) do
-  local unlocked=minerals[i]=='Quartz' or (p and p.run and p.run.shops and p.run.shops[minerals[i]]==true)
-  entry.tile.Visible=unlocked==true
-  if unlocked then
+ local width=180;local rowHeight=24;local shown=0
+ local now=os.clock();local resources=p and p.run and p.run.resources or {}
+ local mouse=UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
+ local at=r.resources.AbsolutePosition;local hover=mouse.X>=at.X and mouse.X<=at.X+width and mouse.Y>=at.Y and mouse.Y<=at.Y+180
+ for _,entry in ipairs(self.wallets) do
+  local money=entry.key=='Money'
+  local balance=money and (wallet.Quartz or 0) or (resources[entry.key] or 0)
+  if balance~=entry.last then entry.last=balance;entry.untilAt=math.max(entry.untilAt,now+4) end
+  local opacity=money and 1 or hover and balance>0 and 1 or math.clamp((entry.untilAt-now)/.7,0,1)
+  entry.tile.Visible=opacity>0
+  if opacity>0 then
    entry.tile.Position=UDim2.fromOffset(0,shown*rowHeight);entry.tile.Size=UDim2.fromOffset(width,rowHeight);shown+=1
-   entry.value.Text=compact(wallet[minerals[i]] or 0)
+   local value=money and balance or balance/100
+   entry.value.Text=value<10000 and not money and string.format('%.2f',value):gsub('0+$',''):gsub('%.$','') or compact(value)
+   entry.name.TextTransparency=1-opacity;entry.value.TextTransparency=1-opacity
+   entry.value.TextColor3=(entry.pulseUntil or 0)>now and C.gold or C.text
   end
  end
  local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)

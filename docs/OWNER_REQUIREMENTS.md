@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 15 — selling cascade, field rocks, and material rewards
+
+Selling should briefly soften the real-world background while the player's ore rises into a grid in front of the camera. Sort by rock/mineral type, with ordinary stone at the top left and the highest available crystal at the bottom right. Sell individual pieces in a very fast reading-order cascade, using a short screen shake and particles at each piece. Money icons must fly from that piece's screen position into the actual money counter at the top left.
+
+Each sold item also pays its own material: stone from rocks, ruby shards from rubies, diamond dust from diamonds, and corresponding materials for other minerals. Animate these into counters beneath money, then fade the material rows to avoid clutter. Ordinary field rocks become the common drop and crystals become rarer. Ordinary rocks appear immediately without a launch or waiting beat. Better-field rocks pay more money and have visibly distinct shades and outlines. They also pay a small amount of their field's material, about 4–10% of the corresponding actual crystal reward. Crystals must pay much more money than rocks.
+
 ## November 15 — battery tells the drone's story
 
 Keep the battery as the only indicator throughout gun windup and firing, including Ballcaster. Flash a red lightning bolt when a drone flies to charge. Draw a fixed amount of power in each rectangular segment and animate gains and losses in the style of the Overwatch health bar. When the Compactor merges, show its battery draining. Give it two merges on a full starting battery before it has to recharge. Keep a single indicator per drone so power explains the waits it actually causes.

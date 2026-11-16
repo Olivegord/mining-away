@@ -60,12 +60,13 @@ end
 local Instance={}
 function Instance.new(class)
  local i=setmetatable({_p={ClassName=class,Name=class,Position=Vector3.zero,CFrame=CFrame.new(),Size=Vector3.one,Color=Color3.new(1,1,1),Transparency=0,CanQuery=true,CanCollide=true,Enabled=true,Destroying=signal()},_children={},_attrs={},_signals={}},IT)
- if class=='RemoteEvent' then i.OnServerEvent=signal() end
+ if class=='RemoteEvent' then i.OnServerEvent=signal();i.OnClientEvent=signal();i.clientMessages={} end
  if class=='ProximityPrompt' then
   i.PromptButtonHoldBegan=signal();i.PromptButtonHoldEnded=signal();i.Triggered=signal()
  end
  return i
 end
+function IM:FireClient(player,payload) table.insert(self.clientMessages,{player=player,payload=payload});self.OnClientEvent:Fire(payload) end
 function IM:SetTextureOffset(offset) self.TextureOffset=offset end
 function IM:Play() self.Playing=true end
 function IM:TakeDamage(amount) self.Health=math.max(0,self.Health-amount) end

@@ -677,7 +677,7 @@ function W:courier(drone,record,now)
     local material=fx.load[i] or ''
     if slot.material~=material then
      slot.material=material
-     local key,_,packed=Workshop.crystalCargo(material)
+     local key,_,packed,stone=Workshop.crystalCargo(material)
      local tier=key and Workshop.CRYSTAL_BY_MATERIAL[key]
      packed=packed==true
      if not slot.cargo or slot.packed~=packed or not packed then
@@ -686,7 +686,7 @@ function W:courier(drone,record,now)
       if not packed then
        local net=RS:FindFirstChild('MiningAway')
        local original=workspace:FindFirstChild('Crystal')
-       mesh=(net and net:FindFirstChild('CargoCrystal')) or (original and original:FindFirstChild('Mesh'))
+       mesh=(net and net:FindFirstChild(stone and 'CargoStone' or 'CargoCrystal')) or (original and original:FindFirstChild('Mesh'))
       end
       slot.cargo=part(fx.root,'MountedCargo',mesh and mesh:IsA('UnionOperation') and mesh or nil)
       if slot.cargo:IsA('PartOperation') then slot.cargo.UsePartColor=true end
@@ -694,7 +694,8 @@ function W:courier(drone,record,now)
       slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
       slot.faceted=false
       if not packed then
-       slot.cargo:SetAttribute('Mineral',key or material);slot.cargo.Size=cargoRawSize
+       slot.cargo:SetAttribute('Mineral',key or material);slot.cargo:SetAttribute('StoneCargo',stone==true);slot.cargo.Size=cargoRawSize
+       if stone then slot.cargo.Material=Enum.Material.Slate;slot.cargo.Reflectance=0 end
        local gem,faceted=RockFinish.Gems.clone(slot.cargo)
        if faceted then
         local old=slot.cargo;gem.Name='MountedCargo';gem.Parent=old.Parent;old:Destroy()
@@ -703,8 +704,9 @@ function W:courier(drone,record,now)
       end
       slot.dust=fx.detailed and cargoDust(slot.cargo) or nil
      end
-     local rgb=Shops.COLORS[tier and tier.name or material]
+     local rgb=Workshop.RESOURCE_COLORS[key and Workshop.resourceKey(key)] or Shops.COLORS[tier and tier.name or material]
      slot.cargo.Color=slot.faceted and WHITE or rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
+     if stone and rgb then slot.cargo.Color=Color3.fromRGB(88,84,81):Lerp(Color3.fromRGB(table.unpack(rgb)),.32) end
      slot.cargo.Size=packed and cargoBlockSize or cargoRawSize*(slot.cargo:GetAttribute('GemAspect') or Vector3.one)
      if slot.dust then slot.dust.Color=ColorSequence.new(slot.cargo.Color:Lerp(WHITE,.52),slot.cargo.Color) end
      slot.packed=packed

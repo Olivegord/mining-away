@@ -3,7 +3,7 @@ local Shops=require('./Shops')
 local DroneCatalog=require('./DroneCatalog')
 local Consumables=require('./Consumables')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=12,CONTENT=1}
+local P={SCHEMA=13,CONTENT=1}
 local STARTER_COUNT=3
 local crystalStarterCount=STARTER_COUNT+#Workshop.STARTER_SPECIALISTS
 local excessStarters={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator'}
@@ -415,6 +415,10 @@ function P.migrate(raw,uid,seed)
  if p.schemaVersion==11 and type(p.run)=='table' then
   p.run.stars=0;p.run.starUpgrades={};p.schemaVersion=12
  end
+ if p.schemaVersion==12 and type(p.run)=='table' then
+  if p.run.resources==nil then p.run.resources={} end
+  p.schemaVersion=13
+ end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  if p.starterDrones==oversizedStarterCount then
   if not correctStarterGrant(p) then return nil,'Unexpected oversized starter fleet' end
@@ -599,9 +603,9 @@ function P.finishDelivery(p,droneId,prices,tx,expectedRun)
  end
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
- local deposited,quartz=Shops.deposit(p.run,manifest.cargo);if not deposited then return false,quartz end
+ local deposited,quartz,resources=Shops.deposit(p.run,manifest.cargo);if not deposited then return false,quartz end
  p.run.deliveries[droneId]=nil;p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=quartz
- local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(manifest.cargo),credits=amount,quartz=quartz}
+ local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(manifest.cargo),credits=amount,quartz=quartz,cargo=clone(manifest.cargo),resources=resources}
  P.record(p,'FinishDelivery',tx,result);return true,result
 end
 function P.sell(p,prices,tx,expectedRun)
@@ -620,9 +624,9 @@ function P.sell(p,prices,tx,expectedRun)
  end
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
- local deposited,quartz=Shops.deposit(p.run,p.run.cargo);if not deposited then return false,quartz end
+ local deposited,quartz,resources=Shops.deposit(p.run,p.run.cargo);if not deposited then return false,quartz end
  p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=quartz
- local result={credits=amount,earnings=amount,units=units,cargo=manifest,quartz=quartz,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
+ local result={credits=amount,earnings=amount,units=units,cargo=manifest,quartz=quartz,resources=resources,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
 end
 function P.milestone(p)
  return {earnings=Workshop.prestigeGoal(p.prestiges),field='Quartz',wins=0}

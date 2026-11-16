@@ -1,5 +1,11 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — rapid selling grid and immediate field stone
+
+Sell over the actual world with a mild far-depth blur. Raise the sorted ore into a camera-facing grid, then burst and sell each cell in reading order. Small money and material icons travel from the actual cell to its HUD counter. Manual/backpack sales use a short camera beat per piece; the small courier receipt skips blur and camera beats so automated trips do not repeatedly interrupt mining. Honor Reduced Motion and Reduced Effects. Material counters fade after receipt and can be revealed by hovering the wallet area.
+
+Ordinary field rocks appear at rest immediately, with a mineral-specific stone tint and outline. They do not use the crystal launch arc, trail, or idle sparkle. Rare crystals retain their accepted mineral geometry and launch treatment. Emptiers retain the stone appearance while carrying it; Compactor outputs preserve both currency and material yields. The owner-requested Compactor ejection arc remains separate from the instant ordinary mining drop.
+
 ## November 15 — two continuous grapples and a visible pickup outline
 
 Use a separate cable from each Compactor winch to a claw on its own rock. Keep both cables drawn through the buffered reel and remove them at seating. Add screen shake when the claws latch, the jaws press and the larger gem ejects. Use the actual ejection point for the burst. Temporarily render highlighted gem shells opaque so the native white or amber outline draws around their faceted shape.
