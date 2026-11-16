@@ -185,6 +185,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   local strength=if prism or nomad then math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
    else math.clamp(fullSize.Magnitude*.21,.9,2.45)
   local clusterSize=prism and (s:GetAttribute('BlastClusterSize') or 1) or 1
+  local ordinaryStone=s:GetAttribute('CargoReward')=='Stone' and not prism and not nomad
   local prismReceipt=prism and s:GetAttribute('CutProjectileFX')==true
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,size.Y*.60),frame.Position.Z)
   local reduced=BeamVFX.reduced() or V.reducedMotion()
@@ -197,19 +198,19 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
      {level=volume,rockSize=(fullSize.X*fullSize.Y*fullSize.Z)^(1/3)})
    end
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
-   audio:play('crystal_release_tink',point,{level=volume})
+   if not ordinaryStone then audio:play('crystal_release_tink',point,{level=volume}) end
   end
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
   openHalves(r,frame,size,now,reduced)
   if not reduced then
-   if not prism and not nomad then releaseSparks(point,ground,r.baseColor,strength,now) end
+   if not prism and not nomad and not ordinaryStone then releaseSparks(point,ground,r.baseColor,strength,now) end
    if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     if not prismReceipt then
      RoleVisuals.Pulse(floor,prism and EMBER or stone:Lerp(STONE_LIGHT,.36),strength*.55,strength*(prism and 8.6 or 6.6),.58)
      if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     end
-    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*.83,prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
+    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*(ordinaryStone and .52 or .83),prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
    end
    for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end

@@ -1763,12 +1763,14 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
    world:GetAttribute('DepotFloorFrame'),world:GetAttribute('DepotFloorSize'))
  end})
 pickupView.sales=SaleView.new({hud=tacticalHUD,player=player,world=world,parent=localFX,presentation=presentation,
- reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible})
+ audio=soundscape,reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible,
+ confirm=function(id) command:FireServer('ConfirmSale',id) end,
+ cancel=function(id) command:FireServer('CancelSale',id) end})
 connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt)
- soundscape:observeSale(receipt)
+ if type(receipt)=='table' and receipt.kind==nil then soundscape:observeSale(receipt) end
  pickupView.sales:receive(receipt)
 end)
-connect(RunService.RenderStepped,function(dt) pickupView.sales:update(dt) end)
+RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function(dt) pickupView.sales:update(dt) end)
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
@@ -1793,7 +1795,7 @@ local function stationAction(station)
  elseif kind=='Printer' then return function() logisticsView:toggle() end,'Drone yard','Manage your permanent fleet and transport','Browse'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
-  return cargoAction,'Sell ore','Your backpack becomes spendable minerals immediately','Sell'
+  return cargoAction,'Sell ore','Preview the rocks in your backpack','Review'
  end
  return nil
 end
@@ -1802,7 +1804,7 @@ local function performStation(station)
  local action=stationAction(station)
  local hr=ownerRoot();local prompt=station:FindFirstChildOfClass('ProximityPrompt')
  if not hr or not prompt or not prompt.Enabled or (hr.Position-station.Position).Magnitude>prompt.MaxActivationDistance+1 then return end
- if menusVisible() then return end
+ if menusVisible() or pickupView.sales:isOpen() then return end
  if action and os.clock()-lastStationUse>.25 then lastStationUse=os.clock();menuStation=station;action() end
 end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
@@ -1862,7 +1864,7 @@ local mouse=player:GetMouse()
  connect(service.PromptShown,function(prompt) prompts[prompt]=true end)
  connect(service.PromptHidden,function(prompt) prompts[prompt]=nil end)
  local function available()
-  if menusVisible() or not profile or UIS:GetFocusedTextBox() or (toolView and toolView:selected()~=nil)
+  if pickupView.sales:isOpen() or menusVisible() or not profile or UIS:GetFocusedTextBox() or (toolView and toolView:selected()~=nil)
    or (logisticsView and logisticsView.selected~=nil) then return end
   for prompt in pairs(prompts) do
    if prompt.Enabled and prompt:IsDescendantOf(workspace) and prompt.KeyboardKeyCode==Enum.KeyCode.E then return end
@@ -1911,6 +1913,7 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
+ if pickupView.sales:isOpen() then return end
  if inspectingFleet() then
   local key=input.KeyCode
   if key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB then closeFleetInspection(true)
@@ -2058,7 +2061,7 @@ connect(RunService.Heartbeat,function(dt)
   modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and palette.white or palette.text
  else modalSubtitle.Text=normalSubtitle;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and Color3.fromRGB(202,209,231) or palette.muted end
  tacticalHUD:update(view,world,ownActive)
- unload.Text=touch and 'Sell' or 'Sell [U]'
+ unload.Text=touch and 'Preview sale' or 'Preview sale [U]'
  logisticsView:update(view,ownActive)
 end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
@@ -2067,6 +2070,7 @@ connect(gui.Destroying,function()
  fleetView:destroy();packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy();chargerView:destroy()
  RunService:UnbindFromRenderStep('MiningAwayWorldPresentation')
+ RunService:UnbindFromRenderStep('MiningAwaySelling')
  if celestialRain then celestialRain:destroy() end
  rockDamage.feedback:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end

@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 15 — preview and confirm the sale, recognizable gem rewards
+
+Show the backpack contents before selling. Fill the screen with substantially larger rocks. Offer **E to sell** from that view. After confirmation, give the sale a short pause, screen shake, particles and sounds. Let each reward linger near its rock before flying to its counter.
+
+Ordinary rocks can take a small arc. Restore the stronger particles and effects when a rare gem drops, and give it a distinct sound. Ballcaster, the purple shooter, needs audible charge and release cues and a separate impact.
+
 ## November 15 — occasional field and sell-route music
 
 Use the six ambient tracks from Downloads as background music. Give the

@@ -95,6 +95,7 @@ check('a delayed Emerald sell trip leaves physical cargo available on return',fu
  end
  walk(counter.Position+Vector3.yAxis*3)
  command.OnServerEvent:Fire(pl,'Sell')
+ command.OnServerEvent:Fire(pl,'ConfirmSale',assert(p.saleQuote).id)
  assert(Pro.cargoUnits(data(p))==0,'the depot sale did not make room')
  steps(math.ceil(10/C.Tick))
  -- The ore has already passed its original deadline before the return leg.

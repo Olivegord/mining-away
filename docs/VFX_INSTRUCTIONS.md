@@ -1,5 +1,11 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — selling anticipation and gem reveal
+
+A sale opens a large grid and waits for E. After server confirmation, hold the grid for 0.38 seconds, then cascade through it. Each sale has an impact pose, a camera beat, colored particles and its own crack. Reward icons hold for 0.38 seconds before departing. Courier and automatic transactions retain compact notifications. Reduced Motion removes the shake and particles.
+
+Ordinary rocks hop from near the floor immediately, with a quiet clack and muted break debris. The rare gem keeps its taller arc, launch trail, resting effects and mineral geometry. A distinct reveal sound and mineral-colored launch burst signal the drop, followed by a separate shimmering landing cue. Ballcaster's projectile renderer plays its charge, imported spaceship release, and heavier impact at the corresponding authoritative phases.
+
 ## November 15 — owner-supplied rock and weapon audio
 
 Use the Downloads artninja crashes as eight randomized size-aware break cuts,

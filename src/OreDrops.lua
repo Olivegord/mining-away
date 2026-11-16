@@ -91,7 +91,7 @@ local function fall(s,dt)
  return impact
 end
 function O.collectible(s)
- if s.instant then return s.landed==true end
+ if s.stone and not s.compactorOutput then return s.landed==true end
  local collectAt=s.raw and .40 or O.SCATTER_TIME
  if s.arc or s.raw then
   collectAt=math.max(collectAt,(s.firstLandedAge or 0)+(s.arc and O.GEM_CONTACT_HOLD or .075))

@@ -1820,6 +1820,13 @@ local FIELD_CONTEXT = {'Amber','Ruby','Quartz','Violet','Diamond'}
 local CUES = {
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
+ sale_confirm={id='9126066421',volume=.26,duration=.22,pitch=.79,cooldown=.14},
+ sale_stone={id='9125869495',volume=.35,duration=.25,pitch=.84,cooldown=.048,maxVoices=4},
+ sale_gem={id='9125869138',volume=.40,duration=.28,pitch=1.44,cooldown=.048,maxVoices=4},
+ sale_credit={id='9126066421',volume=.13,duration=.21,pitch=1.75,cooldown=.064,maxVoices=3},
+ gem_reveal={id='91735091370012',volume=.44,duration=1.1,pitch=1.31,attack=.008,cooldown=.11,range=90,maxVoices=3,reserved=true},
+ gem_land={id='9125869138',volume=.48,duration=.49,pitch=1.48,cooldown=.055,range=79,maxVoices=4},
+ stone_land={id='9125869495',volume=.36,duration=.29,pitch=.71,cooldown=.06,range=62,maxVoices=3},
  pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.11,duration=.3,pitch=1.2,cooldown=.09,fallback='volume_slider.ogg'},
  crystal_electric={id='9126066421',volume=.10,duration=.13,pitch=1.6,cooldown=.08,range=42,maxVoices=2},
  crystal_snap={ids={'9125869504','9125869495','9125869138'},volume=.22,duration=.24,pitch=1.12,cooldown=.07,range=60,maxVoices=3,fallback='action_jump_land.mp3'},
@@ -1914,6 +1921,10 @@ if DOWNLOADS.laser then
  CUES.laser_start={id=DOWNLOADS.laser,volume=.44,duration=.821521,pitch=1,attack=.006,
   cooldown=.16,range=65,maxVoices=3,naturalTail=true,fallback='volume_slider.ogg'}
 end
+CUES.ballcaster_charge={id=CUES.coil_load.id,volume=.29,duration=.55,pitch=.94,attack=.035,
+ cooldown=.12,range=65,maxVoices=3,fallback='volume_slider.ogg'}
+CUES.ballcaster_impact={id=CUES.coil_hit.id,volume=.71,duration=.47,pitch=.60,attack=.004,
+ cooldown=.105,nearDistance=23,range=82,maxVoices=4,reserved=true,fallback='impact_explosion_03.mp3'}
 CUES.ballcaster_fire=table.clone(CUES.coil_fire)
 if DOWNLOADS.ball then
  CUES.ballcaster_fire={id=DOWNLOADS.ball,volume=.47,duration=3.642857,pitch=1,attack=.006,
@@ -7728,6 +7739,7 @@ local impactStyles={
  Frostbite={speed=NumberRange.new(13,24),spread=59,lift=-18,count=11,dust=0},
  Resonator={speed=NumberRange.new(5,12),spread=79,lift=-6,count=6,dust=1},
  Touchdown={speed=NumberRange.new(5,10),spread=79,lift=-16,count=4,dust=3},
+ GemReward={speed=NumberRange.new(9,22),spread=72,lift=-12,count=20,dust=0},
  Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
 }
 function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?)
@@ -9218,7 +9230,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      local q=age/windup
      if not r.loaded then
       r.loaded=true
-      if paused<=0 and age<.13 and audio then audio:play(ball and 'coil_load' or 'needle_cock',muzzle or from) end
+      if paused<=0 and age<.13 and audio then audio:play(ball and 'ballcaster_charge' or 'needle_cock',muzzle or from) end
      end
      if not BeamVFX.reduced() and BeamVFX.near(muzzle or from,95) then
       gunCharge(self,r,muzzle or from,to,color,ball,q)
@@ -9237,7 +9249,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now,true)
       if ball then RoleVisuals.Pulse(point+normal*.42,color,.55,3.25*grade,.37,normal,1.5) end
       if onCameraBeat then onCameraBeat(ball and 'BallHit' or 'NeedleHit',point,now,grade) end
-      if audio then audio:play(ball and 'coil_hit' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
+      if audio then audio:play(ball and 'ballcaster_impact' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
      end
     end
     local resolved=landed or (not contactAt and (progress>1+.16/duration or (not target and progress>=1)))
@@ -9624,6 +9636,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   local strength=if prism or nomad then math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
    else math.clamp(fullSize.Magnitude*.21,.9,2.45)
   local clusterSize=prism and (s:GetAttribute('BlastClusterSize') or 1) or 1
+  local ordinaryStone=s:GetAttribute('CargoReward')=='Stone' and not prism and not nomad
   local prismReceipt=prism and s:GetAttribute('CutProjectileFX')==true
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,size.Y*.60),frame.Position.Z)
   local reduced=BeamVFX.reduced() or V.reducedMotion()
@@ -9636,19 +9649,19 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
      {level=volume,rockSize=(fullSize.X*fullSize.Y*fullSize.Z)^(1/3)})
    end
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
-   audio:play('crystal_release_tink',point,{level=volume})
+   if not ordinaryStone then audio:play('crystal_release_tink',point,{level=volume}) end
   end
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
   openHalves(r,frame,size,now,reduced)
   if not reduced then
-   if not prism and not nomad then releaseSparks(point,ground,r.baseColor,strength,now) end
+   if not prism and not nomad and not ordinaryStone then releaseSparks(point,ground,r.baseColor,strength,now) end
    if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     if not prismReceipt then
      RoleVisuals.Pulse(floor,prism and EMBER or stone:Lerp(STONE_LIGHT,.36),strength*.55,strength*(prism and 8.6 or 6.6),.58)
      if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     end
-    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*.83,prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
+    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*(ordinaryStone and .52 or .83),prism and 'PrismBlast' or 'CrystalBreak',nil,stone)
    end
    for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end
@@ -11061,7 +11074,7 @@ end
 -- Short camera translations driven by the same events as sound and particles.
 -- Keep routine feedback in its own budget so clustered hits cannot drown out a blast.
 local cameraBeats={
- Sale={.055,.12,.010},
+ Sale={.115,.16,.019},
  NeedleFire={.014,.070,.008}, BallFire={.073,.15,.025},
  NeedleHit={.015,.075,.009}, BallHit={.080,.165,.026},
  Fracture={.032,.14,.023}, Split={.18,.29,.024}, HeavySplit={.49,.52,.021,true}, CompactorGrip={.125,.19,.017}, CompactorPress={.26,.29,.021,true}, CompactorEject={.32,.32,.016,true},
@@ -14601,7 +14614,7 @@ local function fall(s,dt)
  return impact
 end
 function O.collectible(s)
- if s.instant then return s.landed==true end
+ if s.stone and not s.compactorOutput then return s.landed==true end
  local collectAt=s.raw and .40 or O.SCATTER_TIME
  if s.arc or s.raw then
   collectAt=math.max(collectAt,(s.firstLandedAge or 0)+(s.arc and O.GEM_CONTACT_HOLD or .075))
@@ -15650,7 +15663,7 @@ function V.new(root,parent,audio,reducedMotion)
   source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,faceted=faceted,gemOpacity=view:GetAttribute('GemOpacity') or .76,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
-   stone=source:GetAttribute('StoneCargo')==true,instant=source:GetAttribute('InstantDrop')==true,samples={},owner=source:GetAttribute('Owner'),
+   stone=source:GetAttribute('StoneCargo')==true,rareGem=source:GetAttribute('RareGemReward')==true,samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
   local velocity=source:GetAttribute('OreLaunchVelocity')
@@ -15822,6 +15835,17 @@ function V:update(dt,now)
    local docking=live and source:GetAttribute('CourierDocking')~=nil
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
+   if r.rareGem and not r.rewardCue and displayAt>=r.born then
+    r.rewardCue=true
+    local launch=source:GetAttribute('OreLaunchOrigin') or r.pos
+    if age<.32 and cameraPosition and (cameraPosition-launch).Magnitude<90 then
+     if self.audio then self.audio:play('gem_reveal',launch,{level=r.owner==self.player.UserId and 1 or .64}) end
+     if not reducedEffects and not reducedMotion then
+      RoleVisuals.ImpactParticles(launch,r.effectColor,1.2,'GemReward')
+      RoleVisuals.Pulse(launch,r.effectColor,.55,5.2,.42)
+     end
+    end
+   end
    -- Regular ore fragments and large workshop cargo both land. Wait for the
    -- contact position/speed to replicate before consuming this one-shot cue.
    if r.hasArc and r.landAge and age>=r.landAge and not r.landCue and (live or r.arc) then
@@ -15832,8 +15856,12 @@ function V:update(dt,now)
     elseif typeof(point)=='Vector3' and speed>0 then
      r.landCue=true
      if self.audio and not r.preview then
-      self.audio:play('ore_land',point,{level=math.clamp(speed/43,.67,1.18)*(r.arc and 1.12 or r.physical and 1 or .82),
+      local cue=r.rareGem and 'gem_land' or r.stone and 'stone_land' or 'ore_land'
+      self.audio:play(cue,point,{level=math.clamp(speed/43,.67,1.18)*(r.arc and 1.12 or r.physical and 1 or .82),
        pitch=(r.physical and .84 or 1.02)+(r.seed%4)*.028})
+     end
+     if r.rareGem and not reducedEffects and not reducedMotion then
+      RoleVisuals.ImpactParticles(point,r.effectColor,.73,'GemReward')
      end
     end
    end
@@ -15960,7 +15988,7 @@ function V:update(dt,now)
     local distanceFade=math.clamp((72-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
     updateGlint(self,r,landingAge,canGlint and glintStrength*distanceFade*opacity or 0,now)
    else removeIdle(self,r) end
-   if not r.instant and (r.physical or r.hasArc) and cameraPosition then
+   if not r.stone and (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
     local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)
@@ -16000,6 +16028,12 @@ local SaleView = (function()
 local Sale={};Sale.__index=Sale
 local Lighting=game:GetService('Lighting')
 local GuiService=game:GetService('GuiService')
+local Input=game:GetService('UserInputService')
+local Actions=game:GetService('ContextActionService')
+local CONFIRM_ACTION='MiningAwayConfirmSale'
+local FIRST_HIT=.38
+local HIT_HOLD=.085
+local ICON_HOLD=.38
 local GOLD=Color3.fromRGB(255,218,104)
 local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
 local function label(parent,text,color,size)
@@ -16011,18 +16045,75 @@ end
 function Sale.new(refs)
  local self=setmetatable({refs=refs,queue={},seen={},seenOrder={},flights={},sparks={},tiles={},closed=false},Sale)
  local gui=Instance.new('ScreenGui');gui.Name='OreSaleCascade';gui.ResetOnSpawn=false
- gui.IgnoreGuiInset=true;gui.DisplayOrder=13;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.Parent=refs.player.PlayerGui
+ gui.ScreenInsets=Enum.ScreenInsets.DeviceSafeInsets;gui.DisplayOrder=13;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.Parent=refs.player.PlayerGui
  self.gui=gui
- self.title=label(gui,'',Color3.new(1,1,1),20);self.title.Visible=false
+ local blocker=Instance.new('Frame');blocker.Name='SaleInputArea';blocker.BackgroundTransparency=1
+ blocker.Active=true;blocker.Visible=false;blocker.Size=UDim2.fromScale(1,1);blocker.Parent=gui
+ self.blocker=blocker
+ self.title=label(gui,'',Color3.new(1,1,1),24);self.title.Visible=false
+ self.title.Size=UDim2.fromOffset(300,34);self.title.ZIndex=2
+ local prompt=Instance.new('TextButton');prompt.Name='ConfirmSale';prompt.Visible=false
+ prompt.AnchorPoint=Vector2.new(.5,1);prompt.Position=UDim2.new(.5,0,1,-32)
+ prompt.Size=UDim2.fromOffset(214,49);prompt.BackgroundColor3=Color3.fromRGB(33,27,20)
+ prompt.ZIndex=4;prompt.BorderSizePixel=0;prompt.TextColor3=GOLD;prompt.TextSize=22;prompt.Font=Enum.Font.SourceSansBold;prompt.Parent=gui
+ local stroke=Instance.new('UIStroke');stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+ stroke.Color=GOLD;stroke.Transparency=.2;stroke.Thickness=2;stroke.Parent=prompt
+ prompt.Activated:Connect(function() self:confirm() end)
+ self.prompt=prompt
+ local back=Instance.new('TextButton');back.Name='CancelSale';back.AnchorPoint=Vector2.new(.5,1)
+ back.Position=UDim2.new(.5,0,1,-4);back.Size=UDim2.fromOffset(110,26);back.BackgroundTransparency=1
+ back.Text='Cancel';back.TextColor3=Color3.new(1,1,1);back.TextSize=17;back.Font=Enum.Font.SourceSansBold
+ back.ZIndex=4;back.Visible=false;back.Parent=gui;back.Activated:Connect(function() self:cancel() end);self.back=back
  return self
 end
+function Sale:isOpen()
+ return self.active and self.active.full==true
+end
+function Sale:confirm()
+ local active=self.active
+ if not active or active.kind~='preview' or self.pendingAt or os.clock()-self.started<.24 then return end
+ self.pendingAt=os.clock()
+ if self.refs.audio then self.refs.audio:play('sale_confirm') end
+ if self.refs.confirm then self.refs.confirm(active.id) end
+end
+function Sale:cancel()
+ if self.active and self.active.kind=='preview' and not self.pendingAt then
+  if self.refs.cancel then self.refs.cancel(self.active.id) end
+  self:clearGrid()
+ end
+end
+function Sale:bindInput()
+ if not self.refs.confirm or self.bound then return end
+ self.bound=true
+ local service=game:GetService('ProximityPromptService')
+ self.promptsEnabled=service.Enabled;service.Enabled=false
+ Actions:BindActionAtPriority(CONFIRM_ACTION,function(_,state,input)
+  if state==Enum.UserInputState.Begin then
+   if input.KeyCode==Enum.KeyCode.Escape or input.KeyCode==Enum.KeyCode.ButtonB then self:cancel()
+   else self:confirm() end
+  end
+  return Enum.ContextActionResult.Sink
+ end,false,Enum.ContextActionPriority.High.Value+10,Enum.KeyCode.E,Enum.KeyCode.ButtonX,Enum.KeyCode.Escape,Enum.KeyCode.ButtonB)
+end
 function Sale:receive(receipt)
- if self.closed or type(receipt)~='table' or type(receipt.id)~='string' or self.seen[receipt.id] or type(receipt.cargo)~='table' then return end
+ if self.closed or type(receipt)~='table' then return end
+ if receipt.kind=='rejected' then
+  if self.active and self.active.id==receipt.id then self:clearGrid() end
+  return
+ end
+ if self.active and self.active.kind=='preview' and receipt.kind~='preview' and receipt.id==self.active.id then
+  self.active.kind=nil;self.active.resources=receipt.resources
+  self.pendingAt=nil;self.cascadeAt=os.clock();self.prompt.Visible=false;self.back.Visible=false
+  self.refs.hud:revealSale(receipt.resources or {},8)
+  return
+ end
+ if type(receipt.id)~='string' or self.seen[receipt.id] or type(receipt.cargo)~='table' then return end
  self.seen[receipt.id]=true;table.insert(self.seenOrder,receipt.id)
  if #self.seenOrder>128 then self.seen[table.remove(self.seenOrder,1)]=nil end
  local entries={}
  for key,units in pairs(receipt.cargo) do
   local item=Workshop.saleItem(key)
+  if not item and Shops.COLORS[key] then item={key=key,name=key,rank=8,color=Shops.COLORS[key],cash=0,dust=0,stoneUnits=0} end
   if item and units>0 then item.units=units;entries[#entries+1]=item end
  end
  table.sort(entries,function(a,b) if a.rank~=b.rank then return a.rank<b.rank end;return a.key<b.key end)
@@ -16039,8 +16130,14 @@ function Sale:receive(receipt)
  end
  if #expanded==0 then return end
  receipt.items=expanded
- -- Courier trips stay small and never repeatedly blur the world or shake it.
- table.insert(self.queue,receipt)
+ if receipt.kind=='preview' then
+  receipt.full=true
+  if self.active and not self.active.full then self:clearGrid() end
+  if not self.active and not self.refs.hidden() then self:start(receipt,os.clock())
+  elseif self.refs.cancel then self.refs.cancel(receipt.id) end
+ elseif #self.queue<8 then
+  table.insert(self.queue,receipt)
+ end
 end
 function Sale:makeOre(item)
  local net=game:GetService('ReplicatedStorage'):FindFirstChild('MiningAway')
@@ -16073,49 +16170,63 @@ function Sale:makeOre(item)
 end
 function Sale:start(receipt,now)
  self.active=receipt;self.started=now;self.tiles={}
- self.refs.hud:revealSale(receipt.resources or {},6)
+ self.cascadeAt=receipt.kind~='preview' and now or nil
+ if receipt.kind~='preview' then self.refs.hud:revealSale(receipt.resources or {},8) end
  if receipt.full then
-  local focus=Instance.new('DepthOfFieldEffect');focus.Name='SellingFocus';focus.FocusDistance=8;focus.InFocusRadius=4
+  local focus=Instance.new('DepthOfFieldEffect');focus.Name='SellingFocus';focus.FocusDistance=4;focus.InFocusRadius=2.5
   focus.NearIntensity=0;focus.FarIntensity=0;focus.Parent=Lighting;self.focus=focus
+  self.blocker.Visible=true;self:bindInput()
  end
- self.stepTime=receipt.full and math.clamp(1.1/#receipt.items,.028,.065) or .035
+ self.stepTime=receipt.full and math.clamp(1.65/#receipt.items,.055,.15) or .045
+ local count=0
  for i,item in ipairs(receipt.items) do
   local ore,gem=self:makeOre(item)
   local caption=label(self.gui,item.units>1 and item.name..' ×'..item.units or item.name,Color3.fromRGB(table.unpack(item.color)),14)
-  self.tiles[i]={item=item,ore=ore,gem=gem,caption=caption,size=ore.Size,at=.38+(i-1)*self.stepTime}
+  count+=item.units
+  self.tiles[i]={item=item,ore=ore,gem=gem,caption=caption,size=ore.Size,at=FIRST_HIT+(i-1)*self.stepTime}
  end
- self.title.Text=receipt.full and ('SELLING '..tostring(#receipt.items)..' · +$'..tostring(receipt.cash)) or ''
+ self.title.Text='Backpack  ·  '..count..' ore'
  self.title.Visible=receipt.full
 end
 function Sale:fly(key,amount,from,color,now)
  if amount<=0 then return end
- local icon=label(self.gui,key=='Money' and '$' or '◆',color,key=='Money' and 21 or 17)
- icon.Size=UDim2.fromOffset(24,24)
- table.insert(self.flights,{view=icon,key=key,from=from,at=now,duration=.34,amount=amount})
+ local number=key=='Money' and tostring(amount) or string.format('%.2f',amount/100):gsub('0+$',''):gsub('%.$','')
+ local icon=label(self.gui,(key=='Money' and '+$' or '◆ +')..number,color,key=='Money' and 23 or 18)
+ icon.Size=UDim2.fromOffset(110,28);icon.ZIndex=3
+ icon.Position=UDim2.fromOffset(from.X,from.Y)
+ table.insert(self.flights,{view=icon,key=key,from=from,at=now,hold=self.active.full and ICON_HOLD or .10,duration=.42})
 end
 function Sale:burst(tile,point,now)
  local item=tile.item;local color=Color3.fromRGB(table.unpack(item.color))
  self:fly('Money',item.cash*item.units,point,GOLD,now)
- self:fly(item.resource,item.dust*item.units,point+Vector2.new(12,5),color,now+.025)
- if item.stoneUnits>0 then self:fly('Stone',item.stoneUnits*item.units,point+Vector2.new(-10,4),Color3.fromRGB(171,164,151),now+.045) end
+ if item.resource then self:fly(item.resource,item.dust*item.units,point+Vector2.new(15,21),color,now+.025) end
+ if item.stoneUnits>0 then self:fly('Stone',item.stoneUnits*item.units,point+Vector2.new(-12,43),Color3.fromRGB(226,214,192),now+.045) end
+ if self.refs.audio then self.refs.audio:play(item.stone and 'sale_stone' or 'sale_gem',nil,{pitch=.89+(tile.index%8)*.045}) end
  if not self.refs.reducedMotion() then
   if self.active.full then
-   self.refs.presentation:cameraBeat('Sale',tile.ore.Position,workspace:GetServerTimeNow(),item.stone and .65 or 1)
+   local character=self.refs.player.Character
+   local root=character and character:FindFirstChild('HumanoidRootPart')
+   self.refs.presentation:cameraBeat('Sale',root and root.Position or tile.ore.Position,workspace:GetServerTimeNow(),item.stone and .8 or 1.2)
   end
   if self.refs.player:GetAttribute('ReducedEffects')~=true then
-   for i=1,5 do
+   for i=1,item.stone and 10 or 17 do
     local shard=Instance.new('Frame');shard.AnchorPoint=Vector2.new(.5,.5);shard.Size=UDim2.fromOffset(4+i%2*2,4+i%2*2)
     shard.BorderSizePixel=0;shard.BackgroundColor3=i%2==0 and GOLD or color;shard.Rotation=i*37;shard.Parent=self.gui
     local angle=i*2.399
-    self.sparks[#self.sparks+1]={view=shard,from=point,velocity=Vector2.new(math.cos(angle),math.sin(angle))*(55+i*9),at=now}
+    self.sparks[#self.sparks+1]={view=shard,from=point,velocity=Vector2.new(math.cos(angle),math.sin(angle))*(68+(i%6)*24),at=now}
    end
   end
  end
- tile.ore:Destroy();tile.caption:Destroy();tile.sold=true
+ tile.hitAt=now
 end
 function Sale:clearGrid()
  for _,tile in ipairs(self.tiles) do if not tile.sold then tile.ore:Destroy();tile.caption:Destroy() end end
- self.tiles={};self.active=nil;self.title.Visible=false
+ self.tiles={};self.active=nil;self.title.Visible=false;self.pendingAt=nil;self.cascadeAt=nil
+ self.prompt.Visible=false;self.back.Visible=false;self.blocker.Visible=false
+ if self.bound then
+  Actions:UnbindAction(CONFIRM_ACTION);self.bound=false
+  game:GetService('ProximityPromptService').Enabled=self.promptsEnabled
+ end
  if self.focus then self.focus:Destroy();self.focus=nil end
 end
 function Sale:update(dt)
@@ -16125,15 +16236,26 @@ function Sale:update(dt)
  if not self.active and #self.queue>0 and not self.refs.hidden() then self:start(table.remove(self.queue,1),now) end
  if self.active then
   local age=now-self.started;local count=#self.tiles;local full=self.active.full
+  local preview=self.active.kind=='preview'
+  if preview and (age>44 or (self.pendingAt and now-self.pendingAt>15)) then self:clearGrid();return end
+  local cascadeAge=self.cascadeAt and now-self.cascadeAt
+  if preview then
+   local input=Input:GetLastInputType()
+   self.prompt.Text=self.pendingAt and 'Selling…' or input==Enum.UserInputType.Touch and 'Sell ore'
+    or input.Name:match('^Gamepad') and 'X   Sell ore' or 'E   Sell ore'
+   self.prompt.Visible=age>=.24;self.back.Visible=self.prompt.Visible and not self.pendingAt
+  end
   local viewport=camera.ViewportSize
   local limit=full and (viewport.X<600 and 5 or 8) or 4
-  local columns=math.min(limit,count<=5 and count or math.ceil(math.sqrt(count*2)))
+  local aspect=math.clamp(viewport.X/math.max(1,viewport.Y),.55,1.85)
+  local columns=math.min(limit,count,math.max(1,math.ceil(math.sqrt(count*aspect))))
   local rows=math.ceil(count/columns)
-  local cell=math.min(full and 83 or 48,(viewport.X-40)/columns,(viewport.Y*.52)/rows)
-  local center=full and Vector2.new(viewport.X*.53,viewport.Y*.48) or Vector2.new(viewport.X*.5,viewport.Y*.24)
-  self.title.Position=UDim2.fromOffset(center.X,center.Y-rows*cell*.5-28)
-  if self.focus then self.focus.FarIntensity=.22*smooth(age/.22)*(1-smooth((age-(.38+count*self.stepTime))/.3)) end
-  local depth=8;local unitsPerPixel=2*depth*math.tan(math.rad(camera.FieldOfView*.5))/viewport.Y
+  local cell=math.min(full and viewport.Y*.46 or 55,(viewport.X-40)/columns,(viewport.Y*(full and .65 or .48))/rows)
+  local center=full and Vector2.new(viewport.X*.5,viewport.Y*.465) or Vector2.new(viewport.X*.5,viewport.Y*.24)
+  self.title.Position=UDim2.fromOffset(center.X,math.max(35,center.Y-rows*cell*.5-13))
+  local lastHit=FIRST_HIT+(count-1)*self.stepTime
+  if self.focus then self.focus.FarIntensity=.34*smooth(age/.22)*(1-smooth(((cascadeAge or 0)-(lastHit+.50))/.24)) end
+  local depth=4;local unitsPerPixel=2*depth*math.tan(math.rad(camera.FieldOfView*.5))/viewport.Y
   for i,tile in ipairs(self.tiles) do if not tile.sold then
    local row=math.floor((i-1)/columns);local column=(i-1)%columns
    local point=center+Vector2.new((column-(columns-1)*.5)*cell,(row-(rows-1)*.5)*cell)
@@ -16141,28 +16263,38 @@ function Sale:update(dt)
    point+=Vector2.new(0,(1-rise)*65)
    local ray=camera:ViewportPointToRay(point.X,point.Y)
    local position=ray.Origin+ray.Direction*(depth/math.max(.1,ray.Direction:Dot(camera.CFrame.LookVector)))
-   local scale=cell*.57*unitsPerPixel/math.max(tile.size.X,tile.size.Y,tile.size.Z)
+   local hit=tile.hitAt and math.clamp((now-tile.hitAt)/HIT_HOLD,0,1) or 0
+   local scale=cell*(full and .88 or .70)*unitsPerPixel/math.max(tile.size.X,tile.size.Y,tile.size.Z)
+   if tile.hitAt and not reduced then scale*=1+.11*(1-hit) end
    tile.ore.Size=tile.size*scale*(.7+.3*rise)
    tile.ore.CFrame=CFrame.new(position)*camera.CFrame.Rotation*CFrame.Angles(.16,(reduced and .3 or age*.45)+i*.6,.12)
    if tile.gem then RockFinish.Gems.update(tile.ore,rise,camera.CFrame.Position) end
-   tile.caption.Position=UDim2.fromOffset(point.X,point.Y+cell*.36)
-   tile.caption.TextSize=cell<56 and 12 or 14;tile.caption.TextTransparency=1-rise
-   if age>=tile.at then self:burst(tile,point,now) end
+   tile.caption.Position=UDim2.fromOffset(point.X,point.Y+cell*.43)
+   tile.caption.TextSize=cell<56 and 12 or full and 17 or 14;tile.caption.TextTransparency=1-rise
+   if tile.hitAt and hit>=1 then
+    tile.ore:Destroy();tile.caption:Destroy();tile.sold=true
+   elseif not tile.hitAt and cascadeAge and cascadeAge>=tile.at then
+    tile.index=i;self:burst(tile,point,now)
+   end
   end end
-  if age>.38+count*self.stepTime+.48 then self:clearGrid() end
+  if cascadeAge and cascadeAge>lastHit+.98 then self:clearGrid() end
  end
  for i=#self.flights,1,-1 do
-  local f=self.flights[i];local t=math.clamp((now-f.at)/f.duration,0,1)
+  local f=self.flights[i];local t=math.clamp((now-f.at-f.hold)/f.duration,0,1)
   local target=self.refs.hud:currencyTarget(f.key)
   if target then
-   target+=GuiService:GetGuiInset()
-   local eased=t*t;local p=f.from:Lerp(target,eased)+Vector2.new(0,reduced and 0 or -math.sin(t*math.pi)*45)
-   f.view.Position=UDim2.fromOffset(p.X,p.Y);f.view.TextTransparency=now<f.at and 1 or 0
+   target-=GuiService:GetInsetArea(Enum.ScreenInsets.DeviceSafeInsets).Min
+   local drift=reduced and 0 or 14*smooth((now-f.at)/f.hold)
+   local p=(f.from-Vector2.new(0,drift)):Lerp(target,smooth(t))+Vector2.new(0,reduced and 0 or -math.sin(t*math.pi)*46)
+   f.view.Position=UDim2.fromOffset(p.X,p.Y);f.view.TextTransparency=now<f.at and 1 or t*.30
   end
-  if t>=1 or not target then self.refs.hud:currencyHit(f.key);f.view:Destroy();table.remove(self.flights,i) end
+  if t>=1 or not target then
+   if f.key=='Money' and self.refs.audio then self.refs.audio:play('sale_credit') end
+   self.refs.hud:currencyHit(f.key);f.view:Destroy();table.remove(self.flights,i)
+  end
  end
  for i=#self.sparks,1,-1 do
-  local s=self.sparks[i];local age=now-s.at;local t=age/.29
+  local s=self.sparks[i];local age=now-s.at;local t=age/.53
   if t>=1 then s.view:Destroy();table.remove(self.sparks,i)
   else
    local p=s.from+s.velocity*age+Vector2.new(0,80*age*age)
@@ -18765,12 +18897,14 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
    world:GetAttribute('DepotFloorFrame'),world:GetAttribute('DepotFloorSize'))
  end})
 pickupView.sales=SaleView.new({hud=tacticalHUD,player=player,world=world,parent=localFX,presentation=presentation,
- reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible})
+ audio=soundscape,reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible,
+ confirm=function(id) command:FireServer('ConfirmSale',id) end,
+ cancel=function(id) command:FireServer('CancelSale',id) end})
 connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt)
- soundscape:observeSale(receipt)
+ if type(receipt)=='table' and receipt.kind==nil then soundscape:observeSale(receipt) end
  pickupView.sales:receive(receipt)
 end)
-connect(RunService.RenderStepped,function(dt) pickupView.sales:update(dt) end)
+RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function(dt) pickupView.sales:update(dt) end)
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
@@ -18795,7 +18929,7 @@ local function stationAction(station)
  elseif kind=='Printer' then return function() logisticsView:toggle() end,'Drone yard','Manage your permanent fleet and transport','Browse'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
-  return cargoAction,'Sell ore','Your backpack becomes spendable minerals immediately','Sell'
+  return cargoAction,'Sell ore','Preview the rocks in your backpack','Review'
  end
  return nil
 end
@@ -18804,7 +18938,7 @@ local function performStation(station)
  local action=stationAction(station)
  local hr=ownerRoot();local prompt=station:FindFirstChildOfClass('ProximityPrompt')
  if not hr or not prompt or not prompt.Enabled or (hr.Position-station.Position).Magnitude>prompt.MaxActivationDistance+1 then return end
- if menusVisible() then return end
+ if menusVisible() or pickupView.sales:isOpen() then return end
  if action and os.clock()-lastStationUse>.25 then lastStationUse=os.clock();menuStation=station;action() end
 end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
@@ -18864,7 +18998,7 @@ local mouse=player:GetMouse()
  connect(service.PromptShown,function(prompt) prompts[prompt]=true end)
  connect(service.PromptHidden,function(prompt) prompts[prompt]=nil end)
  local function available()
-  if menusVisible() or not profile or UIS:GetFocusedTextBox() or (toolView and toolView:selected()~=nil)
+  if pickupView.sales:isOpen() or menusVisible() or not profile or UIS:GetFocusedTextBox() or (toolView and toolView:selected()~=nil)
    or (logisticsView and logisticsView.selected~=nil) then return end
   for prompt in pairs(prompts) do
    if prompt.Enabled and prompt:IsDescendantOf(workspace) and prompt.KeyboardKeyCode==Enum.KeyCode.E then return end
@@ -18913,6 +19047,7 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
+ if pickupView.sales:isOpen() then return end
  if inspectingFleet() then
   local key=input.KeyCode
   if key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB then closeFleetInspection(true)
@@ -19060,7 +19195,7 @@ connect(RunService.Heartbeat,function(dt)
   modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and palette.white or palette.text
  else modalSubtitle.Text=normalSubtitle;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and Color3.fromRGB(202,209,231) or palette.muted end
  tacticalHUD:update(view,world,ownActive)
- unload.Text=touch and 'Sell' or 'Sell [U]'
+ unload.Text=touch and 'Preview sale' or 'Preview sale [U]'
  logisticsView:update(view,ownActive)
 end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
@@ -19069,6 +19204,7 @@ connect(gui.Destroying,function()
  fleetView:destroy();packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy();chargerView:destroy()
  RunService:UnbindFromRenderStep('MiningAwayWorldPresentation')
+ RunService:UnbindFromRenderStep('MiningAwaySelling')
  if celestialRain then celestialRain:destroy() end
  rockDamage.feedback:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end

@@ -21,6 +21,13 @@ local FIELD_CONTEXT = {'Amber','Ruby','Quartz','Violet','Diamond'}
 local CUES = {
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
+ sale_confirm={id='9126066421',volume=.26,duration=.22,pitch=.79,cooldown=.14},
+ sale_stone={id='9125869495',volume=.35,duration=.25,pitch=.84,cooldown=.048,maxVoices=4},
+ sale_gem={id='9125869138',volume=.40,duration=.28,pitch=1.44,cooldown=.048,maxVoices=4},
+ sale_credit={id='9126066421',volume=.13,duration=.21,pitch=1.75,cooldown=.064,maxVoices=3},
+ gem_reveal={id='91735091370012',volume=.44,duration=1.1,pitch=1.31,attack=.008,cooldown=.11,range=90,maxVoices=3,reserved=true},
+ gem_land={id='9125869138',volume=.48,duration=.49,pitch=1.48,cooldown=.055,range=79,maxVoices=4},
+ stone_land={id='9125869495',volume=.36,duration=.29,pitch=.71,cooldown=.06,range=62,maxVoices=3},
  pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.11,duration=.3,pitch=1.2,cooldown=.09,fallback='volume_slider.ogg'},
  crystal_electric={id='9126066421',volume=.10,duration=.13,pitch=1.6,cooldown=.08,range=42,maxVoices=2},
  crystal_snap={ids={'9125869504','9125869495','9125869138'},volume=.22,duration=.24,pitch=1.12,cooldown=.07,range=60,maxVoices=3,fallback='action_jump_land.mp3'},
@@ -115,6 +122,10 @@ if DOWNLOADS.laser then
  CUES.laser_start={id=DOWNLOADS.laser,volume=.44,duration=.821521,pitch=1,attack=.006,
   cooldown=.16,range=65,maxVoices=3,naturalTail=true,fallback='volume_slider.ogg'}
 end
+CUES.ballcaster_charge={id=CUES.coil_load.id,volume=.29,duration=.55,pitch=.94,attack=.035,
+ cooldown=.12,range=65,maxVoices=3,fallback='volume_slider.ogg'}
+CUES.ballcaster_impact={id=CUES.coil_hit.id,volume=.71,duration=.47,pitch=.60,attack=.004,
+ cooldown=.105,nearDistance=23,range=82,maxVoices=4,reserved=true,fallback='impact_explosion_03.mp3'}
 CUES.ballcaster_fire=table.clone(CUES.coil_fire)
 if DOWNLOADS.ball then
  CUES.ballcaster_fire={id=DOWNLOADS.ball,volume=.47,duration=3.642857,pitch=1,attack=.006,

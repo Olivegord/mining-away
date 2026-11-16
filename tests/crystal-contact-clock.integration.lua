@@ -217,7 +217,7 @@ local gunner={}
 local drones={gunner=gunner,late={}}
 local targets={live={view=r.view}}
 observer:step(110.03,drones,targets)
-assert(not observer.records[node].projectile and gunner.shotReceipt==node and shotAudio[1][1]=='coil_load')
+assert(not observer.records[node].projectile and gunner.shotReceipt==node and shotAudio[1][1]=='ballcaster_charge')
 observer:step(110.16,drones,targets)
 local loaded=assert(observer.records[node].load)
 local gathered=loaded.core.Size.X
@@ -235,7 +235,7 @@ observer:step(110.53,drones,targets)
 assert(observer.records[node].projectile and #shotAudio==2,'projectile vanished or hit before contact')
 assert(not muzzleBurst.lamp.Enabled and muzzleBurst.node.Parent,'source light outlived its flash or cut the particle tail')
 observer:step(110.54,drones,targets)
-assert(not observer.records[node].projectile and shotAudio[3][1]=='coil_hit' and shotAudio[3][2].level>1)
+assert(not observer.records[node].projectile and shotAudio[3][1]=='ballcaster_impact' and shotAudio[3][2].level>1)
 assert(observer.records[node].after and not observer.records[node].trail.Enabled,'shot wake disappeared with the projectile head')
 local wake=observer.records[node].after
 node:Destroy()

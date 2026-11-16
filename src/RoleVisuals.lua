@@ -307,6 +307,7 @@ local impactStyles={
  Frostbite={speed=NumberRange.new(13,24),spread=59,lift=-18,count=11,dust=0},
  Resonator={speed=NumberRange.new(5,12),spread=79,lift=-6,count=6,dust=1},
  Touchdown={speed=NumberRange.new(5,10),spread=79,lift=-16,count=4,dust=3},
+ GemReward={speed=NumberRange.new(9,22),spread=72,lift=-12,count=20,dust=0},
  Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
 }
 function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?)

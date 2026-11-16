@@ -953,7 +953,7 @@ end
 function scene.spawnOrePickup(template,drop,position,velocity,color)
  pickupSerial+=1
  local launchAt=now
- if drop.finishing and not drop.instant then
+ if drop.finishing and not drop.stone then
   local splitAt=template:GetAttribute('CrystalSplitAt') or now
   launchAt=splitAt+OreDrops.REWARD_DELAY
  end
@@ -979,8 +979,8 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Position=position
  chip.Color=color
  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
- chip:SetAttribute('StoneCargo',drop.stone==true);chip:SetAttribute('InstantDrop',drop.instant==true)
- if drop.stone then chip.Color=drop.oreArc and color or Color3.fromRGB(88,84,81):Lerp(color,.32);chip.Material=Enum.Material.Slate end
+ chip:SetAttribute('StoneCargo',drop.stone==true);chip:SetAttribute('RareGemReward',drop.rareGem==true)
+ if drop.stone then chip.Color=drop.compactorOutput and color or Color3.fromRGB(88,84,81):Lerp(color,.32);chip.Material=Enum.Material.Slate end
  chip.MaterialVariant='';chip.Reflectance=(drop.compacted or drop.stone) and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
  if drop.raw then
   chip:SetAttribute('PhysicalCargo',true)
@@ -999,10 +999,6 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Parent=pickupFolder
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
  drop.vx=velocity.X;drop.vy=velocity.Y;drop.vz=velocity.Z;drop.age=0;drop.spawnAt=launchAt
- if drop.instant then
-  drop.landed=true;drop.firstLandedAge=0
-  chip:SetAttribute('GroundImpactAt',launchAt)
- end
  drop.publishedPosition=position;drop.publishedVelocity=velocity
  drop.publishedHoming=false;drop.publishedFloor=drop.floor
  pickups[pickupSerial]=drop
@@ -1060,20 +1056,23 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local stoneUnits=crystal and 0 or math.min(1000000,mass*100)
   local value=math.clamp(math.floor(amount*(crystal and 8 or .3)),1,1000000)
   profile.run.yieldRemainders[material]=amount-math.floor(amount)
-  r.cargoProduced=true;r.extractedOre=r.ore;r.part:SetAttribute('ExtractedOre',r.ore)
+  r.cargoProduced=true;r.extractedOre=r.ore;r.part:SetAttribute('CargoReward',crystal and 'Gem' or 'Stone');r.part:SetAttribute('ExtractedOre',r.ore)
   local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
   local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
   local out=Vector3.new(vx,0,vz).Unit
   -- The reward emerges from the split. Early extraction still clears a living rock.
   local edge=extraction and Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42 or .24
   local position=r.part.Position+out*edge+Vector3.yAxis*(r.part.Size.Y*.18+.18)
-  -- Ordinary field stone appears immediately at rest; only rare crystals launch.
-  if not crystal then position=Vector3.new(position.X,fieldTop+.22,position.Z) end
+  if not crystal then
+   -- Start immediately and hop just above the floor. Gems keep the full arc.
+   position=Vector3.new(position.X,fieldTop+.27,position.Z)
+   vx,vy,vz=out.X*4.5,16,out.Z*4.5
+  end
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,
    material=Workshop.saleCargo(material,value,not crystal,dust,stoneUnits),tierMaterial=material,value=value,
-   stone=not crystal,instant=not crystal,units=1,raw=true,oreArc=crystal,finishing=not extraction,
+   stone=not crystal,rareGem=crystal,units=1,raw=true,oreArc=true,finishing=not extraction,
    floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14,modifiers=r.modifiers},
-   position,crystal and Vector3.new(vx,vy,vz) or Vector3.zero,r.field.color)
+   position,Vector3.new(vx,vy,vz),r.field.color)
   p.dirty=true;p.publishDirty=true;return
  end
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
@@ -1167,7 +1166,7 @@ function scene.finishPress(press,drops)
  local first,second=drops[1],drops[2]
  local value=first.value+second.value
  local output={owner=first.owner,runId=first.runId,nodeId=first.nodeId,tierMaterial=first.tierMaterial,
-  material=Workshop.cargoKey(first.tierMaterial,value),stone=first.stone,value=value,units=1,raw=true,oreArc=true,
+  material=Workshop.cargoKey(first.tierMaterial,value),stone=first.stone,compactorOutput=true,value=value,units=1,raw=true,oreArc=true,
   floor=job.floor,fieldPart=first.fieldPart,modifiers=job.modifiers}
  local a,b=Workshop.saleItem(first.material),Workshop.saleItem(second.material)
  if a and b then
@@ -3153,7 +3152,7 @@ local function breakerDrone(d,p,hr,field,dt)
  elseif event=='missed' or event=='canceled' then release(d) end
 end
 function scene.autoSellReady(p,profile,units)
- return Workshop.starLevel(profile,'autosell')>0 and units>=Ca.capacity(profile,previewPerks(p)) and not activeAssault(p)
+ return (not p.saleQuote or now>=p.saleQuote.expiresAt) and Workshop.starLevel(profile,'autosell')>0 and units>=Ca.capacity(profile,previewPerks(p)) and not activeAssault(p)
 end
 function scene.emptierOffset(rank)
  return Vector3.new(rank%2==0 and 2.2 or -2.2,2.4,1)
@@ -3888,23 +3887,55 @@ local function serviceDeliveries(p: any)
   end
  end
 end
-local function sellBackpack(p: any,automatic: boolean?)
+function scene.canSellBackpack(p)
+ return not activeAssault(p) and (atStation(p,scene.converter or scene.packStation,18)
+  or atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20))
+end
+function scene.previewSale(p)
+ if not scene.canSellBackpack(p) then notice(p,'Visit SELL ORE with your drones out of combat.');return end
+ if Pro.cargoUnits(data(p))==0 then notice(p,'Your backpack is empty.');return end
+ local run=data(p).run
+ local quote={id=Http:GenerateGUID(false),runId=run.id,cargo=Pro.clone(run.cargo),expiresAt=now+45}
+ p.saleQuote=quote
+ RS.MiningAway.Sale:FireClient(p.player,{kind='preview',id=quote.id,runId=quote.runId,cargo=quote.cargo})
+end
+function scene.confirmSale(p,id,sell)
+ local quote=p.saleQuote
+ if not quote or id~=quote.id then return end
+ p.saleQuote=nil
+ local run=data(p).run
+ local reason
+ if run.id~=quote.runId or now>=quote.expiresAt then reason='Sale preview expired.'
+ elseif not scene.canSellBackpack(p) then reason='Return to SELL ORE to confirm.'
+ else
+  for key,n in pairs(run.cargo) do if n~=(quote.cargo[key] or 0) then reason='Backpack changed.';break end end
+  for key,n in pairs(quote.cargo) do if n~=(run.cargo[key] or 0) then reason='Backpack changed.';break end end
+ end
+ if reason then
+  RS.MiningAway.Sale:FireClient(p.player,{kind='rejected',id=id})
+  notice(p,reason)
+  if reason=='Backpack changed.' and Pro.cargoUnits(data(p))>0 then scene.previewSale(p) end
+  return
+ end
+ sell(p,false,quote)
+end
+local function sellBackpack(p: any,automatic: boolean?,quote: any?)
  if activeAssault(p) then
   if not automatic then notice(p,'Recall your fighting drones before selling.') end
   return
  end
- if not automatic and not (atStation(p,scene.converter or scene.packStation,18) or atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then
+ if not automatic and not scene.canSellBackpack(p) then
   notice(p,'Sell your backpack at the Workshop or SELL ORE.')
   return
  end
  if Pro.cargoUnits(data(p))==0 then notice(p,'Your backpack is empty.');return end
- local tx,runId=Http:GenerateGUID(false),data(p).run.id
+ local tx,runId=quote and quote.id or Http:GenerateGUID(false),data(p).run.id
  transact(p,'sell:'..tx,function(copy)
   local ok,result=Pro.sell(copy,prices,tx,runId)
   if ok then return result end;return nil,result
  end,function(result)
   p.nextEmptierPlan=nil
-  RS.MiningAway.Sale:FireClient(p.player,{id=tx,runId=result.runId,cargo=result.cargo,resources=result.resources,cash=result.quartz,full=true})
+  RS.MiningAway.Sale:FireClient(p.player,{id=tx,runId=result.runId,cargo=result.cargo,resources=result.resources,cash=result.quartz,full=not automatic})
   local amounts={}
   for _,key in ipairs(Shops.ORDER) do
    local n=key=='Quartz' and result.quartz or result.cargo[key]
@@ -3913,7 +3944,9 @@ local function sellBackpack(p: any,automatic: boolean?)
   local sale=automatic and 'Auto Sell' or 'Sold '..result.units..' ore'
   notice(p,scene.saleMilestoneNotice(p,result.quartz) or sale..' · +'..table.concat(amounts,', '))
   p.publishDirty=true
- end)
+ end,quote and function(status)
+  if status=='rejected' then RS.MiningAway.Sale:FireClient(p.player,{kind='rejected',id=tx}) end
+ end or nil)
 end
 local function validPayload(payload)
  return type(payload)=='table' and type(payload.txId)=='string' and #payload.txId>=1 and #payload.txId<=100 and type(payload.runId)=='string' and #payload.runId<=100
@@ -4548,7 +4581,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   reply('queued','Queued · next available worker',r)
  elseif action=='ReturnCargo' then
   if payload~=nil and (type(payload)~='string' or #payload>160) then return end
-  sellBackpack(p)
+  scene.previewSale(p)
  elseif action=='Patch' then
   local fieldId=type(payload)=='table' and payload.fieldId or payload
   if type(payload)=='table' and not validCommandId(payload.requestId) then return end
@@ -4607,7 +4640,11 @@ local function commandPlayer(pl: any,action: any,payload: any)
    commandReply(pl,payload,'accepted','Fighting guards',field)
   end
  elseif action=='Sell' then
-  sellBackpack(p)
+  scene.previewSale(p)
+ elseif action=='ConfirmSale' then
+  scene.confirmSale(p,payload,sellBackpack)
+ elseif action=='CancelSale' then
+  if p.saleQuote and p.saleQuote.id==payload then p.saleQuote=nil end
  elseif action=='BuyPack' or action=='ChooseCard' or action=='Prestige' then
   if not economyAction(p,pl,action,payload) then return end
  end

@@ -279,7 +279,7 @@ function V.new(root,parent,audio,reducedMotion)
   source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,faceted=faceted,gemOpacity=view:GetAttribute('GemOpacity') or .76,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
-   stone=source:GetAttribute('StoneCargo')==true,instant=source:GetAttribute('InstantDrop')==true,samples={},owner=source:GetAttribute('Owner'),
+   stone=source:GetAttribute('StoneCargo')==true,rareGem=source:GetAttribute('RareGemReward')==true,samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
   local velocity=source:GetAttribute('OreLaunchVelocity')
@@ -451,6 +451,17 @@ function V:update(dt,now)
    local docking=live and source:GetAttribute('CourierDocking')~=nil
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
+   if r.rareGem and not r.rewardCue and displayAt>=r.born then
+    r.rewardCue=true
+    local launch=source:GetAttribute('OreLaunchOrigin') or r.pos
+    if age<.32 and cameraPosition and (cameraPosition-launch).Magnitude<90 then
+     if self.audio then self.audio:play('gem_reveal',launch,{level=r.owner==self.player.UserId and 1 or .64}) end
+     if not reducedEffects and not reducedMotion then
+      RoleVisuals.ImpactParticles(launch,r.effectColor,1.2,'GemReward')
+      RoleVisuals.Pulse(launch,r.effectColor,.55,5.2,.42)
+     end
+    end
+   end
    -- Regular ore fragments and large workshop cargo both land. Wait for the
    -- contact position/speed to replicate before consuming this one-shot cue.
    if r.hasArc and r.landAge and age>=r.landAge and not r.landCue and (live or r.arc) then
@@ -461,8 +472,12 @@ function V:update(dt,now)
     elseif typeof(point)=='Vector3' and speed>0 then
      r.landCue=true
      if self.audio and not r.preview then
-      self.audio:play('ore_land',point,{level=math.clamp(speed/43,.67,1.18)*(r.arc and 1.12 or r.physical and 1 or .82),
+      local cue=r.rareGem and 'gem_land' or r.stone and 'stone_land' or 'ore_land'
+      self.audio:play(cue,point,{level=math.clamp(speed/43,.67,1.18)*(r.arc and 1.12 or r.physical and 1 or .82),
        pitch=(r.physical and .84 or 1.02)+(r.seed%4)*.028})
+     end
+     if r.rareGem and not reducedEffects and not reducedMotion then
+      RoleVisuals.ImpactParticles(point,r.effectColor,.73,'GemReward')
      end
     end
    end
@@ -589,7 +604,7 @@ function V:update(dt,now)
     local distanceFade=math.clamp((72-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
     updateGlint(self,r,landingAge,canGlint and glintStrength*distanceFade*opacity or 0,now)
    else removeIdle(self,r) end
-   if not r.instant and (r.physical or r.hasArc) and cameraPosition then
+   if not r.stone and (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
     local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)

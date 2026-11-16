@@ -660,7 +660,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      local q=age/windup
      if not r.loaded then
       r.loaded=true
-      if paused<=0 and age<.13 and audio then audio:play(ball and 'coil_load' or 'needle_cock',muzzle or from) end
+      if paused<=0 and age<.13 and audio then audio:play(ball and 'ballcaster_charge' or 'needle_cock',muzzle or from) end
      end
      if not BeamVFX.reduced() and BeamVFX.near(muzzle or from,95) then
       gunCharge(self,r,muzzle or from,to,color,ball,q)
@@ -679,7 +679,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now,true)
       if ball then RoleVisuals.Pulse(point+normal*.42,color,.55,3.25*grade,.37,normal,1.5) end
       if onCameraBeat then onCameraBeat(ball and 'BallHit' or 'NeedleHit',point,now,grade) end
-      if audio then audio:play(ball and 'coil_hit' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
+      if audio then audio:play(ball and 'ballcaster_impact' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
      end
     end
     local resolved=landed or (not contactAt and (progress>1+.16/duration or (not target and progress>=1)))
