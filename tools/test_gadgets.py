@@ -8,6 +8,7 @@ import tempfile
 from build import ROOT, bundle, module_bundle
 
 luau = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/luau')
+only = sys.argv[2] if len(sys.argv) > 2 else None
 for name in ('DroneRoles', 'DroneAbilities', 'AbilityView', 'DroneConfig', 'DroneRoleEffects', 'Feel', 'Mining', 'OreDrops', 'PickupView', 'CommandView'):
     subprocess.run([str(luau / 'luau-compile'), str(ROOT / 'src' / f'{name}.lua')], check=True, stdout=subprocess.DEVNULL)
 subprocess.run([str(luau / 'luau'), str(ROOT / 'tests/drone-abilities.spec.lua')], check=True)
@@ -18,7 +19,7 @@ client = (ROOT / 'src/Client.lua').read_text()
 render = client[client.index('local function renderDrone(d,dt,now)'):client.index('-- Every observer draws repair beams', client.index('local function renderDrone(d,dt,now)'))]
 resource_start = client.index('local function renderResource(')
 resource_render = client[resource_start:client.index('local function resolveRenderedTarget', resource_start)]
-crystal_frame = client[client.index(' for _,r in pairs(resources) do\n  if impactFreeze:holds(r)'):client.index(' selectorView:updateHealing(now)')]
+crystal_frame = client[client.index(' for _,r in pairs(resources) do\n  RockModifierView.clearSelectionFlash(r)'):client.index(' selectorView:updateHealing(now)')]
 crystal_clock_setup = """
 local BeamVFX={near=function() return true end,reduced=function() return false end}
 local splitParticles=0
@@ -55,9 +56,12 @@ with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
         'mining-impact': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/mining-impact-server.integration.lua').read_text(),
         'roles-server': mock + '\nfunction runService:IsStudio() return true end\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/drone-role-server.integration.lua').read_text(),
     }
+    assert only is None or only in fixtures, f'Unknown fixture: {only}'
     for name, source in fixtures.items():
+        if only and name != only:
+            continue
         path = pathlib.Path(directory) / f'{name}.lua'
         path.write_text(source)
         subprocess.run([str(luau / 'luau-compile'), str(path)], check=True, stdout=subprocess.DEVNULL)
         subprocess.run([str(luau / 'luau'), str(path)], check=True)
-print('PASS gadget source compilation + production domain/steering/server logic using API doubles. Studio visual/multiplayer/fun not verified.')
+print(f'PASS {only or "all gadget"} fixture checks using API doubles. Studio visual/multiplayer/fun not verified.')

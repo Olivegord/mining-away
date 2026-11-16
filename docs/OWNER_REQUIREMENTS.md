@@ -1,5 +1,14 @@
 # Owner requirements
 
+## November 15 — Downloads rock and weapon WAVs
+
+Split artninja's rock impact/crash recording into distinct breaks, sort the cuts
+by volume and duration, and randomly select an appropriate pool for regular
+rock sizes. Use either identical Elementus low-mid file for laser startup,
+the distorted spaceship for the purple Ballcaster, and layer the synthesized
+explosion and cinematic boom over Ramiel's existing sound and Orbital. The
+owner confirms all files inside this project folder are approved for uploads.
+
 ## November 15 — selling cascade, field rocks, and material rewards
 
 Selling should briefly soften the real-world background while the player's ore rises into a grid in front of the camera. Sort by rock/mineral type, with ordinary stone at the top left and the highest available crystal at the bottom right. Sell individual pieces in a very fast reading-order cascade, using a short screen shake and particles at each piece. Money icons must fly from that piece's screen position into the actual money counter at the top left.

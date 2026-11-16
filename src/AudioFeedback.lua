@@ -1,6 +1,18 @@
 -- Pure audio event gating. Replicated state authorizes cues, never the reverse.
 local A={}
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
+-- Original, unshrunk bounding-box volume expressed as an equivalent cube edge.
+-- This follows actual rock size, independent of mineral, damage stage or camera.
+function A.rockPool(size)
+ if not finite(size) then return 'medium' end
+ return size<4.5 and 'small' or size<7 and 'medium' or 'large'
+end
+function A.variantIndex(count,last,draw)
+ if count<=1 then return 1 end
+ local repeatable=type(last)~='number' or last<1 or last>count
+ local index=math.clamp(math.floor(draw),1,repeatable and count or count-1)
+ return not repeatable and index>=last and index+1 or index
+end
 function A.fresh(at,now,age)
  return finite(at) and at>0 and finite(now) and now-at>=-.1 and now-at<=(age or .6)
 end

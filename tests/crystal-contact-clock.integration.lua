@@ -6,6 +6,7 @@ CF.__index=function(frame,key)
 end
 local fx=Instance.new('Folder');fx.Parent=workspace
 local audio={}
+local audioOptions={}
 local cameraKicks={}
 local owner=Instance.new('Player');owner.UserId=42
 game:GetService('Players').LocalPlayer=owner
@@ -15,7 +16,9 @@ for index,name in ipairs({'Left','Right'}) do
  half:SetAttribute('SizeRatio',Vector3.new(.5,1,1));half:SetAttribute('CenterRatio',Vector3.new((index*2-3)*.25,0,0))
  half.Parent=halves
 end
-rockDamage.feedback=CrystalImpactView.new(fx,{play=function(_,name) table.insert(audio,name) end},function(_,_,at)
+rockDamage.feedback=CrystalImpactView.new(fx,{play=function(_,name,_,options)
+ table.insert(audio,name);audioOptions[#audio]=options
+end},function(_,_,at)
  table.insert(cameraKicks,at)
 end,nil,function(name) if name=='Original' then return halves end end)
 local source=Instance.new('UnionOperation');source.Parent=workspace
@@ -75,6 +78,7 @@ assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==9 and #cues=
  'the first frame back did not split and play the impact sounds')
 assert(audio[7]=='crystal_split' and audio[8]=='crystal_impact' and audio[9]=='crystal_release_tink'
  and #cameraKicks==1 and cameraKicks[1]==103.07 and splitParticles==1)
+assert(math.abs(audioOptions[7].rockSize-3)<.0001,'break audio used the shrunken final stage instead of original rock size')
 for _,gradient in ipairs(r.stoneGradient) do
  assert(gradient.LocalTransparencyModifier==1,'a rock gradient remained visible after the split')
 end
@@ -140,7 +144,7 @@ rockDamage.feedback:requestBreakHold(target,104.84,requestHold)
 assert(#holds==1 and target.view.Transparency==0 and target.view.Size==size and #audio==11,
  'Ramiel queued a second hold after its post-beam beat')
 crystalFrame({target},104.84)
-assert(target.view.Transparency==1 and audio[12]=='prism_blast' and #audio==14 and prismParticles==1,'the charred target did not explode once')
+assert(target.view.Transparency==1 and audio[12]=='ramiel_blast' and #audio==14 and prismParticles==1,'the charred target did not explode once')
 crystalFrame({target},104.97)
 assert(#audio==14,'the prism explosion replayed')
 charred:Destroy();target.view:Destroy()
@@ -223,7 +227,7 @@ assert(loaded.core.Size.X>gathered and loaded.core.Transparency<.35 and loaded.r
 observer:step(110.32,drones,targets)
 assert(observer.records[node].projectile and gunner.shotReceipt==node)
 assert(not observer.records[node].load and not loaded.root.Parent,'the charge stayed behind when the shot fired')
-assert(shotAudio[2][1]=='coil_fire' and table.concat(shotBeats,',')=='BallFire')
+assert(shotAudio[2][1]=='ballcaster_fire' and table.concat(shotBeats,',')=='BallFire')
 local muzzleBurst=observer.bursts[#observer.bursts]
 assert(muzzleBurst.lamp and muzzleBurst.lamp.Enabled and muzzleBurst.lamp.Brightness>0,'shot did not light nearby surfaces')
 node:SetAttribute('ContactAt',110.54);node:SetAttribute('ContactFracture',true)
@@ -299,7 +303,7 @@ local loop,launches,cracks=nil,0,0
 local audio={
  setLoop=function(_,_,name,_,level) loop={name=name,level=level} end,
  stopLoop=function() loop=nil end,
- play=function(_,name) if name=='prism_fire' then launches+=1 elseif name=='prism_blast' then cracks+=1 end end,
+ play=function(_,name) if name=='prism_fire' then launches+=1 elseif name=='ramiel_blast' then cracks+=1 end end,
 }
 local discharge=RoleEffectView.new(audio,function() kicks+=1 end,nil,function(_,point,level)
  chargeKicks[#chargeKicks+1]={point=point,level=level}

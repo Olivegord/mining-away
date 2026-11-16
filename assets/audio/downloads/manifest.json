@@ -1,0 +1,211 @@
+{
+  "sources": {
+    "rock": {
+      "file": "865325__artninja__rock_impact_crash_sounds_08022026.wav",
+      "sha256": "75bc1cdaecb968f50bb3d043da33d20f8890574fe8b0ac7b1908491648383b52",
+      "sample_rate": 48000,
+      "channels": 2
+    },
+    "laser_start": {
+      "file": "873747__the_elementus__low_mid_end_void_energy_blast_punch_01.wav",
+      "sha256": "db54b7351822253b0172b5829dca4102f8d13f218305ae431fdf94eb928e30d2",
+      "sample_rate": 48000,
+      "channels": 1
+    },
+    "ballcaster_fire": {
+      "file": "877834__cat-fox_alex__space-ship-distoried-1_2.wav",
+      "sha256": "bbdff1601d9b2a78c1d397a4067b2749b14aede2b5ef78b02d26bd8d7a89eb7b",
+      "sample_rate": 44100,
+      "channels": 2
+    },
+    "synth_explosion": {
+      "file": "879282__qvantor__synthesized-explosion.wav",
+      "sha256": "af9926daf819025c4e2b87115f3700bd680f6a0dd05deebcdf988e88f99e70f8",
+      "sample_rate": 48000,
+      "channels": 2
+    },
+    "cinematic_boom": {
+      "file": "879905__woodbetweenstudio__cinematic-boom-impact.wav",
+      "sha256": "18045939aee19300557901300b9a7b3901b71498d8c8eaf9ec4cb67c6876ece6",
+      "sample_rate": 48000,
+      "channels": 2
+    }
+  },
+  "clips": [
+    {
+      "name": "rock_break_01",
+      "file": "rock_break_01.wav",
+      "source": "rock",
+      "start": 0.245,
+      "duration": 1.415,
+      "rms_db": -1.208,
+      "peak": 12.96372,
+      "gain": 0.05953815,
+      "sha256": "7b9f5b50c859a6d98723f180423020a8b4a2302148211d2a26123d62537aaf32",
+      "duration_rank": 1,
+      "rms_db_rank": 6,
+      "size_pool": "medium",
+      "atlas_start": 5.305
+    },
+    {
+      "name": "rock_break_02",
+      "file": "rock_break_02.wav",
+      "source": "rock",
+      "start": 3.045,
+      "duration": 1.665,
+      "rms_db": -3.479,
+      "peak": 8.43194,
+      "gain": 0.05953815,
+      "sha256": "ed854f7e8dabdbe57dc57cb6da99859db84fad242de72399001677bd57a037a8",
+      "duration_rank": 2,
+      "rms_db_rank": 4,
+      "size_pool": "small",
+      "atlas_start": 3.39
+    },
+    {
+      "name": "rock_break_03",
+      "file": "rock_break_03.wav",
+      "source": "rock",
+      "start": 5.925,
+      "duration": 1.155,
+      "rms_db": -3.135,
+      "peak": 7.348554,
+      "gain": 0.05953815,
+      "sha256": "635f8f1908d95a374b41fe46bbba12640922aa5da64e3c663622ff3656d57d5f",
+      "duration_rank": 0,
+      "rms_db_rank": 5,
+      "size_pool": "small",
+      "atlas_start": 1.985
+    },
+    {
+      "name": "rock_break_04",
+      "file": "rock_break_04.wav",
+      "source": "rock",
+      "start": 8.745,
+      "duration": 1.885,
+      "rms_db": -0.166,
+      "peak": 15.788198,
+      "gain": 0.05953815,
+      "sha256": "4c698116795e8f35facde74c36197bc2cb4afeb117f0af32654b46c66e2b4d9c",
+      "duration_rank": 4,
+      "rms_db_rank": 7,
+      "size_pool": "large",
+      "atlas_start": 14.799583
+    },
+    {
+      "name": "rock_break_05",
+      "file": "rock_break_05.wav",
+      "source": "rock",
+      "start": 11.775,
+      "duration": 1.735,
+      "rms_db": -11.388,
+      "peak": 2.952181,
+      "gain": 0.05953815,
+      "sha256": "23b6d3b54f73824518b45000db1fa03e31bb0f30e40a13aabe5cbb10cc7364da",
+      "duration_rank": 3,
+      "rms_db_rank": 0,
+      "size_pool": "small",
+      "atlas_start": 0.0
+    },
+    {
+      "name": "rock_break_06",
+      "file": "rock_break_06.wav",
+      "source": "rock",
+      "start": 14.235,
+      "duration": 2.525,
+      "rms_db": -9.919,
+      "peak": 11.625436,
+      "gain": 0.05953815,
+      "sha256": "da8ea2e7bc0a8156bf0d564cd35de1c898fd0826343f8426d7346f4b6f52e31d",
+      "duration_rank": 6,
+      "rms_db_rank": 2,
+      "size_pool": "medium",
+      "atlas_start": 9.825
+    },
+    {
+      "name": "rock_break_07",
+      "file": "rock_break_07.wav",
+      "source": "rock",
+      "start": 17.495,
+      "duration": 2.605,
+      "rms_db": -10.935,
+      "peak": 5.570377,
+      "gain": 0.05953815,
+      "sha256": "eb77c87598c4e402ab53061d7cef5c8781a27c90fa31beb80aaf404d3ed19c79",
+      "duration_rank": 7,
+      "rms_db_rank": 1,
+      "size_pool": "medium",
+      "atlas_start": 6.97
+    },
+    {
+      "name": "rock_break_08",
+      "file": "rock_break_08.wav",
+      "source": "rock",
+      "start": 21.145,
+      "duration": 1.949583,
+      "rms_db": -7.087,
+      "peak": 4.983505,
+      "gain": 0.05953815,
+      "sha256": "abc23adcd8527e0bf244b1a0d1aafceb3beae3780caaea275c6b0906c7f44c5d",
+      "duration_rank": 5,
+      "rms_db_rank": 3,
+      "size_pool": "large",
+      "atlas_start": 12.6
+    },
+    {
+      "name": "laser_start",
+      "file": "laser_start.wav",
+      "source": "laser_start",
+      "start": 0,
+      "duration": 0.821521,
+      "rms_db": -19.555,
+      "peak": 0.44109,
+      "gain": 1.0,
+      "sha256": "e05b5163a80d5d5e557ac18e94f272df12783a7a0d980aba7c706d027f2bd6ef"
+    },
+    {
+      "name": "ballcaster_fire",
+      "file": "ballcaster_fire.wav",
+      "source": "ballcaster_fire",
+      "start": 0,
+      "duration": 3.642857,
+      "rms_db": -18.72,
+      "peak": 0.999969,
+      "gain": 0.94002869,
+      "sha256": "1c7ac25f6cd382675242f6c18c07535bb5a5ede4dee5c19196da0c49409a7c2d"
+    },
+    {
+      "name": "synth_explosion",
+      "file": "synth_explosion.wav",
+      "source": "synth_explosion",
+      "start": 0,
+      "duration": 6.741562,
+      "rms_db": -19.308,
+      "peak": 0.627692,
+      "gain": 1.0,
+      "sha256": "1178dd6ea47fb84c04c41addfb352d9bb8ee20d52f30895496a51cdd5395aa3c"
+    },
+    {
+      "name": "cinematic_boom",
+      "file": "cinematic_boom.wav",
+      "source": "cinematic_boom",
+      "start": 0,
+      "duration": 2.070333,
+      "rms_db": -15.267,
+      "peak": 0.890684,
+      "gain": 1.0,
+      "sha256": "2f145ea56231dcf2bf962bca260c6daa985494a58e5da2b0a87e7e6f8e805035"
+    }
+  ],
+  "atlas": {
+    "name": "rock_break_atlas",
+    "file": "rock_break_atlas.wav",
+    "source": "rock",
+    "start": 0,
+    "duration": 16.934583,
+    "rms_db": -29.658,
+    "peak": 0.939972,
+    "gain": 1.0,
+    "sha256": "e30d1186bb02cc7fde32ffc4ec136780f2aa54a6f99090606a5462f263cc6741"
+  }
+}

@@ -1593,6 +1593,18 @@ local AudioFeedback = (function()
 -- Pure audio event gating. Replicated state authorizes cues, never the reverse.
 local A={}
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
+-- Original, unshrunk bounding-box volume expressed as an equivalent cube edge.
+-- This follows actual rock size, independent of mineral, damage stage or camera.
+function A.rockPool(size)
+ if not finite(size) then return 'medium' end
+ return size<4.5 and 'small' or size<7 and 'medium' or 'large'
+end
+function A.variantIndex(count,last,draw)
+ if count<=1 then return 1 end
+ local repeatable=type(last)~='number' or last<1 or last>count
+ local index=math.clamp(math.floor(draw),1,repeatable and count or count-1)
+ return not repeatable and index>=last and index+1 or index
+end
 function A.fresh(at,now,age)
  return finite(at) and at>0 and finite(now) and now-at>=-.1 and now-at<=(age or .6)
 end
@@ -1811,6 +1823,38 @@ local CUES = {
  denied={id='9118941971',volume=.1,duration=.4,pitch=.65,cooldown=.25,fallback='volume_slider.ogg'},
  full={id='9126066421',volume=.12,duration=.6,pitch=.7,cooldown=2,fallback='volume_slider.ogg'},
 }
+-- Owner-provided WAVs, cuts and measurements: assets/audio/downloads/manifest.json.
+-- Completed Roblox upload receipts, owned by this experience's creator.
+local DOWNLOADS = {rock='96292866549392',laser='88808719170718',ball='136064510893795',
+ synth='116172612398887',boom='73460664261612'}
+local ROCK_CUTS = {
+ small={{start=0,duration=1.735},{start=1.985,duration=1.155},{start=3.390,duration=1.665}},
+ medium={{start=5.305,duration=1.415},{start=6.970,duration=2.605},{start=9.825,duration=2.525}},
+ large={{start=12.600,duration=1.949583},{start=14.799583,duration=1.885}},
+}
+if DOWNLOADS.rock then
+ CUES.crystal_split={id=DOWNLOADS.rock,volume=1.55,duration=2.7,pitch=1,attack=.003,
+  cooldown=.065,range=82,maxVoices=5,rockCuts=true,naturalTail=true,fallback='action_jump_land.mp3'}
+end
+if DOWNLOADS.laser then
+ CUES.laser_start={id=DOWNLOADS.laser,volume=.44,duration=.821521,pitch=1,attack=.006,
+  cooldown=.16,range=65,maxVoices=3,naturalTail=true,fallback='volume_slider.ogg'}
+end
+CUES.ballcaster_fire=table.clone(CUES.coil_fire)
+if DOWNLOADS.ball then
+ CUES.ballcaster_fire={id=DOWNLOADS.ball,volume=.47,duration=3.642857,pitch=1,attack=.006,
+  cooldown=.13,range=74,maxVoices=3,naturalTail=true,fallback='action_get_up.mp3'}
+end
+-- Keep the existing Ramiel base intact and leave Nomad's prism_blast untouched.
+CUES.ramiel_blast=table.clone(CUES.prism_blast)
+if DOWNLOADS.synth and DOWNLOADS.boom then
+ CUES.synth_explosion={id=DOWNLOADS.synth,volume=.40,duration=6.741562,pitch=1,attack=.006,
+  cooldown=.16,nearDistance=22,range=120,maxVoices=3,reserved=true,naturalTail=true,skipMissing=true}
+ CUES.cinematic_boom={id=DOWNLOADS.boom,volume=.46,duration=2.070333,pitch=1,attack=.004,
+  cooldown=.16,nearDistance=22,range=120,maxVoices=3,reserved=true,naturalTail=true,skipMissing=true}
+ CUES.ramiel_blast.layers={'synth_explosion','cinematic_boom'}
+ CUES.orbital.layers={'synth_explosion','cinematic_boom'}
+end
 local function fade(object,duration,volume)
  local tween=TweenService:Create(object,TweenInfo.new(duration,Enum.EasingStyle.Sine),{Volume=volume})
  tween:Play();return tween
@@ -1926,13 +1970,13 @@ function Soundscape:_listenerStep()
  end
  self.listenerRoot=root
 end
-function Soundscape:_voice(name,position,looped)
+function Soundscape:_voice(name,position,looped,options)
  local cue=CUES[name];local id=cue.ids and cue.ids[self.random:NextInteger(1,#cue.ids)] or cue.id
  local template=self.bank[id]
  if looped and cue.loopFallback and not (template and template.IsLoaded) then template=self.bank[cue.loopFallback] end
  local ready=template and template.IsLoaded
  -- A missing sustained clip stays silent; never loop a generic fallback beep.
- if looped and not ready then return nil end
+ if (looped or cue.skipMissing) and not ready then return nil end
  local sound=ready and template:Clone() or Instance.new('Sound')
  sound.Name=name;sound.SoundGroup=self.effectsGroup
  if cue.softLaser then
@@ -1947,6 +1991,21 @@ function Soundscape:_voice(name,position,looped)
  local spread=looped and (cue.softLaser and .02 or .04) or (cue.softLaser and .03 or .08)
  local pitchFactor=self.random:NextNumber(1-spread,1+spread)
  sound.PlaybackSpeed=(cue.pitch or 1)*pitchFactor
+ local clipDuration
+ if cue.naturalTail and ready then clipDuration=cue.duration end
+ if cue.rockCuts and ready then
+  local pool=AudioFeedback.rockPool(options and options.rockSize)
+  local cuts=ROCK_CUTS[pool]
+  self.lastRockCut=self.lastRockCut or {}
+  local previous=self.lastRockCut[pool]
+  local index=AudioFeedback.variantIndex(#cuts,previous,self.random:NextInteger(1,previous and #cuts-1 or #cuts))
+  self.lastRockCut[pool]=index
+  local cut=cuts[index]
+  -- Engine-enforced bounds prevent another cut playing if a frame stalls.
+  sound.PlaybackRegionsEnabled=true
+  sound.PlaybackRegion=NumberRange.new(cut.start,cut.start+cut.duration)
+  sound.TimePosition=cut.start;clipDuration=cut.duration
+ end
  sound.Looped=looped;sound.PlayOnRemove=false
  local anchor
  if position then
@@ -1962,7 +2021,7 @@ function Soundscape:_voice(name,position,looped)
   self.active[sound]=nil;self.voices=math.max(0,self.voices-1)
   self.cueVoices[name]=math.max(0,(self.cueVoices[name] or 0)-1)
  end)
- return sound,anchor,pitchFactor
+ return sound,anchor,pitchFactor,clipDuration
 end
 function Soundscape:play(name,position,options)
  local cue=CUES[name];local now=os.clock()
@@ -1970,15 +2029,21 @@ function Soundscape:play(name,position,options)
  if (self.cueVoices[name] or 0)>=(cue.maxVoices or 5) then return end
  if position and self:_distance(position)>(cue.range or 80) then return end
  self.cooldowns[name]=now+cue.cooldown
- local sound,anchor=self:_voice(name,position,false);if not sound then return end
+ local sound,anchor,_,clipDuration=self:_voice(name,position,false,options);if not sound then return end
  local volume=cue.volume/math.sqrt(1+self.voices*.07)*(options and options.level or 1)
  if options and options.pitch then sound.PlaybackSpeed*=options.pitch end
  sound.Ended:Once(function() if anchor then anchor:Destroy() else sound:Destroy() end end)
  if cue.instant then sound.Volume=volume end
  sound:Play()
  if not cue.instant then fade(sound,cue.attack or .025,volume) end
- task.delay(math.max(.05,cue.duration-.22),function() if sound.Parent then fade(sound,.18,0) end end)
- Debris:AddItem(anchor or sound,cue.duration+.05)
+ -- Imported clips keep their decay, including when pitch lowers playback speed.
+ local duration=clipDuration and clipDuration/math.max(.1,sound.PlaybackSpeed) or cue.duration
+ local tail=clipDuration and .035 or .22
+ task.delay(math.max(.05,duration-tail),function() if sound.Parent then fade(sound,clipDuration and .03 or .18,0) end end)
+ Debris:AddItem(anchor or sound,duration+.10)
+ if cue.layers then
+  for _,layer in ipairs(cue.layers) do self:play(layer,position,{level=options and options.level or 1}) end
+ end
 end
 function Soundscape:stopLoop(key,immediate)
  local loop=self.loops[key];if not loop then return end
@@ -8979,7 +9044,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       r.shattered=true
       RoleVisuals.setTime(shatterAt)
       RoleVisuals.PrismShatter(ground,radius,shatterAt,travel)
-      if audio and now-shatterAt<.24 and BeamVFX.near(ground,135) then audio:play('prism_blast',ground,{level=1.18,pitch=.88}) end
+      if audio and now-shatterAt<.24 and BeamVFX.near(ground,135) then audio:play('ramiel_blast',ground,{level=1.18,pitch=.88}) end
      end
      if landed and not r.impacted then
       r.impacted=true
@@ -9020,7 +9085,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       local travel=to-origin
       if onCameraBeat then onCameraBeat(ball and 'BallFire' or 'NeedleFire',origin,now) end
       if travel.Magnitude>.01 then burst(self,origin+travel.Unit*.17,travel.Unit,color,ball,false,1,now,true) end
-      if audio then audio:play(ball and 'coil_fire' or 'needle_fire',origin) end
+      if audio then audio:play(ball and 'ballcaster_fire' or 'needle_fire',origin) end
      end
     end
     if age>=0 and progress<0 and not landed then
@@ -9440,7 +9505,10 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
   if audio and not nomad then
    local volume=owned and 1 or .62
-   if not prismReceipt then audio:play(prism and 'prism_blast' or 'crystal_split',point,{level=volume}) end
+   if not prismReceipt then
+    audio:play(prism and 'ramiel_blast' or 'crystal_split',point,
+     {level=volume,rockSize=(fullSize.X*fullSize.Y*fullSize.Z)^(1/3)})
+   end
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    audio:play('crystal_release_tink',point,{level=volume})
   end

@@ -1,5 +1,44 @@
 # Shared project context
 
+## November 15 — Downloads rock and weapon audio
+
+Integrated on the saved selling baseline **ef21413**. Eight separate artninja
+crashes now form three size pools using combined loudness/duration ranks. The
+ordinary break uses its original full dimensions and avoids consecutive repeats
+within a pool. Elementus low-mid plays at laser ignition and distorted spaceship
+plays on Ballcaster release. Ramiel and Orbital retain their base cues with the
+synthesized explosion and cinematic boom layered on top. Nomad is unchanged.
+Natural tails, spatial limits, effects mute and authoritative cue timing remain.
+
+The five uploaded audio assets loaded successfully in the existing shared
+**DRONEREVOLUTION** Edit session, place **124078027733625**, universe
+**10774898335**. Studio was already open and remains open in Edit. Script Sync
+exported the client bundle, but all three roots still report `Errored`; a guarded
+Script Editor update changed only ClientDroneControl after checking all seven
+baseline hashes. Team Create save **353** succeeded. Post-save checks matched
+all seven installed Sources to canonical **build/DRONE_GAME.rbxl**, SHA-256
+**730d474dbac7e32d6c83645d060dbea1586d2e454a137734e2f74136036f3fd9**.
+The next shared Studio Play loads the selling pass plus these sounds.
+**No Roblox experience publication.** Audio uploads are separate assets.
+
+Native muted Edit checks loaded all five assets, exercised all eight bounded
+regions, repeat avoidance, the two layered families, unchanged Nomad routing,
+voice caps and mute cleanup. The fixture was removed. Full client compilation,
+eight audio-event checks and the focused crystal contact/projectile clock passed.
+The latter also verifies size comes from the intact rock rather than its shrunken
+last stage. All 13 rendered WAV checksums match the manifest. The broader audio
+runner encounters the already reproduced baseline pickup failure, `ore vanished
+during a sell trip`; this is not a clean full-suite result. No Play session was
+started. Listening balance, gameplay feel and multiplayer remain unverified.
+
+Reproduce with `python3 tools/prepare_download_audio.py`,
+`python3 tools/test_gadgets.py /private/tmp/drone-luau crystal-clock`, and
+`/private/tmp/drone-luau/luau tests/audio-feedback.spec.lua`. The native component
+check is `tools/studio_download_audio_checks.lua`, prepended with the production
+AudioFeedback/Soundscape bundle. Source-only refresh uses
+`python3 tools/build.py --previous-commit ef21413` on that preceding canonical
+snapshot. See [audio provenance and cuts](../assets/audio/downloads/README.md).
+
 Last substantive handoff: **November 15, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
 **Current implementation:** New Crystal Run players start with two Laser Miners, Inkbeam, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary cut gives one physical cargo item: an 88% chance of field stone and a 12% chance of its crystal. Stone gives money, stone material and 7% field-material pity; crystals give much more money and full material rewards. Across Crystal Run, larger crystals take longer to cut, fracture in more stages and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly and sell it one item per trip. The Compactor grapples two loose rocks of the same size and ejects a larger gem worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.

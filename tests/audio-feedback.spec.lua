@@ -4,6 +4,20 @@ local function check(name,fn) fn();checks+=1;print('PASS audio '..name) end
 local function sample(state)
  return {state=state,life=1,at=100,dead=false,paused=false,sale=0,saleAt=0}
 end
+check('rock size bands and random variants remain bounded without consecutive repeats',function()
+ assert(A.rockPool(3)=='small' and A.rockPool(4.5)=='medium' and A.rockPool(7)=='large')
+ assert(A.rockPool(nil)=='medium' and A.rockPool(0/0)=='medium')
+ for count=2,3 do
+  for last=1,count do
+   local seen={}
+   for draw=1,count-1 do
+    local pick=A.variantIndex(count,last,draw)
+    assert(pick~=last and pick>=1 and pick<=count and not seen[pick]);seen[pick]=true
+   end
+  end
+ end
+ assert(A.variantIndex(1,1,1)==1 and A.variantIndex(3,nil,3)==3)
+end)
 check('late join reconstructs a sustained charge without replaying an action',function()
  local r={};local cues,mode=A.drone(r,sample('Warmup'),100)
  assert(#cues==0 and mode=='charge')

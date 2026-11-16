@@ -1,0 +1,29 @@
+{
+  "universe_id": 10774898335,
+  "place_id": 124078027733625,
+  "creator_user_id": 2481980029,
+  "game_published": false,
+  "native_preload": "All five loaded successfully in shared Studio Edit; no listening/Play test.",
+  "assets": {
+    "rock_break_atlas": {
+      "id": "96292866549392",
+      "operation": "8f3b12b5-f579-430b-827d-765a4cdeddcc"
+    },
+    "laser_start": {
+      "id": "88808719170718",
+      "operation": "38013de0-0b49-4807-8cf8-2376cb2da41b"
+    },
+    "ballcaster_fire": {
+      "id": "136064510893795",
+      "operation": "a2b3ae9f-9828-4982-9626-8a2cc7dec9a7"
+    },
+    "synth_explosion": {
+      "id": "116172612398887",
+      "operation": "63c43477-d8a2-4553-b65b-f89ba4047e2e"
+    },
+    "cinematic_boom": {
+      "id": "73460664261612",
+      "operation": "0a0d21ea-f063-4e5f-90c2-6ed4d5413091"
+    }
+  }
+}

@@ -1,5 +1,16 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — owner-supplied rock and weapon audio
+
+Use the Downloads artninja crashes as eight randomized size-aware break cuts,
+classified jointly by duration and loudness. Choose size from the full rock,
+not its depleted visual stage. Elementus low-mid replaces laser ignition;
+distorted spaceship replaces only Ballcaster firing. Preserve Ramiel's base
+blast and Orbital's base cue and add synthesized explosion plus cinematic boom
+to both. Keep native bounded clip regions, spatial/mute/voice limits, natural
+decay and existing authoritative event timing. Nomad remains unchanged. Asset
+provenance, measurements and upload receipts are in `assets/audio/downloads/`.
+
 ## November 15 — rapid selling grid and immediate field stone
 
 Sell over the actual world with a mild far-depth blur. Raise the sorted ore into a camera-facing grid, then burst and sell each cell in reading order. Small money and material icons travel from the actual cell to its HUD counter. Manual/backpack sales use a short camera beat per piece; the small courier receipt skips blur and camera beats so automated trips do not repeatedly interrupt mining. Honor Reduced Motion and Reduced Effects. Material counters fade after receipt and can be revealed by hovering the wallet area.

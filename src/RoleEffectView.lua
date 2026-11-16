@@ -612,7 +612,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       r.shattered=true
       RoleVisuals.setTime(shatterAt)
       RoleVisuals.PrismShatter(ground,radius,shatterAt,travel)
-      if audio and now-shatterAt<.24 and BeamVFX.near(ground,135) then audio:play('prism_blast',ground,{level=1.18,pitch=.88}) end
+      if audio and now-shatterAt<.24 and BeamVFX.near(ground,135) then audio:play('ramiel_blast',ground,{level=1.18,pitch=.88}) end
      end
      if landed and not r.impacted then
       r.impacted=true
@@ -653,7 +653,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       local travel=to-origin
       if onCameraBeat then onCameraBeat(ball and 'BallFire' or 'NeedleFire',origin,now) end
       if travel.Magnitude>.01 then burst(self,origin+travel.Unit*.17,travel.Unit,color,ball,false,1,now,true) end
-      if audio then audio:play(ball and 'coil_fire' or 'needle_fire',origin) end
+      if audio then audio:play(ball and 'ballcaster_fire' or 'needle_fire',origin) end
      end
     end
     if age>=0 and progress<0 and not landed then

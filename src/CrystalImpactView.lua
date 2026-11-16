@@ -192,7 +192,10 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
   if audio and not nomad then
    local volume=owned and 1 or .62
-   if not prismReceipt then audio:play(prism and 'prism_blast' or 'crystal_split',point,{level=volume}) end
+   if not prismReceipt then
+    audio:play(prism and 'ramiel_blast' or 'crystal_split',point,
+     {level=volume,rockSize=(fullSize.X*fullSize.Y*fullSize.Z)^(1/3)})
+   end
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    audio:play('crystal_release_tink',point,{level=volume})
   end
