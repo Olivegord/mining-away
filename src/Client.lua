@@ -153,6 +153,11 @@ pickupView.cargoMount=function(droneId,pickupId)
  local mount=drone and drone.cargoMount
  if mount and mount.id==pickupId then return mount.frame end
 end
+pickupView.pressMount=function(droneId,slot)
+ local drone=droneId and droneIndex[droneId]
+ local socket=slot and DroneConfig.PressSockets[slot]
+ if drone and socket then return drone.view:GetPivot():PointToWorldSpace(socket) end
+end
 local turretIndex={}
 local hiddenParts={}
 local pendingDroneSources={}
@@ -606,8 +611,8 @@ openFleet=function()
    statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.emptierBatch(profile) or DroneConfig.Courier.BatchUnits)..' cargo')
    statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Collect loose ore' or 'Haul to storage')
   elseif role=='Compactor' then
-   statTile(row,14,91,tileWidth,'INPUT','Up to '..Workshop.compactorBatch(profile)..' rocks')
-   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 equal-value block')
+   statTile(row,14,91,tileWidth,'INPUT','2 matching sizes')
+   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','Next size up')
   elseif role=='Dart' then
    statTile(row,14,91,tileWidth,'JOB','Grow rocks')
    statTile(row,tileWidth+28,91,tileWidth,'COOLDOWN',number(stats.growCooldown or 5)..' sec')
@@ -980,6 +985,7 @@ local function registerDrone(source)
   flightImpulseAt=source:GetAttribute('FlightImpulseAt') or 0,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
+ d.updateStatus=SpecialDroneMotion.status.draw
  if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone)
  elseif role=='Nomad' then d.nomadProjectors=clone:FindFirstChild('NomadProjectors') end
  drones[source]=d;droneIndex[tostring(id)]=d
@@ -1464,13 +1470,15 @@ local function renderDrone(d,dt,now)
    cameraBeat('CompactorPress',d.emitter.Position,now)
    presentation.work:burst(d.emitter.Position-Vector3.yAxis*.48,Vector3.yAxis,Color3.fromRGB(255,198,118),12,now)
   end
-  if at>0 and now>=at+Workshop.PRESS_EJECT and now-at<Workshop.PRESS_EJECT+.18 and d.pressEjectAt~=at then
-   d.pressEjectAt=at;soundscape:play('parcel_latch',d.emitter.Position,{pitch=1.12,level=.75})
+  local eject=s:GetAttribute('PressEjectAt') or 0
+  if eject>0 and now>=eject and now-eject<.23 and d.pressEjectAt~=eject then
+   d.pressEjectAt=eject;soundscape:play('parcel_latch',d.emitter.Position,{pitch=1.12,level=.75})
    presentation.work:burst(d.emitter.Position,Vector3.yAxis,Color3.fromRGB(255,228,164),7,now)
   end
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
+ if d.updateStatus then d.updateStatus(d,s,state,role,alive,now,CrystalImpactView.reducedMotion()) end
  presentation:syncMiningHardware(d,alive)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
@@ -1837,6 +1845,9 @@ local mouse=player:GetMouse()
   if selectorView.draft then
    if not selectorView.pending then return 'Confirm plot' end
   elseif player:GetAttribute('MA_OrePickup') then return 'Pick up rock' end
+ end
+ pickupView.pickupFocus=function()
+  return available()=='Pick up rock' and player:GetAttribute('MA_OrePickup') or nil
  end
  selectorView.performFieldAction=function()
   local action=available()

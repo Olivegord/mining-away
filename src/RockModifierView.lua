@@ -8,7 +8,9 @@ local white=Color3.fromRGB(249,251,255)
 local icons={
  {bit=bits.Charged,name='Charged',color=charged},
  {bit=bits.Frosted,name='Frosted',color=frost},
+ {bit=bits.Big,name='Big',color=Color3.fromRGB(239,202,143)},
  {bit=bits.Massive,name='Massive',color=dust},
+ {bit=bits.Titan,name='Titan',color=Color3.fromRGB(255,151,104)},
 }
 local square='rbxasset://textures/particles/SquareParticle.png'
 local smoke='rbxasset://textures/particles/smoke_main.dds'
@@ -308,9 +310,10 @@ local function ambient(view,state,now,lowFlash,drop)
   state.Frosted.flakes:Emit(drop and 2 or 3)
   state.Frosted.mist:Emit(drop and 1 or 2)
  end
- if state.Massive and now>=(state.nextDustAt or 0) then
+ local sizeFx=state.Titan or state.Massive or state.Big
+ if sizeFx and now>=(state.nextDustAt or 0) then
   state.nextDustAt=now+random:NextNumber(1.1,2.2)
-  state.Massive.dust:Emit(drop and 1 or 2)
+  sizeFx.dust:Emit(drop and 1 or 2)
  end
 end
 
@@ -328,9 +331,10 @@ local function burst(view,state,lowFlash,kind)
   state.Frosted.flakes:Emit(final and 16 or 6)
   state.Frosted.mist:Emit(final and 12 or ground and 4 or 3)
  end
- if state.Massive then
-  state.Massive.grit:Emit(final and 21 or 7)
-  state.Massive.dust:Emit(final and 11 or ground and 5 or 4)
+ local sizeFx=state.Titan or state.Massive or state.Big
+ if sizeFx then
+  sizeFx.grit:Emit(final and 21 or 7)
+  sizeFx.dust:Emit(final and 11 or ground and 5 or 4)
  end
  if final and activeBreaks<10 and view.Parent then
   -- The source rock expires before the cold breath. Keep the tails on a
@@ -382,7 +386,7 @@ function V.rock(record,now,lowFlash,eventKind)
   state.mask=mask
  end
  for _,entry in ipairs(icons) do
-  if entry.bit==bits.Massive or not bit32.btest(mask,entry.bit) then continue end
+  if (entry.bit~=bits.Charged and entry.bit~=bits.Frosted) or not bit32.btest(mask,entry.bit) then continue end
   local name=entry.name
   local at=record.source:GetAttribute(name..'At')
   if at and at~=state.seen[name] and now>=at then
@@ -426,40 +430,24 @@ function V.drop(record,now,landingAge,lowFlash)
  ambient(view,state,now,lowFlash,true)
 end
 
-local function icon(parent,entry,order)
- local frame=Instance.new('Frame')
- frame.Name=entry.name;frame.Size=UDim2.fromOffset(10,12)
- frame.BackgroundTransparency=1;frame.LayoutOrder=order;frame.Parent=parent
- local function stroke(x,y,width,height,rotation)
-  local piece=Instance.new('Frame')
-  piece.BorderSizePixel=0;piece.BackgroundColor3=entry.color;piece.AnchorPoint=Vector2.new(.5,.5)
-  piece.Position=UDim2.fromOffset(x,y);piece.Size=UDim2.fromOffset(width,height);piece.Rotation=rotation
-  piece.Parent=frame
- end
- if entry.bit==bits.Charged then
-  stroke(4,4,2,6,33);stroke(5,6,6,2,0);stroke(6,8,2,6,33)
- elseif entry.bit==bits.Frosted then
-  for angle=0,120,60 do stroke(5,6,1,10,angle) end
-  stroke(5,6,4,4,45)
- else
-  stroke(5,6,6,6,45);stroke(5,6,2,2,0)
- end
-end
-
 function V.dropLabel(view,material,mask)
  local gui=Instance.new('BillboardGui');gui.Name='OreLabel'
- gui.MaxDistance=44;gui.LightInfluence=0;gui.Size=UDim2.fromOffset(126,18)
- gui.StudsOffsetWorldSpace=Vector3.yAxis*(view.Size.Magnitude*.5+.34)
+ gui.Enabled=true;gui.MaxDistance=44;gui.LightInfluence=0;gui.Size=UDim2.fromOffset(246,27)
+ gui.StudsOffsetWorldSpace=Vector3.yAxis*(view.Size.Magnitude*.5+.38)
  gui.AlwaysOnTop=false;gui.Adornee=view
  local row=Instance.new('UIListLayout');row.FillDirection=Enum.FillDirection.Horizontal
  row.HorizontalAlignment=Enum.HorizontalAlignment.Center;row.VerticalAlignment=Enum.VerticalAlignment.Center
- row.SortOrder=Enum.SortOrder.LayoutOrder;row.Padding=UDim.new(0,3);row.Parent=gui
- local text=Instance.new('TextLabel');text.Name='Mineral';text.Text=material;text.TextSize=12;text.LayoutOrder=0
- text.AutomaticSize=Enum.AutomaticSize.X;text.Size=UDim2.fromOffset(0,18);text.BackgroundTransparency=1
- text.Font=Enum.Font.GothamMedium;text.TextColor3=white;text.TextStrokeColor3=Color3.fromRGB(18,23,32)
- text.TextStrokeTransparency=.18;text.Parent=gui
+ row.SortOrder=Enum.SortOrder.LayoutOrder;row.Padding=UDim.new(0,4);row.Parent=gui
+ local function pill(title,order,tint,width)
+  local text=Instance.new('TextLabel');text.Name=order==0 and 'Mineral' or title
+  text.Text=title;text.TextSize=15;text.LayoutOrder=order;text.Size=UDim2.fromOffset(width,23)
+  text.BorderSizePixel=0;text.BackgroundColor3=tint:Lerp(Color3.fromRGB(17,23,31),.80)
+  text.Font=Enum.Font.GothamBold;text.TextColor3=tint;text.Parent=gui
+  local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,5);corner.Parent=text
+ end
+ pill(material,0,white,math.max(54,#material*8+12))
  for i,entry in ipairs(icons) do
-  if bit32.btest(mask,entry.bit) then icon(gui,entry,i) end
+  if bit32.btest(mask,entry.bit) then pill(entry.name,i,entry.color,#entry.name*8+12) end
  end
  gui.Parent=view
  return gui

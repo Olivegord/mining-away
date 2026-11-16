@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — Compactor grapples and the rapid Needler
+
+The Compactor reaches clear space before marking the pair. Two cables cast together and reel the real drops in. When the merge bar fills, eject the larger gem in its normal rising and falling arc, with existing trailing particles and landing effects. Needler fires four times as often with smaller hits, recoil and camera beats. Keep Ballcaster's slower release and heavier contact. The selected plot floor stays white; status color belongs on the edges.
+
 ## November 15 — direct reel on capture
 
 Use a taut cable and lift the rock straight into the cradle on capture. The courier keeps climbing and turning while reeling in. The owner removed the slack and dragging effect.

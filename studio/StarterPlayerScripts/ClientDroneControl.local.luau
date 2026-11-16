@@ -273,13 +273,14 @@ end
 W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30
 W.BLOCK_SIZE={1.45,.90,1.22}
-W.COMPACTOR_BATCH=3
-W.COMPACTOR_WAIT=5
-W.COMPACTOR_PARTIAL_WAIT=1.5
-W.COMPACTOR_REACH=12
+W.COMPACTOR_BATCH=2
+W.COMPACTOR_REACH=16
+W.GRAPPLE_MARK=.28
+W.GRAPPLE_CAST=.16
+W.GRAPPLE_REEL=.56
+W.PRESS_DURATION=2.2
 W.PRESS_CONTACT=.43
-W.PRESS_EJECT=.82
-W.PRESS_RESET=1.20
+W.PRESS_RECOVER=.38
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
 -- New physical cargo occupies one slot per object. Keep legacy mineral keys
 -- unchanged so existing bags and in-flight Emptier manifests retain value.
@@ -322,8 +323,8 @@ W.CATALOG={
  {id='Q_TURBO_ROTOR',title='Twin Thrusters',scope='Individual',category='flight',tier=2,max=1,step={twinThrusters=1},color={255,137,66},icon='flight',crystalRun=true,hardware=true},
  {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
  {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
- {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
- {id='Q_DENSER_PACK',title='Denser Packing',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_BATCH_PRESS',title='Quick Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_DENSER_PACK',title='Rapid Cycling',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
  {id='Q_CARGO_RACK',title='Quick Turnaround',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
  {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
@@ -352,7 +353,7 @@ function W.hasCompactor(p,extra)
  for _,d in ipairs(p.fleet) do if d.role=='Compactor' then return true end end
  return W.effect(p,'compactor',extra)>0
 end
-function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra)+W.effect(p,'denserPacking',extra) end
+function W.pressDuration(p,extra) return W.PRESS_DURATION/(1+.3*W.effect(p,'batchPress',extra)+.2*W.effect(p,'denserPacking',extra)) end
 function W.emptierBatch() return W.EMPTIER_BATCH end
 function W.emptierCooldown(base,p,extra) return base/(1+.5*W.effect(p,'cargoRack',extra)) end
 W.STAR_CATALOG={
@@ -896,7 +897,7 @@ function F.courierLoad(units)
  return 1.65+load*.56,1/(1+.26*load)
 end
 function F.gunImpulse(role,from,to,mass)
- local momentum=role=='Needler' and 7 or role=='Ballcaster' and 15 or 0
+ local momentum=role=='Needler' and 1.75 or role=='Ballcaster' and 15 or 0
  local delta=from-to
  return delta.Magnitude>.001 and delta.Unit*(momentum/(mass or 1)) or Vector3.zero
 end
@@ -1207,7 +1208,19 @@ local Mining = (function()
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 M.SELECTOR_RANGE=44
 M.SELECTOR_LEASH=100
-M.ROCK_MODIFIERS={Massive=1,Charged=2,Frosted=4}
+M.ROCK_MODIFIERS={Massive=1,Charged=2,Frosted=4,Big=8,Titan=16}
+M.SIZE_BITS={0,M.ROCK_MODIFIERS.Big,M.ROCK_MODIFIERS.Massive,M.ROCK_MODIFIERS.Titan}
+M.ORE_SIZE_SCALE={1,1.32,1.72,2.18}
+function M.sizeTier(mask)
+ for tier=4,2,-1 do if bit32.btest(mask or 0,M.SIZE_BITS[tier]) then return tier end end
+ return 1
+end
+function M.nextSizeMask(first,second)
+ local tier=M.sizeTier(first)
+ if tier>=4 or tier~=M.sizeTier(second) then return nil end
+ local other=bit32.band(bit32.bor(first or 0,second or 0),bit32.bnot(bit32.bor(M.SIZE_BITS[2],M.SIZE_BITS[3],M.SIZE_BITS[4])))
+ return bit32.bor(other,M.SIZE_BITS[tier+1])
+end
 M.MASSIVE_CHANCE=.09
 M.MASSIVE_SCALE=1.38
 local SELECTOR_GRID=2
@@ -4563,7 +4576,7 @@ local Catalog = {
   Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=.42,BlackPause=.055,BeamRange=64,BeamStation=32,BeamTargets=4,BlastRadius=11,CorePower=1,Color={93,203,255},Description='Blackens crystals near the beam impact, then shatters them together for 35% extra ore.'},
   Nomad = {Name='Nomad',Duration=3,CycleDuration=9.20,Impact=5/9.20,Power=4,Chunk=1,Yield=1,Projectile='Nomad',Windup=4.05,Flight=.95,StationHeight=38,BlastRadius=13,BlastTargets=5,Color={101,194,255},Description='Sweeps the field from high above and drops a tiny rocket that shatters up to five nearby crystals.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
-  Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
+  Needler = {Name='Needler',Duration=.165,Impact=.55,Power=1.12,Chunk=.10,Projectile='Dart',Windup=.05,Flight=.04,Recovery=.025,CorePower=1.25,Color={255,195,94},Description='Fires a rapid stream of light darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
  },
 }
@@ -6475,7 +6488,8 @@ local function fieldStep(record,state,now,dt,shot,source)
   elseif kind=='PressJaw' then
    local age=now-(source:GetAttribute('PressAt') or 0)
    local close=smooth((age-.065)/(Workshop.PRESS_CONTACT-.065))
-   local reopen=smooth((age-Workshop.PRESS_EJECT)/(Workshop.PRESS_RESET-Workshop.PRESS_EJECT))
+   local eject=source:GetAttribute('PressEjectAt') or 0
+   local reopen=eject>(source:GetAttribute('PressAt') or 0) and smooth((now-eject)/Workshop.PRESS_RECOVER) or 0
    local stroke=state=='Press' and close*(1-reopen) or 0
    offset=Vector3.new(-item.side*.69*stroke,-.22*stroke,0)
   elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
@@ -6521,6 +6535,81 @@ function Motion.step(record,source,resource,now,dt,shot)
  end
  record.active=t~=nil
 end
+Motion.status=(function()
+-- Small indicators derive from the visible hull and authoritative job clocks.
+local Status={}
+local paper=Color3.fromRGB(237,245,248)
+local ink=Color3.fromRGB(22,29,35)
+local green=Color3.fromRGB(158,232,161)
+local gold=Color3.fromRGB(255,200,113)
+local blue=Color3.fromRGB(142,215,244)
+
+local function frame(parent,name,width,height,tint)
+ local part=Instance.new('Frame');part.Name=name;part.Size=UDim2.fromOffset(width,height)
+ part.BorderSizePixel=0;part.BackgroundColor3=tint;part.Parent=parent
+ local round=Instance.new('UICorner');round.CornerRadius=UDim.new(1,0);round.Parent=part
+ return part
+end
+local function new(adornee)
+ local gui=Instance.new('BillboardGui');gui.Name='DroneWorkStatus';gui.Adornee=adornee
+ gui.StudsOffsetWorldSpace=Vector3.yAxis*(adornee.Size.Y*.5+1.2)
+ gui.Size=UDim2.fromOffset(48,17);gui.MaxDistance=64;gui.LightInfluence=0
+ gui.AlwaysOnTop=false;gui.Parent=adornee
+ local track=frame(gui,'Track',30,6,ink)
+ track.AnchorPoint=Vector2.new(.5,.5);track.Position=UDim2.fromScale(.5,.5)
+ local fill=frame(track,'Level',28,4,green);fill.Position=UDim2.fromOffset(1,1)
+ local wheel=Instance.new('Frame');wheel.Name='Thinking';wheel.Size=UDim2.fromOffset(14,14)
+ wheel.AnchorPoint=Vector2.new(0,.5);wheel.Position=UDim2.fromOffset(34,8)
+ wheel.BackgroundTransparency=1;wheel.Parent=gui
+ for i=0,7 do
+  local angle=math.pi*i/4
+  local spoke=frame(wheel,'Spoke',2,4,paper)
+  spoke.AnchorPoint=Vector2.new(.5,.5)
+  spoke.Position=UDim2.fromOffset(7+math.sin(angle)*5,7-math.cos(angle)*5)
+  spoke.Rotation=math.deg(angle);spoke.BackgroundTransparency=.08+.115*i
+ end
+ return {gui=gui,track=track,fill=fill,wheel=wheel}
+end
+function Status.draw(drone,source,state,role,alive,now,reducedMotion)
+ local camera=workspace.CurrentCamera
+ local rig=drone.workStatus
+ if not alive or not camera or (camera.CFrame.Position-drone.pos).Magnitude>64 then
+  if rig then rig.gui.Enabled=false end
+  return
+ end
+ if not rig then rig=new(drone.view.PrimaryPart);drone.workStatus=rig end
+ rig.gui.Enabled=true
+ local thinking=now<(source:GetAttribute('ThinkUntil') or 0)
+ local start=source:GetAttribute('PressStarted') or 0
+ local finish=source:GetAttribute('PressFinish') or 0
+ local pressing=start>0 and finish>start
+ local cycleStart=source:GetAttribute('GunCycleStart') or 0
+ local cycleEnd=source:GetAttribute('GunCycleEnd') or 0
+ local fraction,tint
+ if role=='Compactor' then
+  fraction=pressing and (now-start)/(finish-start) or (state=='Press' and 1 or 0)
+  tint=gold
+ elseif role=='Striker' or role=='Ramiel' then
+  fraction=(source:GetAttribute('Battery') or 0)/math.max(1,source:GetAttribute('MaxBattery') or 1)
+  tint=fraction<.22 and gold or green
+ elseif cycleEnd>cycleStart then
+  fraction=(now-cycleStart)/(cycleEnd-cycleStart);tint=gold
+ else
+  fraction=(source:GetAttribute('HP') or 1)/math.max(1,source:GetAttribute('MaxHP') or 1)
+  tint=blue
+ end
+ local spinner=thinking or pressing or role=='Compactor' and state=='Intake'
+ rig.track.Visible=not thinking or pressing
+ rig.track.Position=UDim2.fromOffset(spinner and 16 or 24,8)
+ rig.fill.Size=UDim2.fromOffset(math.floor(math.clamp(fraction,0,1)*28+.5),4)
+ rig.fill.BackgroundColor3=tint
+ rig.wheel.Visible=spinner
+ rig.wheel.Position=UDim2.fromOffset(rig.track.Visible and 33 or 17,8)
+ if spinner then rig.wheel.Rotation=reducedMotion and 0 or now*420%360 end
+end
+return Status
+
+end)()
 return Motion
 
 end)()
@@ -10601,8 +10690,8 @@ end
 -- Short camera translations driven by the same events as sound and particles.
 -- Keep routine feedback in its own budget so clustered hits cannot drown out a blast.
 local cameraBeats={
- NeedleFire={.030,.105,.016}, BallFire={.073,.15,.025},
- NeedleHit={.030,.12,.019}, BallHit={.080,.165,.026},
+ NeedleFire={.014,.070,.008}, BallFire={.073,.15,.025},
+ NeedleHit={.015,.075,.009}, BallHit={.080,.165,.026},
  Fracture={.032,.14,.023}, Split={.18,.29,.024}, HeavySplit={.49,.52,.021,true}, CompactorPress={.043,.14,.021},
  DroneShot={.039,.13,.020}, SentryShot={.060,.17,.027}, DroneDeath={.093,.21,.034},
 }
@@ -12355,7 +12444,7 @@ local definitions={
  Needler={job='Dart thrower',worker=true,special='Needler'},
  Ballcaster={job='Energy ball thrower',worker=true,special='Ballcaster'},
  Vacuum={job='Collects loose ore'},
- Compactor={job='Compresses loose ore into equal-value blocks'},
+ Compactor={job='Merges two loose rocks of the same size'},
 }
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function R.canonical(role) return legacy[role] or role end
@@ -14193,7 +14282,9 @@ local white=Color3.fromRGB(249,251,255)
 local icons={
  {bit=bits.Charged,name='Charged',color=charged},
  {bit=bits.Frosted,name='Frosted',color=frost},
+ {bit=bits.Big,name='Big',color=Color3.fromRGB(239,202,143)},
  {bit=bits.Massive,name='Massive',color=dust},
+ {bit=bits.Titan,name='Titan',color=Color3.fromRGB(255,151,104)},
 }
 local square='rbxasset://textures/particles/SquareParticle.png'
 local smoke='rbxasset://textures/particles/smoke_main.dds'
@@ -14493,9 +14584,10 @@ local function ambient(view,state,now,lowFlash,drop)
   state.Frosted.flakes:Emit(drop and 2 or 3)
   state.Frosted.mist:Emit(drop and 1 or 2)
  end
- if state.Massive and now>=(state.nextDustAt or 0) then
+ local sizeFx=state.Titan or state.Massive or state.Big
+ if sizeFx and now>=(state.nextDustAt or 0) then
   state.nextDustAt=now+random:NextNumber(1.1,2.2)
-  state.Massive.dust:Emit(drop and 1 or 2)
+  sizeFx.dust:Emit(drop and 1 or 2)
  end
 end
 
@@ -14513,9 +14605,10 @@ local function burst(view,state,lowFlash,kind)
   state.Frosted.flakes:Emit(final and 16 or 6)
   state.Frosted.mist:Emit(final and 12 or ground and 4 or 3)
  end
- if state.Massive then
-  state.Massive.grit:Emit(final and 21 or 7)
-  state.Massive.dust:Emit(final and 11 or ground and 5 or 4)
+ local sizeFx=state.Titan or state.Massive or state.Big
+ if sizeFx then
+  sizeFx.grit:Emit(final and 21 or 7)
+  sizeFx.dust:Emit(final and 11 or ground and 5 or 4)
  end
  if final and activeBreaks<10 and view.Parent then
   -- The source rock expires before the cold breath. Keep the tails on a
@@ -14567,7 +14660,7 @@ function V.rock(record,now,lowFlash,eventKind)
   state.mask=mask
  end
  for _,entry in ipairs(icons) do
-  if entry.bit==bits.Massive or not bit32.btest(mask,entry.bit) then continue end
+  if (entry.bit~=bits.Charged and entry.bit~=bits.Frosted) or not bit32.btest(mask,entry.bit) then continue end
   local name=entry.name
   local at=record.source:GetAttribute(name..'At')
   if at and at~=state.seen[name] and now>=at then
@@ -14611,40 +14704,24 @@ function V.drop(record,now,landingAge,lowFlash)
  ambient(view,state,now,lowFlash,true)
 end
 
-local function icon(parent,entry,order)
- local frame=Instance.new('Frame')
- frame.Name=entry.name;frame.Size=UDim2.fromOffset(10,12)
- frame.BackgroundTransparency=1;frame.LayoutOrder=order;frame.Parent=parent
- local function stroke(x,y,width,height,rotation)
-  local piece=Instance.new('Frame')
-  piece.BorderSizePixel=0;piece.BackgroundColor3=entry.color;piece.AnchorPoint=Vector2.new(.5,.5)
-  piece.Position=UDim2.fromOffset(x,y);piece.Size=UDim2.fromOffset(width,height);piece.Rotation=rotation
-  piece.Parent=frame
- end
- if entry.bit==bits.Charged then
-  stroke(4,4,2,6,33);stroke(5,6,6,2,0);stroke(6,8,2,6,33)
- elseif entry.bit==bits.Frosted then
-  for angle=0,120,60 do stroke(5,6,1,10,angle) end
-  stroke(5,6,4,4,45)
- else
-  stroke(5,6,6,6,45);stroke(5,6,2,2,0)
- end
-end
-
 function V.dropLabel(view,material,mask)
  local gui=Instance.new('BillboardGui');gui.Name='OreLabel'
- gui.MaxDistance=44;gui.LightInfluence=0;gui.Size=UDim2.fromOffset(126,18)
- gui.StudsOffsetWorldSpace=Vector3.yAxis*(view.Size.Magnitude*.5+.34)
+ gui.Enabled=true;gui.MaxDistance=44;gui.LightInfluence=0;gui.Size=UDim2.fromOffset(246,27)
+ gui.StudsOffsetWorldSpace=Vector3.yAxis*(view.Size.Magnitude*.5+.38)
  gui.AlwaysOnTop=false;gui.Adornee=view
  local row=Instance.new('UIListLayout');row.FillDirection=Enum.FillDirection.Horizontal
  row.HorizontalAlignment=Enum.HorizontalAlignment.Center;row.VerticalAlignment=Enum.VerticalAlignment.Center
- row.SortOrder=Enum.SortOrder.LayoutOrder;row.Padding=UDim.new(0,3);row.Parent=gui
- local text=Instance.new('TextLabel');text.Name='Mineral';text.Text=material;text.TextSize=12;text.LayoutOrder=0
- text.AutomaticSize=Enum.AutomaticSize.X;text.Size=UDim2.fromOffset(0,18);text.BackgroundTransparency=1
- text.Font=Enum.Font.GothamMedium;text.TextColor3=white;text.TextStrokeColor3=Color3.fromRGB(18,23,32)
- text.TextStrokeTransparency=.18;text.Parent=gui
+ row.SortOrder=Enum.SortOrder.LayoutOrder;row.Padding=UDim.new(0,4);row.Parent=gui
+ local function pill(title,order,tint,width)
+  local text=Instance.new('TextLabel');text.Name=order==0 and 'Mineral' or title
+  text.Text=title;text.TextSize=15;text.LayoutOrder=order;text.Size=UDim2.fromOffset(width,23)
+  text.BorderSizePixel=0;text.BackgroundColor3=tint:Lerp(Color3.fromRGB(17,23,31),.80)
+  text.Font=Enum.Font.GothamBold;text.TextColor3=tint;text.Parent=gui
+  local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,5);corner.Parent=text
+ end
+ pill(material,0,white,math.max(54,#material*8+12))
  for i,entry in ipairs(icons) do
-  if bit32.btest(mask,entry.bit) then icon(gui,entry,i) end
+  if bit32.btest(mask,entry.bit) then pill(entry.name,i,entry.color,#entry.name*8+12) end
  end
  gui.Parent=view
  return gui
@@ -14751,7 +14828,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  local kind=record.view:GetAttribute('GemKind')
  local optical=kind=='Amber' or kind=='Quartz' or kind=='Diamond'
  rig.outline.OutlineTransparency=1-strength*(optical and .24 or .94)
- rig.outline.Enabled=kind~='Diamond' and record.view.Parent~=nil and record.view.Transparency<1
+ rig.outline.Enabled=not record.selection and kind~='Diamond' and record.view.Parent~=nil and record.view.Transparency<1
  rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
  rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
  rig.surface.Enabled=true
@@ -15037,7 +15114,7 @@ local function updateDisplays(self,now,reducedMotion,reducedEffects)
   elseif r then
    rig.releaseAt=rig.releaseAt or now
    local tail=math.clamp(1-(now-rig.releaseAt)/DISPLAY_TAIL,0,1)*r.displayStrength
-   if tail>.02 and (not r.expiresAt or now<r.expiresAt) then
+   if tail>.02 and (r.modifiers~=0 or not r.expiresAt or now<r.expiresAt) then
     PickupDisplay.draw(rig,r,r.displayGround,now,tail,reducedMotion,reducedEffects)
    else
     PickupDisplay.hide(rig);r.displayRig=nil;rig.record=nil;rig.outline.Adornee=nil
@@ -15100,6 +15177,20 @@ local function sample(r,source,now)
   floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true,dronePull=source:GetAttribute('DronePull')==true,
   seated=source:GetAttribute('PressSocket')~=nil})
  while #r.samples>5 do table.remove(r.samples,1) end
+end
+local function newGrapple(view)
+ local root=Instance.new('Folder');root.Name='CompactorGrapple';root.Parent=view
+ local a=Instance.new('Attachment');a.Name='Winch';a.Parent=view
+ local head=Instance.new('Part');head.Name='GrappleHead';head.Shape=Enum.PartType.Ball
+ head.Size=Vector3.new(.21,.28,.21);head.Material=Enum.Material.Metal
+ head.Color=Color3.fromRGB(253,202,117);head.Anchored=true;head.CanCollide=false
+ head.CanTouch=false;head.CanQuery=false;head.CastShadow=false;head.Parent=root
+ local b=Instance.new('Attachment');b.Parent=head
+ local line=Instance.new('Beam');line.Name='GrappleCable';line.Attachment0=a;line.Attachment1=b
+ line.FaceCamera=true;line.Width0=.072;line.Width1=.041;line.LightEmission=.48
+ line.Color=ColorSequence.new(Color3.fromRGB(166,134,96),Color3.fromRGB(255,210,133));line.Parent=root
+ root.Destroying:Once(function() a:Destroy() end)
+ return {root=root,a=a,head=head}
 end
 function V.new(root,parent,audio,reducedMotion)
  GemAppearance.prepare()
@@ -15202,6 +15293,7 @@ function V:update(dt,now)
  local rootPart=character and character:FindFirstChild('HumanoidRootPart')
  MineralLineup.update(self.lineup,now,reducedMotion,reducedEffects,rootPart and rootPart.Position,cameraPosition)
  local displayAt=now-PickupMotion.DELAY
+ local focusId=self.pickupFocus and self.pickupFocus()
  table.clear(self.displayCandidates)
  for source,r in pairs(self.records) do
   local replayAt=r.previewReplayAt
@@ -15255,7 +15347,7 @@ function V:update(dt,now)
     r.landAge=math.max(0,contactAt-r.born)
    end
    sample(r,source,now)
-   opacity=PickupMotion.expiryOpacity(now,r.expiresAt,reducedEffects or reducedFlashing)
+   if r.modifiers==0 then opacity=PickupMotion.expiryOpacity(now,r.expiresAt,reducedEffects or reducedFlashing) end
   else
    r.removedAt=r.removedAt or now
    -- Keep the record briefly in case its collection receipt arrives late.
@@ -15273,7 +15365,9 @@ function V:update(dt,now)
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
    if r.faceted then GemAppearance.update(r.view,0) end
-   if r.label then r.label.Enabled=false end
+   if r.label then r.label:Destroy();r.label=nil end
+   if r.selection then r.selection:Destroy();r.selection=nil end
+   if r.grapple then r.grapple.root:Destroy();r.grapple=nil end
    finishTrail(self,r,now);removeIdle(self,r)
    if r.liftDust and not r.liftTail then r.liftTail=now+.42 end
    if r.ribbon or r.liftTail and now<r.liftTail then r.view.Transparency=1
@@ -15390,7 +15484,7 @@ function V:update(dt,now)
    end
    local floor=arcLanded and r.arc.floor or latest.floor
    if live and not seated and not pulling and landingAge and landingAge>=0 and floor and cameraPosition
-    and (not r.expiresAt or now<r.expiresAt) then
+    and (r.modifiers~=0 or not r.expiresAt or now<r.expiresAt) then
     local ground=Vector3.new(r.pos.X,floor-.21,r.pos.Z)
     local distance=(ground-cameraPosition).Magnitude
     if distance<DISPLAY_RANGE then
@@ -15410,12 +15504,40 @@ function V:update(dt,now)
    if cameraPosition then
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
-    if loose and distance<44 and not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
-    if r.label then r.label.Enabled=loose and distance<44 end
+    local marked=live and source:GetAttribute('PressMarked')==true
+    local selected=loose and r.seed==focusId and not r.preview
+    local highlighted=(selected or marked) and distance<44
+    if highlighted then
+     if not r.selection then
+      local outline=Instance.new('Highlight');outline.Name='SelectedOre';outline.Adornee=r.view
+      outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.OutlineTransparency=.03
+      outline.FillTransparency=.84;outline.Enabled=true;outline.Parent=r.view;r.selection=outline
+     end
+     local tint=marked and Color3.fromRGB(255,193,106) or Color3.fromRGB(251,254,255)
+     r.selection.OutlineColor=tint;r.selection.FillColor=tint
+     if not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
+    end
+    if not highlighted then
+     if r.selection then r.selection:Destroy();r.selection=nil end
+     if r.label then r.label:Destroy();r.label=nil end
+    end
+    local cast=marked and source:GetAttribute('PressCastAt')
+    local mount=cast and distance<85 and self.pressMount
+     and self.pressMount(source:GetAttribute('PressDrone'),source:GetAttribute('PressSlot'))
+    if mount and displayAt>=cast then
+     r.grapple=r.grapple or newGrapple(r.view)
+     local t=math.clamp((displayAt-cast)/Workshop.GRAPPLE_CAST,0,1)
+     r.grapple.a.WorldPosition=mount
+     r.grapple.head.Position=mount:Lerp(r.drawPosition,t)+Vector3.yAxis*(math.sin(t*math.pi)*.55)
+    elseif r.grapple then r.grapple.root:Destroy();r.grapple=nil end
     if r.modifiers~=0 and landingAge and landingAge>=0 and loose and distance<62 and not reducedEffects and not reducedMotion then
      RockModifierView.drop(r,now,landingAge,reducedFlashing)
     end
-   elseif r.label then r.label.Enabled=false end
+   else
+    if r.label then r.label:Destroy();r.label=nil end
+    if r.selection then r.selection:Destroy();r.selection=nil end
+    if r.grapple then r.grapple.root:Destroy();r.grapple=nil end
+   end
    local canGlint=landingAge and ((landingAge<.24 and (live or r.collectAt)) or (live and not seated and not pulling))
    if (r.arc or r.physical) and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
     local distanceFade=math.clamp((72-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
@@ -16157,10 +16279,10 @@ function V:step(dt)
  local pinWidth=o.player:GetAttribute('MA_SelectorWidth') or width
  local click,flashStrength=self:flashState()
  showOutline(self.activeEdge,pin,pinWidth,color)
- showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,color,.04)
+ showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,white,.04)
  local preview,previewWidth,strength=self:previewState()
  showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor)
- showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,previewColor,.065)
+ showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,white,.065)
  showFill(self.flash,click and click.point,click and click.width or width,flashStrength*.86,white,.09)
 end
 
@@ -16428,6 +16550,11 @@ pickupView.cargoMount=function(droneId,pickupId)
  local drone=droneIndex[droneId]
  local mount=drone and drone.cargoMount
  if mount and mount.id==pickupId then return mount.frame end
+end
+pickupView.pressMount=function(droneId,slot)
+ local drone=droneId and droneIndex[droneId]
+ local socket=slot and DroneConfig.PressSockets[slot]
+ if drone and socket then return drone.view:GetPivot():PointToWorldSpace(socket) end
 end
 local turretIndex={}
 local hiddenParts={}
@@ -16882,8 +17009,8 @@ openFleet=function()
    statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.emptierBatch(profile) or DroneConfig.Courier.BatchUnits)..' cargo')
    statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Collect loose ore' or 'Haul to storage')
   elseif role=='Compactor' then
-   statTile(row,14,91,tileWidth,'INPUT','Up to '..Workshop.compactorBatch(profile)..' rocks')
-   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 equal-value block')
+   statTile(row,14,91,tileWidth,'INPUT','2 matching sizes')
+   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','Next size up')
   elseif role=='Dart' then
    statTile(row,14,91,tileWidth,'JOB','Grow rocks')
    statTile(row,tileWidth+28,91,tileWidth,'COOLDOWN',number(stats.growCooldown or 5)..' sec')
@@ -17256,6 +17383,7 @@ local function registerDrone(source)
   flightImpulseAt=source:GetAttribute('FlightImpulseAt') or 0,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
+ d.updateStatus=SpecialDroneMotion.status.draw
  if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone)
  elseif role=='Nomad' then d.nomadProjectors=clone:FindFirstChild('NomadProjectors') end
  drones[source]=d;droneIndex[tostring(id)]=d
@@ -17740,13 +17868,15 @@ local function renderDrone(d,dt,now)
    cameraBeat('CompactorPress',d.emitter.Position,now)
    presentation.work:burst(d.emitter.Position-Vector3.yAxis*.48,Vector3.yAxis,Color3.fromRGB(255,198,118),12,now)
   end
-  if at>0 and now>=at+Workshop.PRESS_EJECT and now-at<Workshop.PRESS_EJECT+.18 and d.pressEjectAt~=at then
-   d.pressEjectAt=at;soundscape:play('parcel_latch',d.emitter.Position,{pitch=1.12,level=.75})
+  local eject=s:GetAttribute('PressEjectAt') or 0
+  if eject>0 and now>=eject and now-eject<.23 and d.pressEjectAt~=eject then
+   d.pressEjectAt=eject;soundscape:play('parcel_latch',d.emitter.Position,{pitch=1.12,level=.75})
    presentation.work:burst(d.emitter.Position,Vector3.yAxis,Color3.fromRGB(255,228,164),7,now)
   end
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
+ if d.updateStatus then d.updateStatus(d,s,state,role,alive,now,CrystalImpactView.reducedMotion()) end
  presentation:syncMiningHardware(d,alive)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
@@ -18113,6 +18243,9 @@ local mouse=player:GetMouse()
   if selectorView.draft then
    if not selectorView.pending then return 'Confirm plot' end
   elseif player:GetAttribute('MA_OrePickup') then return 'Pick up rock' end
+ end
+ pickupView.pickupFocus=function()
+  return available()=='Pick up rock' and player:GetAttribute('MA_OrePickup') or nil
  end
  selectorView.performFieldAction=function()
   local action=available()

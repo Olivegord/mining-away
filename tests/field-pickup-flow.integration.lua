@@ -28,6 +28,14 @@ local initialRay=workspace.Raycast
 workspace.Raycast=function() return {Instance=bed} end
 scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center})
 assert((p.miningSquare.center-center).Magnitude<.001,'raised bed blocked a legal command')
+local thinkTimes={}
+for _,worker in ipairs(p.drones) do
+ snapshotDrone(worker)
+ local ready=worker.model:GetAttribute('ThinkUntil')
+ assert(ready>=now+.32-1e-6 and ready<=now+1.05+1e-6)
+ thinkTimes[ready]=true
+end
+assert(next(thinkTimes,next(thinkTimes)),'target decisions were not staggered')
 scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center-Vector3.xAxis*28})
 assert((p.miningSquare.center-center).Magnitude<.001,'out-of-range command changed the pin')
 assert((Mining.selectorCenter(center+Vector3.xAxis*108.001,bed.CFrame,bed.Size)-(center+Vector3.xAxis*108)).Magnitude<.001)
@@ -110,10 +118,23 @@ do
  local sharedRock=gun.target
  local laser
  for _,worker in ipairs(crew) do
-  worker.pos=committedStation(worker,worker.target)
-  if worker.target==sharedRock and worker.role=='Striker' then laser=worker end
+  if worker.target==sharedRock and worker.role=='Striker' then laser=worker;break end
  end
- assert(laser and (laser.pos-gun.pos).Magnitude>=4.49,'mixed-role stations overlapped')
+ -- The traveling reservation with the first slot must not take the center.
+ -- Move the laser in on its own, then let the selected gun join it.
+ for _,worker in ipairs(crew) do if worker.target==sharedRock then worker.pos=sharedRock.position+Vector3.zAxis*45 end end
+ laser.pos=sharedRock.position
+ now+=1.1
+ scene.planMiningStations()
+ assert(scene.workPlans[sharedRock].approach==laser,'nearby worker did not get the next station')
+ local single=committedStation(laser,sharedRock,C.Tick)
+ assert(math.abs(single.X-sharedRock.position.X)<.001 and math.abs(single.Z-sharedRock.position.Z)<.001)
+ laser.pos=single;laser.warmAt=now
+ sharedRock.approachingDrone=nil;gun.pos=sharedRock.position
+ scene.planMiningStations()
+ assert(#scene.workPlans[sharedRock].active==1 and scene.workPlans[sharedRock].approach==gun)
+ gun.pos=committedStation(gun,sharedRock,C.Tick);gun.warmAt=now
+ assert((laser.pos-gun.pos).Magnitude>=4.49,'mixed-role stations overlapped')
  local rival=player(98761);players.PlayerAdded:Fire(rival)
  local rivalProfile=profiles[rival.UserId]
  rival.Character:PivotTo(CFrame.new(hr.Position))
@@ -144,11 +165,28 @@ do
  assert(assigned()==1,'only one worker should launch immediately at the last rock')
  now+=3.15;searchAll()
  assert(assigned()==10 and count(strong)==10,'the final healthy rock left spare workers idle')
- for i,worker in ipairs(crew) do
-  worker.pos=committedStation(worker,strong)
-  for j=1,i-1 do assert((worker.pos-crew[j].pos).Magnitude>=4.49,'shared stations overlapped') end
+ for _,worker in ipairs(crew) do worker.pos=strong.position+Vector3.zAxis*45 end
+ for i=1,#crew do
+  scene.planMiningStations()
+  local plan=scene.workPlans[strong]
+  assert(#plan.active==i-1,'a traveling reservation counted as a mining drone')
+  local worker=assert(plan.approach)
+  worker.pos=committedStation(worker,strong,C.Tick);worker.warmAt=now
+  for _,other in ipairs(plan.active) do assert((worker.pos-other.pos).Magnitude>=4.49,'shared stations overlapped') end
  end
- assert(hitResource(miner,strong,10000) and strong.paid and not next(strong.slots),'depletion did not retire every worker')
+ scene.planMiningStations()
+ local plan=scene.workPlans[strong]
+ local leaving,sliding=plan.active[1],plan.active[2]
+ release(leaving)
+ scene.planMiningStations()
+ local goal
+ for _=1,160 do goal=committedStation(sliding,strong,C.Tick) end
+ sliding.pos=goal
+ assert(math.abs(goal.X-strong.position.X)<.01 and math.abs(goal.Z-strong.position.Z)<.01,'departure left a phantom station in the center')
+ scene.workPlans=nil
+ local finalLaser
+ for _,worker in ipairs(crew) do if worker.target==strong and worker.role=='Striker' then finalLaser=worker;break end end
+ assert(finalLaser and hitResource(finalLaser,strong,10000) and strong.paid and not next(strong.slots),'depletion did not retire every worker')
  assert(not hitResource(miner,strong,10000),'a depleted shared rock accepted a second payout contact')
  for id,drop in pairs(pickups) do drop.part:Destroy();pickups[id]=nil end
  for _,rock in ipairs(field.resources) do resources[rock.id]=nil;rock.part:Destroy() end
@@ -191,9 +229,9 @@ do
 end
 
 local material=Workshop.cargoKey('Amber',7)
-local function loose(position)
+local function loose(position,modifiers)
  scene.spawnOrePickup(bed,{owner=pl.UserId,runId=data(p).run.id,nodeId='test',units=1,raw=true,
-   tierMaterial='Amber',material=material,value=7,floor=position.Y,fieldPart=bed},position,Vector3.zero,bed.Color)
+   tierMaterial='Amber',material=material,value=7,modifiers=modifiers,floor=position.Y,fieldPart=bed},position,Vector3.zero,bed.Color)
  local drop=pickups[pickupSerial]
  drop.landed=true;drop.age=1
  return drop,pickupSerial
@@ -296,20 +334,57 @@ assert(data(p).run.wallet.Quartz==7,'sale was credited twice')
 print('PASS Studio test crew, plot queue, moving grip, repin during swoop, and one-ore sale')
 
 do
+ for id,drop in pairs(pickups) do drop.part:Destroy();pickups[id]=nil end
  local press=assert(p.compactor)
- local first,firstId=loose(center);local second,secondId=loose(center+Vector3.xAxis)
+ local spot=p.miningSquare.center+Vector3.yAxis*.22
+ local first,firstId=loose(spot-Vector3.xAxis*2)
+ local second,secondId=loose(spot+Vector3.xAxis*2)
+ local big=Mining.ROCK_MODIFIERS.Big
+ local charged=Mining.ROCK_MODIFIERS.Charged
+ local third,thirdId=loose(spot-Vector3.xAxis*3,bit32.bor(big,charged))
+ local fourth,fourthId=loose(spot+Vector3.xAxis*3,big)
  local tint=Color3.fromRGB(255,153,20)
- first.part.Color=tint;second.part.Color=tint
- first.pressCarrier=press;first.pressSocket=1;second.pressCarrier=press;second.pressSocket=2
- press.pressInputs={firstId,secondId};press.pressInputValue=first.value+second.value
- scene.finishPress(press)
- assert(not pickups[firstId] and not pickups[secondId] and not press.pressInputs,'Amber blocked press completion')
- now+=Workshop.PRESS_EJECT+C.Tick;pickupStep(C.Tick)
- local packed=pickups[pickupSerial]
- local key,value,isBlock=Workshop.crystalCargo(packed.material)
- assert(key=='Amber' and value==14 and isBlock and packed.part.Color==tint,'press lost Amber color or input value')
- packed.part:Destroy();pickups[pickupSerial]=nil
+ third.part.Color=tint
+ assert(not third.part:GetAttribute('ExpiresAt') and not scene.oreExpired(third,now+3600),'modified rocks can still fade')
+ assert(scene.oreExpired(first,now+3600),'normal rocks stopped expiring')
+ press.pos=spot+Vector3.new(13,8,0);press.velocity=Vector3.zero
+ pickupStep(C.Tick)
+ local job=assert(press.pressJob,'nearby matching rocks were ignored')
+ assert((press.pos-job.position).Magnitude>3 and not job.castAt,'press grappled before flying to its clearing')
+ assert(table.find(job.ids,thirdId) and table.find(job.ids,fourthId) and not first.pressCarrier and not second.pressCarrier,
+  'the larger matching pair did not take priority')
+ local before=press.pos
+ droneStep(press,C.Tick)
+ assert((press.pos-before).Magnitude>0 and press.state=='Intake','press did not fly toward the clearing')
+ press.pos=job.position
+ now+=.1;pickupStep(C.Tick)
+ assert(third.part:GetAttribute('PressMarked') and fourth.part:GetAttribute('PressMarked') and job.castAt>now,'the two rocks were not marked before launch')
+ now=job.castAt+Workshop.GRAPPLE_CAST+Workshop.GRAPPLE_REEL*.5;pickupStep(C.Tick)
+ assert(third.homing and fourth.homing and third.y>spot.Y and fourth.y>spot.Y,'the grapples did not reel both rocks')
+ scene.resetPress(press,true)
+ assert(not third.pressCarrier and not fourth.pressCarrier and third.y==spot.Y and not third.part:GetAttribute('PressMarked'),
+  'an interrupted pull did not return both rocks and clear their marks')
+ now+=1.1;pickupStep(C.Tick)
+ job=assert(press.pressJob)
+ press.pos=job.position
+ pickupStep(C.Tick)
+ now=job.castAt+Workshop.GRAPPLE_CAST+Workshop.GRAPPLE_REEL+.01;pickupStep(C.Tick)
+ assert(third.pressSocket and fourth.pressSocket and job.finishAt>now,'both rocks must be seated before the timer starts')
+ snapshotDrone(press)
+ assert(press.model:GetAttribute('PressFinish')==job.finishAt and press.model:GetAttribute('PressStarted')==job.startedAt)
+ now=job.finishAt-.01;pickupStep(C.Tick)
+ assert(pickups[thirdId] and pickups[fourthId],'the output arrived before processing finished')
+ now=job.finishAt+.01;pickupStep(C.Tick)
+ local merged=assert(pickups[pickupSerial])
+ local key,value,isBlock=Workshop.crystalCargo(merged.material)
+ assert(not pickups[thirdId] and not pickups[fourthId] and pickups[firstId] and pickups[secondId])
+ assert(key=='Amber' and value==14 and not isBlock and merged.part.Color==tint,'merging changed mineral, value or tint')
+ assert(Mining.sizeTier(merged.modifiers)==3 and bit32.btest(merged.modifiers,charged) and merged.arc and merged.part.Size.X>third.part.Size.X)
+ assert(not Mining.nextSizeMask(big,0) and Mining.sizeTier(Mining.nextSizeMask(0,0))==2
+  and Mining.sizeTier(Mining.nextSizeMask(1,1))==4 and not Mining.nextSizeMask(16,16))
+ for id,drop in pairs(pickups) do drop.part:Destroy();pickups[id]=nil end
 end
+print('PASS Compactor flies before marking and reeling the largest matching pair, preserves inputs on cancellation, and ejects a lasting larger ore')
 
 field.center=bed.Position;field.model=zone;field.color=bed.Color
 field.cfg.AlwaysUnlocked=true;field.cfg.Key='Quartz'
@@ -336,10 +411,23 @@ for _,role in ipairs({'Needler','Ballcaster'}) do
  assert(shot and shot.launched and shot.impacted and target.hp<hp and kickAt<now,role..' lost a valid shot after recoil')
  local backward=(shot.from-shot.contact).Unit
  local retreat=(gun.pos-station):Dot(backward)
- assert(kick.Unit:Dot(backward)>.99 and retreat>.3,role..' did not push back its logical hull')
+ assert(kick.Unit:Dot(backward)>.99 and retreat>(role=='Needler' and .04 or .3),role..' did not push back its logical hull')
  kicks[role]=kick.Magnitude
- for _=1,8 do now+=C.Tick;droneStep(gun,C.Tick) end
+ for _=1,2 do now+=C.Tick;droneStep(gun,C.Tick) end
  assert(gun.model:GetAttribute('FlightImpulseAt')==kickAt,'one projectile pushed twice')
+ if role=='Needler' then
+  local last=kickAt;local shots=1
+  for _=1,121 do
+   now+=C.Tick;droneStep(gun,C.Tick)
+   local at=gun.model:GetAttribute('FlightImpulseAt')
+   if at~=last then
+    assert(at-last>=.149 and at-last<=.184,'Needler interval '..tostring(at-last)..' effective '..gun.stats.miningDPS..' base '..gun.owned.base.miningDPS)
+    shots+=1;last=at
+   end
+  end
+  local cut=DroneCatalog.cycle(role,gun.owned.base.miningDPS,gun.owned.base.miningDPS)
+  assert(shots>=12 and math.abs(cut.damage/cut.duration-gun.owned.base.miningDPS*1.12)<1e-8,'Needler did not preserve its work per second')
+ end
  local recoverStart=(gun.pos-station).Magnitude
  for _=1,120 do now+=C.Tick;move(gun,station,C.Tick) end
  assert((gun.pos-station).Magnitude<recoverStart*.45,'thrusters never returned the gun to the station')

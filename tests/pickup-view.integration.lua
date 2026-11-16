@@ -17,13 +17,18 @@ check('rotating fragment stays supported above the authoritative floor',function
  assert(r.drawPosition.Y>=.22 and r.view.Size.Y==.58)
  assert(source.LocalTransparencyModifier==1 and not r.view.CanCollide and not r.view.CanQuery)
 end)
-check('ordinary scattered ore shows a minimal mineral label even with reduced effects',function()
+check('the pickup action highlights only its current rock, even with reduced effects',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
+ local focus
+ view.pickupFocus=function() return focus end
  source:SetAttribute('SnapshotAt',realTime+.01);source:SetAttribute('Velocity',Vector3.new(10,16,0))
  view:update(1/60,realTime+.01)
- assert(r.label.Enabled and r.label.Mineral.Text=='Ore' and #r.label:GetChildren()==2 and r.view.Name=='CollectibleOre')
+ assert(not r.label and not r.selection and r.view.Name=='CollectibleOre')
+ focus=1
  pl:SetAttribute('ReducedEffects',true);view:update(1/60,realTime+.02)
- assert(r.label.Enabled and not r.modifierFX)
+ assert(r.label.Enabled and r.label.Mineral.Text=='Ore' and r.selection.Enabled and not r.modifierFX)
+ focus=nil;view:update(1/60,realTime+.03)
+ assert(not r.label and not r.selection,'the highlight outlived the pickup action')
  pl:SetAttribute('ReducedEffects',false);workspace.CurrentCamera=camera
 end)
 check('landing settles the fragment without adding another mining sound',function()
@@ -96,7 +101,7 @@ check('ordinary ore clinks once when its buffered landing data arrives',function
  assert(#audio.calls==sounds+1,'landing cue replayed')
  renderer:destroy();loose:Destroy()
 end)
-check('stacked icons and particles follow the drop while the launch trail finishes',function()
+check('modifier pills follow the highlighted drop and untargeted ore keeps its particles',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
  local cargo=fixturePart(root,'RawCrystalCargo',Vector3.new(0,3,0),Vector3.new(1.48,1.70,1.42))
  cargo.Material=Enum.Material.SmoothPlastic
@@ -106,6 +111,7 @@ check('stacked icons and particles follow the drop while the launch trail finish
   OreLaunchVelocity=Vector3.new(7,30,0)}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio);local record=assert(renderer.records[cargo])
  local sounds=#audio.calls
+ renderer.pickupFocus=function() return 3 end
  renderer:update(1/60,realTime+.2)
  local ribbon=assert(record.ribbon)
  assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and record.label.Enabled)
@@ -114,7 +120,7 @@ check('stacked icons and particles follow the drop while the launch trail finish
  local bits=Mining.ROCK_MODIFIERS
  cargo:SetAttribute('RockModifiers',bit32.bor(bits.Massive,bits.Frosted,bits.Charged))
  renderer:update(1/60,realTime+.21)
- assert(record.label.Mineral.Text=='Ruby' and record.label.Charged and record.label.Frosted and record.label.Massive)
+ assert(record.label.Mineral.Text=='Ruby' and record.label.Charged.TextSize>=15 and record.label.Frosted and record.label.Massive)
  assert(record.view.Material==cargo.Material and record.view.Color==cargo.Color and record.view.Size==cargo.Size)
  assert(not record.view:FindFirstChildWhichIsA('BasePart',true),'modifier added visible geometry to the ore')
  assert(not record.modifierFX,'modifier landing burst started during the launch')
@@ -135,12 +141,14 @@ check('stacked icons and particles follow the drop while the launch trail finish
  assert(particles.Frosted.flakes.Emitted>0 and particles.Frosted.mist.ZOffset<0 and particles.Massive.dust.Emitted>0)
  local display=record.displayRig
  assert(display.tint==record.effectColor and display.outline.FillTransparency==1 and display.rings.shadow.Visible)
- for _,ring in ipairs(display.rings) do assert(ring.Visible) end
+ local visibleRings=0
+ for _,ring in ipairs(display.rings) do if ring.Visible then visibleRings+=1 end end
+ assert(visibleRings==3)
  assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land' and audio.calls[#audio.calls].position.X==4)
  assert(record.idle and record.idle.emitter.Emitted==1,'physical ore missed its landing sparkle')
  cargo:SetAttribute('CollectedAt',realTime+1.16)
  renderer:update(1/60,realTime+1.16)
- assert(not record.label.Enabled)
+ assert(not record.label and not record.selection)
  renderer:update(1/60,realTime+1.37)
  assert(renderer.records[cargo]==record and record.view.Transparency==1 and ribbon.trail.Parent==record.view,
   'a quick collection cut the remaining trail segments')
@@ -249,9 +257,9 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  end
  assert(mostLit>0 and mostLit<=12 and renderer.idleCount==lit)
  assert(renderer.idleCount+#renderer.idlePool<=12,'glint pool exceeded the visual budget')
- local gui=renderer.records[sources[2]].label
- assert(gui.Adornee==renderer.records[sources[2]].view and gui.Mineral.Text=='Ore')
- assert(renderer.records[sources[1]].label.Enabled and not renderer.records[sources[80]].label)
+ for _,source in ipairs(sources) do
+  assert(not renderer.records[source].label,'unselected rocks displayed a label')
+ end
  assert(#renderer.displays==12 and #visuals:GetChildren()==92,'the display pool exceeded its budget')
  local rig=renderer.displays[1]
  assert(rig.record==renderer.records[sources[1]] and rig.outline.Adornee==rig.record.view and rig.outline.Enabled
@@ -278,7 +286,6 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  assert(rig.outline.Adornee==renderer.records[sources[1]].view,'changing the distance order retargeted an existing outline')
  workspace.CurrentCamera.CFrame=CFrame.new(15,2,0)
  renderer:update(1/60,realTime+5)
- assert(renderer.records[sources[2]].label==gui and math.abs(gui.Adornee.CFrame.Position.X-1.5)<.7)
  local first=renderer.records[sources[2]]
  sources[2]:SetAttribute('Units',4)
  renderer:update(1/60,realTime+6)
@@ -310,6 +317,11 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  assert(renderer.idleCount==0 and rig.record==first and rig.outline.Enabled and rig.surface.Enabled
   and not rig.curves[1].Enabled,'reduced effects did not simplify the ore display')
  pl:SetAttribute('ReducedEffects',false)
+ sources[2]:SetAttribute('RockModifiers',Mining.ROCK_MODIFIERS.Big)
+ sources[2]:SetAttribute('ExpiresAt',realTime+15)
+ renderer:update(1/60,realTime+15.21)
+ assert(first.view.Transparency==0 and not first.label,'a modified rock faded at a stale normal deadline')
+ sources[2]:SetAttribute('ExpiresAt',nil)
  sources[2]:SetAttribute('Homing',true);sources[2]:SetAttribute('SnapshotAt',realTime+15.21)
  renderer:update(1/60,realTime+15.23)
  local alpha=rig.core.ImageTransparency

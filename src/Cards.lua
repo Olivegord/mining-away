@@ -211,7 +211,7 @@ local function preview(p,c)
  local lines={}
  if c.effects.compactor then table.insert(lines,{label='Compactor drones',before=0,after=1,unit=''}) end
  if c.effects.shiftRelay then table.insert(lines,{label='Mining boost after delivery',before=Workshop.effect(p,'shiftRelay'),after=Workshop.effect(p,'shiftRelay',c),unit='s'}) end
- if c.effects.batchPress or c.effects.denserPacking then table.insert(lines,{label='Rocks per full press',before=Workshop.compactorBatch(p),after=Workshop.compactorBatch(p,c),unit='rocks'}) end
+ if c.effects.batchPress or c.effects.denserPacking then table.insert(lines,{label='Merge time',before=Workshop.pressDuration(p),after=Workshop.pressDuration(p,c),unit='seconds'}) end
  if c.effects.cargoRack then table.insert(lines,{label='Emptier turnaround rate',before=1+.5*Workshop.effect(p,'cargoRack'),after=1+.5*Workshop.effect(p,'cargoRack',c),unit='×'}) end
  if c.effects.fieldCharge then table.insert(lines,{label='Field recharge',before=Workshop.effect(p,'fieldCharge'),after=Workshop.effect(p,'fieldCharge',c),unit='battery/s'}) end
  if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end

@@ -261,7 +261,7 @@ function F.courierLoad(units)
  return 1.65+load*.56,1/(1+.26*load)
 end
 function F.gunImpulse(role,from,to,mass)
- local momentum=role=='Needler' and 7 or role=='Ballcaster' and 15 or 0
+ local momentum=role=='Needler' and 1.75 or role=='Ballcaster' and 15 or 0
  local delta=from-to
  return delta.Magnitude>.001 and delta.Unit*(momentum/(mass or 1)) or Vector3.zero
 end

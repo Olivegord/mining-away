@@ -109,6 +109,8 @@ def module_bundle(names):
     if embedded=='GemAppearance':
      module=module.replace("require('./GemGeometry')",'(function()\n'+(ROOT/'src/GemGeometry.lua').read_text().replace("require('./GemRefinement')", '(function()\n'+(ROOT/'src/GemRefinement.lua').read_text()+'\nend)()')+'\nend)()')
     code=code.replace("require('./"+embedded+"')",'(function()\n'+module+'\nend)()')
+  if name=='SpecialDroneMotion':
+   code=code.replace("require('./DroneStatus')",'(function()\n'+(ROOT/'src/DroneStatus.lua').read_text()+'\nend)()')
   if name=='PickupView':
    code=code.replace("require('./MineralLineup')",'(function()\n'+(ROOT/'src/MineralLineup.lua').read_text()+'\nend)()')
   if name=='CrystalCuts':

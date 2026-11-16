@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 15 — plot, mining crew, and Compactor polish
+
+Keep the selected plot floor whitish and put color on the edges. The yellow Needler should shoot about four times as often for the same sustained damage; keep the other guns distinct. Highlight the loose rock offered for pickup and show its larger modifier pills only while highlighted. Modified drops never blink or expire during the run.
+
+The Compactor should fly to open space, mark two visible loose rocks of the same size, reel them in with two grapples, then eject a single larger rock in an arc with the existing particle treatment. Prefer a larger matching pair when there is one. Its size progression is ordinary → Big → Massive → Titan. Add useful indicators above the drones: a battery bar for lasers, merge progress and a spinning wheel for the Compactor, and a short staggered thinking wheel for new plot orders. Place workers on a shared rock according to the drones actually there to mine it; reservations in flight should leave no gaps.
+
 ## November 15 — direct reel
 
 Remove the slack and ground drag. The Emptier should lift the rock into the cradle as soon as it grabs it.

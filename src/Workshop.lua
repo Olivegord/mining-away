@@ -183,13 +183,14 @@ end
 W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30
 W.BLOCK_SIZE={1.45,.90,1.22}
-W.COMPACTOR_BATCH=3
-W.COMPACTOR_WAIT=5
-W.COMPACTOR_PARTIAL_WAIT=1.5
-W.COMPACTOR_REACH=12
+W.COMPACTOR_BATCH=2
+W.COMPACTOR_REACH=16
+W.GRAPPLE_MARK=.28
+W.GRAPPLE_CAST=.16
+W.GRAPPLE_REEL=.56
+W.PRESS_DURATION=2.2
 W.PRESS_CONTACT=.43
-W.PRESS_EJECT=.82
-W.PRESS_RESET=1.20
+W.PRESS_RECOVER=.38
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
 -- New physical cargo occupies one slot per object. Keep legacy mineral keys
 -- unchanged so existing bags and in-flight Emptier manifests retain value.
@@ -232,8 +233,8 @@ W.CATALOG={
  {id='Q_TURBO_ROTOR',title='Twin Thrusters',scope='Individual',category='flight',tier=2,max=1,step={twinThrusters=1},color={255,137,66},icon='flight',crystalRun=true,hardware=true},
  {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
  {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
- {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
- {id='Q_DENSER_PACK',title='Denser Packing',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_BATCH_PRESS',title='Quick Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_DENSER_PACK',title='Rapid Cycling',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
  {id='Q_CARGO_RACK',title='Quick Turnaround',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
  {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
@@ -262,7 +263,7 @@ function W.hasCompactor(p,extra)
  for _,d in ipairs(p.fleet) do if d.role=='Compactor' then return true end end
  return W.effect(p,'compactor',extra)>0
 end
-function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra)+W.effect(p,'denserPacking',extra) end
+function W.pressDuration(p,extra) return W.PRESS_DURATION/(1+.3*W.effect(p,'batchPress',extra)+.2*W.effect(p,'denserPacking',extra)) end
 function W.emptierBatch() return W.EMPTIER_BATCH end
 function W.emptierCooldown(base,p,extra) return base/(1+.5*W.effect(p,'cargoRack',extra)) end
 W.STAR_CATALOG={

@@ -117,7 +117,7 @@ local function updateDisplays(self,now,reducedMotion,reducedEffects)
   elseif r then
    rig.releaseAt=rig.releaseAt or now
    local tail=math.clamp(1-(now-rig.releaseAt)/DISPLAY_TAIL,0,1)*r.displayStrength
-   if tail>.02 and (not r.expiresAt or now<r.expiresAt) then
+   if tail>.02 and (r.modifiers~=0 or not r.expiresAt or now<r.expiresAt) then
     PickupDisplay.draw(rig,r,r.displayGround,now,tail,reducedMotion,reducedEffects)
    else
     PickupDisplay.hide(rig);r.displayRig=nil;rig.record=nil;rig.outline.Adornee=nil
@@ -180,6 +180,20 @@ local function sample(r,source,now)
   floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true,dronePull=source:GetAttribute('DronePull')==true,
   seated=source:GetAttribute('PressSocket')~=nil})
  while #r.samples>5 do table.remove(r.samples,1) end
+end
+local function newGrapple(view)
+ local root=Instance.new('Folder');root.Name='CompactorGrapple';root.Parent=view
+ local a=Instance.new('Attachment');a.Name='Winch';a.Parent=view
+ local head=Instance.new('Part');head.Name='GrappleHead';head.Shape=Enum.PartType.Ball
+ head.Size=Vector3.new(.21,.28,.21);head.Material=Enum.Material.Metal
+ head.Color=Color3.fromRGB(253,202,117);head.Anchored=true;head.CanCollide=false
+ head.CanTouch=false;head.CanQuery=false;head.CastShadow=false;head.Parent=root
+ local b=Instance.new('Attachment');b.Parent=head
+ local line=Instance.new('Beam');line.Name='GrappleCable';line.Attachment0=a;line.Attachment1=b
+ line.FaceCamera=true;line.Width0=.072;line.Width1=.041;line.LightEmission=.48
+ line.Color=ColorSequence.new(Color3.fromRGB(166,134,96),Color3.fromRGB(255,210,133));line.Parent=root
+ root.Destroying:Once(function() a:Destroy() end)
+ return {root=root,a=a,head=head}
 end
 function V.new(root,parent,audio,reducedMotion)
  GemAppearance.prepare()
@@ -282,6 +296,7 @@ function V:update(dt,now)
  local rootPart=character and character:FindFirstChild('HumanoidRootPart')
  MineralLineup.update(self.lineup,now,reducedMotion,reducedEffects,rootPart and rootPart.Position,cameraPosition)
  local displayAt=now-PickupMotion.DELAY
+ local focusId=self.pickupFocus and self.pickupFocus()
  table.clear(self.displayCandidates)
  for source,r in pairs(self.records) do
   local replayAt=r.previewReplayAt
@@ -335,7 +350,7 @@ function V:update(dt,now)
     r.landAge=math.max(0,contactAt-r.born)
    end
    sample(r,source,now)
-   opacity=PickupMotion.expiryOpacity(now,r.expiresAt,reducedEffects or reducedFlashing)
+   if r.modifiers==0 then opacity=PickupMotion.expiryOpacity(now,r.expiresAt,reducedEffects or reducedFlashing) end
   else
    r.removedAt=r.removedAt or now
    -- Keep the record briefly in case its collection receipt arrives late.
@@ -353,7 +368,9 @@ function V:update(dt,now)
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
    if r.faceted then GemAppearance.update(r.view,0) end
-   if r.label then r.label.Enabled=false end
+   if r.label then r.label:Destroy();r.label=nil end
+   if r.selection then r.selection:Destroy();r.selection=nil end
+   if r.grapple then r.grapple.root:Destroy();r.grapple=nil end
    finishTrail(self,r,now);removeIdle(self,r)
    if r.liftDust and not r.liftTail then r.liftTail=now+.42 end
    if r.ribbon or r.liftTail and now<r.liftTail then r.view.Transparency=1
@@ -470,7 +487,7 @@ function V:update(dt,now)
    end
    local floor=arcLanded and r.arc.floor or latest.floor
    if live and not seated and not pulling and landingAge and landingAge>=0 and floor and cameraPosition
-    and (not r.expiresAt or now<r.expiresAt) then
+    and (r.modifiers~=0 or not r.expiresAt or now<r.expiresAt) then
     local ground=Vector3.new(r.pos.X,floor-.21,r.pos.Z)
     local distance=(ground-cameraPosition).Magnitude
     if distance<DISPLAY_RANGE then
@@ -490,12 +507,40 @@ function V:update(dt,now)
    if cameraPosition then
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
-    if loose and distance<44 and not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
-    if r.label then r.label.Enabled=loose and distance<44 end
+    local marked=live and source:GetAttribute('PressMarked')==true
+    local selected=loose and r.seed==focusId and not r.preview
+    local highlighted=(selected or marked) and distance<44
+    if highlighted then
+     if not r.selection then
+      local outline=Instance.new('Highlight');outline.Name='SelectedOre';outline.Adornee=r.view
+      outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.OutlineTransparency=.03
+      outline.FillTransparency=.84;outline.Enabled=true;outline.Parent=r.view;r.selection=outline
+     end
+     local tint=marked and Color3.fromRGB(255,193,106) or Color3.fromRGB(251,254,255)
+     r.selection.OutlineColor=tint;r.selection.FillColor=tint
+     if not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
+    end
+    if not highlighted then
+     if r.selection then r.selection:Destroy();r.selection=nil end
+     if r.label then r.label:Destroy();r.label=nil end
+    end
+    local cast=marked and source:GetAttribute('PressCastAt')
+    local mount=cast and distance<85 and self.pressMount
+     and self.pressMount(source:GetAttribute('PressDrone'),source:GetAttribute('PressSlot'))
+    if mount and displayAt>=cast then
+     r.grapple=r.grapple or newGrapple(r.view)
+     local t=math.clamp((displayAt-cast)/Workshop.GRAPPLE_CAST,0,1)
+     r.grapple.a.WorldPosition=mount
+     r.grapple.head.Position=mount:Lerp(r.drawPosition,t)+Vector3.yAxis*(math.sin(t*math.pi)*.55)
+    elseif r.grapple then r.grapple.root:Destroy();r.grapple=nil end
     if r.modifiers~=0 and landingAge and landingAge>=0 and loose and distance<62 and not reducedEffects and not reducedMotion then
      RockModifierView.drop(r,now,landingAge,reducedFlashing)
     end
-   elseif r.label then r.label.Enabled=false end
+   else
+    if r.label then r.label:Destroy();r.label=nil end
+    if r.selection then r.selection:Destroy();r.selection=nil end
+    if r.grapple then r.grapple.root:Destroy();r.grapple=nil end
+   end
    local canGlint=landingAge and ((landingAge<.24 and (live or r.collectAt)) or (live and not seated and not pulling))
    if (r.arc or r.physical) and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
     local distanceFade=math.clamp((72-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)

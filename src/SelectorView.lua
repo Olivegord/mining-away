@@ -245,10 +245,10 @@ function V:step(dt)
  local pinWidth=o.player:GetAttribute('MA_SelectorWidth') or width
  local click,flashStrength=self:flashState()
  showOutline(self.activeEdge,pin,pinWidth,color)
- showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,color,.04)
+ showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,white,.04)
  local preview,previewWidth,strength=self:previewState()
  showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor)
- showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,previewColor,.065)
+ showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,white,.065)
  showFill(self.flash,click and click.point,click and click.width or width,flashStrength*.86,white,.09)
 end
 

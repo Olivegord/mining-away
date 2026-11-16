@@ -3,7 +3,19 @@
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 M.SELECTOR_RANGE=44
 M.SELECTOR_LEASH=100
-M.ROCK_MODIFIERS={Massive=1,Charged=2,Frosted=4}
+M.ROCK_MODIFIERS={Massive=1,Charged=2,Frosted=4,Big=8,Titan=16}
+M.SIZE_BITS={0,M.ROCK_MODIFIERS.Big,M.ROCK_MODIFIERS.Massive,M.ROCK_MODIFIERS.Titan}
+M.ORE_SIZE_SCALE={1,1.32,1.72,2.18}
+function M.sizeTier(mask)
+ for tier=4,2,-1 do if bit32.btest(mask or 0,M.SIZE_BITS[tier]) then return tier end end
+ return 1
+end
+function M.nextSizeMask(first,second)
+ local tier=M.sizeTier(first)
+ if tier>=4 or tier~=M.sizeTier(second) then return nil end
+ local other=bit32.band(bit32.bor(first or 0,second or 0),bit32.bnot(bit32.bor(M.SIZE_BITS[2],M.SIZE_BITS[3],M.SIZE_BITS[4])))
+ return bit32.bor(other,M.SIZE_BITS[tier+1])
+end
 M.MASSIVE_CHANCE=.09
 M.MASSIVE_SCALE=1.38
 local SELECTOR_GRID=2

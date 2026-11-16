@@ -182,7 +182,7 @@ local fieldTestRoles={
  Needler={label='Needler',color=Color3.fromRGB(255,195,94),detail='Fires quick darts. Hits exposed deep cores 25% harder.'},
  Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Deals 50% more damage through the first two layers of deep crystals.'},
  Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
- Compactor={label='Compactor',color=Color3.fromRGB(255,184,83),detail='Presses loose rocks into one block worth the sum of its inputs.'},
+ Compactor={label='Compactor',color=Color3.fromRGB(255,184,83),detail='Grapples matching loose rocks and merges them into the next size.'},
 }
 for name,role in pairs(fieldTestRoles) do
  DroneConfig.Types[name]={DisplayName=role.label,Description=role.detail,Color=role.color,Accent=role.color:Lerp(Color3.new(1,1,1),.5),Scale=.9,MaxHealth=80,Speed=26,FlightHeight=3.2,AttackStyle='Special',AttackRange=20,AttackCooldown=1,Damage=12,Weight=1}
@@ -208,7 +208,7 @@ for name in pairs(fieldTestRoles) do
 end
 
 DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold=.55,LaunchHold=.25,UnloadHold=.65}
-DroneConfig.PressSockets = {Vector3.new(0,-1.32,.79),Vector3.new(-.86,-1.32,-.67),Vector3.new(.86,-1.32,-.67),Vector3.new(-1.72,-1.32,.79),Vector3.new(1.72,-1.32,.79)}
+DroneConfig.PressSockets = {Vector3.new(-1.07,-1.32,-.18),Vector3.new(1.07,-1.32,-.18)}
 
 -- Quarry machines share painted stone-gray panels and worn metal at working
 -- surfaces. The old Mesh, weld and emitter stay in every clone as the rig.

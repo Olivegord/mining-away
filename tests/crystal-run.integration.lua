@@ -1004,99 +1004,50 @@ end
 tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(-130,3,0)))
 local foreign=pressOre('Quartz',70,tester.UserId);foreign.runId=data(testCrew).run.id
 Pro.addCargo(data(buyer),'Quartz',10,10)
-press.pos=floor+Vector3.new(0,3.2,0)
+press.pos=floor+Vector3.new(0,8,0)
 local function pressTicks(count)
- for _=1,count do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end
+ for _=1,count do
+  realTime+=C.Tick;now=realTime
+  if press.pressJob then press.pos=press.pressJob.position end
+  pickupStep(C.Tick)
+ end
 end
-local lone=pressOre('Quartz',5)
-local remote=pressOre('Quartz',6,nil,floor+Vector3.new(20,0,0))
-pressTicks(20)
-assert(not buyer.compactorTarget and not lone.pressSocket and not remote.pressSocket,'isolated rocks started a batch')
-local relaying=pressOre('Quartz',7)
+local big=Mining.ROCK_MODIFIERS.Big
+local charged=Mining.ROCK_MODIFIERS.Charged
+local massive=Mining.ROCK_MODIFIERS.Massive
+local lone=pressOre('Quartz',5,nil,nil,big)
+local remote=pressOre('Quartz',6,nil,floor+Vector3.xAxis*20,big)
+local otherSize=pressOre('Quartz',7,nil,floor+Vector3.xAxis*2,massive)
+pressTicks(80)
+assert(not press.pressJob and not lone.pressSocket and not remote.pressSocket,'isolated or mismatched rocks started a merge')
+local relaying=pressOre('Quartz',7,nil,nil,big)
 relaying.relayUntil=now+1
 pressTicks(20)
-assert(not buyer.compactorTarget and not relaying.pressSocket,'press interrupted an in-flight Vacuum relay')
-for _,drop in ipairs({lone,remote,relaying}) do
+assert(not press.pressJob and not relaying.pressSocket,'press interrupted an in-flight Vacuum relay')
+for _,drop in ipairs({remote,otherSize,relaying}) do
  pickups[drop.part:GetAttribute('PickupId')]=nil;drop.part:Destroy()
 end
-local raw={pressOre('Quartz',10,nil,nil,2),pressOre('Quartz',12,nil,nil,4),pressOre('Quartz',14,nil,nil,1),pressOre('Quartz',16)}
-for _=1,50 do
- pressTicks(1)
- if raw[2].pressSocket then break end
-end
-assert(raw[1].pressSocket==1 and raw[2].pressSocket==2 and not raw[3].pressSocket)
-assert(raw[1].x~=raw[2].x or raw[1].z~=raw[2].z,'press inputs overlapped')
-local beforeNudge=buyer.miningSquare
-input('PlaceSelector','nudge-press',{fieldId=f.id,position=f.center+Vector3.xAxis*2})
-pressTicks(1)
-assert(buyer.miningSquare~=beforeNudge and press.pressSquare==buyer.miningSquare and raw[1].pressSocket==1 and raw[2].pressSocket==2,
- 'nudging the pin released the loaded press')
-pressTicks(70)
-local pressedOre=pickups[pickupSerial]
-assert(pressedOre.units==1 and pressedOre.tierMaterial=='Quartz' and pressedOre.compacted)
-assert(pressedOre.value==36,'press lost value or minted Quartz')
-assert(pressedOre.modifiers==7 and pressedOre.part:GetAttribute('RockModifiers')==7)
-pressTicks(math.ceil(1.5/C.Tick))
-assert(not raw[4].pressSocket and raw[4].part.Parent and not buyer.compactorTarget,'a single rock was trapped')
-assert(foreign.part.Parent and Pro.cargoUnits(data(buyer))==10,'press changed foreign ore or a full bag')
-
-pressOre('RunEmerald',2560);pressOre('RunEmerald',2700)
-pressTicks(math.ceil(2.75/C.Tick))
-local deepBlock=pickups[pickupSerial]
-assert(deepBlock.tierMaterial=='RunEmerald' and deepBlock.compacted and deepBlock.units==1 and deepBlock.value==5260)
-assert(pressedOre.part.Parent and pressedOre.units==1,'already compacted cargo entered the press again')
-print('PASS Compactor leaves isolated rocks and Vacuum relays alone, and ejects two-rock batches sooner')
-
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_BATCH_PRESS,3));publish(buyer)
-pressOre('RunRuby',40);pressOre('RunRuby',41)
-pressTicks(90+math.ceil(Workshop.PRESS_EJECT/C.Tick))
-local upgraded=pickups[pickupSerial]
-assert(upgraded.tierMaterial=='RunRuby' and upgraded.units==1 and upgraded.value==81)
-
-local legacyPress=table.remove(data(buyer).run.cards)
-table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_DENSER_PACK,3));publish(buyer)
-assert(buyer.compactorBatch==5)
-for value=50,54 do pressOre('RunCobalt',value) end
-pressTicks(150+math.ceil(Workshop.PRESS_EJECT/C.Tick))
-local dense=pickups[pickupSerial]
-assert(dense.tierMaterial=='RunCobalt' and dense.compacted and dense.units==1 and dense.value==260,
- 'a partial timer fired before the five-rock batch finished')
-table.remove(data(buyer).run.cards);table.insert(data(buyer).run.cards,legacyPress);publish(buyer)
-
-do
- local first,second=pressOre('RunRuby',38),pressOre('RunRuby',42)
- for _=1,50 do pressTicks(1);if second.pressSocket then break end end
- assert(first.pressSocket and second.pressSocket)
- local before=pickupSerial
- local dock=press.pos
- input('PlaceSelector','move-past-press',{fieldId=f.id,position=f.center+Vector3.xAxis*32})
- pressTicks(1)
- assert(not press.pressSquare and press.model:GetAttribute('PressAt') and not pickups[first.part:GetAttribute('PickupId')]
-  and not pickups[second.part:GetAttribute('PickupId')],'a loaded Compactor dropped its batch on a distant repin')
- local startedAt=press.model:GetAttribute('PressAt')
- while now+C.Tick<startedAt+Workshop.PRESS_EJECT do
-  pressTicks(1)
-  assert(pickupSerial==before,'pressed cargo appeared before the jaws reached the ejection beat')
- end
- for _=1,math.ceil(.2/C.Tick) do pressTicks(1);if pickupSerial>before then break end end
- local output=assert(pickups[before+1])
- assert(pickupSerial==before+1 and output.compacted and output.units==1 and output.value==80)
- assert((output.part.Position-dock).Magnitude<4,'the pressed block did not eject at the old dock')
- pressTicks(math.ceil(.7/C.Tick))
- assert(pickupSerial==before+1,'the old load ejected twice')
- input('PlaceSelector','return-to-press-field',{fieldId=f.id,position=f.center})
- local lone,pair=pressOre('RunRuby',34),pressOre('RunRuby',39)
- local beforeSingle=pickupSerial
- for _=1,70 do pressTicks(1);if lone.pressSocket then break end end
- assert(lone.pressSocket and not pair.pressSocket)
- input('PlaceSelector','move-with-one-rock',{fieldId=f.id,position=f.center+Vector3.xAxis*32})
- pressTicks(1)
- assert(not lone.pressSocket and not press.pressSquare and pickupSerial==beforeSingle and lone.part.Parent,
-  'a distant repin did not release the lone input without an output')
- for _,drop in ipairs({lone,pair}) do pickups[drop.part:GetAttribute('PickupId')]=nil;drop.part:Destroy() end
- input('PlaceSelector','return-after-single',{fieldId=f.id,position=f.center})
- print('PASS a distant repin finishes one loaded Compactor batch at its old dock and releases a lone rock')
-end
+local matched=pressOre('Quartz',12,nil,floor+Vector3.xAxis*3,bit32.bor(big,charged))
+for _=1,140 do pressTicks(1);if matched.pressSocket then break end end
+local job=assert(press.pressJob)
+assert(lone.pressSocket and matched.pressSocket and lone.x~=matched.x)
+assert(math.abs(job.finishAt-job.startedAt-Workshop.PRESS_DURATION/1.3)<1e-8)
+local dock=press.pos
+local serial=pickupSerial
+input('PlaceSelector','move-past-press',{fieldId=f.id,position=f.center+Vector3.xAxis*32})
+pressTicks(1)
+assert(press.pressJob==job and matched.pressSocket,'a loaded Compactor dropped the pair on a distant repin')
+while now+C.Tick<job.finishAt do pressTicks(1);assert(pickupSerial==serial) end
+pressTicks(2)
+local merged=assert(pickups[serial+1])
+assert(not merged.compacted and merged.units==1 and merged.value==17 and merged.arc)
+assert(merged.modifiers==bit32.bor(massive,charged) and (merged.part.Position-dock).Magnitude<4)
+assert(foreign.part.Parent and Pro.cargoUnits(data(buyer))==10,'press changed foreign ore or a full bag')
+pressTicks(55)
+assert(pickupSerial==serial+1,'the old pair ejected twice')
+input('PlaceSelector','return-to-press-field',{fieldId=f.id,position=f.center})
+print('PASS Compactor excludes isolated or mismatched rocks and Vacuum relays, finishes its held pair after repinning, and never touches foreign ore or a full bag')
 
 -- Actual movement consumes one parcel and unloads its manifest exactly once.
 local emptier=buyer.drones[4]
