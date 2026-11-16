@@ -1764,7 +1764,10 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
  end})
 pickupView.sales=SaleView.new({hud=tacticalHUD,player=player,world=world,parent=localFX,presentation=presentation,
  reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible})
-connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt) pickupView.sales:receive(receipt) end)
+connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt)
+ soundscape:observeSale(receipt)
+ pickupView.sales:receive(receipt)
+end)
 connect(RunService.RenderStepped,function(dt) pickupView.sales:update(dt) end)
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
@@ -2024,6 +2027,7 @@ connect(RunService.Heartbeat,function(dt)
  end
  evade.Visible=ownActive and not menusVisible();evade.Text=touch and 'Evade shot' or 'Evade [Q]'
  soundscape:setContext(ownActive,menusVisible())
+ soundscape:observeMining(world,ownerRoot(),drones,resourceIndex,player.UserId,now)
  hud.Visible=not menusVisible() and not (l.short and ownActive)
  if not ownActive and (l.mobile or touch) and not l.actionAtTop then recall.Position=UDim2.fromOffset((view.X-l.recallWidth)/2,l.recallY) end
  if #reprints>0 and os.clock()>noticeUntil then notice.Text=#reprints>2 and tostring(#reprints)..' drones reprinting for free' or table.concat(reprints,' · ') end

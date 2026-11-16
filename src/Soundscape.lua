@@ -6,13 +6,18 @@ local TweenService = game:GetService('TweenService')
 local Debris = game:GetService('Debris')
 local Players = game:GetService('Players')
 local Http = game:GetService('HttpService')
+local MusicDirector = require('./MusicDirector')
 local Soundscape = {}; Soundscape.__index = Soundscape
 
 local TRACKS = {
- {name='Bossa Me (a)',id='1837768517'},
- {name='Heavenly Fields',id='1835928951'},
- {name='The City',id='1835929012'},
+ Amber={name='Ambient',id='116857311274471'},
+ Ruby={name='Matt’s Emotional Ambient Synthscape',id='81744055232053'},
+ Quartz={name='Calm Ambient Dreamscape',id='105147018523009'},
+ Violet={name='Sci-Fi Ambient',id='133891253196953'},
+ Diamond={name='Deep Ambient',id='102181496252358'},
+ Sell={name='Chill Ambient',id='124734593853134'},
 }
+local FIELD_CONTEXT = {'Amber','Ruby','Quartz','Violet','Diamond'}
 local CUES = {
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
@@ -134,11 +139,20 @@ local function group(parent,name,volume)
 end
 function Soundscape.new(effectParent)
  local folder=Instance.new('SoundGroup');folder.Name='DroneBlowerSoundscape';folder.Volume=1;folder.Parent=SoundService
- local self=setmetatable({folder=folder,effectParent=effectParent,tracks={},bank={},cooldowns={},
-  voices=0,closed=false,musicMuted=true,effectsMuted=false,combat=false,menu=false,
+ local self=setmetatable({folder=folder,effectParent=effectParent,bank={},cooldowns={},
+  voices=0,closed=false,musicMuted=false,effectsMuted=false,combat=false,menu=false,
   loops={},loopCount=0,active={},cueVoices={},droneStates={},
-  nextIndex=1,current=nil,lastMusicVolume=-1,random=Random.new()},Soundscape)
+  nextMusicSample=0,nextMusicCheck=0,musicRetryAt=0,lastMusicVolume=-1,random=Random.new()},Soundscape)
+ self.musicDirector=MusicDirector.new(Random.new(),os.clock())
  self.musicGroup=group(folder,'Music',0)
+ local music=Instance.new('Sound');music.Name='BackgroundMusic';music.Volume=0
+ music.Looped=false;music.SoundGroup=self.musicGroup;music.Parent=folder
+ self.music=music
+ music.Ended:Connect(function()
+  if self.closed or not self.current then return end
+  self.current=nil
+  self.musicDirector:finished(os.clock())
+ end)
  self.effectsGroup=group(folder,'Actions',1)
  self.crystalGroup=group(folder,'OriginalCrystals',1)
  local eq=Instance.new('EqualizerSoundEffect');eq.Name='GentleActionMix';eq.LowGain=0;eq.MidGain=0;eq.HighGain=-3;eq.Parent=self.effectsGroup
@@ -151,11 +165,6 @@ function Soundscape.new(effectParent)
  self.listenerToken=Http:GenerateGUID(false)
  self:_listenerStep()
  local preload={}
- for _,track in ipairs(TRACKS) do
-  local sound=Instance.new('Sound');sound.Name=track.name;sound.SoundId='rbxassetid://'..track.id
-  sound.Volume=0;sound.Looped=false;sound.PlayOnRemove=false;sound.SoundGroup=self.musicGroup;sound.Parent=folder
-  table.insert(self.tracks,sound);table.insert(preload,sound)
- end
  -- Reuse one loaded template per asset, even when several cues share a clip.
  for _,cue in pairs(CUES) do for _,id in ipairs(cue.ids or {cue.id}) do if not self.bank[id] then
   local sound=Instance.new('Sound');sound.Name='Toolbox_'..id;sound.SoundId=cue.localSound or 'rbxassetid://'..id
@@ -178,24 +187,69 @@ function Soundscape.new(effectParent)
  end)
  return self
 end
+function Soundscape:observeMining(world,root,drones,resourceIndex,owner,serverNow)
+ local now=os.clock()
+ if now<self.nextMusicSample then return end
+ self.nextMusicSample=now+1
+ local context,fieldId
+ local map=world:FindFirstChild('Map')
+ local run=map and map:FindFirstChild('CrystalRun')
+ if root and run then
+  for _,model in ipairs(run:GetChildren()) do
+   local bed=model:FindFirstChild('Field')
+   if bed and bed:IsA('BasePart') then
+    local field=FIELD_CONTEXT[bed:GetAttribute('CrystalZone')]
+    local offset=bed.CFrame:PointToObjectSpace(root.Position)
+    if field and math.abs(offset.X)<=bed.Size.X*.5 and math.abs(offset.Z)<=bed.Size.Z*.5
+     and math.abs(offset.Y)<=bed.Size.Y*.5+12 then
+     context=field;fieldId=bed:GetAttribute('FieldId')
+     break
+    end
+   end
+  end
+ end
+ local working=false
+ if fieldId then
+  for drone in pairs(drones) do
+   local state=drone:GetAttribute('State')
+   if (state=='Mine' or state=='Warmup' or state=='SpecialMine' or state=='BreakerDive')
+    and drone:GetAttribute('Owner')==owner and not drone:GetAttribute('WorkPaused')
+    and not drone:GetAttribute('MotionPaused') and AudioFeedback.fresh(drone:GetAttribute('SnapshotAt'),serverNow) then
+    local target=resourceIndex[tostring(drone:GetAttribute('TargetId') or '')]
+    if target and target.source:GetAttribute('FieldId')==fieldId then working=true;break end
+   end
+  end
+ end
+ self.musicDirector:observe(now,context,working)
+end
+function Soundscape:observeSale(receipt)
+ self.musicDirector:sale(os.clock(),receipt)
+end
 function Soundscape:_musicStep()
- if self.closed or self.musicMuted then return end
- local current=self.current
- local playing=current and current.IsPlaying
- local remaining=playing and current.TimeLength>0 and (current.TimeLength-current.TimePosition) or math.huge
- if playing and remaining>2 then return end
- local nextSound,index
- for offset=0,#self.tracks-1 do
-  local i=(self.nextIndex+offset-1)%#self.tracks+1;local candidate=self.tracks[i]
-  if candidate.IsLoaded and (candidate~=current or not playing) then nextSound=candidate;index=i;break end
+ if self.closed or self.musicMuted or self.current then return end
+ local now=os.clock()
+ if now<self.nextMusicCheck or now<self.musicRetryAt then return end
+ self.nextMusicCheck=now+.5
+ local context=not self.combat and not self.menu and self.musicDirector:eligible(now)
+ local track=context and TRACKS[context]
+ if not track then self.pendingTrack=nil;return end
+ local music=self.music
+ if self.pendingTrack~=track then
+  self.pendingTrack=track;self.musicLoadDeadline=now+20
+  music.Name=track.name;music.SoundId='rbxassetid://'..track.id
+  if not music.IsLoaded then
+   task.spawn(function() pcall(ContentProvider.PreloadAsync,ContentProvider,{music}) end)
+  end
+  return
  end
- if not nextSound then return end -- All unavailable: stay quiet and allow later loads to recover.
- self.nextIndex=index%#self.tracks+1;self.current=nextSound
- if current and current~=nextSound then
-  fade(current,math.min(2,remaining),0)
-  task.delay(2,function() if not self.closed and current~=self.current then current:Stop() end end)
+ if not music.IsLoaded then
+  if now>=self.musicLoadDeadline then self.pendingTrack=nil;self.musicRetryAt=now+45 end
+  return
  end
- nextSound.Volume=0;nextSound.TimePosition=0;nextSound:Play();fade(nextSound,2,1)
+ self.pendingTrack=nil
+ self.current=track
+ self.musicDirector:started(context)
+ music.Volume=0;music.TimePosition=0;music:Play();fade(music,3,1)
 end
 function Soundscape:setContext(combat,menu)
  self.combat=combat==true;self.menu=menu==true
@@ -208,7 +262,10 @@ function Soundscape:setContext(combat,menu)
 end
 function Soundscape:toggleMusic()
  self.musicMuted=not self.musicMuted;self:setContext(self.combat,self.menu)
- if self.musicMuted then for _,track in ipairs(self.tracks) do track:Stop() end end
+ if self.musicMuted then
+  if self.current then self.musicDirector:finished(os.clock()) end
+  self.current=nil;self.pendingTrack=nil;self.music:Stop()
+ end
  return not self.musicMuted
 end
 function Soundscape:toggleEffects()

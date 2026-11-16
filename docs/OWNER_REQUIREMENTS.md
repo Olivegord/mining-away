@@ -1,5 +1,12 @@
 # Owner requirements
 
+## November 15 — occasional field and sell-route music
+
+Use the six ambient tracks from Downloads as background music. Give the
+mining fields reserved songs that can start after sustained work, and give
+frequent sell trips their own song. Keep stretches of silence and let the
+current song finish when the player leaves or changes activities.
+
 ## November 15 — Downloads rock and weapon WAVs
 
 Split artninja's rock impact/crash recording into distinct breaks, sort the cuts

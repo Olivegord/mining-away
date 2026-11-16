@@ -1,5 +1,37 @@
 # Shared project context
 
+## November 15 — occasional field and sell-route music
+
+The six user-confirmed Downloads tracks replace the continuous Toolbox
+playlist. Music starts enabled with the existing toggle. Each Crystal Run
+field has its own track that qualifies after 75–120 seconds of local crew
+work while the player is inside that bed. Up to 12 seconds between jobs
+preserves progress. Three paid backpack sales within five minutes qualify the
+sell-route song for 55 seconds. A song can finish across field changes and
+sell trips, then schedules 150–300 seconds of silence. Combat and menus
+continue to duck music. See [soundtrack credits and tuning](../assets/audio/background/README.md).
+
+Studio was already open in the owner's Play session and returned to Edit at
+**DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**.
+Script Sync exported the client bundle. All three roots reported `Errored`,
+so a guarded Script Editor update changed only ClientDroneControl against the
+**39e5b32** baseline. Team Create save **354** succeeded. Post-save readback
+matched all seven Sources to canonical **build/DRONE_GAME.rbxl**, SHA-256
+**10e5a731df65e1d9197491844e698104f300cdb7713fcfffb89aca3c5a9f3036**.
+The next shared Studio Play loads the soundtrack. **No Roblox experience publication.**
+
+All six uploaded assets returned Success and reported their full durations
+in Edit. Muted Edit checks mapped all five field footprints, selected the Ruby
+track, preserved it after leaving and after an eligible sell streak, and
+verified mute. Edit did not emit a natural track completion in the check.
+The production scheduler test covers the post-completion delay, mining
+streaks, receipt dedupe and expiry. Full client compilation, the audio-event
+checks and the focused crystal contact clock passed. No agent-started Play
+session, live listening check or multiplayer check. Reproduce the scheduler
+with `/private/tmp/drone-luau/luau tests/music-director.spec.lua` and the native
+Source refresh with `python3 tools/build.py --previous-commit 39e5b32` on the
+preceding canonical snapshot.
+
 ## November 15 — Downloads rock and weapon audio
 
 Gameplay revision **4118026**, integrated on the saved selling baseline

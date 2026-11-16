@@ -10,7 +10,7 @@ from build import ROOT, bundle, client_bundle, module_bundle
 luau = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/private/tmp/mining-away-luau')
 for path in sorted((ROOT / 'src').glob('*.lua')):
     subprocess.run([str(luau / 'luau-compile'), str(path)], check=True, stdout=subprocess.DEVNULL)
-for name in ('audio-feedback', 'ore-drops', 'feedback'):
+for name in ('audio-feedback', 'music-director', 'ore-drops', 'feedback'):
     subprocess.run([str(luau / 'luau'), str(ROOT / 'tests' / (name + '.spec.lua'))], check=True)
 mock = (ROOT / 'tests/mock-roblox.lua').read_text()
 with tempfile.TemporaryDirectory(prefix='mining-audio-checks-') as directory:

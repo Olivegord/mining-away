@@ -99,6 +99,9 @@ def module_bundle(names):
  s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
+  if name=='Soundscape':
+   director=(ROOT/'src/MusicDirector.lua').read_text()
+   code=code.replace("require('./MusicDirector')",'(function()\n'+director+'\nend)()')
   if name=='World':
    # Keep World helpers scoped to World; the game controller is near Luau's local limit.
    biome=(ROOT/'src/QuarryBiomes.lua').read_text()
