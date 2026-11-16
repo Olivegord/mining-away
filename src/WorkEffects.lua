@@ -397,7 +397,7 @@ end
 local function destroyGrapple(fx)
  if fx.grapple then fx.grapple.root:Destroy();fx.grapple=nil end
 end
-local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,reduced,velocity,now)
+local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,reduced,velocity,now,elapsed)
  if age<.24 and not loadedId then return nil end
  local hook=fx.grapple
  if not hook then
@@ -421,12 +421,14 @@ local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,pause
  local target=CFrame.new(groundPose and groundPose.Position or ground)*cradle.Rotation
  if loadedId and not hook.ore then
   hook.ore=loadedId;hook.contact=hook.shown or target;hook.velocity=velocity
+  hook.clock=elapsed or 0
  elseif hook.ore and not paused then
-  hook.clock+=dt
+  hook.clock=elapsed or hook.clock+dt
  end
  local seated=false
  if hook.ore then
-  payload.CFrame,seated=Workshop.grappleReel(hook.contact,cradle,hook.velocity,hook.clock,reduced)
+  local slide=fx.dragUntil and Workshop.courierDragOffset(fx.dragYaw,fx.dragTurn,math.min(hook.clock,fx.dragUntil))
+  payload.CFrame,seated=Workshop.grappleReel(hook.contact,cradle,hook.velocity,hook.clock,reduced,slide)
  else
   payload.CFrame=cradle:Lerp(target,reach^3*(10+reach*(-15+6*reach)))
  end
@@ -520,11 +522,15 @@ function W:courier(drone,record,now)
  local ground=source:GetAttribute('CourierPickupPoint')
  local scanAge=drone.pickupAge
  local grappling=state=='Pickup' and source:GetAttribute('CourierGrappling')==true and typeof(ground)=='Vector3'
- if grappling then fx.grappleGround=ground
+ if grappling then
+  fx.grappleGround=ground
+  fx.dragUntil=source:GetAttribute('CourierDragUntil')
+  fx.dragYaw=source:GetAttribute('CourierDockYaw') or 0
+  fx.dragTurn=source:GetAttribute('CourierReturnTurn') or 0
  elseif state=='Deliver' and fx.grapple and fx.grapple.ore then
   grappling=true;ground=fx.grappleGround
  else
-  destroyGrapple(fx);fx.grappleDone=nil;fx.grappleGround=nil
+  destroyGrapple(fx);fx.grappleDone=nil;fx.grappleGround=nil;fx.dragUntil=nil
  end
  local scanning=state=='Pickup' and not paused and typeof(ground)=='Vector3' and scanAge~=nil
   and scanAge>=0 and scanAge<Workshop.COURIER_SCAN+.17 and not grappling
@@ -590,8 +596,9 @@ function W:courier(drone,record,now)
   if groundPose then fx.grappleOrePose=groundPose
   elseif not grappling then fx.grappleOrePose=nil end
   local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
+  local carryAge=drone.pickupAge and drone.pickupAge-Workshop.COURIER_CONTACT or loadAge
   local loadingSlot
-  if loadedId and loadedId>0 and (loadAge<.55 or grappling and loadAge<2) and not unload then
+  if loadedId and loadedId>0 and (loadAge<.55 or grappling and carryAge<Workshop.COURIER_DRAG_TIME+Workshop.COURIER_REEL_TIME+.45) and not unload then
    for i=math.min(parcelUnits,6),1,-1 do
     if fx.load[i]==loadedMaterial then loadingSlot=i;break end
    end
@@ -653,8 +660,9 @@ function W:courier(drone,record,now)
    elseif not paused then slot.angles=nil;slot.spin=nil end
    local seatImpact
    if hooked then
+    local elapsed=docking and source:GetAttribute('CourierApproachTime') and math.max(0,pickupAge-Workshop.COURIER_CONTACT) or nil
     local hookPose,seated=grappleFrame(fx,pivot,cargoFrame,ground,fx.grappleOrePose,pickupAge,
-     not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,velocity,now)
+     not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,velocity,now,elapsed)
     if hookPose then cargoFrame=hookPose end
     seatImpact=seated
    end
@@ -712,7 +720,7 @@ function W:courier(drone,record,now)
     local rotation=cargoFrame.Rotation
     if i==loadingSlot and fx.grappleOrePose then
      local incoming=fx.grappleOrePose.Rotation
-     local mountBlend=hooked and fx.grapple and math.clamp(fx.grapple.clock/.48,0,1) or 1
+     local mountBlend=hooked and fx.grapple and math.clamp((fx.grapple.clock-Workshop.COURIER_DRAG_TIME)/.48,0,1) or 1
      rotation=incoming:Lerp(rotation,mountBlend*mountBlend*(3-2*mountBlend))
     end
     if seatImpact then

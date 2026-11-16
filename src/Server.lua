@@ -1980,7 +1980,7 @@ function scene.nomadTargetScore(d,rock,distance)
 end
 local function chooseResource(d: any,field: any,square: any?)
  local best,score,bestPriority=nil,math.huge,-math.huge
- local bestUsed,hasHelp=math.huge,false
+ local bestHelping,bestHealth,bestUsed,hasHelp=true,math.huge,math.huge,false
  local helpReady=square and d.squareHelpAt and now>=d.squareHelpAt
  local definition=DroneCatalog.Types[d.role]
  local chunkCycle=square and field.cfg.SelectionOnly and definition and not definition.Projectile
@@ -1990,8 +1990,10 @@ local function chooseResource(d: any,field: any,square: any?)
    and (not square or scene.rockInSquare(square,r)) then
    local used=0
    for _ in pairs(r.slots) do used+=1 end
-   if square and best and (used>bestUsed or used==bestUsed and r.hp>best.hp) then continue end
    local helping=square~=nil and used>0
+   local healthRank=helping and -r.hp or r.hp
+   if square and best and (helping and not bestHelping or helping==bestHelping
+    and (healthRank>bestHealth or healthRank==bestHealth and used>bestUsed)) then continue end
    local capacity=if square then 10 else r.limit
    if used<capacity and sameRockType(d,r,helping) then
     if helping and not helpReady then hasHelp=true;continue end
@@ -2014,17 +2016,18 @@ local function chooseResource(d: any,field: any,square: any?)
      elseif d.role=='Striker' and not field.junk then
      distance+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
-    -- Spread spare workers by reservation count. With equal crews, favor the
-    -- least remaining health so weaker cuts finish first.
+    -- Start unclaimed rocks weak-first. Reinforcements go where the most
+    -- work remains, with smaller crews taking ties.
     local priority=0
     if square and r.cargoProduced then priority=-1
     elseif square and square.leadId==r.id then priority=3
     elseif square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
      priority=(d.resumePin==square and d.resumeResourceId==r.id) and 2 or 1
     end
-    if not best or (square and (used<bestUsed or r.hp<best.hp))
+    if not best or (square and (helping~=bestHelping or healthRank<bestHealth or used<bestUsed))
      or priority>bestPriority or priority==bestPriority and value<score then
-     best=r;score=value;bestPriority=priority;bestUsed=used
+     best=r;score=value;bestPriority=priority
+     bestHelping=helping;bestHealth=healthRank;bestUsed=used
     end
    end
   end
@@ -2968,11 +2971,11 @@ function scene.courierDeliveryGoal(d,p)
  if offset.Magnitude>6 then offset=offset.Unit*6 end
  return destination+offset+Vector3.yAxis*d.flightHeight
 end
-function scene.flyCourierPickup(d,dt)
+function scene.flyCourierPickup(d,dt,at)
  d.pos,d.velocity=Workshop.courierSwoop(d.oreDock,d.oreYaw,d.oreEntryOffset,d.oreEntryVelocity,
-  now-d.pickupAt,d.oreApproachTime,d.oreReturnTurn)
+  (at or now)-d.pickupAt,d.oreApproachTime,d.oreReturnTurn)
  d.yaw=Feel.approachYaw(d.yaw,Feel.flightYaw(d.pos,d.pos,d.velocity,d.yaw),dt)
- d.goal=d.pos;d.intentGoal=d.pos
+ d.goal=d.oreReturnGoal;d.intentGoal=d.goal
 end
 function scene.collectGroundCargo(d,p,hr,dt)
  local profile=data(p)
@@ -2980,8 +2983,14 @@ function scene.collectGroundCargo(d,p,hr,dt)
  local id=d.orePickupId
  local drop=id and pickups[id]
  if d.oreSeatUntil then
-  scene.flyCourierPickup(d,dt)
-  if now<d.oreSeatUntil then d.state='Pickup';return true end
+  if now<d.oreSeatUntil then
+   scene.flyCourierPickup(d,dt);d.state='Pickup';return true
+  end
+  -- Hand the solver the exact exit position and tangent. Integrate only the
+  -- part of this tick after the exit so no time is spent twice at the seam.
+  local remaining=math.clamp(now-d.oreSeatUntil,0,dt)
+  scene.flyCourierPickup(d,dt-remaining,d.oreSeatUntil)
+  dt=remaining
   d.oreSeatUntil=nil;d.oreDock=nil;d.oreYaw=nil;d.pickupAt=nil
  end
  if d.deliveryRequested then
@@ -3014,7 +3023,8 @@ function scene.collectGroundCargo(d,p,hr,dt)
   local entryVelocity=d.velocity or Vector3.zero
   local offset=d.pos-dock
   local approachTime=Workshop.courierApproachTime(offset)
-  local turn=Workshop.courierReturnTurn(dock,yaw,scene.courierDeliveryGoal(d,p))
+  local deliveryGoal=scene.courierDeliveryGoal(d,p)
+  local turn=Workshop.courierReturnTurn(dock,yaw,deliveryGoal)
   local duration=approachTime+Workshop.courierReturnDuration(turn)
   local previous=d.pos
   local samples=math.clamp(math.ceil(duration*5),6,40)
@@ -3030,8 +3040,19 @@ function scene.collectGroundCargo(d,p,hr,dt)
    d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.oreYaw=nil;p.nextEmptierPlan=nil
    return false
   end
+  local bed=drop.fieldPart
+  local lastGround=gem
+  d.oreDragUntil=0
+  for i=1,18 do
+   local pullTime=(Workshop.COURIER_DRAG_TIME+.16)*i/18
+   local nextGround=gem+Workshop.courierDragOffset(yaw,turn,pullTime)
+   local edge=bed and bed.CFrame:PointToObjectSpace(nextGround)
+   if edge and (math.abs(edge.X)>bed.Size.X*.5 or math.abs(edge.Z)>bed.Size.Z*.5)
+    or not los(lastGround,nextGround,d.model,ignore,true) then break end
+   d.oreDragUntil=pullTime;lastGround=nextGround
+  end
   d.oreDock=dock;d.oreYaw=yaw;d.oreEntryOffset=offset;d.oreEntryVelocity=entryVelocity
-  d.oreApproachTime=approachTime;d.oreReturnTurn=turn;d.pickupAt=now;d.oreHookPoint=gem
+  d.oreApproachTime=approachTime;d.oreReturnTurn=turn;d.oreReturnGoal=deliveryGoal;d.pickupAt=now;d.oreHookPoint=gem
   d.lastMoveFormation=false;d.descentOrigin=nil
   drop.part:SetAttribute('CourierDocking',d.id)
   drop.part:SetAttribute('CourierDockYaw',yaw+gripYaw)
@@ -3046,7 +3067,7 @@ function scene.collectGroundCargo(d,p,hr,dt)
   p.nextEmptierPlan=nil;return false
  end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
-  d.oreSeatUntil=d.pickupAt+d.oreApproachTime+Workshop.courierReturnDuration(d.oreReturnTurn)+Workshop.COURIER_RENDER_DELAY
+  d.oreSeatUntil=d.pickupAt+d.oreApproachTime+Workshop.courierReturnDuration(d.oreReturnTurn)
   d.oreLoadedId=id;d.oreLoadedMaterial=drop.material;d.oreLoadedVisualAt=now
   d.deliveryRequested=false
   drop.part:SetAttribute('Units',0)
@@ -3342,6 +3363,7 @@ local function snapshotDrone(d)
   CourierEntryOffset=d.oreDock and d.oreEntryOffset or Vector3.zero,
   CourierEntryVelocity=d.oreDock and d.oreEntryVelocity or false,
   CourierApproachTime=d.oreDock and d.oreApproachTime or false,CourierReturnTurn=d.oreDock and d.oreReturnTurn or false,
+  CourierDragUntil=d.oreDock and d.oreDragUntil or false,
   CourierPacked=groundCargo and groundCargo.compacted==true or false,
   CourierLoadedOre=d.oreLoadedId or 0,CourierLoadedMaterial=d.oreLoadedMaterial or '',CourierLoadedAt=d.oreLoadedVisualAt or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,

@@ -34,19 +34,40 @@ local ok,err=xpcall(function()
  local contact=CFrame.new(0,0,0)
  local velocity=Vector3.xAxis*11
  local function frame(t) return CFrame.new(11*t,5+2*t,.4*t) end
- local first=Workshop.grappleReel(contact,frame(0),velocity,0,false)
- local last,seated=Workshop.grappleReel(contact,frame(Workshop.COURIER_REEL_TIME),velocity,Workshop.COURIER_REEL_TIME,false)
+ local duration=Workshop.COURIER_DRAG_TIME+Workshop.COURIER_REEL_TIME
+ local function slide(t)
+  return Workshop.courierDragOffset(-math.pi/2,0,math.min(t,Workshop.COURIER_DRAG_TIME+.16))
+ end
+ local first=Workshop.grappleReel(contact,frame(0),velocity,0,false,slide(0))
+ local last,seated=Workshop.grappleReel(contact,frame(duration),velocity,duration,false,slide(duration))
  local previous=first
  local maxStep=0
- for tick=1,math.ceil(Workshop.COURIER_REEL_TIME*144) do
-  local t=math.min(tick/144,Workshop.COURIER_REEL_TIME)
-  local pose=Workshop.grappleReel(contact,frame(t),velocity,t,false)
+ for tick=1,math.ceil(duration*144) do
+  local t=math.min(tick/144,duration)
+  local pose=Workshop.grappleReel(contact,frame(t),velocity,t,false,slide(t))
+  if t<=Workshop.COURIER_DRAG_TIME then assert(pose.Position.Y==0 and pose.Position.X>=previous.Position.X) end
   maxStep=math.max(maxStep,(pose.Position-previous.Position).Magnitude)
   previous=pose
  end
- assert(first==contact and seated and (last.Position-frame(Workshop.COURIER_REEL_TIME).Position).Magnitude<.001)
- assert(maxStep<.21,'reel snapped between neighboring frames')
+ assert(first==contact and seated and (last.Position-frame(duration).Position).Magnitude<.001)
+ assert(maxStep<.31,'ground pull or reel snapped between neighboring frames')
+ local dock=Vector3.zero
+ local destination=Vector3.new(-48,9,0)
+ local yaw=-math.pi/2
+ local offset=Vector3.new(-18,15,0)
+ local approach=Workshop.courierApproachTime(offset)
+ local turn=Workshop.courierReturnTurn(dock,yaw,destination)
+ local exit=approach+Workshop.courierReturnDuration(turn)
+ local position,tangent=Workshop.courierSwoop(dock,yaw,offset,velocity,exit,approach,turn)
+ local late,lateVelocity=Workshop.courierSwoop(dock,yaw,offset,velocity,exit+.16,approach,turn)
+ local regular,regularVelocity=Feel.inertialApproach(position,destination,tangent,.29,1/60,true,nil,1,1.6)
+ assert((late-position).Magnitude>1.7 and tangent:Dot(lateVelocity)>120,'exit stalled between snapshots')
+ assert((regular-position):Dot(tangent.Unit)>.17 and tangent.Unit:Dot(regularVelocity)>10.5,'delivery did not inherit the exit tangent')
  report.leanDotRange={minUp,maxUp};report.maximumReelStep=maxStep
+ local groundPull=Workshop.grappleReel(contact,frame(2),velocity,2,false,slide(2)).Position
+ assert(groundPull.Y==0 and groundPull.X>15,'two-second ground pull did not keep the rock moving')
+ report.dragDistance=(groundPull-contact.Position).Magnitude
+ report.exitSpeed=tangent.Magnitude;report.firstDeliverySpeed=regularVelocity.Magnitude
 end,debug.traceback)
 root:Destroy()
 assert(ok,err)

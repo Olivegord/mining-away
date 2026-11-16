@@ -612,13 +612,15 @@ check('courier draws a dotted guide overhead, then closes the claw at contact',f
  assert(not work:courier(drone,record,720+Workshop.COURIER_CONTACT+.04))
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)
-check('courier reels smoothly from the displayed grab and leaves colored chips at seating',function()
+check('courier drags the ore along the floor before reeling and leaves colored chips at seating',function()
  local source=Instance.new('Folder');source:SetAttribute('Role','Courier');source:SetAttribute('State','Pickup')
  source:SetAttribute('DeliverySlots',1);source:SetAttribute('CourierDock',Vector3.new(0,9,0))
  source:SetAttribute('CourierGrappling',true);source:SetAttribute('CourierPickupPoint',Vector3.new(0,4.2,0))
+ source:SetAttribute('CourierApproachTime',1.2);source:SetAttribute('CourierDragUntil',2.16)
+ source:SetAttribute('CourierDockYaw',-math.pi/2);source:SetAttribute('CourierReturnTurn',0)
  local model=Instance.new('Model');model.Parent=root
  local emitter=Instance.new('Part');emitter.CFrame=CFrame.new(0,9,0);emitter.Parent=model;model.PrimaryPart=emitter
- local drone={source=source,view=model,emitter=emitter,pos=emitter.Position,pickupAge=.6}
+ local drone={source=source,view=model,emitter=emitter,pos=emitter.Position,pickupAge=Workshop.COURIER_CONTACT}
  local record={events={dead=false}};local work=WorkEffects.new(root)
  work:courier(drone,record,740)
  local hook=assert(record.courier.grapple)
@@ -626,24 +628,31 @@ check('courier reels smoothly from the displayed grab and leaves colored chips a
  local before=hook.payload.Position
  source:SetAttribute('DeliveryUnits',1);source:SetAttribute('DeliveryMaterials','Rock:Quartz:10')
  source:SetAttribute('CourierLoadedOre',23);source:SetAttribute('CourierLoadedMaterial','Rock:Quartz:10');source:SetAttribute('CourierLoadedAt',740.4)
- drone.pickupAge=Workshop.COURIER_CONTACT+.01
+ drone.pickupAge=Workshop.COURIER_CONTACT
  work:courier(drone,record,740.4)
  assert((hook.payload.Position-before).Magnitude<.001,'confirmed grab teleported the claw')
+ drone.pickupAge=Workshop.COURIER_CONTACT+1.99
+ emitter.CFrame=CFrame.new(21.89,9,0);drone.pos=emitter.Position
+ work:courier(drone,record,742.39)
+ assert(hook.payload.Position.X>before.X+14 and math.abs(hook.payload.Position.Y-before.Y)<.001,'rock lifted before two seconds of ground drag')
  local beforeReel=hook.rope.Length
- work:courier(drone,record,740.64)
+ drone.pickupAge=Workshop.COURIER_CONTACT+2.42
+ emitter.CFrame=CFrame.new(26.62,9,0);drone.pos=emitter.Position
+ work:courier(drone,record,742.82)
  assert(hook.rope.Length<beforeReel,'reel did not close the gap')
  local pausedAt=hook.payload.Position
  assert(drone.cargoMount and drone.cargoMount.id==23 and (drone.cargoMount.frame.Position-hook.payload.Position).Magnitude<.001)
  source:SetAttribute('WorkPaused',true)
- work:courier(drone,record,740.90)
+ work:courier(drone,record,743)
  assert((hook.payload.Position-pausedAt).Magnitude<.001,'reel clock advanced during a pause')
  source:SetAttribute('WorkPaused',false)
- work:courier(drone,record,741.36)
+ drone.pickupAge=Workshop.COURIER_CONTACT+2.69
+ work:courier(drone,record,743.09)
  assert(not record.courier.grapple and not hook.root.Parent,'spent rope was not cleaned up')
  local impact=assert(root:FindFirstChild('GrappleSeatImpact'))
  local chips=assert(impact:FindFirstChild('OreSeatChips'))
  assert(chips.Lifetime.Max>=1 and chips.Emitted>0,'seating lost its lingering particles')
- work:courier(drone,record,741.40)
+ work:courier(drone,record,743.13)
  assert(#work.bursts==1 and impact.Parent==root,'seating particles were duplicated or removed with the rope')
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)

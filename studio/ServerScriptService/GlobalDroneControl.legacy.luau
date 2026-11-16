@@ -45,12 +45,17 @@ W.COURIER_CONTACT=W.COURIER_SCAN+W.COURIER_LOWER+W.COURIER_CLOSE
 W.COURIER_LIFT=.59
 W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
-W.COURIER_RENDER_DELAY=.10
 W.COURIER_SWEEP_SPEED=11
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
 W.COURIER_HOOK_DROP=4.8
+W.COURIER_DRAG_TIME=2
 W.COURIER_REEL_TIME=.68
+local courierTurnRelease=.32
+local function easeClaw(t)
+ t=math.clamp(t,0,1)
+ return t*t*t*(10+t*(-15+6*t))
+end
 function W.oreOrientation(seed,packed)
  local n=math.abs(seed)
  local yaw=2*math.pi*(n*381%997)/997
@@ -59,23 +64,20 @@ function W.oreOrientation(seed,packed)
  local lean=math.rad(14+n*173%39)
  return math.cos(bearing)*lean,yaw,math.sin(bearing)*lean
 end
-function W.grappleReel(contact,cradle,velocity,elapsed,reduced)
- local t=math.clamp(elapsed/(reduced and .43 or W.COURIER_REEL_TIME),0,1)
- -- A smooth release off the ground, with a short mechanical stop on seating.
- local draw=t*t*(2.5-1.5*t)
+function W.grappleReel(contact,cradle,velocity,elapsed,reduced,slide)
+ local duration=reduced and .43 or W.COURIER_REEL_TIME
+ if elapsed>=W.COURIER_DRAG_TIME+duration then return cradle,true end
+ local t=math.clamp((elapsed-W.COURIER_DRAG_TIME)/duration,0,1)
+ -- Match the moving cradle instead of stopping in world space at seating.
  local drift=Vector3.new(velocity.X,0,velocity.Z)
  if drift.Magnitude>12 then drift=drift.Unit*12 end
  local swing=reduced and Vector3.zero or -drift*(math.sin(t*math.pi)^2*.045)
- return CFrame.new(swing)*contact:Lerp(cradle,draw),t>=1
+ return (contact+(slide or Vector3.zero)):Lerp(cradle,easeClaw(t))+swing,false
 end
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
  return side*.98,-1.14,.86-math.floor((slot-1)/2)*1.72,side*.06
-end
-local function easeClaw(t)
- t=math.clamp(t,0,1)
- return t*t*t*(10+t*(-15+6*t))
 end
 local function clawSpeed(t,duration)
  if t<=0 or t>=1 then return 0 end
@@ -136,32 +138,49 @@ function W.courierTurnTime(turn)
  return math.abs(turn)*W.COURIER_TURN_RADIUS/W.COURIER_SWEEP_SPEED
 end
 function W.courierReturnDuration(turn)
- return math.max(1.1,W.courierTurnTime(turn))
+ return math.max(W.COURIER_DRAG_TIME+W.COURIER_REEL_TIME+.12,W.courierTurnTime(turn)+courierTurnRelease)
 end
-function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
- approachTime=approachTime or W.COURIER_CONTACT
- turn=turn or 0
+local function courierPlanar(yaw,turn,travel)
  local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
  local side=Vector3.new(-forward.Z,0,forward.X)*(turn<0 and -1 or 1)
  local speed=W.COURIER_SWEEP_SPEED
  local radius=W.COURIER_TURN_RADIUS
- local riseTime=.72
- if age<approachTime then
-  -- Match the return's velocity and acceleration at the grab. The bend
-  -- starts at contact as the ascent begins, so there is no straight climb.
-  local bend=math.abs(turn)>1e-5 and side*(speed^2/radius) or Vector3.zero
-  local lift=Vector3.yAxis*(2*W.COURIER_SWEEP_RISE/riseTime^2)
-  return courierApproach(dock,offset,entryVelocity,forward*speed,bend+lift,age,approachTime)
- end
  local turningTime=W.courierTurnTime(turn)
- local travel=math.min(age-approachTime,W.courierReturnDuration(turn)+W.COURIER_RENDER_DELAY)
  local angle=math.min(math.abs(turn),travel*speed/radius)
  local tangent=(forward*math.cos(angle)+side*math.sin(angle))*speed
- local arc=dock+(forward*math.sin(angle)+side*(1-math.cos(angle)))*radius
+ local arc=(forward*math.sin(angle)+side*(1-math.cos(angle)))*radius
+ local straight=math.max(0,travel-turningTime)
+ local position=arc+tangent*straight
+ local velocity=tangent
+ local bend=turningTime>0 and (side*math.cos(angle)-forward*math.sin(angle))*(speed^2/radius) or Vector3.zero
+ if turningTime>0 and straight>0 and straight<courierTurnRelease then
+  -- Release the centripetal acceleration into the exit tangent. Position
+  -- and velocity rejoin the tangent with no remaining lateral acceleration.
+  local u=straight/courierTurnRelease
+  position+=bend*(.5*straight^2*(1-u)^3)
+  velocity+=bend*(.5*straight*(1-u)^2*(2-5*u))
+ end
+ return position,velocity,bend
+end
+function W.courierDragOffset(yaw,turn,elapsed)
+ -- Accelerate the grounded payload into a trailing path behind the hull.
+ local travel=.86*(elapsed-.27*(1-math.exp(-elapsed/.27)))
+ return (courierPlanar(yaw,turn,travel))
+end
+function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
+ approachTime=approachTime or W.COURIER_CONTACT
+ turn=turn or 0
+ local riseTime=1.20
+ local travel=math.max(0,age-approachTime)
+ local planar,tangent,bend=courierPlanar(yaw,turn,travel)
+ if age<approachTime then
+  local lift=Vector3.yAxis*(2*W.COURIER_SWEEP_RISE/riseTime^2)
+  return courierApproach(dock,offset,entryVelocity,tangent,bend+lift,age,approachTime)
+ end
  local rise=math.exp(-(travel/riseTime)^2)
  local height=W.COURIER_SWEEP_RISE*(1-rise)
  local climb=2*W.COURIER_SWEEP_RISE*travel*rise/riseTime^2
- return arc+tangent*math.max(0,travel-turningTime)+Vector3.yAxis*height,tangent+Vector3.yAxis*climb
+ return dock+planar+Vector3.yAxis*height,tangent+Vector3.yAxis*climb
 end
 function W.clawSuspension(angles,spin,acceleration,loaded,dt)
  local elapsed=math.clamp(dt,0,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
@@ -11508,7 +11527,7 @@ function scene.nomadTargetScore(d,rock,distance)
 end
 local function chooseResource(d: any,field: any,square: any?)
  local best,score,bestPriority=nil,math.huge,-math.huge
- local bestUsed,hasHelp=math.huge,false
+ local bestHelping,bestHealth,bestUsed,hasHelp=true,math.huge,math.huge,false
  local helpReady=square and d.squareHelpAt and now>=d.squareHelpAt
  local definition=DroneCatalog.Types[d.role]
  local chunkCycle=square and field.cfg.SelectionOnly and definition and not definition.Projectile
@@ -11518,8 +11537,10 @@ local function chooseResource(d: any,field: any,square: any?)
    and (not square or scene.rockInSquare(square,r)) then
    local used=0
    for _ in pairs(r.slots) do used+=1 end
-   if square and best and (used>bestUsed or used==bestUsed and r.hp>best.hp) then continue end
    local helping=square~=nil and used>0
+   local healthRank=helping and -r.hp or r.hp
+   if square and best and (helping and not bestHelping or helping==bestHelping
+    and (healthRank>bestHealth or healthRank==bestHealth and used>bestUsed)) then continue end
    local capacity=if square then 10 else r.limit
    if used<capacity and sameRockType(d,r,helping) then
     if helping and not helpReady then hasHelp=true;continue end
@@ -11542,17 +11563,18 @@ local function chooseResource(d: any,field: any,square: any?)
      elseif d.role=='Striker' and not field.junk then
      distance+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
-    -- Spread spare workers by reservation count. With equal crews, favor the
-    -- least remaining health so weaker cuts finish first.
+    -- Start unclaimed rocks weak-first. Reinforcements go where the most
+    -- work remains, with smaller crews taking ties.
     local priority=0
     if square and r.cargoProduced then priority=-1
     elseif square and square.leadId==r.id then priority=3
     elseif square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
      priority=(d.resumePin==square and d.resumeResourceId==r.id) and 2 or 1
     end
-    if not best or (square and (used<bestUsed or r.hp<best.hp))
+    if not best or (square and (helping~=bestHelping or healthRank<bestHealth or used<bestUsed))
      or priority>bestPriority or priority==bestPriority and value<score then
-     best=r;score=value;bestPriority=priority;bestUsed=used
+     best=r;score=value;bestPriority=priority
+     bestHelping=helping;bestHealth=healthRank;bestUsed=used
     end
    end
   end
@@ -12496,11 +12518,11 @@ function scene.courierDeliveryGoal(d,p)
  if offset.Magnitude>6 then offset=offset.Unit*6 end
  return destination+offset+Vector3.yAxis*d.flightHeight
 end
-function scene.flyCourierPickup(d,dt)
+function scene.flyCourierPickup(d,dt,at)
  d.pos,d.velocity=Workshop.courierSwoop(d.oreDock,d.oreYaw,d.oreEntryOffset,d.oreEntryVelocity,
-  now-d.pickupAt,d.oreApproachTime,d.oreReturnTurn)
+  (at or now)-d.pickupAt,d.oreApproachTime,d.oreReturnTurn)
  d.yaw=Feel.approachYaw(d.yaw,Feel.flightYaw(d.pos,d.pos,d.velocity,d.yaw),dt)
- d.goal=d.pos;d.intentGoal=d.pos
+ d.goal=d.oreReturnGoal;d.intentGoal=d.goal
 end
 function scene.collectGroundCargo(d,p,hr,dt)
  local profile=data(p)
@@ -12508,8 +12530,14 @@ function scene.collectGroundCargo(d,p,hr,dt)
  local id=d.orePickupId
  local drop=id and pickups[id]
  if d.oreSeatUntil then
-  scene.flyCourierPickup(d,dt)
-  if now<d.oreSeatUntil then d.state='Pickup';return true end
+  if now<d.oreSeatUntil then
+   scene.flyCourierPickup(d,dt);d.state='Pickup';return true
+  end
+  -- Hand the solver the exact exit position and tangent. Integrate only the
+  -- part of this tick after the exit so no time is spent twice at the seam.
+  local remaining=math.clamp(now-d.oreSeatUntil,0,dt)
+  scene.flyCourierPickup(d,dt-remaining,d.oreSeatUntil)
+  dt=remaining
   d.oreSeatUntil=nil;d.oreDock=nil;d.oreYaw=nil;d.pickupAt=nil
  end
  if d.deliveryRequested then
@@ -12542,7 +12570,8 @@ function scene.collectGroundCargo(d,p,hr,dt)
   local entryVelocity=d.velocity or Vector3.zero
   local offset=d.pos-dock
   local approachTime=Workshop.courierApproachTime(offset)
-  local turn=Workshop.courierReturnTurn(dock,yaw,scene.courierDeliveryGoal(d,p))
+  local deliveryGoal=scene.courierDeliveryGoal(d,p)
+  local turn=Workshop.courierReturnTurn(dock,yaw,deliveryGoal)
   local duration=approachTime+Workshop.courierReturnDuration(turn)
   local previous=d.pos
   local samples=math.clamp(math.ceil(duration*5),6,40)
@@ -12558,8 +12587,19 @@ function scene.collectGroundCargo(d,p,hr,dt)
    d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.oreYaw=nil;p.nextEmptierPlan=nil
    return false
   end
+  local bed=drop.fieldPart
+  local lastGround=gem
+  d.oreDragUntil=0
+  for i=1,18 do
+   local pullTime=(Workshop.COURIER_DRAG_TIME+.16)*i/18
+   local nextGround=gem+Workshop.courierDragOffset(yaw,turn,pullTime)
+   local edge=bed and bed.CFrame:PointToObjectSpace(nextGround)
+   if edge and (math.abs(edge.X)>bed.Size.X*.5 or math.abs(edge.Z)>bed.Size.Z*.5)
+    or not los(lastGround,nextGround,d.model,ignore,true) then break end
+   d.oreDragUntil=pullTime;lastGround=nextGround
+  end
   d.oreDock=dock;d.oreYaw=yaw;d.oreEntryOffset=offset;d.oreEntryVelocity=entryVelocity
-  d.oreApproachTime=approachTime;d.oreReturnTurn=turn;d.pickupAt=now;d.oreHookPoint=gem
+  d.oreApproachTime=approachTime;d.oreReturnTurn=turn;d.oreReturnGoal=deliveryGoal;d.pickupAt=now;d.oreHookPoint=gem
   d.lastMoveFormation=false;d.descentOrigin=nil
   drop.part:SetAttribute('CourierDocking',d.id)
   drop.part:SetAttribute('CourierDockYaw',yaw+gripYaw)
@@ -12574,7 +12614,7 @@ function scene.collectGroundCargo(d,p,hr,dt)
   p.nextEmptierPlan=nil;return false
  end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
-  d.oreSeatUntil=d.pickupAt+d.oreApproachTime+Workshop.courierReturnDuration(d.oreReturnTurn)+Workshop.COURIER_RENDER_DELAY
+  d.oreSeatUntil=d.pickupAt+d.oreApproachTime+Workshop.courierReturnDuration(d.oreReturnTurn)
   d.oreLoadedId=id;d.oreLoadedMaterial=drop.material;d.oreLoadedVisualAt=now
   d.deliveryRequested=false
   drop.part:SetAttribute('Units',0)
@@ -12870,6 +12910,7 @@ local function snapshotDrone(d)
   CourierEntryOffset=d.oreDock and d.oreEntryOffset or Vector3.zero,
   CourierEntryVelocity=d.oreDock and d.oreEntryVelocity or false,
   CourierApproachTime=d.oreDock and d.oreApproachTime or false,CourierReturnTurn=d.oreDock and d.oreReturnTurn or false,
+  CourierDragUntil=d.oreDock and d.oreDragUntil or false,
   CourierPacked=groundCargo and groundCargo.compacted==true or false,
   CourierLoadedOre=d.oreLoadedId or 0,CourierLoadedMaterial=d.oreLoadedMaterial or '',CourierLoadedAt=d.oreLoadedVisualAt or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,

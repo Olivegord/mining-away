@@ -1250,7 +1250,16 @@ local function renderDrone(d,dt,now)
  local approachTime=docking and s:GetAttribute('CourierApproachTime')
  local returnTurn=docking and s:GetAttribute('CourierReturnTurn')
  local dockClock=now
- if docking and s:GetAttribute('WorkPaused') then dockClock=s:GetAttribute('SnapshotAt') or now end
+ if docking then
+  local snapshot=s:GetAttribute('SnapshotAt') or now
+  if s:GetAttribute('WorkPaused') then dockClock=snapshot
+  elseif stroke and approachTime and returnTurn then
+   -- A Pickup snapshot can outlive the arc. Follow its exit tangent while
+   -- the Deliver snapshot is in flight, with bounded network extrapolation.
+   local exitAt=stroke+approachTime+Workshop.courierReturnDuration(returnTurn)
+   dockClock=math.min(now,math.max(exitAt,snapshot+.26))
+  end
+ end
  local pickupAge=stroke and dockClock-stroke
  if docking and not pickupAge then docking=false end
  d.pickupAge=docking and (pickupAge-(approachTime or Workshop.COURIER_CONTACT)+Workshop.COURIER_CONTACT) or nil
@@ -1268,8 +1277,8 @@ local function renderDrone(d,dt,now)
  elseif docking then
   local swoop=typeof(entryVelocity)=='Vector3' and type(dockYaw)=='number'
   local entryOffset=s:GetAttribute('CourierEntryOffset') or Vector3.zero
-  local desired
-  if swoop then desired=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge,approachTime,returnTurn)
+  local desired,velocity
+  if swoop then desired,velocity=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge,approachTime,returnTurn)
   else
    local height,_,entryWeight=Workshop.courierStroke(pickupAge)
    desired=dock+Vector3.yAxis*height+entryOffset*entryWeight
@@ -1282,7 +1291,9 @@ local function renderDrone(d,dt,now)
   local correctionTime=math.clamp((pickupAge-d.dockCorrectionAt)/.16,0,1)
   local blend=correctionTime*correctionTime*(3-2*correctionTime)
   d.pos=desired+d.dockCorrection*(1-blend)
-  d.velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
+  if velocity then
+   d.velocity=velocity-d.dockCorrection*(6*correctionTime*(1-correctionTime)/.16)
+  elseif dt>0 then d.velocity=(d.pos-previousPosition)/dt end
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
   -- A powered fall accelerates all the way into the surface. Evaluate the
   -- authoritative stroke directly: destination smoothing here brakes before

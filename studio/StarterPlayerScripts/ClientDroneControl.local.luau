@@ -132,12 +132,17 @@ W.COURIER_CONTACT=W.COURIER_SCAN+W.COURIER_LOWER+W.COURIER_CLOSE
 W.COURIER_LIFT=.59
 W.COURIER_CLEARANCE=6
 W.COURIER_APPROACH_RESPONSE=1.85
-W.COURIER_RENDER_DELAY=.10
 W.COURIER_SWEEP_SPEED=11
 W.COURIER_SWEEP_RISE=5.4
 W.COURIER_TURN_RADIUS=15
 W.COURIER_HOOK_DROP=4.8
+W.COURIER_DRAG_TIME=2
 W.COURIER_REEL_TIME=.68
+local courierTurnRelease=.32
+local function easeClaw(t)
+ t=math.clamp(t,0,1)
+ return t*t*t*(10+t*(-15+6*t))
+end
 function W.oreOrientation(seed,packed)
  local n=math.abs(seed)
  local yaw=2*math.pi*(n*381%997)/997
@@ -146,23 +151,20 @@ function W.oreOrientation(seed,packed)
  local lean=math.rad(14+n*173%39)
  return math.cos(bearing)*lean,yaw,math.sin(bearing)*lean
 end
-function W.grappleReel(contact,cradle,velocity,elapsed,reduced)
- local t=math.clamp(elapsed/(reduced and .43 or W.COURIER_REEL_TIME),0,1)
- -- A smooth release off the ground, with a short mechanical stop on seating.
- local draw=t*t*(2.5-1.5*t)
+function W.grappleReel(contact,cradle,velocity,elapsed,reduced,slide)
+ local duration=reduced and .43 or W.COURIER_REEL_TIME
+ if elapsed>=W.COURIER_DRAG_TIME+duration then return cradle,true end
+ local t=math.clamp((elapsed-W.COURIER_DRAG_TIME)/duration,0,1)
+ -- Match the moving cradle instead of stopping in world space at seating.
  local drift=Vector3.new(velocity.X,0,velocity.Z)
  if drift.Magnitude>12 then drift=drift.Unit*12 end
  local swing=reduced and Vector3.zero or -drift*(math.sin(t*math.pi)^2*.045)
- return CFrame.new(swing)*contact:Lerp(cradle,draw),t>=1
+ return (contact+(slide or Vector3.zero)):Lerp(cradle,easeClaw(t))+swing,false
 end
 function W.courierClawOffset(slot)
  if slot==1 then return 0,-1.14,0,0 end
  local side=slot%2==1 and -1 or 1
  return side*.98,-1.14,.86-math.floor((slot-1)/2)*1.72,side*.06
-end
-local function easeClaw(t)
- t=math.clamp(t,0,1)
- return t*t*t*(10+t*(-15+6*t))
 end
 local function clawSpeed(t,duration)
  if t<=0 or t>=1 then return 0 end
@@ -223,32 +225,49 @@ function W.courierTurnTime(turn)
  return math.abs(turn)*W.COURIER_TURN_RADIUS/W.COURIER_SWEEP_SPEED
 end
 function W.courierReturnDuration(turn)
- return math.max(1.1,W.courierTurnTime(turn))
+ return math.max(W.COURIER_DRAG_TIME+W.COURIER_REEL_TIME+.12,W.courierTurnTime(turn)+courierTurnRelease)
 end
-function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
- approachTime=approachTime or W.COURIER_CONTACT
- turn=turn or 0
+local function courierPlanar(yaw,turn,travel)
  local forward=Vector3.new(-math.sin(yaw),0,-math.cos(yaw))
  local side=Vector3.new(-forward.Z,0,forward.X)*(turn<0 and -1 or 1)
  local speed=W.COURIER_SWEEP_SPEED
  local radius=W.COURIER_TURN_RADIUS
- local riseTime=.72
- if age<approachTime then
-  -- Match the return's velocity and acceleration at the grab. The bend
-  -- starts at contact as the ascent begins, so there is no straight climb.
-  local bend=math.abs(turn)>1e-5 and side*(speed^2/radius) or Vector3.zero
-  local lift=Vector3.yAxis*(2*W.COURIER_SWEEP_RISE/riseTime^2)
-  return courierApproach(dock,offset,entryVelocity,forward*speed,bend+lift,age,approachTime)
- end
  local turningTime=W.courierTurnTime(turn)
- local travel=math.min(age-approachTime,W.courierReturnDuration(turn)+W.COURIER_RENDER_DELAY)
  local angle=math.min(math.abs(turn),travel*speed/radius)
  local tangent=(forward*math.cos(angle)+side*math.sin(angle))*speed
- local arc=dock+(forward*math.sin(angle)+side*(1-math.cos(angle)))*radius
+ local arc=(forward*math.sin(angle)+side*(1-math.cos(angle)))*radius
+ local straight=math.max(0,travel-turningTime)
+ local position=arc+tangent*straight
+ local velocity=tangent
+ local bend=turningTime>0 and (side*math.cos(angle)-forward*math.sin(angle))*(speed^2/radius) or Vector3.zero
+ if turningTime>0 and straight>0 and straight<courierTurnRelease then
+  -- Release the centripetal acceleration into the exit tangent. Position
+  -- and velocity rejoin the tangent with no remaining lateral acceleration.
+  local u=straight/courierTurnRelease
+  position+=bend*(.5*straight^2*(1-u)^3)
+  velocity+=bend*(.5*straight*(1-u)^2*(2-5*u))
+ end
+ return position,velocity,bend
+end
+function W.courierDragOffset(yaw,turn,elapsed)
+ -- Accelerate the grounded payload into a trailing path behind the hull.
+ local travel=.86*(elapsed-.27*(1-math.exp(-elapsed/.27)))
+ return (courierPlanar(yaw,turn,travel))
+end
+function W.courierSwoop(dock,yaw,offset,entryVelocity,age,approachTime,turn)
+ approachTime=approachTime or W.COURIER_CONTACT
+ turn=turn or 0
+ local riseTime=1.20
+ local travel=math.max(0,age-approachTime)
+ local planar,tangent,bend=courierPlanar(yaw,turn,travel)
+ if age<approachTime then
+  local lift=Vector3.yAxis*(2*W.COURIER_SWEEP_RISE/riseTime^2)
+  return courierApproach(dock,offset,entryVelocity,tangent,bend+lift,age,approachTime)
+ end
  local rise=math.exp(-(travel/riseTime)^2)
  local height=W.COURIER_SWEEP_RISE*(1-rise)
  local climb=2*W.COURIER_SWEEP_RISE*travel*rise/riseTime^2
- return arc+tangent*math.max(0,travel-turningTime)+Vector3.yAxis*height,tangent+Vector3.yAxis*climb
+ return dock+planar+Vector3.yAxis*height,tangent+Vector3.yAxis*climb
 end
 function W.clawSuspension(angles,spin,acceleration,loaded,dt)
  local elapsed=math.clamp(dt,0,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
@@ -4083,7 +4102,7 @@ end
 local function destroyGrapple(fx)
  if fx.grapple then fx.grapple.root:Destroy();fx.grapple=nil end
 end
-local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,reduced,velocity,now)
+local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,paused,reduced,velocity,now,elapsed)
  if age<.24 and not loadedId then return nil end
  local hook=fx.grapple
  if not hook then
@@ -4107,12 +4126,14 @@ local function grappleFrame(fx,pivot,cradle,ground,groundPose,age,loadedId,pause
  local target=CFrame.new(groundPose and groundPose.Position or ground)*cradle.Rotation
  if loadedId and not hook.ore then
   hook.ore=loadedId;hook.contact=hook.shown or target;hook.velocity=velocity
+  hook.clock=elapsed or 0
  elseif hook.ore and not paused then
-  hook.clock+=dt
+  hook.clock=elapsed or hook.clock+dt
  end
  local seated=false
  if hook.ore then
-  payload.CFrame,seated=Workshop.grappleReel(hook.contact,cradle,hook.velocity,hook.clock,reduced)
+  local slide=fx.dragUntil and Workshop.courierDragOffset(fx.dragYaw,fx.dragTurn,math.min(hook.clock,fx.dragUntil))
+  payload.CFrame,seated=Workshop.grappleReel(hook.contact,cradle,hook.velocity,hook.clock,reduced,slide)
  else
   payload.CFrame=cradle:Lerp(target,reach^3*(10+reach*(-15+6*reach)))
  end
@@ -4206,11 +4227,15 @@ function W:courier(drone,record,now)
  local ground=source:GetAttribute('CourierPickupPoint')
  local scanAge=drone.pickupAge
  local grappling=state=='Pickup' and source:GetAttribute('CourierGrappling')==true and typeof(ground)=='Vector3'
- if grappling then fx.grappleGround=ground
+ if grappling then
+  fx.grappleGround=ground
+  fx.dragUntil=source:GetAttribute('CourierDragUntil')
+  fx.dragYaw=source:GetAttribute('CourierDockYaw') or 0
+  fx.dragTurn=source:GetAttribute('CourierReturnTurn') or 0
  elseif state=='Deliver' and fx.grapple and fx.grapple.ore then
   grappling=true;ground=fx.grappleGround
  else
-  destroyGrapple(fx);fx.grappleDone=nil;fx.grappleGround=nil
+  destroyGrapple(fx);fx.grappleDone=nil;fx.grappleGround=nil;fx.dragUntil=nil
  end
  local scanning=state=='Pickup' and not paused and typeof(ground)=='Vector3' and scanAge~=nil
   and scanAge>=0 and scanAge<Workshop.COURIER_SCAN+.17 and not grappling
@@ -4276,8 +4301,9 @@ function W:courier(drone,record,now)
   if groundPose then fx.grappleOrePose=groundPose
   elseif not grappling then fx.grappleOrePose=nil end
   local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
+  local carryAge=drone.pickupAge and drone.pickupAge-Workshop.COURIER_CONTACT or loadAge
   local loadingSlot
-  if loadedId and loadedId>0 and (loadAge<.55 or grappling and loadAge<2) and not unload then
+  if loadedId and loadedId>0 and (loadAge<.55 or grappling and carryAge<Workshop.COURIER_DRAG_TIME+Workshop.COURIER_REEL_TIME+.45) and not unload then
    for i=math.min(parcelUnits,6),1,-1 do
     if fx.load[i]==loadedMaterial then loadingSlot=i;break end
    end
@@ -4339,8 +4365,9 @@ function W:courier(drone,record,now)
    elseif not paused then slot.angles=nil;slot.spin=nil end
    local seatImpact
    if hooked then
+    local elapsed=docking and source:GetAttribute('CourierApproachTime') and math.max(0,pickupAge-Workshop.COURIER_CONTACT) or nil
     local hookPose,seated=grappleFrame(fx,pivot,cargoFrame,ground,fx.grappleOrePose,pickupAge,
-     not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,velocity,now)
+     not beforeContact and i==loadingSlot and loadedId or nil,paused,reduced,velocity,now,elapsed)
     if hookPose then cargoFrame=hookPose end
     seatImpact=seated
    end
@@ -4398,7 +4425,7 @@ function W:courier(drone,record,now)
     local rotation=cargoFrame.Rotation
     if i==loadingSlot and fx.grappleOrePose then
      local incoming=fx.grappleOrePose.Rotation
-     local mountBlend=hooked and fx.grapple and math.clamp(fx.grapple.clock/.48,0,1) or 1
+     local mountBlend=hooked and fx.grapple and math.clamp((fx.grapple.clock-Workshop.COURIER_DRAG_TIME)/.48,0,1) or 1
      rotation=incoming:Lerp(rotation,mountBlend*mountBlend*(3-2*mountBlend))
     end
     if seatImpact then
@@ -17503,7 +17530,16 @@ local function renderDrone(d,dt,now)
  local approachTime=docking and s:GetAttribute('CourierApproachTime')
  local returnTurn=docking and s:GetAttribute('CourierReturnTurn')
  local dockClock=now
- if docking and s:GetAttribute('WorkPaused') then dockClock=s:GetAttribute('SnapshotAt') or now end
+ if docking then
+  local snapshot=s:GetAttribute('SnapshotAt') or now
+  if s:GetAttribute('WorkPaused') then dockClock=snapshot
+  elseif stroke and approachTime and returnTurn then
+   -- A Pickup snapshot can outlive the arc. Follow its exit tangent while
+   -- the Deliver snapshot is in flight, with bounded network extrapolation.
+   local exitAt=stroke+approachTime+Workshop.courierReturnDuration(returnTurn)
+   dockClock=math.min(now,math.max(exitAt,snapshot+.26))
+  end
+ end
  local pickupAge=stroke and dockClock-stroke
  if docking and not pickupAge then docking=false end
  d.pickupAge=docking and (pickupAge-(approachTime or Workshop.COURIER_CONTACT)+Workshop.COURIER_CONTACT) or nil
@@ -17521,8 +17557,8 @@ local function renderDrone(d,dt,now)
  elseif docking then
   local swoop=typeof(entryVelocity)=='Vector3' and type(dockYaw)=='number'
   local entryOffset=s:GetAttribute('CourierEntryOffset') or Vector3.zero
-  local desired
-  if swoop then desired=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge,approachTime,returnTurn)
+  local desired,velocity
+  if swoop then desired,velocity=Workshop.courierSwoop(dock,dockYaw,entryOffset,entryVelocity,pickupAge,approachTime,returnTurn)
   else
    local height,_,entryWeight=Workshop.courierStroke(pickupAge)
    desired=dock+Vector3.yAxis*height+entryOffset*entryWeight
@@ -17535,7 +17571,9 @@ local function renderDrone(d,dt,now)
   local correctionTime=math.clamp((pickupAge-d.dockCorrectionAt)/.16,0,1)
   local blend=correctionTime*correctionTime*(3-2*correctionTime)
   d.pos=desired+d.dockCorrection*(1-blend)
-  d.velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
+  if velocity then
+   d.velocity=velocity-d.dockCorrection*(6*correctionTime*(1-correctionTime)/.16)
+  elseif dt>0 then d.velocity=(d.pos-previousPosition)/dt end
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
   -- A powered fall accelerates all the way into the surface. Evaluate the
   -- authoritative stroke directly: destination smoothing here brakes before

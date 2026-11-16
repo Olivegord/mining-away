@@ -105,8 +105,8 @@ do
  now=started+2.35;searchAll()
  assert(assigned()>3 and assigned()<10,'helpers did not stagger their departures')
  now=started+3.15;searchAll()
- assert(assigned()==10 and count(weak)==4 and count(medium)==3 and count(strong)==3,
-  'three healthy rocks did not use the full crew across balanced cuts')
+ assert(assigned()==10 and count(weak)==1 and count(medium)==1 and count(strong)==8,
+  'helpers did not prioritize the highest-health occupied rock')
  local sharedRock=gun.target
  local laser
  for _,worker in ipairs(crew) do
@@ -159,7 +159,7 @@ do
   drones[worker.id]=nil;worker.model:Destroy();table.remove(p.drones,i)
  end
 end
-print('PASS weak-first dispatch, 10 workers across 3 rocks, staggered sharing, mixed contacts, and foreign claim protection')
+print('PASS weak-first dispatch, highest-health reinforcements, staggered sharing, mixed contacts, and foreign claim protection')
 
 do
  local destination=Vector3.new(-48,9,0)
@@ -171,7 +171,7 @@ do
  local _,left=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach-.001,approach,turn)
  local _,at=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach,approach,turn)
  local _,right=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,approach+.001,approach,turn)
- assert(((at-left)-(right-at)).Magnitude<.001 and math.abs(right.Z)>.005 and right.Y>.015,'the turn and climb must share the contact tangent and acceleration')
+ assert(((at-left)-(right-at)).Magnitude<.001 and math.abs(right.Z)>.005 and right.Y>.006,'the turn and climb must share the contact tangent and acceleration')
  local previous=Vector3.xAxis
  for i=0,120 do
   local time=turnStart+Workshop.courierTurnTime(turn)*i/120
@@ -184,6 +184,10 @@ do
    assert(Vector3.new(toCounter.X,0,toCounter.Z).Unit:Dot(previous)>.999,'the exit tangent missed the counter')
   end
  end
+ local exit=approach+Workshop.courierReturnDuration(turn)
+ local first,enter=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,exit,approach,turn)
+ local later,exitVelocity=Workshop.courierSwoop(Vector3.zero,-math.pi/2,start,Vector3.xAxis*4,exit+.14,approach,turn)
+ assert((later-first).Magnitude>1.5 and enter:Dot(exitVelocity)>120,'a pending delivery snapshot stopped the exit tangent')
 end
 
 local material=Workshop.cargoKey('Amber',7)
@@ -246,6 +250,7 @@ assert(d.state=='Pickup' and #idle>0 and #idle<#p.drones,'active couriers should
 assert(math.abs((idle[1].intentGoal.Z+idle[#idle].intentGoal.Z)*.5-center.Z)<.001,'working drones left a hole in the line')
 snapshotDrone(d)
 assert((d.model:GetAttribute('CourierPickupPoint')-gem).Magnitude<.01)
+assert(d.model:GetAttribute('CourierDragUntil')>=2,'the planned grab did not include a full two-second ground pull')
 scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center+Vector3.xAxis*36})
 assert(p.miningSquare.center.X==36)
 pl.Character:PivotTo(CFrame.new(center+Vector3.new(56,3,0)))
@@ -262,10 +267,14 @@ assert(not pickups[id] and pickups[extraId] and Pro.droneCargoUnits(data(p),d.id
 assert(d.pos.X>dock.X and d.velocity.X>8,'cargo contact interrupted forward flight')
 now=d.pickupAt+d.oreApproachTime+1
 scene.collectGroundCargo(d,p,hr,C.Tick)
-assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+4 and d.velocity.Magnitude>10,'climb lost its forward momentum before clearing the pickup')
-now=d.oreSeatUntil+.01
+assert(d.pos.X>dock.X+6 and d.pos.Y>dock.Y+2.5 and d.velocity.Magnitude>10,'climb lost its forward momentum before clearing the pickup')
+local exitAt=d.oreSeatUntil
+local exitPosition,exitVelocity=Workshop.courierSwoop(d.oreDock,d.oreYaw,d.oreEntryOffset,d.oreEntryVelocity,
+ exitAt-d.pickupAt,d.oreApproachTime,d.oreReturnTurn)
+now=exitAt+.01
 scene.collectGroundCargo(d,p,hr,C.Tick)
-assert(d.pos.Y>dock.Y+5 and d.velocity.Magnitude>5 and d.deliveryRequested,'one ore should continue out of the swoop into delivery')
+assert(math.abs((d.pos-exitPosition):Dot(exitVelocity.Unit)-.11)<.012 and d.velocity:Dot(exitVelocity.Unit)>10.5
+ and d.deliveryRequested,'the flight solver lost momentum or integrated the exit tick twice')
 serviceDeliveries(p)
 assert(Pro.deliveryUnits(data(p),d.id)==1 and Pro.cargoUnits(data(p))==1)
 now+=3;droneStep(d,C.Tick)

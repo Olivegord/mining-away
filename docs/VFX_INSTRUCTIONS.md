@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — the rock trails on the ground before the reel
+
+The grappling claw pulls the rock along a checked ground path behind the moving Emptier. The returning hull keeps turning and climbing during the two-second drag. The winch then draws the rock up to its moving cradle, where the existing seating chips play. The return arc keeps its exit velocity into regular delivery flight.
+
 ## November 15 — ground-only selection
 
 The two-click preview still expands on the ground and highlights the stones inside it. Confirmation flashes the rocks and leaves the full footprint visible after the floor wash fades. The owner removed the custom hovering cursor, selection walls and wall particles, superseding the older selection effects below.

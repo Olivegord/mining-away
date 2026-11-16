@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 15 — highest-health reinforcements and a two-second ground pull
+
+When helping on an occupied rock, drones choose the eligible rock with the most health left. The first workers still take weaker unclaimed rocks first, and helpers still join after the staggered delay.
+
+The Emptier should keep its momentum from the pickup turn into the flight to the counter. After the grab, drag the rock on the ground for two full seconds before winching it into the cradle.
+
 ## November 15 — ground-only selection and delayed teamwork
 
 Remove the custom selection cursor and the rising walls with their particles. Keep the two-click selection, expanding preview, rock highlights, confirmation wash, and full confirmed footprint.
