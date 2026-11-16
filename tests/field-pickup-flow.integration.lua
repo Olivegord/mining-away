@@ -464,6 +464,58 @@ do
 end
 print('PASS private thinking claims, upgrades to the largest pair, manual override and smaller Emptier priority')
 
+do
+ local press=assert(p.compactor)
+ local pin=p.miningSquare
+ local spot=pin.center+Vector3.yAxis*.22
+ local originalCharger=scene.chargingStation
+ scene.chargingStation=World.part(zone,'BatteryTestPad',spot+Vector3.zAxis*42,Vector3.new(4,1,4),bed.Color)
+ press.pos=spot+Vector3.new(0,7,-7);press.velocity=Vector3.zero
+ press.thinkUntil=nil;press.pressSearchAt=nil
+ assert(press.stats.batteryCapacity==100 and press.battery==100,'a new Compactor must start with two merges worth of power')
+ local function stepUntil(predicate,seconds,message)
+  for _=1,math.ceil(seconds/C.Tick) do
+   now+=C.Tick;pickupStep(C.Tick);droneStep(press,C.Tick)
+   if predicate() then return end
+  end
+  error(message)
+ end
+ for merge=1,2 do
+  local inputA,inputAId=loose(spot-Vector3.xAxis*3)
+  local inputB,inputBId=loose(spot+Vector3.xAxis*3)
+  local initial=press.battery
+  local serial=pickupSerial
+  stepUntil(function() return press.pressJob and press.pressJob.startedAt end,7,'press never seated both inputs')
+  local job=press.pressJob
+  assert(press.battery==initial,'search, approach and grapples consumed power')
+  stepUntil(function() return now>=(job.startedAt+job.finishAt)*.5 end,3,'press never reached the middle of its merge')
+  snapshotDrone(press)
+  assert(press.model:GetAttribute('BatteryPowered') and press.model:GetAttribute('BatteryWorking'))
+  assert(math.abs(press.battery-(initial-25))<1 and pickups[inputAId]==inputA and pickups[inputBId]==inputB,
+   'charge did not drain during the merge or the pair ejected early')
+  stepUntil(function() return pickupSerial>serial end,3,'press never ejected at the end of the merge')
+  assert(math.abs(press.battery-(100-merge*50))<1e-6,'a completed merge must cost exactly 50 charge')
+  local output=pickups[serial+1];output.part:Destroy();pickups[serial+1]=nil
+  if merge==1 then assert(not press.recharging,'the first merge sent a half-full drone to charge') end
+ end
+
+ local waitingA=loose(spot-Vector3.xAxis*3)
+ local waitingB=loose(spot+Vector3.xAxis*3)
+ stepUntil(function() return press.state=='ToCharge' end,1,'an empty Compactor did not fly to the charger')
+ assert(press.recharging and not press.pressJob and not waitingA.pressCarrier and not waitingB.pressCarrier and p.miningSquare==pin)
+ press.pos=press.goal;press.velocity=Vector3.zero
+ stepUntil(function() return press.state=='Charging' and press.battery>0 end,.5,'the charger did not refill the empty Compactor')
+ assert(not press.pressJob,'the drone claimed another pair during recharge')
+ stepUntil(function() return not press.recharging end,4,'the charger did not finish refilling')
+ assert(press.battery==100)
+ stepUntil(function() return press.pressJob~=nil end,.5,'the fully charged Compactor did not resume its plot')
+ assert(waitingA.pressCarrier==press and waitingB.pressCarrier==press)
+ scene.resetPress(press,true)
+ for id,drop in pairs(pickups) do drop.part:Destroy();pickups[id]=nil end
+ scene.chargingStation:Destroy();scene.chargingStation=originalCharger
+end
+print('PASS real Compactor charge drains over two merges, routes to the pad and resumes its plot on a full battery')
+
 field.center=bed.Position;field.model=zone;field.color=bed.Color
 field.cfg.AlwaysUnlocked=true;field.cfg.Key='Quartz'
 field.cfg.Value=1;field.cfg.Hardness=1;field.cfg.Turrets=0;field.cfg.ReferenceCrystals=true

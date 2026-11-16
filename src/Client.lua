@@ -1493,7 +1493,9 @@ local function renderDrone(d,dt,now)
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
- if d.updateStatus then d.updateStatus(d,s,state,role,alive,now,CrystalImpactView.reducedMotion()) end
+ if d.updateStatus then
+  d.updateStatus(d,s,state,role,alive,now,CrystalImpactView.reducedMotion(),player:GetAttribute('ReducedFlashing')==true)
+ end
  presentation:syncMiningHardware(d,alive)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1

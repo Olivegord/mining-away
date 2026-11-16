@@ -283,6 +283,8 @@ W.STAR_CATALOG={
 }
 W.STAR_BY_ID={};for _,entry in ipairs(W.STAR_CATALOG) do W.STAR_BY_ID[entry.id]=entry end
 W.BATTERY=100
+W.BATTERY_SEGMENT=25
+W.PRESS_POWER_COST=50
 function W.starLevel(p,id) return (p.run.starUpgrades or {})[id] or 0 end
 function W.chargeSpeed(p) return 1+.3*W.starLevel(p,'charge') end
 function W.starPrice(entry,level) return entry.cost+level end

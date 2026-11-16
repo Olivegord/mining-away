@@ -113,7 +113,9 @@ function C.stats(p,d,extra)
  local b=d.base;local s=sums(p,d,extra)
  local forkCap=extra and extra.workshop and (extra.effects.fork or 0)>0 and .4 or .2
  for _,c in ipairs(p.run.cards) do if c.workshop and (c.effects.fork or 0)>0 then forkCap=.4;break end end
- local cutter=DroneRoles.isMiner(d.role or d.type)
+ local role=d.role or d.type
+ local cutter=DroneRoles.isMiner(role)
+ local batteryPowered=DroneRoles.isWorker(role) or role=='Compactor'
  local doubleBeam=cutter and (s.doubleBeam or 0)>0 and 1 or 0
  local twinThrusters=cutter and (s.twinThrusters or 0)>0 and 1 or 0
  local oreDuplicator=cutter and (s.oreDuplicator or 0)>0 and 1 or 0
@@ -132,7 +134,7 @@ function C.stats(p,d,extra)
   aftershock=cutter and (s.aftershock or 0) or 0,reclaim=s.reclaim or 0,earlyDrop=s.earlyDrop or 0,liveWire=cutter and (s.liveWire or 0) or 0,
   deepCutMultiplier=1+(cutter and (s.deepCut or 0) or 0),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
-  batteryCapacity=DroneRoles.isWorker(d.role or d.type) and (Workshop.BATTERY+(s.battery or 0)) or 0,
+  batteryCapacity=batteryPowered and (Workshop.BATTERY+(s.battery or 0)) or 0,
   courierCapacity=courier(d) and math.floor(8*clamp(1+(s.courierCapacity or 0),1,4)) or 0,
   growCooldown=5/clamp(1+(s.scanDuration or 0),1,2),healAmount=10*clamp(1+(s.healPower or 0),1,2),
   plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=courier(d) and clamp(s.fullAuto or 0,0,2) or 0}

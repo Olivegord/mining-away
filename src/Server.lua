@@ -1215,6 +1215,9 @@ function scene.pressCandidate(square,drop,position)
  return drop.raw and not drop.compacted and Mining.sizeTier(drop.modifiers)<4 and drop.fieldPart==square.field.part
   and scene.cargoInSquare(square,position)
 end
+function scene.pressHasPower(press)
+ return not scene.chargingStation or press.battery+1e-6>=Workshop.PRESS_POWER_COST
+end
 function scene.pressPairingWindow(p,drop,position)
  local press=p.compactor
  local square=p.miningSquare
@@ -1222,7 +1225,7 @@ function scene.pressPairingWindow(p,drop,position)
  -- Hold Big and Massive ore for the next matching input while this pin is active.
  -- Plain ore gets a short chance to pair and can then move on to the Emptiers.
  if Mining.sizeTier(drop.modifiers)>1 then return true end
- return not press.pressJob and now>=(drop.pressBlockedUntil or 0)
+ return not press.recharging and scene.pressHasPower(press) and not press.pressJob and now>=(drop.pressBlockedUntil or 0)
   and drop.age-(drop.firstLandedAge or 0)<Workshop.COMPACTOR_PAIR_WINDOW
 end
 function scene.planPress(p,press,candidates)
@@ -1282,6 +1285,9 @@ function scene.stepPress(p,press)
   -- Keep the earned inputs if a save pauses flight or work.
   scene.resetPress(press,true);return
  end
+ if not job.startedAt and not scene.pressHasPower(press) then
+  scene.resetPress(press,true);return
+ end
  if not job.castAt then
   if now<(press.thinkUntil or 0) or (press.pos-job.position).Magnitude>.8 then return end
   local ignore={pickupFolder,droneFolder,p.player.Character}
@@ -1300,6 +1306,12 @@ function scene.stepPress(p,press)
   press.model:SetAttribute('PressGripAt',job.castAt+Workshop.GRAPPLE_CAST)
  end
  if job.startedAt then
+  if scene.chargingStation then
+   local progress=math.clamp((now-job.startedAt)/(job.finishAt-job.startedAt),0,1)
+   local spent=Workshop.PRESS_POWER_COST*progress
+   press.battery=math.max(0,press.battery-(spent-(job.powerSpent or 0)))
+   job.powerSpent=spent
+  end
   if now>=job.finishAt then scene.finishPress(press,drops) end
   return
  end
@@ -1391,7 +1403,8 @@ local function pickupStep(dt)
   end
   local press=p.compactor
   if not press then continue end
-  if not p.miningSquare or press.hp<=0 or press.carrierId or not healthy(p) or not characterRoot(p) then
+  if not p.miningSquare or press.hp<=0 or press.carrierId or press.recharging or not scene.pressHasPower(press)
+   or not healthy(p) or not characterRoot(p) then
    press.pressWaiting=false
   elseif not (press.pressJob and (press.pressJob.castAt or press.pressJob.tier>=3))
    and now>=math.max(press.pressUntil or 0,press.pressSearchAt or 0) then
@@ -3345,10 +3358,18 @@ local function droneStep(d: any,dt: number)
   if committed and not d.recharging then
    d.battery=math.max(0,d.battery-2*dt)
   end
-  -- Power can run out during a shot or dive that the player already saw start.
-  -- Resolve that single gesture before charging. Warmup alone still needs power.
-  if d.battery<=0 and not d.recharging and not scene.finishingDiscreteCut(d) then
+  -- Committed cuts and seated merges finish before the drone leaves to charge.
+  local press=d.role=='Compactor'
+  local needsCharge
+  if press then
+   local finishing=d.pressJob and d.pressJob.startedAt or now<(d.pressUntil or 0)
+   needsCharge=not finishing and not scene.pressHasPower(d)
+  else
+   needsCharge=d.battery<=0 and not scene.finishingDiscreteCut(d)
+  end
+  if needsCharge and not d.recharging then
    local pin,target=d.squareJob,d.target
+   if press then scene.resetPress(d,true) end
    release(d);d.recharging=true
    if pin and pin==p.miningSquare and target and target.hardness>=Workshop.DEEP_CUT_HARDNESS then
     d.resumePin=pin;d.resumeResourceId=target.id
@@ -3549,10 +3570,11 @@ local function snapshotDrone(d)
  local combatId=combatTarget and combatTarget.hp>0 and combatTarget.model.Parent and combatTarget.model:GetAttribute('TurretId') or ''
  local mining=not profiles[d.owner].busy and d.state=='Mine' and d.mining and target~=nil
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Role=d.role,FlightHeight=d.flightHeight or Feel.FollowHeight,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,ChargeAt=d.chargeAt or 0,Firing=combatId~='',
-  Battery=math.ceil(d.battery or 0),MaxBattery=d.stats.batteryCapacity,
+  Battery=math.round((d.battery or 0)*10)/10,MaxBattery=d.stats.batteryCapacity,
   ThinkUntil=d.thinkUntil or 0,PressStarted=d.pressJob and d.pressJob.startedAt or 0,
   PressFinish=d.pressJob and d.pressJob.finishAt or 0,
-  BatteryPowered=scene.chargingStation~=nil and DroneRoles.isWorker(d.role) and d.stats.batteryCapacity>0,
+  BatteryPowered=scene.chargingStation~=nil and d.stats.batteryCapacity>0,
+  BatteryWorking=(d.role=='Compactor' and d.state=='Press') or scene.committedWork(d) or combatId~='',
   PressWaiting=d.pressWaiting==true,
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,FlightSteering=d.flightSteering or Vector3.zero,
   FlightMass=d.flightMass or 1,FlightResponse=d.flightResponse or 1,FlightWork=d.flightWork==true,

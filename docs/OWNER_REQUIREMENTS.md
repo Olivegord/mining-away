@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 15 — battery tells the drone's story
+
+Keep the battery as the only indicator throughout gun windup and firing, including Ballcaster. Flash a red lightning bolt when a drone flies to charge. Draw a fixed amount of power in each rectangular segment and animate gains and losses in the style of the Overwatch health bar. When the Compactor merges, show its battery draining. Give it two merges on a full starting battery before it has to recharge. Keep a single indicator per drone so power explains the waits it actually causes.
+
 ## November 15 — rendered pickup outline and two visible grapples
 
 The pickup highlight must visibly outline the rock in play. Show only one indicator at a time. Display battery only while mining, and remove the spinner background. The Compactor must cast a separate grapple for each rock and use screen shake. Reserve its pair while it thinks, favor the larger matching rocks, and have Emptiers choose smaller rocks first.
