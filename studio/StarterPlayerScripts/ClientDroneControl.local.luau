@@ -274,7 +274,9 @@ W.ROCK_SIZE={2.16,1.28,1.94}
 W.RAW_CRYSTAL_REFLECTANCE=.30
 W.BLOCK_SIZE={1.45,.90,1.22}
 W.COMPACTOR_BATCH=2
-W.COMPACTOR_REACH=16
+W.COMPACTOR_REACH=22
+W.COMPACTOR_PAIR_WINDOW=6
+W.COMPACTOR_ARRIVAL_TIME=8
 W.GRAPPLE_MARK=.28
 W.GRAPPLE_CAST=.16
 W.GRAPPLE_REEL=.56
@@ -6536,76 +6538,115 @@ function Motion.step(record,source,resource,now,dt,shot)
  record.active=t~=nil
 end
 Motion.status=(function()
--- Small indicators derive from the visible hull and authoritative job clocks.
+-- Draw status from the server's battery and job state.
 local Status={}
-local paper=Color3.fromRGB(237,245,248)
+local paper=Color3.fromRGB(236,244,248)
 local ink=Color3.fromRGB(22,29,35)
+local empty=Color3.fromRGB(58,71,78)
 local green=Color3.fromRGB(158,232,161)
 local gold=Color3.fromRGB(255,200,113)
-local blue=Color3.fromRGB(142,215,244)
+local red=Color3.fromRGB(248,130,114)
+local busyStates={
+ Travel=true, Waiting=true, Warmup=true, ToCharge=true, Charging=true,
+ Collect=true, Pickup=true, Deliver=true, Unload=true, Launch=true, Vacuum=true,
+ Intake=true, GrowApproach=true, Plant=true, Heal=true, RepairCharge=true, BreakerWindup=true,
+}
+local cellCount,cellWidth=6,6
 
-local function frame(parent,name,width,height,tint)
- local part=Instance.new('Frame');part.Name=name;part.Size=UDim2.fromOffset(width,height)
- part.BorderSizePixel=0;part.BackgroundColor3=tint;part.Parent=parent
- local round=Instance.new('UICorner');round.CornerRadius=UDim.new(1,0);round.Parent=part
- return part
+local function rectangle(parent,name,width,height,tint)
+ local frame=Instance.new('Frame')
+ frame.Name=name;frame.Size=UDim2.fromOffset(width,height)
+ frame.BorderSizePixel=0;frame.BackgroundColor3=tint;frame.Parent=parent
+ return frame
 end
+
 local function new(adornee)
- local gui=Instance.new('BillboardGui');gui.Name='DroneWorkStatus';gui.Adornee=adornee
- gui.StudsOffsetWorldSpace=Vector3.yAxis*(adornee.Size.Y*.5+1.2)
- gui.Size=UDim2.fromOffset(48,17);gui.MaxDistance=64;gui.LightInfluence=0
+ local gui=Instance.new('BillboardGui')
+ gui.Name='DroneWorkStatus';gui.Adornee=adornee
+ gui.StudsOffsetWorldSpace=Vector3.yAxis*(adornee.Size.Y*.5+1.45)
+ gui.Size=UDim2.fromOffset(70,23);gui.MaxDistance=76;gui.LightInfluence=0
  gui.AlwaysOnTop=false;gui.Parent=adornee
- local track=frame(gui,'Track',30,6,ink)
- track.AnchorPoint=Vector2.new(.5,.5);track.Position=UDim2.fromScale(.5,.5)
- local fill=frame(track,'Level',28,4,green);fill.Position=UDim2.fromOffset(1,1)
- local wheel=Instance.new('Frame');wheel.Name='Thinking';wheel.Size=UDim2.fromOffset(14,14)
- wheel.AnchorPoint=Vector2.new(0,.5);wheel.Position=UDim2.fromOffset(34,8)
- wheel.BackgroundTransparency=1;wheel.Parent=gui
- for i=0,7 do
-  local angle=math.pi*i/4
-  local spoke=frame(wheel,'Spoke',2,4,paper)
-  spoke.AnchorPoint=Vector2.new(.5,.5)
-  spoke.Position=UDim2.fromOffset(7+math.sin(angle)*5,7-math.cos(angle)*5)
-  spoke.Rotation=math.deg(angle);spoke.BackgroundTransparency=.08+.115*i
+
+ local track=rectangle(gui,'Track',47,13,ink)
+ track.AnchorPoint=Vector2.new(.5,.5)
+ local levels={}
+ for i=1,cellCount do
+  local cell=rectangle(track,'Cell'..i,cellWidth,7,empty)
+  cell.Position=UDim2.fromOffset(3+(i-1)*(cellWidth+1),3)
+  levels[i]=rectangle(cell,'Level',cellWidth,7,green)
  end
- return {gui=gui,track=track,fill=fill,wheel=wheel}
+
+ local spinner=rectangle(gui,'Spinner',20,20,ink)
+ spinner.AnchorPoint=Vector2.new(.5,.5)
+ local ticks={}
+ local cells={{1,0},{2,0},{2,1},{2,2},{1,2},{0,2},{0,1},{0,0}}
+ for i,cell in ipairs(cells) do
+  local tick=rectangle(spinner,'Step'..i,4,4,paper)
+  tick.Position=UDim2.fromOffset(3+cell[1]*5,3+cell[2]*5)
+  ticks[i]=tick
+ end
+ return {gui=gui,track=track,levels=levels,spinner=spinner,ticks=ticks}
 end
+
 function Status.draw(drone,source,state,role,alive,now,reducedMotion)
  local camera=workspace.CurrentCamera
  local rig=drone.workStatus
- if not alive or not camera or (camera.CFrame.Position-drone.pos).Magnitude>64 then
+ if not alive or not camera or (camera.CFrame.Position-drone.pos).Magnitude>76 then
+  if rig then rig.gui.Enabled=false end
+  return
+ end
+
+ local recallAt=source:GetAttribute('RecallAt') or 0
+ local recalling=state=='Return' or recallAt>0 and now>=recallAt and now-recallAt<1.2
+ local deciding=recalling or now<(source:GetAttribute('ThinkUntil') or 0)
+ local start=source:GetAttribute('PressStarted') or 0
+ local finish=source:GetAttribute('PressFinish') or 0
+ local pressing=start>0 and finish>start
+ local spinner=deciding or pressing or busyStates[state]==true
+  or role=='Compactor' and source:GetAttribute('PressWaiting')==true
+
+ local fraction,tint
+ if pressing then
+  fraction=(now-start)/(finish-start);tint=gold
+ elseif source:GetAttribute('BatteryPowered') then
+  local maximum=source:GetAttribute('MaxBattery') or 1
+  fraction=(source:GetAttribute('Battery') or 0)/math.max(1,maximum)
+  tint=fraction<.22 and gold or green
+ else
+  local maximum=source:GetAttribute('MaxHP') or 1
+  local health=source:GetAttribute('HP') or maximum
+  if health<maximum then fraction=health/maximum;tint=red end
+ end
+ local showBar=fraction~=nil
+ if not showBar and not spinner then
   if rig then rig.gui.Enabled=false end
   return
  end
  if not rig then rig=new(drone.view.PrimaryPart);drone.workStatus=rig end
+
  rig.gui.Enabled=true
- local thinking=now<(source:GetAttribute('ThinkUntil') or 0)
- local start=source:GetAttribute('PressStarted') or 0
- local finish=source:GetAttribute('PressFinish') or 0
- local pressing=start>0 and finish>start
- local cycleStart=source:GetAttribute('GunCycleStart') or 0
- local cycleEnd=source:GetAttribute('GunCycleEnd') or 0
- local fraction,tint
- if role=='Compactor' then
-  fraction=pressing and (now-start)/(finish-start) or (state=='Press' and 1 or 0)
-  tint=gold
- elseif role=='Striker' or role=='Ramiel' then
-  fraction=(source:GetAttribute('Battery') or 0)/math.max(1,source:GetAttribute('MaxBattery') or 1)
-  tint=fraction<.22 and gold or green
- elseif cycleEnd>cycleStart then
-  fraction=(now-cycleStart)/(cycleEnd-cycleStart);tint=gold
- else
-  fraction=(source:GetAttribute('HP') or 1)/math.max(1,source:GetAttribute('MaxHP') or 1)
-  tint=blue
+ rig.track.Visible=showBar
+ rig.spinner.Visible=spinner
+ rig.track.Position=UDim2.fromOffset(spinner and 24 or 35,11)
+ rig.spinner.Position=UDim2.fromOffset(showBar and 59 or 35,11)
+ if showBar then
+  local cells=math.clamp(fraction,0,1)*cellCount
+  for i,level in ipairs(rig.levels) do
+   local width=math.round(math.clamp(cells-i+1,0,1)*cellWidth)
+   level.Visible=width>0
+   if width>0 then level.Size=UDim2.fromOffset(width,7);level.BackgroundColor3=tint end
+  end
  end
- local spinner=thinking or pressing or role=='Compactor' and state=='Intake'
- rig.track.Visible=not thinking or pressing
- rig.track.Position=UDim2.fromOffset(spinner and 16 or 24,8)
- rig.fill.Size=UDim2.fromOffset(math.floor(math.clamp(fraction,0,1)*28+.5),4)
- rig.fill.BackgroundColor3=tint
- rig.wheel.Visible=spinner
- rig.wheel.Position=UDim2.fromOffset(rig.track.Visible and 33 or 17,8)
- if spinner then rig.wheel.Rotation=reducedMotion and 0 or now*420%360 end
+ if spinner then
+  local step=reducedMotion and 0 or math.floor(now*12)%#rig.ticks
+  if step~=rig.spinnerStep then
+   rig.spinnerStep=step
+   for i,tick in ipairs(rig.ticks) do
+    local age=(step-i+1)%#rig.ticks
+    tick.BackgroundTransparency=age==0 and 0 or age==1 and .26 or age==2 and .52 or .81
+   end
+  end
+ end
 end
 return Status
 
@@ -15505,17 +15546,23 @@ function V:update(dt,now)
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
     local marked=live and source:GetAttribute('PressMarked')==true
-    local selected=loose and r.seed==focusId and not r.preview
-    local highlighted=(selected or marked) and distance<44
+    -- The pickup prompt can still offer a rock an Emptier is about to grab.
+    -- Use the prompt's actual ID even when that rock is settling or docked.
+    local selected=live and r.seed==focusId and not r.preview and opacity>0
+    local highlighted=selected or (marked and distance<62)
     if highlighted then
      if not r.selection then
       local outline=Instance.new('Highlight');outline.Name='SelectedOre';outline.Adornee=r.view
-      outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.OutlineTransparency=.03
-      outline.FillTransparency=.84;outline.Enabled=true;outline.Parent=r.view;r.selection=outline
+      outline.Enabled=true;outline.Parent=r.view;r.selection=outline
      end
-     local tint=marked and Color3.fromRGB(255,193,106) or Color3.fromRGB(251,254,255)
+     local tint=selected and Color3.fromRGB(247,253,255) or Color3.fromRGB(255,193,106)
+     r.selection.DepthMode=selected and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+     r.selection.OutlineTransparency=selected and 0 or .04
+     r.selection.FillTransparency=selected and .52 or .77
      r.selection.OutlineColor=tint;r.selection.FillColor=tint
      if not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
+     r.label.AlwaysOnTop=selected
+     r.label.MaxDistance=selected and 100 or 62
     end
     if not highlighted then
      if r.selection then r.selection:Destroy();r.selection=nil end

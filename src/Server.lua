@@ -235,6 +235,19 @@ local function leaveField(p: any,keepField: number?,keepBreakContact: boolean?,k
  end
  for _,d in ipairs(p.drones) do if not keepCarriers or not d.carrierId then release(d,false,keepBreakContact);spend(d);d.field=nil;d.autoField=nil;d.state=d.hp>0 and 'Return' or d.state end end
 end
+function scene.markRecall(d)
+ d.recallSerial=(d.recallSerial or 0)+1;d.recallAt=now
+ d.model:SetAttribute('RecallSerial',d.recallSerial);d.model:SetAttribute('RecallAt',now)
+end
+function scene.recallCue(p,keepCarriers)
+ p.recallSerial=(p.recallSerial or 0)+1
+ p.player:SetAttribute('MA_RecallSerial',p.recallSerial);p.player:SetAttribute('MA_RecallAt',now)
+ for _,d in ipairs(p.drones) do
+  if d.hp>0 and (not keepCarriers or not d.carrierId) then
+   d.state='Follow';scene.markRecall(d)
+  end
+ end
+end
 local function recallFromField(p)
  if not healthy(p) then return end
  local hr=characterRoot(p);if not hr then return end
@@ -255,12 +268,7 @@ local function recallFromField(p)
  if not square and (not hasOrders or not field or nearMiningField(hr.Position,field)) then return end
  leaveField(p,nil,nil,true)
  if square then notice(p,'Too far from the pin. Crew following you.') end
- p.recallSerial=(p.recallSerial or 0)+1
- p.player:SetAttribute('MA_RecallSerial',p.recallSerial);p.player:SetAttribute('MA_RecallAt',now)
- for _,d in ipairs(p.drones) do if d.hp>0 and not d.carrierId then
-  d.state='Follow';d.recallSerial=(d.recallSerial or 0)+1;d.recallAt=now
-  d.model:SetAttribute('RecallSerial',d.recallSerial);d.model:SetAttribute('RecallAt',now)
- end end
+ scene.recallCue(p,true)
  p.publishDirty=true
 end
 local colors={Blue=Color3.fromRGB(86,190,255),Red=Color3.fromRGB(255,110,118),Green=Color3.fromRGB(116,230,157)}
@@ -1157,43 +1165,61 @@ function scene.cargoInSquare(square,position)
  local reach=square.half+8
  return math.abs(position.X-square.center.X)<=reach and math.abs(position.Z-square.center.Z)<=reach
 end
-function scene.pressClearing(press,square,first,second)
+function scene.pressClearing(press,square,first,second,character)
  local a,b=first.position,second.position
  local middle=(a+b)*.5
  local across=Vector3.new(b.X-a.X,0,b.Z-a.Z)
- local side=across.Magnitude>.02 and Vector3.yAxis:Cross(across.Unit) or Vector3.xAxis
+ local axis=across.Magnitude>.02 and across.Unit or Vector3.zAxis
+ local side=Vector3.yAxis:Cross(axis)
  if side:Dot(press.pos-middle)<0 then side=-side end
  local bed=square.field.part
  local floor=bed.Position.Y+bed.Size.Y*.5+.22
- local ignore={pickupFolder,droneFolder}
+ local ignore={pickupFolder,droneFolder,character}
  local outputRadius=Mining.ORE_SIZE_SCALE[first.tier+1]
- for _,offset in ipairs({side*5,-side*5,side*8,-side*8,Vector3.zero}) do
-  local position=Vector3.new(middle.X,floor+6.4,middle.Z)+offset
+ -- Approach from the nearby side first. Diagonals and the center let the
+ -- grapples work between clumps and when the pin sits near a bed edge.
+ local offsets={side*4,-side*4,side*7,-side*7,
+  side*5+axis*4,side*5-axis*4,-side*5+axis*4,-side*5-axis*4,Vector3.zero}
+ for _,offset in ipairs(offsets) do
+  local height=math.max(floor,a.Y,b.Y)+6.4
+  local position=Vector3.new(middle.X,height,middle.Z)+offset
   local direction=offset.Magnitude>0 and offset.Unit or side
   local yaw=Feel.levelYaw(position,position+direction,press.yaw)
-  local launch=position+direction*1.5-Vector3.yAxis*1.25
-  local arc=OreDrops.rawArc(launch.X,launch.Y,launch.Z,direction.X*7.3,29,direction.Z*7.3,floor)
-  local landing=Vector3.new(arc.landX,floor,arc.landZ)
-  if scene.outsidePickupBed(bed,position) or scene.outsidePickupBed(bed,landing) then continue end
-  -- A clear air lane for the hull, both reels and the throw, with room under
-  -- the hull and under the landing point for the larger output.
-  if los(press.pos,position,nil,ignore,true) and los(position,Vector3.new(position.X,floor+.4,position.Z),nil,ignore,true)
-   and los(a,scene.pressSocket(position,yaw,1),nil,ignore,true)
-   and los(b,scene.pressSocket(position,yaw,2),nil,ignore,true) then
-   local apexAge=29/OreDrops.GEM_GRAVITY
-   local x,y,z=OreDrops.rawPose(arc,apexAge);local apex=Vector3.new(x,y,z)
-   if los(launch,apex,nil,ignore,true) and los(apex,landing,nil,ignore,true) then
-    local clear=true
-    for _,edge in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.zAxis,-Vector3.zAxis}) do
-     local corner=landing+edge*outputRadius
-     if scene.outsidePickupBed(bed,corner) or not los(corner+Vector3.yAxis*4,corner,nil,ignore,true) then clear=false;break end
-    end
-    if clear then return position,yaw,direction,floor end
+  if scene.outsidePickupBed(bed,position) or not los(press.pos,position,nil,ignore,true)
+   or not los(position,position-Vector3.yAxis*3.5,nil,ignore,true)
+   or not los(a,scene.pressSocket(position,yaw,1),nil,ignore,true)
+   or not los(b,scene.pressSocket(position,yaw,2),nil,ignore,true) then continue end
+  -- At the field edge, try ejecting back toward the bed as well.
+  for _,out in ipairs({direction,-direction,axis,-axis}) do
+   local launch=position+out*1.5-Vector3.yAxis*1.25
+   local arc=OreDrops.rawArc(launch.X,launch.Y,launch.Z,out.X*7.3,29,out.Z*7.3,floor)
+   local landing=Vector3.new(arc.landX,floor,arc.landZ)
+   if scene.outsidePickupBed(bed,landing) then continue end
+   local x,y,z=OreDrops.rawPose(arc,29/OreDrops.GEM_GRAVITY)
+   local apex=Vector3.new(x,y,z)
+   if not los(launch,apex,nil,ignore,true) or not los(apex,landing,nil,ignore,true) then continue end
+   local clear=true
+   for _,edge in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.zAxis,-Vector3.zAxis}) do
+    local corner=landing+edge*outputRadius
+    if scene.outsidePickupBed(bed,corner) or not los(corner+Vector3.yAxis*4,corner,nil,ignore,true) then clear=false;break end
    end
+   if clear then return position,yaw,out,floor end
   end
  end
 end
+function scene.pressCandidate(square,drop,position)
+ return drop.raw and not drop.compacted and Mining.sizeTier(drop.modifiers)<4 and drop.fieldPart==square.field.part
+  and scene.cargoInSquare(square,position)
+end
+function scene.pressPairingWindow(p,drop,position)
+ local press=p.compactor
+ local square=p.miningSquare
+ return press and press.hp>0 and not press.carrierId and not press.pressJob and square
+  and drop.age-(drop.firstLandedAge or 0)<Workshop.COMPACTOR_PAIR_WINDOW
+  and now>=(drop.pressBlockedUntil or 0) and scene.pressCandidate(square,drop,position)
+end
 function scene.planPress(p,press,candidates)
+ press.pressWaiting=#candidates>0
  table.sort(candidates,function(a,b)
   if a.tier~=b.tier then return a.tier>b.tier end
   if a.distance~=b.distance then return a.distance<b.distance end
@@ -1208,15 +1234,23 @@ function scene.planPress(p,press,candidates)
     or (a.position-b.position).Magnitude>Workshop.COMPACTOR_REACH then continue end
    probes+=1
    if probes>24 then return end
-   local position,yaw,direction,floor=scene.pressClearing(press,p.miningSquare,a,b)
+   local position,yaw,direction,floor=scene.pressClearing(press,p.miningSquare,a,b,p.player.Character)
    if position then
     press.pressJob={ids={a.id,b.id},origins={a.position,b.position},square=p.miningSquare,
-     position=position,yaw=yaw,direction=direction,floor=floor,arriveBy=now+5,
+     position=position,yaw=yaw,direction=direction,floor=floor,arriveBy=now+Workshop.COMPACTOR_ARRIVAL_TIME,
      modifiers=Mining.nextSizeMask(a.drop.modifiers,b.drop.modifiers)}
-    a.drop.pressCarrier=press;b.drop.pressCarrier=press
+    press.pressWaiting=false
     for _,candidate in ipairs({a,b}) do
-     local courier=candidate.drop.courier
-     if courier then courier.orePickupId=nil;courier.oreDock=nil;courier.pickupAt=nil;candidate.drop.courier=nil end
+     local drop=candidate.drop
+     drop.pressCarrier=press
+     if (drop.modifiers or 0)==0 then
+      local untilTime=press.pressJob.arriveBy+Workshop.GRAPPLE_MARK+Workshop.GRAPPLE_CAST+Workshop.GRAPPLE_REEL
+       +(p.pressDuration or Workshop.PRESS_DURATION)+1
+      drop.returnUntil=math.max(untilTime,drop.returnUntil or 0)
+      drop.part:SetAttribute('ExpiresAt',OreDrops.deadline(drop.spawnAt,drop.returnUntil))
+     end
+     local courier=drop.courier
+     if courier then courier.orePickupId=nil;courier.oreDock=nil;courier.pickupAt=nil;drop.courier=nil end
     end
     return
    end
@@ -1239,15 +1273,14 @@ function scene.stepPress(p,press)
   scene.resetPress(press,true);return
  end
  if not job.castAt then
-  if (press.pos-job.position).Magnitude>.56 then return end
-  press.yaw=job.yaw
-  local ignore={pickupFolder,droneFolder}
+  if (press.pos-job.position).Magnitude>.8 then return end
+  local ignore={pickupFolder,droneFolder,p.player.Character}
   for slot=1,2 do
-   if not los(job.origins[slot],scene.pressSocket(press.pos,job.yaw,slot),nil,ignore,true) then
+   if not los(job.origins[slot],scene.pressSocket(job.position,job.yaw,slot),nil,ignore,true) then
     scene.resetPress(press,true);return
    end
   end
-  job.position=press.pos;job.castAt=now+Workshop.GRAPPLE_MARK
+  press.pos=job.position;press.yaw=job.yaw;job.castAt=now+Workshop.GRAPPLE_MARK
   for slot,drop in ipairs(drops) do
    drop.pressMarked=true
    drop.part:SetAttribute('PressMarked',true);drop.part:SetAttribute('PressDrone',press.id)
@@ -1341,9 +1374,10 @@ local function pickupStep(dt)
   local press=p.compactor
   if not press then continue end
   if press.pressJob then scene.stepPress(p,press)
-  elseif p.miningSquare and press.hp>0 and healthy(p) and characterRoot(p)
-   and now>=math.max(press.thinkUntil or 0,press.pressUntil or 0,press.pressSearchAt or 0) then
-   press.pressSearchAt=now+.24
+  elseif not p.miningSquare or press.hp<=0 or press.carrierId or not healthy(p) or not characterRoot(p) then
+   press.pressWaiting=false
+  elseif now>=math.max(press.thinkUntil or 0,press.pressUntil or 0,press.pressSearchAt or 0) then
+   press.pressSearchAt=now+.18
    activePresses[press.owner]={}
   end
  end
@@ -1351,16 +1385,16 @@ local function pickupStep(dt)
   for id,drop in pairs(pickups) do
    local candidates=activePresses[drop.owner]
    local p=candidates and profiles[drop.owner]
-   if not p or not drop.raw or drop.compacted or drop.pressCarrier or drop.playerPickup or drop.homing
+   if not p or drop.pressCarrier or drop.playerPickup or drop.homing
     or not OreDrops.collectible(drop) or not drop.part.Parent or now<(drop.launchAt or 0)
-    or now<(drop.pressBlockedUntil or 0) or scene.oreExpired(drop,now+5)
+    or now<(drop.pressBlockedUntil or 0) or scene.oreExpired(drop,now)
     or now<(drop.relayUntil or 0) or (drop.courier and drop.courier.oreDock)
-    or drop.runId~=data(p).run.id or drop.fieldPart~=p.miningSquare.field.part then continue end
+    or drop.runId~=data(p).run.id then continue end
    local position=Vector3.new(drop.x,drop.y,drop.z)
-   local tier=Mining.sizeTier(drop.modifiers)
-   local distance=(p.compactor.pos-position).Magnitude
-   if tier<4 and distance<=32 and scene.cargoInSquare(p.miningSquare,position) then
-    table.insert(candidates,{id=id,drop=drop,tier=tier,position=position,distance=distance})
+   if scene.pressCandidate(p.miningSquare,drop,position) then
+    local offset=p.compactor.pos-position
+    table.insert(candidates,{id=id,drop=drop,tier=Mining.sizeTier(drop.modifiers),position=position,
+     distance=offset.X^2+offset.Z^2})
    end
   end
   for owner,candidates in pairs(activePresses) do
@@ -1433,6 +1467,7 @@ local function pickupStep(dt)
    if playerPull then
     reach=naturalReach
    elseif hasSpace and vacuum and vacuum.hp>0 and not vacuum.carrierId and not relay
+    and not scene.pressPairingWindow(p,drop,from)
     and not (drop.courier and drop.courier.orePickupId==id and drop.courier.hp>0 and drop.courier.model.Parent)
     and drop.landed and drop.age>=OreDrops.SCATTER_TIME then
     local distance=(target-from).Magnitude
@@ -2445,7 +2480,7 @@ local function move(d,goal,dt)
  local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)*Feel.SwarmForce*(escort and .22 or .18+.82*descentProgress)
  d.flightSteering=weight==0 and Vector3.zero or Feel.smoothSwarm(d.flightSteering,desired,dt)
  d.goal=goal
- local work=d.target~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach'
+ local work=d.target~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach' or d.state=='Intake'
  local speed=travelSpeed(d)
  local flight=RoleConfig.Prominent[d.role]
  local response=d.orePickupId and d.state=='Collect' and Workshop.COURIER_APPROACH_RESPONSE or flight and flight.response
@@ -3068,6 +3103,7 @@ function scene.emptierCanCollect(p,drop,id,hr)
  -- Once the downward scan begins the courier owns this one stroke, even
  -- when the player places a new square before the claw closes.
  if drop.courier and drop.courier.orePickupId==id and drop.courier.oreDock and drop.courier.hp>0 then return true end
+ if scene.pressPairingWindow(p,drop,position) then return false end
  local square=p.miningSquare
  return (square and drop.fieldPart==square.field.part and scene.cargoInSquare(square,position))
   or (hr.Position-position).Magnitude<=28
@@ -3484,8 +3520,8 @@ local function snapshotDrone(d)
   Battery=math.ceil(d.battery or 0),MaxBattery=d.stats.batteryCapacity,
   ThinkUntil=d.thinkUntil or 0,PressStarted=d.pressJob and d.pressJob.startedAt or 0,
   PressFinish=d.pressJob and d.pressJob.finishAt or 0,
-  GunCycleStart=RoleConfig.DownwardGunDepth[d.role] and d.specialJob and d.specialJob.startedAt or 0,
-  GunCycleEnd=RoleConfig.DownwardGunDepth[d.role] and d.specialJob and (d.specialJob.startedAt+d.specialJob.duration) or 0,
+  BatteryPowered=scene.chargingStation~=nil and DroneRoles.isWorker(d.role) and d.stats.batteryCapacity>0,
+  PressWaiting=d.pressWaiting==true,
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,FlightSteering=d.flightSteering or Vector3.zero,
   FlightMass=d.flightMass or 1,FlightResponse=d.flightResponse or 1,FlightWork=d.flightWork==true,
   Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=d.flightSpeed or travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
@@ -4356,7 +4392,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
  elseif action=='Recall' then
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
-  for _,d in ipairs(p.drones) do if d.hp>0 then d.state='Follow' end end
+  scene.recallCue(p,false)
   notice(p,'Orders cleared. Your backpack stays with you.');commandReply(pl,payload,'recalled','Orders cleared')
  elseif action=='Evade' then
   if now<(p.nextEvade or 0) then return end;p.nextEvade=now+2
@@ -4370,7 +4406,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if d.carrierId then reject('Select its carrier to give orders',nil,d);return end
   if d.life~=payload.life or d.hp<=0 or not R.allowed(d.owner,pl.UserId,d.state) then reject('Drone reprinted or unavailable',nil,d);return end
   if action=='CancelDrone' then
-   local old=d.field;release(d);spend(d);d.field=nil;d.autoField=nil;d.state='Return';dropFieldIfEmpty(p,old)
+   local old=d.field;release(d);spend(d);d.field=nil;d.autoField=nil;d.state='Return';scene.markRecall(d);dropFieldIfEmpty(p,old)
    commandReply(pl,payload,'accepted','Drone recalled',patches[old],d);return
   end
   if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or type(payload.resourceId)~='string' or #payload.resourceId>160 then reject('Invalid request',nil,d);return end

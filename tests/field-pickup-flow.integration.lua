@@ -283,6 +283,7 @@ end
 
 local drop,id=loose(center+Vector3.yAxis*.22)
 local extra,extraId=loose(center+Vector3.new(5,.22,0))
+drop.age=Workshop.COMPACTOR_PAIR_WINDOW+.1;extra.age=drop.age
 local gem=Vector3.new(drop.x,drop.floor-.22+drop.part.Size.Y*.5,drop.z)
 local dock=gem+Vector3.yAxis*Workshop.COURIER_HOOK_DROP
 d.pos=dock-Vector3.xAxis*18+Vector3.yAxis*15;d.velocity=Vector3.xAxis*4
@@ -386,11 +387,52 @@ do
 end
 print('PASS Compactor flies before marking and reeling the largest matching pair, preserves inputs on cancellation, and ejects a lasting larger ore')
 
+do
+ local press=assert(p.compactor)
+ local spot=p.miningSquare.center+Vector3.yAxis*.22
+ now+=Workshop.PRESS_RECOVER+1
+ press.pos=spot+Vector3.new(36,20,-18);press.velocity=Vector3.zero
+ local first,firstId=loose(spot-Vector3.xAxis*9)
+ local firstPosition=Vector3.new(first.x,first.y,first.z)
+ assert(not scene.emptierCanCollect(p,first,firstId,hr),
+  'an Emptier could take the first rock before the Compactor gets a pair')
+ pl.Character:PivotTo(CFrame.new(firstPosition+Vector3.yAxis*3))
+ first.queryAt=0
+ assert(scene.playerCanPickOre(p,first,firstId,hr,firstPosition,9),'the pairing window blocked manual pickup')
+ pickupStep(C.Tick)
+ snapshotDrone(press)
+ assert(not press.pressJob and press.model:GetAttribute('PressWaiting'))
+ for _=1,120 do now+=C.Tick;pickupStep(C.Tick) end
+ local second,secondId=loose(spot+Vector3.xAxis*9)
+ assert((press.pos-firstPosition).Magnitude>32,'fixture did not exercise the old distance limit')
+ local serial=pickupSerial
+ for _=1,math.ceil((Workshop.COMPACTOR_ARRIVAL_TIME+5)/C.Tick) do
+  now+=C.Tick
+  pickupStep(C.Tick);droneStep(press,C.Tick)
+  if pickupSerial>serial then break end
+ end
+ local output=assert(pickups[serial+1],'Compactor did not fly to opposite sides of the pin and merge the pair on real ticks')
+ assert(not pickups[firstId] and not pickups[secondId] and Mining.sizeTier(output.modifiers)==2)
+ assert(output.value==first.value+second.value)
+ output.part:Destroy();pickups[serial+1]=nil
+ now+=Workshop.PRESS_RECOVER+.5
+ local lone,loneId=loose(spot)
+ lone.age=Workshop.COMPACTOR_PAIR_WINDOW+.1
+ assert(scene.emptierCanCollect(p,lone,loneId,hr),'a lone rock never became available for sale')
+ lone.part:Destroy();pickups[loneId]=nil
+end
+print('PASS Compactor gets first chance at fresh ore while E stays usable, flies to distant pairs, and releases unpaired rocks for sale')
+
 field.center=bed.Position;field.model=zone;field.color=bed.Color
 field.cfg.AlwaysUnlocked=true;field.cfg.Key='Quartz'
 field.cfg.Value=1;field.cfg.Hardness=1;field.cfg.Turrets=0;field.cfg.ReferenceCrystals=true
 pl.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
-scene.clearSquare(p)
+local priorRecall=p.recallSerial or 0
+commandPlayer(pl,'Recall',{requestId='recall-spinner'})
+assert(not p.miningSquare and pl:GetAttribute('MA_RecallSerial')==priorRecall+1)
+for _,worker in ipairs(p.drones) do
+ assert(worker.model:GetAttribute('RecallAt')==now,'Recall did not send a spinner receipt for '..worker.role)
+end
 local kicks={}
 for _,role in ipairs({'Needler','Ballcaster'}) do
  local gun

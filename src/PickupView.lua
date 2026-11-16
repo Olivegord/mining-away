@@ -508,17 +508,23 @@ function V:update(dt,now)
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
     local marked=live and source:GetAttribute('PressMarked')==true
-    local selected=loose and r.seed==focusId and not r.preview
-    local highlighted=(selected or marked) and distance<44
+    -- The pickup prompt can still offer a rock an Emptier is about to grab.
+    -- Use the prompt's actual ID even when that rock is settling or docked.
+    local selected=live and r.seed==focusId and not r.preview and opacity>0
+    local highlighted=selected or (marked and distance<62)
     if highlighted then
      if not r.selection then
       local outline=Instance.new('Highlight');outline.Name='SelectedOre';outline.Adornee=r.view
-      outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.OutlineTransparency=.03
-      outline.FillTransparency=.84;outline.Enabled=true;outline.Parent=r.view;r.selection=outline
+      outline.Enabled=true;outline.Parent=r.view;r.selection=outline
      end
-     local tint=marked and Color3.fromRGB(255,193,106) or Color3.fromRGB(251,254,255)
+     local tint=selected and Color3.fromRGB(247,253,255) or Color3.fromRGB(255,193,106)
+     r.selection.DepthMode=selected and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+     r.selection.OutlineTransparency=selected and 0 or .04
+     r.selection.FillTransparency=selected and .52 or .77
      r.selection.OutlineColor=tint;r.selection.FillColor=tint
      if not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
+     r.label.AlwaysOnTop=selected
+     r.label.MaxDistance=selected and 100 or 62
     end
     if not highlighted then
      if r.selection then r.selection:Destroy();r.selection=nil end

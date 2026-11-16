@@ -25,8 +25,14 @@ check('the pickup action highlights only its current rock, even with reduced eff
  view:update(1/60,realTime+.01)
  assert(not r.label and not r.selection and r.view.Name=='CollectibleOre')
  focus=1
+ workspace.CurrentCamera.CFrame=CFrame.new(0,60,40)
+ source:SetAttribute('CourierDocking','about-to-grab')
  pl:SetAttribute('ReducedEffects',true);view:update(1/60,realTime+.02)
  assert(r.label.Enabled and r.label.Mineral.Text=='Ore' and r.selection.Enabled and not r.modifierFX)
+ assert(r.selection:IsA('Highlight') and r.selection.Adornee==r.view
+  and r.selection.DepthMode==Enum.HighlightDepthMode.AlwaysOnTop and r.selection.OutlineTransparency==0,
+  'the selected rock lost its real outline while docked or at a wide camera angle')
+ source:SetAttribute('CourierDocking',nil)
  focus=nil;view:update(1/60,realTime+.03)
  assert(not r.label and not r.selection,'the highlight outlived the pickup action')
  pl:SetAttribute('ReducedEffects',false);workspace.CurrentCamera=camera

@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 15 — Compactor reliability, battery bars, and pickup highlight
+
+The Compactor did nothing in the owner's Play session. Give it a reliable opportunity to find matching loose rocks before Emptiers take them. Guns use the same real battery display as laser drones. Use thick rectangular bars and square spinner elements. Show the spinner during useful work transitions, including Recall. Put a visible Roblox Highlight on the exact loose rock offered for pickup.
+
 ## November 15 — plot, mining crew, and Compactor polish
 
 Keep the selected plot floor whitish and put color on the edges. The yellow Needler should shoot about four times as often for the same sustained damage; keep the other guns distinct. Highlight the loose rock offered for pickup and show its larger modifier pills only while highlighted. Modified drops never blink or expire during the run.
