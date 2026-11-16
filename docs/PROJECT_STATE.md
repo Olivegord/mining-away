@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 15 — sequential sale breaks and lingering gem particles
+
+Gameplay revision **4b07989** advances through the sorted grid one rock at a time. Each rock shrinks and fades in about 65 milliseconds. A slow frame cannot start the next break until the current rock is gone. The sale uses the same colored sparks and four-point glints as the mined gem reveal, with slower motion at camera distance and particle lifetimes of 0.6–1.17 seconds. The particles survive the rocks that emit them. Reward flight retains its existing pause.
+
+Studio was already open and remains in Edit at **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**. The client Source exported through Script Sync. All three roots reported `Errored`, so a guarded Script Editor update installed the client after verifying all seven baseline Sources. Team Create save **356** succeeded. All seven saved Sources match **build/DRONE_GAME.rbxl**, SHA-256 **7d8b019fac96c744f972608af48bd46992fd3149b7d625711ed06e137d35ec5d**. The next Studio Play loads this change. **No Roblox publication.**
+
+The native Edit fixture verified all ten breaks in order, a delayed render, shared gem emitter lifetimes, particle survival into the next break, and reward arrivals. `python3 tools/test_selling.py` passed. The fixture was removed before saving. Live motion and multiplayer remain unverified. Reproduce the native refresh with `python3 tools/build.py --previous-commit 3d3b19d` on the preceding canonical snapshot.
+
 ## November 15 — sale preview, gem reveal, and Ballcaster cues
 
 Gameplay revision **4679617**, based on soundtrack handoff **6715079**. Using SELL ORE opens the backpack grid before selling. The rocks fill most of the screen. **E** or the on-screen Sell button confirms, and Cancel closes the preview. The server checks the run, station range and exact backpack again. Changed cargo refreshes the preview for review. Backpack sales pause after confirmation, then each rock gets a short impact hold, camera shake, particles and a crack. Money and material amounts linger near the rock for 0.38 seconds before flying to the top-left counters. Auto Sell and Emptiers keep a compact receipt. The soundtrack enters its selling context only after a committed sale.
