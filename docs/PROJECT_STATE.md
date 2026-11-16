@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 15 — slower sale rhythm and readable payouts
+
+Gameplay revision **0978b9f** stretches the lead-in and the spacing between sell breaks. The next rock briefly compresses before its quick break, gems take a slightly longer windup and sound stronger, and the gem reveal particles have longer tails. Cash and material amounts target 33–39 px and 23–27 px, respectively, depending on space. Small cells prefer a short mineral name. Readouts hold for about 1.3 seconds before fading. Coins drift longer before a slower pull, and the material waves are farther apart. The final token lands with its own deeper chime and a larger HUD pulse. Typical ten-piece bags show the grid for roughly 4–5 seconds after confirmation. The [research rationale and timings](VFX_INSTRUCTIONS.md#november-15--sale-pacing-and-larger-payout-text) are recorded as tuning hypotheses.
+
+The owner's Play session ended and Studio remains in Edit at **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**. Script Sync exported the client and TacticalHUD. All three roots still reported `Errored`, so the guarded Script Editor installer updated those two Sources. Team Create save **358** succeeded. All seven saved Sources match **build/DRONE_GAME.rbxl**, SHA-256 **4525fb64dfa20aea8733fdff6b3c2ee09166cf27be0ee8d2967f1c79dd1ad698**. The next Studio Play loads this pass. **No Roblox publication.**
+
+The native Edit fixture verified the larger text settings, slower ordered cadence, longer text and particle holds, money-first flight, material waves, final chime and exact counter reconciliation. `python3 tools/test_selling.py` passed. The fixture was removed before saving. Reading comfort and impact in live motion are still for the owner to judge in Play. Reproduce the canonical refresh with `python3 tools/build.py --previous-commit cdfa519` on the preceding snapshot.
+
 ## November 15 — weighted currency tokens and HUD count-up
 
 Gameplay revision **f2d070e** shows a colored payout beside each rock for 0.92 seconds. Green coins and mineral-colored flecks burst out independently, slow as they drift, then carry their motion into a curved pull. Coins pull first. Material types follow in separate waves once the last rock has broken. The token hits the actual balance digits, plays a currency-specific cue, and adds its exact share to the displayed total. The gem particle system still handles the shatter itself.
