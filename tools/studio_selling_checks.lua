@@ -16,7 +16,8 @@ Finish.Gems.prepare()
 local core=game:GetService('CoreGui')
 local gui=Instance.new('ScreenGui');gui.Name='TemporarySellingHUD';gui.ScreenInsets=Enum.ScreenInsets.CoreUISafeInsets;gui.Parent=core
 local root=Instance.new('Frame');root.BackgroundTransparency=1;root.Size=UDim2.fromScale(1,1);root.Parent=gui
-local refs={gui=gui,root=root,profile=function() return {run={wallet={Quartz=1234},resources={Stone=500,Ruby=114,Diamond=107},shops={Quartz=true},quartzEarnings=100,index=1,packIndex=1}} end,
+local snapshot={revision=4,run={id='test-sale-run',wallet={Quartz=1234},resources={},shops={Quartz=true},quartzEarnings=100,index=1,packIndex=1}}
+local refs={gui=gui,root=root,profile=function() return snapshot end,
  hidden=function() return false end,starterReachable=function() return false end,depotApproach=function() return false end,
  resourceOrder=W.RESOURCE_ORDER,resourceNames=W.RESOURCE_NAMES,resourceColors=W.RESOURCE_COLORS}
 for _,name in ipairs({'resources','modal','recall','unload','test','evade','context','enemy','toast','cargoTrack','cargoText'}) do
@@ -30,17 +31,17 @@ local world=Instance.new('Folder');world.Parent=fx
 local resources=Instance.new('Folder');resources.Name='Resources';resources.Parent=world
 local template=game.ServerStorage:FindFirstChild('MiningAwayCrystal')
 if template then local rock=template:Clone();rock.Parent=resources;rock.Transparency=1 end
-local reduced=false;local beats=0;local confirmed;local cues={}
+local reduced=false;local beats=0;local committed=0;local confirmed;local cues={}
 local fakePlayer={PlayerGui=core,GetAttribute=function(_,name) return name=='ReducedEffects' and false or nil end}
 local view=Sale.new({hud=hud,player=fakePlayer,world=world,parent=fx,reducedMotion=function() return reduced end,hidden=function() return false end,
  presentation={cameraBeat=function() beats+=1 end},confirm=function(id) confirmed=id end,
- cancel=function() end,audio={play=function(_,name) cues[name]=(cues[name] or 0)+1 end}})
+ onCommitted=function() committed+=1 end,cancel=function() end,audio={play=function(_,name) cues[name]=(cues[name] or 0)+1 end}})
 local report={}
 local bag={};for _,tier in ipairs(W.CRYSTAL_TIERS) do
  bag[W.saleCargo(tier.material,math.max(1,tier.value),true,7,100)]=1
  bag[W.saleCargo(tier.material,tier.value*8,false,100,0)]=1
 end
-local receipt={id='component-check',full=true,cargo=bag,cash=3069,resources={Stone=500,Amber=107,Ruby=107,Quartz=107,Violet=107,Diamond=107}}
+local receipt={id='component-check',runId=snapshot.run.id,revision=5,full=true,cargo=bag,cash=3069,resources={Stone=500,Amber=107,Ruby=107,Quartz=107,Violet=107,Diamond=107}}
 local camera=workspace.CurrentCamera;local oldCamera=camera.CFrame
 local closed=false
 local function close()
@@ -64,15 +65,28 @@ local ok,err=xpcall(function()
  report.rockWidthPixels=math.floor(right.X-center.X)
  assert(report.rockWidthPixels>camera.ViewportSize.Y*.21,'rock is too small relative to the screen')
  view:confirm();view:confirm();assert(confirmed==receipt.id and view.pendingAt and cues.sale_confirm==1)
- view:receive(receipt);assert(not view.prompt.Visible)
+ snapshot.revision=5;snapshot.run.wallet.Quartz+=receipt.cash;snapshot.run.resources=table.clone(receipt.resources)
+ snapshot.recentSales={receipt};view:receiveProfile(snapshot);view:receive(receipt)
+ assert(not view.prompt.Visible and committed==1,'profile and remote duplicated the sale')
+ hud:update(camera.ViewportSize,world,false)
+ assert(hud.wallets[1].value.Text=='1234' and hud.wallets[2].value.Text=='0','wallet jumped before tokens arrived')
  view:update(1/60);assert(beats==0 and #view.flights==0,'confirmation has no anticipation beat')
  view.cascadeAt=os.clock()-.40;view:update(1/60)
  local first=view.tiles[1]
- assert(first.hitAt and not first.sold and not view.tiles[2].hitAt and #view.flights==3 and beats==1)
- view:update(1/60)
- local reward=view.flights[1];assert(reward.hold>=.35 and reward.view.Text=='+$1')
- local initialReward=reward.view.Position
- view:update(1/60);assert((reward.view.Position.X.Offset-initialReward.X.Offset)^2<1,'reward departed before holding at the rock')
+ assert(first.hitAt and not first.sold and not view.tiles[2].hitAt and #view.flights==5 and beats==1)
+ local money,amber,stone=view.flights[1],view.flights[2],view.flights[4]
+ assert(money.view.Name=='MoneyCoin' and amber.view.Name=='MaterialFleck')
+ assert(view.readouts[1].view.Text=='+$1' and view.readouts[2].view.Text=='+0.07 Amber chips')
+ assert(view.readouts[1].view.TextColor3.G>view.readouts[1].view.TextColor3.R)
+ local function point(token) return Vector2.new(token.view.Position.X.Offset,token.view.Position.Y.Offset) end
+ view:updatePayouts(amber.at+.01,false);local a=point(amber)
+ view:updatePayouts(amber.at+.06,false);local b=point(amber)
+ view:updatePayouts(amber.at+.11,false);local c=point(amber)
+ assert((b-a).Magnitude>(c-b).Magnitude and (c-b).Magnitude>0,'drift failed to decelerate continuously')
+ view:updatePayouts(money.at+.23,false)
+ assert(money.pullAt and not amber.pullAt and view.readouts[1].view.TextTransparency==0)
+ view:updatePayouts(money.pullAt+money.duration+.01,false);hud:update(camera.ViewportSize,world,false)
+ assert(hud.wallets[1].value.Text=='1235' and cues.sale_credit==1 and not amber.pullAt)
  local burst=assert(fx:FindFirstChild('GemRewardParticles'))
  assert(burst.AirborneSparks.Lifetime.Min>=.59 and burst.ImpactAccent.Lifetime.Max>1,'gem particles need a visible tail')
  view.cascadeAt=os.clock()-4
@@ -92,9 +106,23 @@ local ok,err=xpcall(function()
   if index==1 then assert(burst.Parent==fx,'breaking the next rock cleared the prior gem particles') end
  end
  assert(view.active and beats==10)
- for _,flight in ipairs(view.flights) do flight.at=os.clock()-2 end
+ local wave=view.active.dustAt
+ view:updatePayouts(wave+.12,false)
+ assert(stone.pullAt and not amber.pullAt,'material types did not get separate pull waves')
+ view:updatePayouts(wave+2,false);view:updatePayouts(wave+3,false)
  view.tiles[10].hitAt=os.clock()-1.1;view:update(1/60)
- assert(not view.active and not view.focus and #view.flights==0 and cues.sale_credit)
+ hud:update(camera.ViewportSize,world,false)
+ assert(not view.active and not view.focus and #view.flights==0 and #view.readouts==0)
+ assert(cues.sale_credit>1 and cues.sale_dust_credit>0)
+ assert(hud.wallets[1].value.Text=='4303' and hud.wallets[2].value.Text=='5','arrival credits missed the authoritative totals')
+ local pending={id='receipt-first',runId=snapshot.run.id,revision=6}
+ hud:beginSale(pending,{Money=9});hud:currencyHit(pending.id,'Money',4,false)
+ local offset=hud:pendingSaleBalances(snapshot,os.clock());assert(offset.Money==4)
+ snapshot.revision=6;snapshot.run.wallet.Quartz+=9
+ offset=hud:pendingSaleBalances(snapshot,os.clock());assert(offset.Money==-5)
+ hud:currencyHit(pending.id,'Money',5,false)
+ offset=hud:pendingSaleBalances(snapshot,os.clock());assert(offset.Money==nil)
+ report.deceleratingDrift=true;report.materialWaves=true;report.replicationOrder=true
  report.sortedObjects=10;report.screenBeats=beats;report.currencyArrivals=true;report.cleanup=true
  report.sequentialBreaks=true;report.sharedGemParticles=true
  reduced=true

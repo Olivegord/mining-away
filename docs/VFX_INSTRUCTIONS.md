@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 15 — currency token flight and arrival
+
+Colored payout amounts linger beside their rock for 0.92 seconds. Green round coins and tinted angular material flecks drift independently of the text and existing gem shatter. Random launch angles, speeds, spins and curves vary the trajectory. A decaying drift carries velocity into the pull. Coins start pulling first, and after the final break the material flecks leave in resource waves. The final motion aims at the current digits of the corresponding HUD counter. Arrival plays a coin tick or material chime and advances the displayed balance by the token's share of the confirmed reward.
+
 ## November 15 — sequential sale breaks and gem particles
 
 Each sale rock shrinks and fades in about 65 milliseconds. The grid advances only after that rock is gone, including when the renderer has a slow frame. The existing gem reveal's colored discs and four-point glints replace the sale's square particles. Sale particles use a smaller spread in world space and live for 0.6 to 1.17 seconds, independent of the rock. The reward amounts still pause before flying to the HUD.

@@ -816,6 +816,7 @@ do
   local changedRun=profile and profile.run.id~=p.run.id
   soundscape:observeProfile(oldProfile,p)
   profile=p
+  if pickupView.sales then pickupView.sales:receiveProfile(p) end
   if changedRun then closeFleetInspection(false) end
   local access={p.run.id}
   for _,key in ipairs(Shops.ORDER) do table.insert(access,tostring(Shops.unlocked(p,key))) end
@@ -1764,13 +1765,14 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
  end})
 pickupView.sales=SaleView.new({hud=tacticalHUD,player=player,world=world,parent=localFX,presentation=presentation,
  audio=soundscape,reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible,
+ onCommitted=function(receipt) soundscape:observeSale(receipt) end,
  confirm=function(id) command:FireServer('ConfirmSale',id) end,
  cancel=function(id) command:FireServer('CancelSale',id) end})
 connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt)
- if type(receipt)=='table' and receipt.kind==nil then soundscape:observeSale(receipt) end
  pickupView.sales:receive(receipt)
 end)
-RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function(dt) pickupView.sales:update(dt) end)
+if profile then pickupView.sales:receiveProfile(profile) end
+RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function() pickupView.sales:update() end)
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,

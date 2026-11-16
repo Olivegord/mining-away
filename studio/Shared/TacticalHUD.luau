@@ -10,7 +10,7 @@ local C = {
  text=Color3.fromRGB(245,245,241), muted=Color3.fromRGB(192,197,199),
  blue=Color3.fromRGB(28,132,216), green=Color3.fromRGB(30,153,95),
  red=Color3.fromRGB(218,56,79), track=Color3.fromRGB(16,21,38),
- gold=Color3.fromRGB(255,219,102), violet=Color3.fromRGB(135,58,211),
+ money=Color3.fromRGB(113,246,146), gold=Color3.fromRGB(255,219,102), violet=Color3.fromRGB(135,58,211),
 }
 local function frame(parent: Instance, name: string, color: Color3): Frame
  local f = Instance.new('Frame')
@@ -103,15 +103,15 @@ local function compact(value)
 end
 function HUD.new(refs: any)
  interfaceKit=refs.interface
- local self: any=setmetatable({refs=refs,input=UIS:GetLastInputType(),wallets={}},HUD)
+ local self: any=setmetatable({refs=refs,input=UIS:GetLastInputType(),wallets={},saleCredits={}},HUD)
  plain(refs.resources)
  local keys={'Money'};for _,key in ipairs(refs.resourceOrder or {}) do table.insert(keys,key) end
  for i,key in ipairs(keys) do
   local row=frame(refs.resources,'Wallet_'..key,C.panel);plain(row)
-  local color=key=='Money' and C.gold or Color3.fromRGB(table.unpack(refs.resourceColors[key]))
+  local color=key=='Money' and C.money or Color3.fromRGB(table.unpack(refs.resourceColors[key]))
   local name=text(row,'MineralName',0,0,116,24,17,color);name.Text=key=='Money' and '$ Money' or refs.resourceNames[key]
   local value=text(row,'Balance',116,0,64,24,20,C.text);value.TextXAlignment=Enum.TextXAlignment.Right
-  self.wallets[i]={key=key,tile=row,name=name,value=value,untilAt=0,last=0}
+  self.wallets[i]={key=key,tile=row,name=name,value=value,color=color,untilAt=0,last=0}
  end
  self.cargo=frame(refs.resources,'CargoCounter',C.panel);plain(self.cargo)
  local name=text(self.cargo,'Caption',0,0,78,24,18,C.muted);name.Text='Backpack'
@@ -213,20 +213,51 @@ function HUD.needsFirstCutHint(profile: any, pinned: boolean): boolean
  if not run then return false end
  return not pinned and run.index==1 and run.packIndex==0 and run.quartzEarnings==0
 end
-function HUD:revealSale(resources,duration)
- for _,entry in ipairs(self.wallets) do
-  if (resources[entry.key] or 0)>0 then entry.untilAt=math.max(entry.untilAt,os.clock()+duration) end
- end
+function HUD:beginSale(receipt,amounts)
+ if self.saleCredits[receipt.id] then return end
+ self.saleCredits[receipt.id]={runId=receipt.runId,revision=receipt.revision,
+  remaining=table.clone(amounts),arrived={},untilAt=os.clock()+15}
 end
 function HUD:currencyTarget(key)
  for _,entry in ipairs(self.wallets) do
-  if entry.key==key then return entry.value.AbsolutePosition+entry.value.AbsoluteSize*.5 end
+  if entry.key==key and entry.tile.Visible and self.refs.resources.Visible then
+   local size=entry.value.AbsoluteSize
+   local width=math.clamp(entry.value.TextBounds.X,0,size.X)
+   return entry.value.AbsolutePosition+Vector2.new(size.X-math.max(4,width*.5),size.Y*.5)
+  end
  end
 end
-function HUD:currencyHit(key)
- for _,entry in ipairs(self.wallets) do
-  if entry.key==key then entry.pulseUntil=os.clock()+.16;entry.untilAt=math.max(entry.untilAt,os.clock()+3) end
+function HUD:currencyHit(id,key,amount,reduced)
+ local sale=self.saleCredits[id]
+ if sale then
+  local credit=math.min(amount,sale.remaining[key] or 0)
+  if credit>0 then
+   local left=sale.remaining[key]-credit
+   sale.remaining[key]=left>0 and left or nil
+   sale.arrived[key]=(sale.arrived[key] or 0)+credit
+  end
  end
+ local now=os.clock()
+ for _,entry in ipairs(self.wallets) do
+  if entry.key==key then entry.pulseAt=now;entry.steadyPulse=reduced;entry.untilAt=math.max(entry.untilAt,now+3) end
+ end
+end
+function HUD:pendingSaleBalances(profile,now)
+ local offset,visible={},{}
+ if not profile then return offset,visible end
+ for id,sale in pairs(self.saleCredits) do
+  local replicated=(profile.revision or 0)>=sale.revision
+  if sale.runId~=profile.run.id or now>=sale.untilAt or (replicated and next(sale.remaining)==nil) then
+   self.saleCredits[id]=nil
+  else
+   -- A receipt can arrive on either side of profile replication. Carry the
+   -- landed amount until its real balance is visible, then withhold the rest.
+   local changes=replicated and sale.remaining or sale.arrived
+   for key,value in pairs(changes) do offset[key]=(offset[key] or 0)+(replicated and -value or value) end
+   for key in pairs(sale.remaining) do visible[key]=true end
+  end
+ end
+ return offset,visible
 end
 function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local r=self.refs;local w=view.X
@@ -234,20 +265,24 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local p=r.profile();local wallet=p and p.run and p.run.wallet or {}
  local width=180;local rowHeight=24;local shown=0
  local now=os.clock();local resources=p and p.run and p.run.resources or {}
+ local saleOffset,saleVisible=self:pendingSaleBalances(p,now)
  local mouse=UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
  local at=r.resources.AbsolutePosition;local hover=mouse.X>=at.X and mouse.X<=at.X+width and mouse.Y>=at.Y and mouse.Y<=at.Y+180
  for _,entry in ipairs(self.wallets) do
   local money=entry.key=='Money'
-  local balance=money and (wallet.Quartz or 0) or (resources[entry.key] or 0)
+  local authoritative=money and (wallet.Quartz or 0) or (resources[entry.key] or 0)
+  local balance=math.max(0,authoritative+(saleOffset[entry.key] or 0))
   if balance~=entry.last then entry.last=balance;entry.untilAt=math.max(entry.untilAt,now+4) end
-  local opacity=money and 1 or hover and balance>0 and 1 or math.clamp((entry.untilAt-now)/.7,0,1)
+  local opacity=money and 1 or saleVisible[entry.key] and 1 or hover and balance>0 and 1 or math.clamp((entry.untilAt-now)/.7,0,1)
   entry.tile.Visible=opacity>0
   if opacity>0 then
    entry.tile.Position=UDim2.fromOffset(0,shown*rowHeight);entry.tile.Size=UDim2.fromOffset(width,rowHeight);shown+=1
    local value=money and balance or balance/100
    entry.value.Text=value<10000 and not money and string.format('%.2f',value):gsub('0+$',''):gsub('%.$','') or compact(value)
    entry.name.TextTransparency=1-opacity;entry.value.TextTransparency=1-opacity
-   entry.value.TextColor3=(entry.pulseUntil or 0)>now and C.gold or C.text
+   local pulse=1-math.clamp((now-(entry.pulseAt or -10))/.20,0,1)
+   entry.value.TextColor3=(money and C.money or C.text):Lerp(entry.color,pulse)
+   entry.value.TextSize=20+(entry.steadyPulse and 0 or math.floor(3*pulse+.5))
   end
  end
  local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)

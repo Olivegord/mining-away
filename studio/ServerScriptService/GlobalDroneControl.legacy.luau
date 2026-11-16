@@ -9734,6 +9734,14 @@ local function publish(p)
  p.player:SetAttribute('QueuedOreCount',#(p.oreQueue or {}))
  p.player:SetAttribute('QueuedOreIds',Http:JSONEncode(p.oreQueue or {}))
  copy.seed=nil;copy.receipts=nil
+ if p.recentSales then
+  for _,receipt in ipairs(p.recentSales) do
+   if receipt.runId==copy.run.id and now-receipt.at<12 then
+    copy.recentSales=copy.recentSales or {}
+    table.insert(copy.recentSales,receipt)
+   end
+  end
+ end
  if scene.runStart then copy.consumables=nil end
  if copy.run.pendingOffer then
   copy.run.pendingOffer.seed=nil
@@ -13439,6 +13447,16 @@ function scene.saleMilestoneNotice(p,saleQuartz)
   return '+'..saleQuartz..' Quartz · Pack Counter ready'
  end
 end
+function scene.sendSaleReceipt(p,id,result,full)
+ local receipt={id=id,runId=result.runId,revision=data(p).revision,at=now,
+  cargo=result.cargo,resources=result.resources,cash=result.quartz,full=full}
+ -- The profile also carries recent receipts so a balance snapshot arriving
+ -- before its RemoteEvent cannot jump ahead of the visual credit.
+ p.recentSales=p.recentSales or {}
+ table.insert(p.recentSales,receipt)
+ if #p.recentSales>6 then table.remove(p.recentSales,1) end
+ RS.MiningAway.Sale:FireClient(p.player,receipt)
+end
 local function serviceDeliveries(p: any)
  if not healthy(p) or not characterRoot(p) or now<(p.nextDeliveryAction or 0) then return end
  local run=data(p).run
@@ -13472,7 +13490,7 @@ local function serviceDeliveries(p: any)
      worker.collectAfter=now+(scene.runStart and Workshop.emptierCooldown(RoleConfig.Courier.PickupCooldown,data(p)) or RoleConfig.Courier.PickupCooldown)
     end
     if scene.runStart then
-     RS.MiningAway.Sale:FireClient(p.player,{id=tx,runId=result.runId,cargo=result.cargo,resources=result.resources,cash=result.quartz,full=false})
+     scene.sendSaleReceipt(p,tx,result,false)
      local proceeds=result.quartz>0 and (' · +'..result.quartz..' Quartz') or ''
      if (p.shiftSeconds or 0)>0 then
       p.shiftReadyRun=result.runId
@@ -13562,7 +13580,7 @@ local function sellBackpack(p: any,automatic: boolean?,quote: any?)
   if ok then return result end;return nil,result
  end,function(result)
   p.nextEmptierPlan=nil
-  RS.MiningAway.Sale:FireClient(p.player,{id=tx,runId=result.runId,cargo=result.cargo,resources=result.resources,cash=result.quartz,full=not automatic})
+  scene.sendSaleReceipt(p,tx,result,not automatic)
   local amounts={}
   for _,key in ipairs(Shops.ORDER) do
    local n=key=='Quartz' and result.quartz or result.cargo[key]

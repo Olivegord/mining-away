@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 15 — colored sale amounts and weighted currency tokens
+
+Show how much each rock sold for in lingering colored text, with green money and material-colored dust. Give money and dust different token shapes. Tokens burst out quickly, slow as they drift, and carry their motion into the pull toward their counters. Pull money first and gather dust in waves, with a little variation between tokens. Play an arrival sound and increase the displayed balance as each token lands.
+
 ## November 15 — one sale break at a time
 
 Break the rocks in order, one at a time. Keep each break animation fast and let the particles linger. Reuse the particle system from a gem reveal.

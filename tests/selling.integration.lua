@@ -50,6 +50,10 @@ input('ConfirmSale',refreshed.id)
 local event=messages[#messages]
 assert(event.player==pl and event.payload.full and event.payload.resources.Ruby==2*a.dust+b.dust)
 assert(event.payload.cash==2*a.cash+b.cash and Pro.cargoUnits(data(p))==0)
+local replicated=Http:JSONDecode(pl:GetAttribute('MA_Profile'))
+local credit=replicated.recentSales[1]
+assert(credit.id==event.payload.id and credit.revision==replicated.revision and credit.cash==event.payload.cash)
+assert(replicated.run.wallet.Quartz==money+credit.cash)
 local before=#messages
 input('ConfirmSale',refreshed.id);input('Sell')
 assert(#messages==before,'duplicate or empty sale emitted a reward')
