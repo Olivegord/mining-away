@@ -2,7 +2,8 @@
 
 ## November 15 — Downloads rock and weapon audio
 
-Integrated on the saved selling baseline **ef21413**. Eight separate artninja
+Gameplay revision **4118026**, integrated on the saved selling baseline
+**ef21413**. Eight separate artninja
 crashes now form three size pools using combined loudness/duration ranks. The
 ordinary break uses its original full dimensions and avoids consecutive repeats
 within a pool. Elementus low-mid plays at laser ignition and distorted spaceship
