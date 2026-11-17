@@ -493,6 +493,9 @@ function Sale:update()
    local onPage=not full or math.floor((i-1)/pageSize)==page
    if full then
     tile.ore.LocalTransparencyModifier=onPage and 0 or 1
+    for _,part in ipairs(tile.ore:GetDescendants()) do
+     if part:IsA('BasePart') then part.LocalTransparencyModifier=onPage and 0 or 1 end
+    end
     for _,v in ipairs({tile.caption,tile.worth,tile.modifier,tile.material}) do v.Visible=onPage end
     tile.inspect.Visible=onPage and preview
     if not onPage then if tile.display then PickupDisplay.hide(tile.display) end;continue end

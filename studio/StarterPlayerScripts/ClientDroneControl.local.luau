@@ -16928,6 +16928,9 @@ function Sale:update()
    local onPage=not full or math.floor((i-1)/pageSize)==page
    if full then
     tile.ore.LocalTransparencyModifier=onPage and 0 or 1
+    for _,part in ipairs(tile.ore:GetDescendants()) do
+     if part:IsA('BasePart') then part.LocalTransparencyModifier=onPage and 0 or 1 end
+    end
     for _,v in ipairs({tile.caption,tile.worth,tile.modifier,tile.material}) do v.Visible=onPage end
     tile.inspect.Visible=onPage and preview
     if not onPage then if tile.display then PickupDisplay.hide(tile.display) end;continue end
@@ -19214,7 +19217,7 @@ local function renderResource(r,now)
  local seed=s:GetAttribute('StageSeed') or 0
  local ground=s:GetAttribute('GroundY')
  if not r.visual.broken then
-  view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
+  view.Transparency=s:GetAttribute('Kind')=='Geode' and not s:GetAttribute('SealedDrop') and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
   local shape=s:GetAttribute('Kind')=='Geode' and 1 or quarry and Feel.crystalStageShape(stage,stageCount,full)
    or s:GetAttribute('ZoneName') and Feel.crystalStageShape(stage,stageCount) or period

@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 16 — final combined visibility correction
+
+Final revision: the commit containing this entry, following **3b7d208**, on **codex/restore-feel-prestige**. Includes all mining/drop/interaction/status fixes and the coordinated selling redesign described below. Sealed geode views are fully opaque so Roblox can draw their selection Highlight reliably. The selling follow-up applies page visibility to gem child BaseParts as well as their parent, preventing optical layers on hidden pages from leaking into the current page. The unchanged server quote expiry is documented in [the sale review](review/SALE_REDESIGN.md).
+
+Shared **DRONEREVOLUTION Edit**, place **124078027733625**, universe **10774898335**, saved as Team Create **376**. All seven native/editor Source hashes matched the canonical file after this save; 43 unrelated/backup Sources and all non-Source native chunks were preserved. Canonical **build/DRONE_GAME.rbxl**, SHA-256 **644804b72c0056198a6e51d367e0e73d1e4b3451ef37d507be14a94b5be502de**. Next shared Play loads this final combined revision. No publication; last verified published release remains **v363**. Studio remains open in Edit, access unchanged/not rechecked, native save ownership released. Existing untracked mystery work remains untouched.
+
+The final controllers compile and geode/arc/seat tests pass; the selling chat re-ran the complete selling runner successfully after its visibility correction. Earlier native component, aiming, pickup, thinking-hover and motion evidence applies as described below. No agent-started Play, device simulation or new visual-approval claim. Full live appearance, sound, touch, multiplayer and the reported altitude behavior still need owner evaluation.
+
 ## November 16 — drop arcs, aimed interactions, thinking hover and integrated selling redesign
 
 Revision: the commit containing this entry, based on **cd2f63a**, branch **codex/restore-feel-prestige**. Stone now uses the same full authoritative launch arc as gems. Sealed geodes launch from the broken rock through a 0.75-second arc and cannot open before landing. Their shell reuses the existing irregular rock cut, with restrained warm light/motes and a short opening tremor; smooth spherical halves and the large halo are removed for these drops. Ordinary stone shatters without the hinged opening. Hidden server-rolled contents and all reward ownership/duplicate guards remain intact.

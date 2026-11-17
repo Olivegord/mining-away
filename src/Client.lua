@@ -1158,7 +1158,7 @@ local function renderResource(r,now)
  local seed=s:GetAttribute('StageSeed') or 0
  local ground=s:GetAttribute('GroundY')
  if not r.visual.broken then
-  view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
+  view.Transparency=s:GetAttribute('Kind')=='Geode' and not s:GetAttribute('SealedDrop') and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
   local shape=s:GetAttribute('Kind')=='Geode' and 1 or quarry and Feel.crystalStageShape(stage,stageCount,full)
    or s:GetAttribute('ZoneName') and Feel.crystalStageShape(stage,stageCount) or period
