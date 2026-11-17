@@ -140,24 +140,56 @@ function V:canReachStarterPlot()
  local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
  return point~=nil and Mining.selectorInRange(root.Position,point)
 end
+-- Aim at an object, rather than selecting whichever happens to be nearest.
+function V:interactionScore(view,current)
+ local camera=workspace.CurrentCamera;if not camera or not view or not view.Parent then return nil end
+ local input=game:GetService('UserInputService')
+ local point=input:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
+ if input:GetLastInputType()==Enum.UserInputType.Touch or input:GetLastInputType().Name:match('^Gamepad') then point=camera.ViewportSize*.5 end
+ local screen,visible=camera:WorldToViewportPoint(view.Position)
+ if not visible then return nil end
+ local dx,dy=screen.X-point.X,screen.Y-point.Y
+ local radius=32
+ local score=(dx*dx+dy*dy)/(radius*radius)
+ if current then
+  -- Keep the target while moving the pointer from its body onto its button.
+  local top=camera:WorldToViewportPoint(view.Position+Vector3.yAxis*(view.Size.Y*.5+.7))
+  if math.abs(point.X-top.X)<=68 and point.Y>=top.Y-20 and point.Y<=screen.Y+16 then return -.1 end
+ end
+ return score<=1 and score or nil
+end
 function V:readyRock(resources)
- self.ready=nil
+ local previous=self.ready;self.ready=nil
  local root=self.options.player.Character and self.options.player.Character:FindFirstChild('HumanoidRootPart')
  if not root then return nil end
- local best=Mining.OPEN_REACH
+ local best=math.huge;local now=workspace:GetServerTimeNow()
  for _,r in pairs(resources) do
   local s=r.source
-  if s:GetAttribute('OpenReady') and s:GetAttribute('OpenOwner')==self.options.player.UserId and not s:GetAttribute('OpeningAt') then
-   local distance=(s.Position-root.Position).Magnitude
-   if distance<best then
+  if s:GetAttribute('OpenReady') and now>=(s:GetAttribute('ReadyAt') or 0)
+   and s:GetAttribute('OpenOwner')==self.options.player.UserId and not s:GetAttribute('OpeningAt')
+   and (s.Position-root.Position).Magnitude<=Mining.OPEN_REACH then
+   local score=self:interactionScore(r.view,r==previous)
+   if score and (score<best or score==best and (not self.ready or r.id<self.ready.id)) then
     local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
     params.FilterDescendantsInstances={self.options.player.Character,self.options.parent}
     local hit=workspace:Raycast(root.Position,s.Position-root.Position,params)
-    if not hit or hit.Instance==s then self.ready=r;best=distance end
+    if not hit or hit.Instance==s then self.ready=r;best=score end
    end
   end
  end
  return self.ready
+end
+function V:readyPickup(records)
+ local previous=self.pickupId;self.pickupId=nil;local best=math.huge
+ for source,r in pairs(records) do
+  if source.Parent and source:GetAttribute('Owner')==self.options.player.UserId
+   and source:GetAttribute('ManualPickupReady') and not r.collectAt then
+   local id=source:GetAttribute('PickupId')
+   local score=self:interactionScore(r.view,id==previous)
+   if score and (score<best or score==best and (not self.pickupId or id<self.pickupId)) then self.pickupId=id;best=score end
+  end
+ end
+ return self.pickupId
 end
 function V:aimPreview(ray)
  local point,id,leadId,inRange=self:aim(ray)

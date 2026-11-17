@@ -213,7 +213,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    if not ordinaryStone then audio:play('crystal_release_tink',point,{level=volume}) end
   end
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
-  openHalves(r,frame,size,now,reduced)
+  if not ordinaryStone and not s:GetAttribute('SealedDrop') then openHalves(r,frame,size,now,reduced) end
   if not reduced then
    if not prism and not nomad and not ordinaryStone then releaseSparks(point,ground,r.baseColor,strength,now) end
    if RoleVisuals and not nomad then

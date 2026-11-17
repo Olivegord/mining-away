@@ -67,16 +67,21 @@ function Ledger:begin()
 end
 function Ledger:layout(x,y,width,height)
  self.panel.Position=UDim2.fromOffset(x,y);self.panel.Size=UDim2.fromOffset(width,height)
- local gap=24
- local cols=#self.order
- local bandHeight=math.clamp(height,132,174)
- local columnWidth=math.max(116,(width-gap*(cols-1))/cols)
- self.panel.ScrollingDirection=Enum.ScrollingDirection.X
- self.panel.CanvasSize=UDim2.fromOffset(cols*(columnWidth+gap)-gap,bandHeight)
+ local horizontal=width>height*1.5
+ local gap=horizontal and 14 or 20
+ local rowHeight=horizontal and 74 or 82
+ local columnWidth=horizontal and math.max(112,(width-gap*(#self.order-1))/#self.order) or width
+ self.panel.ScrollingDirection=horizontal and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
+ self.panel.CanvasSize=UDim2.fromOffset(horizontal and #self.order*(columnWidth+gap)-gap or 0,horizontal and rowHeight or #self.order*(rowHeight+gap))
  for i,row in ipairs(self.order) do
-  row.root.Position=UDim2.fromOffset((i-1)*(columnWidth+gap),0)
-  row.root.Size=UDim2.fromOffset(columnWidth,bandHeight-12);row.lineHeight=22
-  row.visibleHistory=math.clamp(math.floor((bandHeight-12-90)/22),1,3)
+  row.root.Position=UDim2.fromOffset(horizontal and (i-1)*(columnWidth+gap) or 0,horizontal and 0 or (i-1)*(rowHeight+gap))
+  row.root.Size=UDim2.fromOffset(columnWidth,rowHeight)
+  row.title.Text=row.key=='Money' and 'Total' or Workshop.RESOURCE_NAMES[row.key]
+  row.title.TextSize=18
+  row.total.TextXAlignment=Enum.TextXAlignment.Left
+  row.total.Position=UDim2.new(1,0,0,47);row.total.Size=UDim2.new(1,0,0,42)
+  row.terms.Visible=false;row.earlier.Visible=false;row.rule.Visible=false
+  row.lineHeight=22;row.visibleHistory=3
   self.rules[i]=row.rule
  end
 end

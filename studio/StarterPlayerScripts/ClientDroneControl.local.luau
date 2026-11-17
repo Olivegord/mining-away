@@ -6905,11 +6905,6 @@ local chargingColor=Color3.fromRGB(121,230,205)
 local readyColor=Color3.fromRGB(236,255,248)
 local boltRed=Color3.fromRGB(239,54,63)
 local boltBright=Color3.fromRGB(255,132,120)
-local busyStates={
- Travel=true, Waiting=true, Collect=true, Pickup=true, Deliver=true, Unload=true,
- Launch=true, Vacuum=true, Intake=true, GrowApproach=true, Plant=true,
- Heal=true, RepairCharge=true, Press=true,
-}
 
 local function rectangle(parent,name,width,height,tint)
  local frame=Instance.new('Frame')
@@ -7040,16 +7035,15 @@ function Status.draw(drone,source,state,role,alive,now,reducedMotion,reducedFlas
   return
  end
 
- local recallAt=source:GetAttribute('RecallAt') or 0
- local deciding=state=='Return' or (recallAt>0 and now>=recallAt and now-recallAt<1.2)
-  or now<(source:GetAttribute('ThinkUntil') or 0)
+ local deciding=state=='Thinking' and now<(source:GetAttribute('ThinkUntil') or 0)
  local powered=source:GetAttribute('BatteryPowered')==true
- local toCharge=powered and state=='ToCharge'
+ local inPlot=source:GetAttribute('InMiningPlot')==true
+ local toCharge=powered and state=='ToCharge' and not inPlot
  local charging=powered and state=='Charging'
  local working=powered and source:GetAttribute('BatteryWorking')==true and not source:GetAttribute('WorkPaused')
- local bar=charging or working
- local spinner=not toCharge and not bar and (deciding or busyStates[state]==true
-  or role=='Compactor' and source:GetAttribute('PressWaiting')==true)
+ local bar=powered and (inPlot or charging or working)
+ local spinner=deciding
+
  if not toCharge and not bar and not spinner then
   if rig then rig.gui.Enabled=false;rig.powerAt=nil end
   return
@@ -7059,6 +7053,7 @@ function Status.draw(drone,source,state,role,alive,now,reducedMotion,reducedFlas
  rig.gui.Enabled=true
  rig.track.Visible=bar and not toCharge
  rig.spinner.Visible=spinner
+ rig.spinner.Position=bar and UDim2.new(1,12,.5,0) or UDim2.fromScale(.5,.5)
  rig.bolt.Visible=toCharge
  if rig.track.Visible then
   local capacity=math.max(1,source:GetAttribute('MaxBattery') or Workshop.BATTERY)
@@ -9582,6 +9577,27 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
   local near=r.restPose and BeamVFX.near(r.restPose.Position,100)
   local rig=self.rigs[r]
   if not near or broken or not (geode or ready or opening) then self:remove(r);return end
+  if source:GetAttribute('SealedDrop') then
+   if not rig then
+    if self.count>=24 then return end
+    local root=Instance.new('Attachment');root.Name='SealedGeodeLight';root.Parent=r.view
+    local light=Instance.new('PointLight');light.Color=Color3.fromRGB(255,221,157);light.Range=5;light.Brightness=.35;light.Parent=root
+    local motes=Instance.new('ParticleEmitter');motes.Name='GeodeDust';motes.Texture='rbxasset://textures/particles/sparkles_main.dds'
+    motes.Color=ColorSequence.new(Color3.fromRGB(255,229,176));motes.LightEmission=.5;motes.Rate=1
+    motes.Lifetime=NumberRange.new(.6,1);motes.Speed=NumberRange.new(.15,.4);motes.Size=NumberSequence.new(.055)
+    motes.Parent=root;rig={root=root,light=light,motes=motes};self.rigs[r]=rig;self.count+=1
+   end
+   local reduced=BeamVFX.reduced()
+   rig.motes.Enabled=not reduced and now>=(source:GetAttribute('ReadyAt') or 0)
+   local t=opening and math.clamp(1-(opening-now)/.85,0,1) or 0
+   rig.light.Brightness=.35+t*1.4
+   if r.restPose then
+    r.view.CFrame=r.restPose*(not reduced and opening and CFrame.Angles(math.sin(now*48)*.035*t,0,math.cos(now*43)*.045*t) or CFrame.identity)
+    if opening and rig.opening~=opening then rig.opening=opening;audio:play('geode_windup',r.restPose.Position,{level=.7}) end
+    if ready and now>=(source:GetAttribute('ReadyAt') or 0) then audio:setLoop(rig,'gem_ready',r.restPose.Position,.35,.77) else audio:stopLoop(rig) end
+   end
+   return
+  end
   if not rig then
    if self.count>=24 then return end
    local template=findFracture(geode and 'Geode' or source:GetAttribute('CrystalCut') or 'Original')
@@ -9873,7 +9889,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    if not ordinaryStone then audio:play('crystal_release_tink',point,{level=volume}) end
   end
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
-  openHalves(r,frame,size,now,reduced)
+  if not ordinaryStone and not s:GetAttribute('SealedDrop') then openHalves(r,frame,size,now,reduced) end
   if not reduced then
    if not prism and not nomad and not ordinaryStone then releaseSparks(point,ground,r.baseColor,strength,now) end
    if RoleVisuals and not nomad then
@@ -16337,16 +16353,21 @@ function Ledger:begin()
 end
 function Ledger:layout(x,y,width,height)
  self.panel.Position=UDim2.fromOffset(x,y);self.panel.Size=UDim2.fromOffset(width,height)
- local gap=24
- local cols=#self.order
- local bandHeight=math.clamp(height,132,174)
- local columnWidth=math.max(116,(width-gap*(cols-1))/cols)
- self.panel.ScrollingDirection=Enum.ScrollingDirection.X
- self.panel.CanvasSize=UDim2.fromOffset(cols*(columnWidth+gap)-gap,bandHeight)
+ local horizontal=width>height*1.5
+ local gap=horizontal and 14 or 20
+ local rowHeight=horizontal and 74 or 82
+ local columnWidth=horizontal and math.max(112,(width-gap*(#self.order-1))/#self.order) or width
+ self.panel.ScrollingDirection=horizontal and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
+ self.panel.CanvasSize=UDim2.fromOffset(horizontal and #self.order*(columnWidth+gap)-gap or 0,horizontal and rowHeight or #self.order*(rowHeight+gap))
  for i,row in ipairs(self.order) do
-  row.root.Position=UDim2.fromOffset((i-1)*(columnWidth+gap),0)
-  row.root.Size=UDim2.fromOffset(columnWidth,bandHeight-12);row.lineHeight=22
-  row.visibleHistory=math.clamp(math.floor((bandHeight-12-90)/22),1,3)
+  row.root.Position=UDim2.fromOffset(horizontal and (i-1)*(columnWidth+gap) or 0,horizontal and 0 or (i-1)*(rowHeight+gap))
+  row.root.Size=UDim2.fromOffset(columnWidth,rowHeight)
+  row.title.Text=row.key=='Money' and 'Total' or Workshop.RESOURCE_NAMES[row.key]
+  row.title.TextSize=18
+  row.total.TextXAlignment=Enum.TextXAlignment.Left
+  row.total.Position=UDim2.new(1,0,0,47);row.total.Size=UDim2.new(1,0,0,42)
+  row.terms.Visible=false;row.earlier.Visible=false;row.rule.Visible=false
+  row.lineHeight=22;row.visibleHistory=3
   self.rules[i]=row.rule
  end
 end
@@ -16421,6 +16442,7 @@ local Input=game:GetService('UserInputService')
 local Actions=game:GetService('ContextActionService')
 local TextService=game:GetService('TextService')
 local CONFIRM_ACTION='MiningAwayConfirmSale'
+local PAGE_SIZE=4
 local FIRST_HIT=.30
 local BREAK_TIME=.08
 local FINISH_HOLD=.65
@@ -16441,7 +16463,7 @@ function Sale.new(refs)
  local gui=Instance.new('ScreenGui');gui.Name='OreSaleCascade';gui.ResetOnSpawn=false
  gui.ScreenInsets=Enum.ScreenInsets.DeviceSafeInsets;gui.DisplayOrder=13;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.Parent=refs.player.PlayerGui
  self.gui=gui
- local blocker=Instance.new('Frame');blocker.Name='SaleInputArea';blocker.BackgroundTransparency=.72;blocker.BackgroundColor3=Color3.fromRGB(15,18,28)
+ local blocker=Instance.new('Frame');blocker.Name='SaleInputArea';blocker.BackgroundTransparency=.60;blocker.BackgroundColor3=Color3.fromRGB(15,18,28)
  blocker.Active=true;blocker.Visible=false;blocker.Size=UDim2.fromScale(1,1);blocker.Parent=gui
  self.blocker=blocker
  local prompt=Instance.new('TextButton');prompt.Name='ConfirmSale';prompt.Visible=false
@@ -16462,7 +16484,7 @@ function Sale.new(refs)
   local button=Instance.new('TextButton');button.Name='BackpackPage';button.BackgroundTransparency=1
   button.Text=direction<0 and '‹' or '›';button.TextColor3=GOLD;button.TextSize=30;button.Size=UDim2.fromOffset(40,36);button.Visible=false;button.ZIndex=4;button.Parent=gui
   button.Activated:Connect(function()
-   if self.active and self.active.kind=='preview' then self.inspectIndex=math.clamp((math.floor((self.inspectIndex-1)/10)+direction)*10+1,1,#self.tiles) end
+   if self.active and (self.active.kind=='preview' or self.finished) then self.inspectIndex=math.clamp((math.floor((self.inspectIndex-1)/(self.pageSize or PAGE_SIZE))+direction)*(self.pageSize or PAGE_SIZE)+1,1,#self.tiles) end
   end)
   self.pages[i]=button
  end
@@ -16630,16 +16652,17 @@ function Sale:start(receipt,now)
   local worth=receipt.full and label(self.gui,'$'..tostring(item.cash*item.units),MONEY,25) or nil
   local mods={}
   for _,name in ipairs({'Charged','Frosted','Big','Massive','Titan'}) do if bit32.btest(item.mask or 0,Mining.ROCK_MODIFIERS[name]) then mods[#mods+1]=name end end
-  local modifier=receipt.full and label(self.gui,table.concat(mods,' · '),GOLD,14) or nil
+  local modifier=receipt.full and label(self.gui,'',GOLD,18) or nil
+  local material=receipt.full and label(self.gui,'',Color3.fromRGB(table.unpack(item.color)),17) or nil
   local inspect
   if receipt.full then
    inspect=Instance.new('TextButton');inspect.Name='InspectOre';inspect.Text='';inspect.BackgroundTransparency=1;inspect.ZIndex=4;inspect.Parent=self.gui
-   inspect.Activated:Connect(function() if self.active and self.active.kind=='preview' then self.inspectIndex=i end end)
+   inspect.Activated:Connect(function() if self.active and (self.active.kind=='preview' or self.finished) then self.inspectIndex=i end end)
   end
   local tint=gem and RockFinish.Gems.tint(item.key) or ore.Color
   local effect=RockModifierView.glow(item.mask or 0) or (item.stone and Color3.fromRGB(table.unpack(item.color))) or tint
   local drop={view=ore,seed=i,physical=true,stone=item.stone,modifiers=item.mask or 0,color=tint,effectColor=effect,sale=receipt.full}
-  self.tiles[i]={item=item,ore=ore,gem=gem,caption=caption,worth=worth,modifier=modifier,inspect=inspect,size=ore.Size,transparency=ore.Transparency,
+  self.tiles[i]={item=item,ore=ore,gem=gem,caption=caption,worth=worth,modifier=modifier,material=material,inspect=inspect,size=ore.Size,transparency=ore.Transparency,
    display=receipt.full and PickupDisplay.new(self.refs.parent,i,item.stone) or nil,drop=drop}
  end
 
@@ -16748,7 +16771,7 @@ function Sale:updateLedgerTokens(now,reduced)
    local t=math.clamp((age-launch)/(token.duration-launch),0,1)
    local endLaunch=token.from+token.velocity*((1-math.exp(-decay*launch))/decay)
    local tangent=token.velocity*math.exp(-decay*launch)*(token.duration-launch)
-   local target=token.row.terms.AbsolutePosition+token.row.terms.AbsoluteSize-Vector2.new(24,12)-GuiService:GetInsetArea(Enum.ScreenInsets.DeviceSafeInsets).Min
+   local target=token.row.total.AbsolutePosition+token.row.total.AbsoluteSize*.5-GuiService:GetInsetArea(Enum.ScreenInsets.DeviceSafeInsets).Min
    local position
    if age<launch then position=token.from+token.velocity*((1-math.exp(-decay*age))/decay)
    else position=endLaunch*(2*t^3-3*t*t+1)+tangent*(t^3-2*t*t+t)+target*(-2*t^3+3*t*t) end
@@ -16816,7 +16839,7 @@ end
 local function removeTile(tile)
  tile.ore:Destroy();if tile.caption then tile.caption:Destroy() end;tile.sold=true
  if tile.display then tile.display.base:Destroy() end
- if tile.worth then tile.worth:Destroy();tile.modifier:Destroy();tile.inspect:Destroy() end
+ if tile.worth then tile.worth:Destroy();tile.modifier:Destroy();tile.material:Destroy();tile.inspect:Destroy() end
 end
 function Sale:clearGrid()
  if self.active and (self.active.tokensRemaining or 0)>0 and not self.active.dustAt then
@@ -16845,7 +16868,7 @@ function Sale:update()
  if self.active then
   local age=now-self.started;local count=#self.tiles;local full=self.active.full
   local preview=self.active.kind=='preview'
-  if preview and (age>44 or (self.pendingAt and now-self.pendingAt>15)) then self:clearGrid();return end
+  if preview and (self.pendingAt and now-self.pendingAt>15) then self:clearGrid();return end
   if self.ledger then self:updateLedger(now,reduced) end
   if preview or self.finished then
    local input=Input:GetLastInputType()
@@ -16855,60 +16878,28 @@ function Sale:update()
    self.prompt.Visible=age>=.24;self.back.Visible=preview and self.prompt.Visible and not self.pendingAt
   end
   local viewport=camera.ViewportSize
-  local stacked=full and viewport.X<650
-  local spreadWidth=viewport.X*(stacked and .88 or .56)
-  local spreadHeight=viewport.Y*(stacked and .27 or .48)
-  local selected=preview and self.inspectIndex or (self.currentIndex or self.breakIndex)
-  local page=full and math.floor((math.min(selected,count)-1)/10) or 0
-  local shownCount=full and math.min(10,count-page*10) or count
-  local columns=math.min(shownCount,shownCount>8 and 5 or 3)
+  local stacked=full and viewport.X<760
+  local pageSize=stacked and 2 or PAGE_SIZE;self.pageSize=pageSize
+  local selected=(preview or self.finished) and self.inspectIndex or (self.currentIndex or self.breakIndex)
+  local page=full and math.floor((math.min(selected,count)-1)/pageSize) or 0
+  local shownCount=full and math.min(pageSize,count-page*pageSize) or count
+  local columns=full and math.min(2,shownCount) or math.min(5,shownCount)
   local rows=math.ceil(shownCount/columns)
-  local rowPitch=spreadHeight/rows
-  local cell=full and math.max(32,math.min(160,spreadWidth/columns,(rowPitch-55)/.74))
-   or math.min(55,(viewport.X-40)/columns,viewport.Y*.48/rows)
-  local center=full and Vector2.new(viewport.X*(stacked and .5 or .32),viewport.Y*(stacked and .25 or .31))
-   or Vector2.new(viewport.X*.5,viewport.Y*.24)
+  local spreadWidth=viewport.X*(stacked and .92 or .65)
+  local top=viewport.Y*(stacked and .08 or .13)
+  local spreadHeight=viewport.Y*(stacked and .55 or .66)
+  local rowPitch=spreadHeight/math.max(stacked and 1 or 2,rows)
+  local cell=full and math.max(32,math.min(180,spreadWidth/columns-28,rowPitch-110)) or 55
+  local center=full and Vector2.new(viewport.X*(stacked and .5 or .36),top+spreadHeight*.5-45) or Vector2.new(viewport.X*.5,viewport.Y*.24)
   for i,button in ipairs(self.pages) do
-   button.Visible=full and preview and count>10
-   button.Position=UDim2.fromOffset(center.X+(i==1 and -65 or 25),viewport.Y*(stacked and .38 or .65))
+   button.Visible=full and (preview or self.finished) and count>pageSize
+   button.Position=UDim2.fromOffset(center.X+(i==1 and -65 or 25),top+spreadHeight-12)
   end
-  local tile=self.tiles[selected]
-  if full and tile then
-   local item=tile.item
-   local x=viewport.X*(stacked and .5 or .80)
-   local y=viewport.Y*(stacked and .44 or .21)
-   local w=viewport.X*(stacked and .90 or .30)
-   local details={self.itemName,self.itemDetail,self.price,self.bonus,self.materials}
-   local offsets=stacked and {0,25,63,100,132} or {0,34,84,135,190}
-   for i,view in ipairs(details) do
-    view.Visible=not self.finished;view.Size=UDim2.fromOffset(w,i==3 and 58 or i==5 and 64 or 30)
-    view.Position=UDim2.fromOffset(x,y+offsets[i]);view.TextStrokeTransparency=.2
-   end
-   self.itemName.Text=item.name..(item.units>1 and ' ×'..item.units or '')
-   self.itemName.TextSize=stacked and 23 or 30
-   self.itemDetail.Text='Base $'..tostring((item.cash-(item.cashBonus or 0))*item.units)..(preview and '' or ' · '..selected..' / '..count)
-   self.itemDetail.TextSize=17;self.itemDetail.TextColor3=Color3.fromRGB(220,222,229)
-   local base=(item.cash-(item.cashBonus or 0))*item.units
-   local shown=preview or tile.bonusShown or tile.hitAt
-   self.price.Text='$'..tostring(shown and item.cash*item.units or base)
-   local pulse=math.exp(-math.max(0,now-(tile.bonusAt or -100))*12)
-   self.price.TextSize=(stacked and 38 or 52)+(reduced and 0 or math.floor(pulse*12))
-   self.bonus.Text=(item.cashBonus or 0)>0 and item.cashMods..'  ×'..string.format('%.2f',item.cash/(item.cash-item.cashBonus))..'  (+$'..tostring(item.cashBonus*item.units)..')' or ''
-   self.bonus.TextTransparency=shown and 0 or .55;self.bonus.Rotation=reduced and 0 or -5*pulse
-   local amounts={}
-   if item.stoneUnits>0 then amounts[#amounts+1]=string.format('%g Stone',item.stoneUnits*item.units/100) end
-   if item.resource and item.dust>0 then
-    local dust=shown and item.dust or item.dust-(item.dustBonus or 0)
-    local line=string.format('%g %s',dust*item.units/100,Workshop.RESOURCE_NAMES[item.resource])
-    if (item.dustBonus or 0)>0 then line..='  · '..item.dustMods..' ×'..string.format('%.2f',item.dust/(item.dust-item.dustBonus)) end
-    amounts[#amounts+1]=line
-   end
-   self.materials.Text=table.concat(amounts,'\n');self.materials.TextSize=stacked and 16 or 20
-   self.materials.TextWrapped=true
-  end
+  -- Each rock owns its arithmetic; there is no second inspection panel.
+  for _,v in ipairs({self.itemName,self.itemDetail,self.price,self.bonus,self.materials}) do v.Visible=false end
   if self.ledger then
-   local top=viewport.Y*(stacked and .74 or .62)
-   self.ledger:layout(viewport.X*.06,top,viewport.X*.88,math.max(100,viewport.Y-top-70))
+   if stacked then self.ledger:layout(viewport.X*.08,viewport.Y*.69,viewport.X*.84,viewport.Y*.31-76)
+   else self.ledger:layout(viewport.X*.73,viewport.Y*.20,viewport.X*.23,viewport.Y*.64) end
   end
   local lastHit=self.tiles[count].hitAt
   if self.focus then
@@ -16934,16 +16925,16 @@ function Sale:update()
   end
   local depth=4;local unitsPerPixel=2*depth*math.tan(math.rad(camera.FieldOfView*.5))/viewport.Y
   for i,tile in ipairs(self.tiles) do if not tile.sold then
-   local onPage=not full or math.floor((i-1)/10)==page
+   local onPage=not full or math.floor((i-1)/pageSize)==page
    if full then
     tile.ore.LocalTransparencyModifier=onPage and 0 or 1
-    for _,v in ipairs({tile.caption,tile.worth,tile.modifier}) do v.Visible=onPage end
+    for _,v in ipairs({tile.caption,tile.worth,tile.modifier,tile.material}) do v.Visible=onPage end
     tile.inspect.Visible=onPage and preview
     if not onPage then if tile.display then PickupDisplay.hide(tile.display) end;continue end
    end
-   local slot=full and (i-1)%10 or i-1
+   local slot=full and (i-1)%pageSize or i-1
    local row=math.floor(slot/columns);local column=slot%columns
-   local point=center+Vector2.new((column-(columns-1)*.5)*cell+(full and (row%2)*cell*.12 or 0),(row-(rows-1)*.5)*(full and rowPitch or cell))
+   local point=center+Vector2.new((column-(columns-1)*.5)*(full and spreadWidth/columns or cell),(row-(rows-1)*.5)*(full and rowPitch or cell))
    local impactAge=now-(self.lastBreakAt or -100)
    if full and not reduced and impactAge<.20 then
     local impulse=math.exp(-impactAge*22)
@@ -16961,28 +16952,44 @@ function Sale:update()
    local scale=emphasis*cell*(full and .70*math.min(1.27,familySize^.36) or .70)*unitsPerPixel/math.max(tile.size.X,tile.size.Y,tile.size.Z)
    local winding=not reduced and full and breakAt and i==self.breakIndex and not tile.hitAt
    local anticipation=winding and smooth((now-breakAt+.15)/.15) or 0
-   if tile.hitAt and not reduced then scale*=1+.16*math.sin(hit*math.pi)-.65*hit*hit end
+   if tile.hitAt and not reduced then scale*=1+.12*math.sin(hit*math.pi)-.12*hit*hit end
    tile.ore.Size=tile.size*Vector3.new(1+.14*anticipation,1-.23*anticipation,1+.14*anticipation)*scale*(.7+.3*rise)
    tile.ore.CFrame=CFrame.new(position)*camera.CFrame.Rotation*CFrame.Angles(.16,(reduced and .3 or age*.45)+i*.6,.12)
-   if tile.gem then RockFinish.Gems.update(tile.ore,rise*(1-hit),camera.CFrame.Position) end
-   if tile.hitAt then tile.ore.Transparency=tile.transparency+(1-tile.transparency)*hit end
+   if tile.gem then RockFinish.Gems.update(tile.ore,rise*(1-hit*(full and .32 or 1)),camera.CFrame.Position) end
+   if tile.hitAt then tile.ore.Transparency=tile.transparency+(1-tile.transparency)*hit*(full and .32 or 1) end
    if tile.caption then
     if full then
-     local inspect=tile.inspect
-     inspect.Visible=preview;inspect.Position=UDim2.fromOffset(point.X-cell*.5,point.Y-cell*.38)
-     inspect.Size=UDim2.fromOffset(cell,cell)
-     tile.worth.Position=UDim2.fromOffset(point.X,point.Y+cell*.39+24)
-     tile.modifier.Position=UDim2.fromOffset(point.X,point.Y+cell*.39+44)
-     tile.worth.Size=UDim2.fromOffset(cell+8,28);tile.modifier.Size=UDim2.fromOffset(cell+12,22)
-     tile.worth.TextSize=cell<85 and 18 or 25;tile.modifier.TextSize=cell<85 and 11 or 14
-     tile.worth.TextTransparency=hit;tile.modifier.TextTransparency=hit
-    end
-    tile.caption.Position=UDim2.fromOffset(point.X,point.Y+cell*.39)
-    tile.caption.Size=UDim2.fromOffset(cell*.96,26)
-    tile.caption.TextSize=full and (cell<80 and 12 or 16) or 12;tile.caption.TextTransparency=1-rise*(1-hit)
-    if full then
-     tile.caption.Text=(i==selected and '› ' or '')..tile.item.name..(tile.item.units>1 and ' ×'..tile.item.units or '')
-     if i~=self.breakIndex then tile.caption.TextTransparency=math.max(.35,tile.caption.TextTransparency) end
+     local item=tile.item
+     local width=spreadWidth/columns-16
+     local y=point.Y+cell*.43+12
+     local shown=preview or tile.bonusShown or tile.hitAt
+     local base=(item.cash-(item.cashBonus or 0))*item.units
+     local bonus=(item.cashBonus or 0)*item.units
+     tile.caption.Position=UDim2.fromOffset(point.X,y);tile.caption.Size=UDim2.fromOffset(width,24)
+     tile.caption.TextSize=18;tile.caption.TextTransparency=tile.settled and .25 or 0
+     tile.worth.Position=UDim2.fromOffset(point.X,y+28);tile.worth.Size=UDim2.fromOffset(width,34)
+     tile.worth.Text=bonus>0 and ('$'..base..' → $'..(shown and item.cash*item.units or base)) or '$'..item.cash*item.units
+     local pulse=math.exp(-math.max(0,now-(tile.bonusAt or -100))*10)
+     tile.worth.TextSize=28+(reduced and 0 or math.floor(6*pulse))
+     tile.modifier.Position=UDim2.fromOffset(point.X,y+54);tile.modifier.Size=UDim2.fromOffset(width,24)
+     tile.modifier.Text=bonus>0 and (item.cashMods..' +$'..bonus) or ''
+     tile.modifier.TextSize=16;tile.modifier.TextTransparency=shown and 0 or .65
+     local amounts={}
+     if item.stoneUnits>0 then amounts[#amounts+1]=string.format('%g Stone',item.stoneUnits*item.units/100) end
+     if item.resource and item.dust>0 then
+      local dust=item.dust*item.units/100
+      local extra=(item.dustBonus or 0)*item.units/100
+      local amount=extra>0 and string.format('%g → %g',dust-extra,shown and dust or dust-extra) or string.format('%g',dust)
+      amounts[#amounts+1]=amount..' '..Workshop.RESOURCE_NAMES[item.resource]
+      if extra>0 then amounts[#amounts+1]=item.dustMods..' +'..string.format('%g',extra) end
+     end
+     tile.material.Text=table.concat(amounts,' · ');tile.material.TextWrapped=true
+     tile.material.Position=UDim2.fromOffset(point.X,y+84);tile.material.Size=UDim2.fromOffset(width,38)
+     tile.inspect.Visible=false
+    else
+     tile.caption.Position=UDim2.fromOffset(point.X,point.Y+cell*.39)
+     tile.caption.Size=UDim2.fromOffset(cell*.96,26);tile.caption.TextSize=12
+     tile.caption.TextTransparency=1-rise*(1-hit)
     end
    end
    if tile.display and not tile.hitAt then
@@ -16994,8 +17001,9 @@ function Sale:update()
      RockModifierView.drop(tile.drop,now,1,self.refs.player:GetAttribute('ReducedFlashing')==true,tile.drop.displayScale)
     end
    elseif tile.display then PickupDisplay.hide(tile.display) end
-   if tile.hitAt and hit>=1 then
-    removeTile(tile)
+   if tile.hitAt and hit>=1 and not tile.settled then
+    tile.settled=true
+    if not full then removeTile(tile) end
     self.breakIndex+=1
    elseif i==scheduledIndex and i==self.breakIndex and not tile.hitAt and breakAt and now>=breakAt then
     -- Advance only after the prior rock is gone, even when a frame stalls.
@@ -17562,19 +17570,19 @@ local V={Interaction=(function()
 local V={};V.__index=V
 function V.new(gui,parent,activate)
  local billboard=Instance.new('BillboardGui');billboard.Name='FieldInteraction'
- billboard.Size=UDim2.fromOffset(190,48);billboard.AlwaysOnTop=true;billboard.LightInfluence=0
+ billboard.Size=UDim2.fromOffset(132,34);billboard.AlwaysOnTop=true;billboard.LightInfluence=0
  billboard.Enabled=false;billboard.Active=true;billboard.Parent=gui.Parent
  local button=Instance.new('TextButton');button.Size=UDim2.fromScale(1,1);button.BackgroundColor3=Color3.fromRGB(25,29,35)
  button.BackgroundTransparency=.08;button.BorderSizePixel=0;button.Text='';button.Parent=billboard
  local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,8);corner.Parent=button
  local stroke=Instance.new('UIStroke');stroke.Color=Color3.new(1,1,1);stroke.Transparency=.25;stroke.Thickness=1.5;stroke.Parent=button
- local key=Instance.new('TextLabel');key.Position=UDim2.fromOffset(7,7);key.Size=UDim2.fromOffset(34,34)
+ local key=Instance.new('TextLabel');key.Position=UDim2.fromOffset(5,5);key.Size=UDim2.fromOffset(24,24)
  key.BackgroundColor3=Color3.fromRGB(246,248,250);key.TextColor3=Color3.fromRGB(25,29,35)
- key.BorderSizePixel=0;key.Font=Enum.Font.GothamBold;key.TextSize=20;key.Parent=button
+ key.BorderSizePixel=0;key.Font=Enum.Font.GothamBold;key.TextSize=16;key.Parent=button
  local kc=Instance.new('UICorner');kc.CornerRadius=UDim.new(0,5);kc.Parent=key
- local caption=Instance.new('TextLabel');caption.Position=UDim2.fromOffset(49,0);caption.Size=UDim2.new(1,-55,1,0)
+ local caption=Instance.new('TextLabel');caption.Position=UDim2.fromOffset(35,0);caption.Size=UDim2.new(1,-39,1,0)
  caption.BackgroundTransparency=1;caption.TextColor3=Color3.new(1,1,1);caption.Font=Enum.Font.GothamBold
- caption.TextSize=17;caption.TextXAlignment=Enum.TextXAlignment.Left;caption.Parent=button
+ caption.TextSize=14;caption.TextXAlignment=Enum.TextXAlignment.Left;caption.Parent=button
  local anchor=Instance.new('Part');anchor.Name='InteractionAnchor';anchor.Anchored=true;anchor.Transparency=1
  anchor.CanQuery=false;anchor.CanTouch=false;anchor.CanCollide=false;anchor.Size=Vector3.one*.1;anchor.Parent=parent
  local highlight=Instance.new('Highlight');highlight.Name='InteractionTarget';highlight.FillColor=Color3.new(1,1,1)
@@ -17592,7 +17600,7 @@ function V:show(action,target,point,height,key,alreadyHighlighted)
  local camera=workspace.CurrentCamera
  if camera then local _,visible=camera:WorldToViewportPoint(point);if not visible then self.gui.Enabled=false;return end end
  self.point=point;self.anchor.Position=point
- self.gui.Adornee=self.anchor;self.gui.StudsOffsetWorldSpace=Vector3.yAxis*((height or 0)*.5+1.3)
+ self.gui.Adornee=self.anchor;self.gui.StudsOffsetWorldSpace=Vector3.yAxis*((height or 0)*.5+.7)
  self.key.Text=key;self.caption.Text=action
  if target and not alreadyHighlighted then self.highlight.Adornee=target;self.highlight.Enabled=true end
 end
@@ -17757,24 +17765,56 @@ function V:canReachStarterPlot()
  local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
  return point~=nil and Mining.selectorInRange(root.Position,point)
 end
+-- Aim at an object, rather than selecting whichever happens to be nearest.
+function V:interactionScore(view,current)
+ local camera=workspace.CurrentCamera;if not camera or not view or not view.Parent then return nil end
+ local input=game:GetService('UserInputService')
+ local point=input:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
+ if input:GetLastInputType()==Enum.UserInputType.Touch or input:GetLastInputType().Name:match('^Gamepad') then point=camera.ViewportSize*.5 end
+ local screen,visible=camera:WorldToViewportPoint(view.Position)
+ if not visible then return nil end
+ local dx,dy=screen.X-point.X,screen.Y-point.Y
+ local radius=32
+ local score=(dx*dx+dy*dy)/(radius*radius)
+ if current then
+  -- Keep the target while moving the pointer from its body onto its button.
+  local top=camera:WorldToViewportPoint(view.Position+Vector3.yAxis*(view.Size.Y*.5+.7))
+  if math.abs(point.X-top.X)<=68 and point.Y>=top.Y-20 and point.Y<=screen.Y+16 then return -.1 end
+ end
+ return score<=1 and score or nil
+end
 function V:readyRock(resources)
- self.ready=nil
+ local previous=self.ready;self.ready=nil
  local root=self.options.player.Character and self.options.player.Character:FindFirstChild('HumanoidRootPart')
  if not root then return nil end
- local best=Mining.OPEN_REACH
+ local best=math.huge;local now=workspace:GetServerTimeNow()
  for _,r in pairs(resources) do
   local s=r.source
-  if s:GetAttribute('OpenReady') and s:GetAttribute('OpenOwner')==self.options.player.UserId and not s:GetAttribute('OpeningAt') then
-   local distance=(s.Position-root.Position).Magnitude
-   if distance<best then
+  if s:GetAttribute('OpenReady') and now>=(s:GetAttribute('ReadyAt') or 0)
+   and s:GetAttribute('OpenOwner')==self.options.player.UserId and not s:GetAttribute('OpeningAt')
+   and (s.Position-root.Position).Magnitude<=Mining.OPEN_REACH then
+   local score=self:interactionScore(r.view,r==previous)
+   if score and (score<best or score==best and (not self.ready or r.id<self.ready.id)) then
     local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
     params.FilterDescendantsInstances={self.options.player.Character,self.options.parent}
     local hit=workspace:Raycast(root.Position,s.Position-root.Position,params)
-    if not hit or hit.Instance==s then self.ready=r;best=distance end
+    if not hit or hit.Instance==s then self.ready=r;best=score end
    end
   end
  end
  return self.ready
+end
+function V:readyPickup(records)
+ local previous=self.pickupId;self.pickupId=nil;local best=math.huge
+ for source,r in pairs(records) do
+  if source.Parent and source:GetAttribute('Owner')==self.options.player.UserId
+   and source:GetAttribute('ManualPickupReady') and not r.collectAt then
+   local id=source:GetAttribute('PickupId')
+   local score=self:interactionScore(r.view,id==previous)
+   if score and (score<best or score==best and (not self.pickupId or id<self.pickupId)) then self.pickupId=id;best=score end
+  end
+ end
+ return self.pickupId
 end
 function V:aimPreview(ray)
  local point,id,leadId,inRange=self:aim(ray)
@@ -19135,7 +19175,7 @@ local function renderResource(r,now)
  local reference=s:GetAttribute('ReferenceCrystal')==true
  -- The open Mining Away uses the full-size crystal during its readiness delay.
  local growth=1
- if not junk and not reference then
+ if not junk and not reference and not s:GetAttribute('SealedDrop') then
   growth=Feel.growth(now,spawnAt)
   if readyAt-spawnAt~=2 then local g=math.clamp((now-spawnAt)/math.max(.01,readyAt-spawnAt),0,1);growth=1-(1-g)^2 end
  end
@@ -19191,7 +19231,13 @@ local function renderResource(r,now)
     if now<spawnAt then view.Transparency=1 end
    end
   end
-  if s:GetAttribute('Kind')=='Geode' then frame=CFrame.new(pos) end
+  if s:GetAttribute('Kind')=='Geode' and not s:GetAttribute('SealedDrop') then frame=CFrame.new(pos) end
+  local dropAt,lands=s:GetAttribute('DropAt'),s:GetAttribute('DropLandsAt')
+  if dropAt and lands and now<lands then
+   local t=math.clamp((now-dropAt)/(lands-dropAt),0,1)
+   local from=s:GetAttribute('DropFrom') or final
+   frame=CFrame.new(from:Lerp(frame.Position,t)+Vector3.yAxis*(32*t*(1-t)))*frame.Rotation*CFrame.Angles(0,t*math.pi*2,t*math.pi*2)
+  end
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
@@ -19207,7 +19253,9 @@ local function renderResource(r,now)
    end
   end
  else
-  if event=='break' and cut then
+  if event=='break' and s:GetAttribute('SealedDrop') then
+   r.splitSize=full;r.splitPose=r.restPose
+  elseif event=='break' and cut then
    r.splitSize=full*Feel.crystalStageShape(stageCount,stageCount,quarry and full or nil)*Feel.rockShape(s:GetAttribute('SliceScale'),s:GetAttribute('MeltBand'))
    local rest=Feel.groundedRockFrame(final,r.splitSize,ground or final.Y-full.Y*.5+.06,stage,seed,s:GetAttribute('CubicRock')==false,
     reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
@@ -19402,7 +19450,7 @@ local function renderDrone(d,dt,now)
  d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
  local grounded=docking or role=='Courier' and state=='Collect' or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
- local drift=(mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
+ local drift=state=='Thinking' and not motionPaused and not CrystalImpactView.reducedMotion() and math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*.08 or (mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
  -- Reading server time makes every observer see the same hop, and late joins
@@ -19418,7 +19466,7 @@ local function renderDrone(d,dt,now)
  local lift=0
  if prominent and state~='Destroyed' and state~='Reprinting' then
   local distantRole=isRamiel or role=='Orbiter'
-  lift=(distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
+  lift=state=='Thinking' and (d.visualLift or 0) or (distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
  end
  d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*(heavyFlight and 1.8 or 5)))
  local ramielRoll=0
@@ -19893,10 +19941,10 @@ local mouse=player:GetMouse()
   if selectorView.draft then
    if not selectorView.pending then return 'Confirm plot' end
   elseif selectorView:readyRock(resources) then return 'Open geode'
-  elseif player:GetAttribute('MA_OrePickup') then return 'Pick up rock' end
+  elseif selectorView:readyPickup(pickupView.records) then return 'Pick up' end
  end
  pickupView.pickupFocus=function()
-  return available()=='Pick up rock' and player:GetAttribute('MA_OrePickup') or nil
+  return available()=='Pick up' and selectorView.pickupId or nil
  end
  local interaction,lastActionAt
  local function showAction(action)
@@ -19906,8 +19954,8 @@ local mouse=player:GetMouse()
   elseif action=='Open geode' and selectorView.ready then
    local r=selectorView.ready
    target=r.shellModel or r.view;point=r.view.Position;height=r.view.Size.Y
-  elseif action=='Pick up rock' then
-   local r=pickupView.byId[player:GetAttribute('MA_OrePickup')]
+  elseif action=='Pick up' then
+   local r=pickupView.byId[selectorView.pickupId]
    if r then target=r.view;point=r.view.Position;height=r.view.Size.Y;existing=true end
   end
   local input=UIS:GetLastInputType()
@@ -19923,8 +19971,8 @@ local mouse=player:GetMouse()
   if action=='Open geode' then
    command:FireServer('OpenResource',{resourceId=selectorView.ready.id,runId=profile.run.id});return true
   end
-  if action=='Pick up rock' then
-   command:FireServer('PickupOre',player:GetAttribute('MA_OrePickup'));return true
+  if action=='Pick up' then
+   command:FireServer('PickupOre',selectorView.pickupId);return true
   end
   return false
  end

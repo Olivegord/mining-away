@@ -59,6 +59,9 @@ local ok,err=xpcall(function()
   task.wait(1/60)
  end
  assert(view.finished and beats==3 and view.ledger.rows.Money.amount==169)
+ for _,tile in ipairs(view.tiles) do
+  assert(tile.settled and tile.ore.Parent and tile.worth.Parent, 'sold rock and payout must remain readable')
+ end
  report.seconds=os.clock()-started;report.maxTokens=maxTokens
  local a,b,c=table.unpack(view.tiles)
  assert(a.bonusAt<a.hitAt and b.hitAt>a.hitAt and c.hitAt>b.hitAt)

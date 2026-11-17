@@ -55,6 +55,14 @@ local function queueGoals()
  table.sort(order,function(a,b) return a.intentGoal.Z<b.intentGoal.Z end)
  return order
 end
+for _,worker in ipairs(p.drones) do
+ local before=worker.pos;droneStep(worker,C.Tick)
+ assert(worker.state=='Thinking' and (worker.pos-before).Magnitude<.001,'thinking must hover instead of flying to the queue')
+end
+local savedPosition=d.pos;d.pos=center+Vector3.yAxis*9;snapshotDrone(d)
+assert(d.model:GetAttribute('InMiningPlot'),'battery visibility lost inside the plot')
+d.pos=savedPosition
+now+=1.1
 local order=queueGoals()
 assert(#order==#p.drones and order[#order].role=='Courier' and order[#order-1].role=='Courier','couriers did not queue together')
 local edgeX=center.X+p.miningSquare.half+5

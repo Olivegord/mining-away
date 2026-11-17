@@ -35,7 +35,7 @@ assert(cash.total.Text=='$33' and ruby.total.Text=='0.23' and stone.total.Text==
 assert(#ledger.rules==3)
 print('PASS sale receipt: quoted totals, final addend, upward addition history, exact HUD credit and persistent totals')
 
-assert(cash.title.Text=='Money' and ruby.title.Text=='Ruby shards' and stone.title.Text=='Stone')
+assert(cash.title.Text=='Total' and ruby.title.Text=='Ruby shards' and stone.title.Text=='Stone')
 assert(cash.rule.Parent==cash.root and ruby.rule.Parent==ruby.root and cash.rule~=ruby.rule)
 assert(cash.history[1].itemName==plain.name..' ×2')
 for i=1,4 do
@@ -46,7 +46,8 @@ local visible=cash.carried
 for _,line in ipairs(cash.history) do visible+=line.value end
 assert(visible==cash.amount and cash.earlier.Text~='', 'hidden history must remain in the displayed arithmetic')
 ledger:layout(20,300,320,280)
-assert(cash.root.Size[1]<=148 and ruby.root.Position[1]>=0)
+assert(cash.root.Size[1]==320 and ruby.root.Position[1]==0 and ruby.root.Position[2]>0)
+assert(not cash.terms.Visible and not cash.earlier.Visible and not cash.rule.Visible, 'summary must not duplicate the per-rock arithmetic')
 ledger:update(160,true)
 assert(cash.total.TextSize==35 and cash.totalScale.Scale==1)
 local hidden=cash.carried

@@ -24,6 +24,9 @@ scene.fieldTools={clear=function() end,refreshStock=function() end,onRock=functi
 local oldRandom=math.random
 math.random=function(...) if select('#',...)==0 then return .01 end;return oldRandom(...) end
 local original=rock();station(original)
+miner.thinkUntil=nil;miner.workTargetId=original.id;miner.workSeat=1;miner.pos=miner.workStation+Vector3.yAxis*5
+scene.planMiningStations();assert(scene.workPlans[original].ranks[miner]==1 and scene.workPlans[original].active[1]==miner,'working miner lost its seat after a flight disturbance')
+miner.pos=miner.workStation
 assert(hitResource(miner,original,10000))
 assert(original.paid and original.hp==0 and original.cargoProduced and not original.openReady,'drones failed to finish ordinary stone')
 assert(not miner.target,'worker did not leave completed mining job')
@@ -34,10 +37,13 @@ assert(g and g~=original and g.openReady and g.hp==1 and g.rewardCount==1)
 assert(g.part:GetAttribute('SealedDrop') and not g.part:GetAttribute('RockModifiers'),'contents leaked before opening')
 assert(nodeUsage(field)==0,'unopened discovery blocks replenishment')
 local count=0
-for _,drop in pairs(pickups) do count+=1;assert(drop.stone and not drop.rareGem,'mining paid a gem before opening') end
+for _,drop in pairs(pickups) do count+=1;assert(drop.stone and not drop.rareGem,'mining paid a gem before opening');assert(drop.arc and drop.arc.vy>=55,'stone lost its full launch arc') end
 assert(count==1,'completed mining did not pay one ordinary rock')
 assert(not hitResource(miner,g,10000) and not clusterEligible(miner,p,g,field),'drones can mine a sealed drop')
 scene.regrow(g,50);assert(g.hp==1)
+scene.openResource(p,{runId=run.id,resourceId=g.id});assert(not g.openingAt,'geode opened during flight')
+assert(g.part:GetAttribute('DropLandsAt')==g.readyAt and g.part:GetAttribute('DropFrom')==original.part.Position)
+now=g.readyAt
 local other=player(98881);players.PlayerAdded:Fire(other);other.Character:PivotTo(CFrame.new(center))
 scene.openResource(profiles[other.UserId],{runId=data(profiles[other.UserId]).run.id,resourceId=g.id});assert(not g.openingAt)
 scene.openResource(p,{runId='old',resourceId=g.id});assert(not g.openingAt)

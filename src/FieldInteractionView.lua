@@ -2,19 +2,19 @@
 local V={};V.__index=V
 function V.new(gui,parent,activate)
  local billboard=Instance.new('BillboardGui');billboard.Name='FieldInteraction'
- billboard.Size=UDim2.fromOffset(190,48);billboard.AlwaysOnTop=true;billboard.LightInfluence=0
+ billboard.Size=UDim2.fromOffset(132,34);billboard.AlwaysOnTop=true;billboard.LightInfluence=0
  billboard.Enabled=false;billboard.Active=true;billboard.Parent=gui.Parent
  local button=Instance.new('TextButton');button.Size=UDim2.fromScale(1,1);button.BackgroundColor3=Color3.fromRGB(25,29,35)
  button.BackgroundTransparency=.08;button.BorderSizePixel=0;button.Text='';button.Parent=billboard
  local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,8);corner.Parent=button
  local stroke=Instance.new('UIStroke');stroke.Color=Color3.new(1,1,1);stroke.Transparency=.25;stroke.Thickness=1.5;stroke.Parent=button
- local key=Instance.new('TextLabel');key.Position=UDim2.fromOffset(7,7);key.Size=UDim2.fromOffset(34,34)
+ local key=Instance.new('TextLabel');key.Position=UDim2.fromOffset(5,5);key.Size=UDim2.fromOffset(24,24)
  key.BackgroundColor3=Color3.fromRGB(246,248,250);key.TextColor3=Color3.fromRGB(25,29,35)
- key.BorderSizePixel=0;key.Font=Enum.Font.GothamBold;key.TextSize=20;key.Parent=button
+ key.BorderSizePixel=0;key.Font=Enum.Font.GothamBold;key.TextSize=16;key.Parent=button
  local kc=Instance.new('UICorner');kc.CornerRadius=UDim.new(0,5);kc.Parent=key
- local caption=Instance.new('TextLabel');caption.Position=UDim2.fromOffset(49,0);caption.Size=UDim2.new(1,-55,1,0)
+ local caption=Instance.new('TextLabel');caption.Position=UDim2.fromOffset(35,0);caption.Size=UDim2.new(1,-39,1,0)
  caption.BackgroundTransparency=1;caption.TextColor3=Color3.new(1,1,1);caption.Font=Enum.Font.GothamBold
- caption.TextSize=17;caption.TextXAlignment=Enum.TextXAlignment.Left;caption.Parent=button
+ caption.TextSize=14;caption.TextXAlignment=Enum.TextXAlignment.Left;caption.Parent=button
  local anchor=Instance.new('Part');anchor.Name='InteractionAnchor';anchor.Anchored=true;anchor.Transparency=1
  anchor.CanQuery=false;anchor.CanTouch=false;anchor.CanCollide=false;anchor.Size=Vector3.one*.1;anchor.Parent=parent
  local highlight=Instance.new('Highlight');highlight.Name='InteractionTarget';highlight.FillColor=Color3.new(1,1,1)
@@ -32,7 +32,7 @@ function V:show(action,target,point,height,key,alreadyHighlighted)
  local camera=workspace.CurrentCamera
  if camera then local _,visible=camera:WorldToViewportPoint(point);if not visible then self.gui.Enabled=false;return end end
  self.point=point;self.anchor.Position=point
- self.gui.Adornee=self.anchor;self.gui.StudsOffsetWorldSpace=Vector3.yAxis*((height or 0)*.5+1.3)
+ self.gui.Adornee=self.anchor;self.gui.StudsOffsetWorldSpace=Vector3.yAxis*((height or 0)*.5+.7)
  self.key.Text=key;self.caption.Text=action
  if target and not alreadyHighlighted then self.highlight.Adornee=target;self.highlight.Enabled=true end
 end

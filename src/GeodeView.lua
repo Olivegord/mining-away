@@ -17,6 +17,27 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
   local near=r.restPose and BeamVFX.near(r.restPose.Position,100)
   local rig=self.rigs[r]
   if not near or broken or not (geode or ready or opening) then self:remove(r);return end
+  if source:GetAttribute('SealedDrop') then
+   if not rig then
+    if self.count>=24 then return end
+    local root=Instance.new('Attachment');root.Name='SealedGeodeLight';root.Parent=r.view
+    local light=Instance.new('PointLight');light.Color=Color3.fromRGB(255,221,157);light.Range=5;light.Brightness=.35;light.Parent=root
+    local motes=Instance.new('ParticleEmitter');motes.Name='GeodeDust';motes.Texture='rbxasset://textures/particles/sparkles_main.dds'
+    motes.Color=ColorSequence.new(Color3.fromRGB(255,229,176));motes.LightEmission=.5;motes.Rate=1
+    motes.Lifetime=NumberRange.new(.6,1);motes.Speed=NumberRange.new(.15,.4);motes.Size=NumberSequence.new(.055)
+    motes.Parent=root;rig={root=root,light=light,motes=motes};self.rigs[r]=rig;self.count+=1
+   end
+   local reduced=BeamVFX.reduced()
+   rig.motes.Enabled=not reduced and now>=(source:GetAttribute('ReadyAt') or 0)
+   local t=opening and math.clamp(1-(opening-now)/.85,0,1) or 0
+   rig.light.Brightness=.35+t*1.4
+   if r.restPose then
+    r.view.CFrame=r.restPose*(not reduced and opening and CFrame.Angles(math.sin(now*48)*.035*t,0,math.cos(now*43)*.045*t) or CFrame.identity)
+    if opening and rig.opening~=opening then rig.opening=opening;audio:play('geode_windup',r.restPose.Position,{level=.7}) end
+    if ready and now>=(source:GetAttribute('ReadyAt') or 0) then audio:setLoop(rig,'gem_ready',r.restPose.Position,.35,.77) else audio:stopLoop(rig) end
+   end
+   return
+  end
   if not rig then
    if self.count>=24 then return end
    local template=findFracture(geode and 'Geode' or source:GetAttribute('CrystalCut') or 'Original')

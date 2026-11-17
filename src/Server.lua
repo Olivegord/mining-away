@@ -1094,11 +1094,6 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   -- The reward emerges from the split. Early extraction still clears a living rock.
   local edge=extraction and Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42 or .24
   local position=r.part.Position+out*edge+Vector3.yAxis*(r.part.Size.Y*.18+.18)
-  if not crystal then
-   -- Start immediately and hop just above the floor. Gems keep the full arc.
-   position=Vector3.new(position.X,fieldTop+.27,position.Z)
-   vx,vy,vz=out.X*4.5,16,out.Z*4.5
-  end
   local cut=not crystal and (r.part:GetAttribute('CrystalCut') or 'Original') or 'Original'
   local cargo=Workshop.saleCargo(material,value,not crystal,dust,stoneUnits,r.modifiers or 0,cut)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,
@@ -1427,7 +1422,7 @@ function scene.requestOrePickup(p,id)
  if not R.finite(id) or id%1~=0 then return end
  local drop=pickups[id]
  local hr=characterRoot(p)
- if not drop or not hr or p.player:GetAttribute('MA_OrePickup')~=id
+ if not drop or not hr
   or Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) then return end
  local from=Vector3.new(drop.x,drop.y,drop.z)
  local reach=(p.cargoReach or OreDrops.CARGO_REACH)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
@@ -1561,6 +1556,7 @@ local function pickupStep(dt)
    local relayReach=p.vacuumReach+12
    local reach=relay and math.max(relayReach,naturalReach) or naturalReach
    local withinReach=hasSpace and (drop.playerPickup or updatePrompt) and scene.playerCanPickOre(p,drop,id,hr,from,naturalReach)
+   if updatePrompt and drop.part:GetAttribute('ManualPickupReady')~=(withinReach==true) then drop.part:SetAttribute('ManualPickupReady',withinReach==true) end
    local playerPull=drop.playerPickup and withinReach
    if drop.playerPickup and not playerPull then drop.playerPickup=nil end
    if updatePrompt and withinReach and not playerPull then
@@ -2023,7 +2019,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     if worker.specialJob and worker~=d and r.part:GetAttribute('EffectDrone')==worker.id then
      r.part:SetAttribute('EffectCancelledSerial',worker.specialJob.serial);r.part:SetAttribute('EffectType',nil)
     end
-    retireTarget(worker,keepContact)
+    retireTarget(worker,keepContact);worker.finishedCut=true
     -- A retired pin only finishes its existing target. A current pin may
     -- reserve a revealed core or shard inside its own boundary.
     if revealed and (not pin or pin==p.miningSquare) then
@@ -2414,7 +2410,8 @@ function scene.squareStep(p,d)
  if not square or d.target or d.breaker or d.specialRecovery then return end
  d.field=nil;d.autoField=nil
  if d.squareSearched~=square then d.squareHelpAt=nil end
- if now<(d.squareSearchAt or 0) and d.squareSearched==square then return end
+ if now<(d.squareSearchAt or 0) and d.squareSearched==square and not d.finishedCut then return end
+ d.finishedCut=nil
  d.squareSearchAt=now+.22;d.squareSearched=square
  if chooseResource(d,square.field,square) then
   d.field=square.field.id;d.squareJob=square;d.state='Travel'
@@ -2588,7 +2585,7 @@ local function move(d,goal,dt)
  end
  local settling=d.target~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant' or d.state=='Intake'
   or d.state=='HoldSelector' or d.state=='Waiting' or d.state=='StorageFull' and d.deployedCarrier
- local weight=(d.state=='Recover' or d.state=='Vacuum' and (goal-d.pos).Magnitude<1) and 0
+ local weight=d.state=='Thinking' and 0 or (d.state=='Recover' or d.state=='Vacuum' and (goal-d.pos).Magnitude<1) and 0
   or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
  -- Calm escort/holding pressure; strong predictive passing is for job travel.
  local escort=d.state=='Follow' or d.state=='HoldSelector' or d.state=='Waiting' or d.state=='StorageFull' and d.deployedCarrier
@@ -2754,8 +2751,7 @@ function scene.planMiningStations()
   local focused=p.miningSquare and p.miningSquare.directId==r.id
   -- A focus command reserves a seat for every miner immediately. Ordinary
   -- automatic mining retains its single approaching drone and compact queue.
-  if focused or (d.warmAt or d.specialJob or d.mining) and d.workTargetId==r.id and d.workStation
-   and (d.pos-d.workStation).Magnitude<=3.5 then
+  if focused or (d.warmAt or d.specialJob or d.mining) and d.workTargetId==r.id and d.workStation then
    table.insert(plan.active,d)
   else
    d.workSeat=nil
@@ -3471,9 +3467,12 @@ local function droneStep(d: any,dt: number)
  end
  if now<(d.thinkUntil or 0) and not d.oreDock and not d.oreSeatUntil
   and not (d.pressJob and d.pressJob.startedAt) and not data(p).run.deliveries[d.id] then
-  if not scene.holdSquare(d,p,dt) then followRole(d,p,hr,dt) end
+  d.thinkPosition=d.thinkPosition or d.pos
+  d.state='Thinking';d.mining=false;d.descentOrigin=nil;d.lastMoveFormation=false
+  move(d,d.thinkPosition,dt)
   return
  end
+ d.thinkPosition=nil
  if d.lingerUntil and not d.breaker then
   if now<d.lingerUntil then
    d.state='Recover';d.mining=false;move(d,d.lingerGoal or d.pos,dt);return
@@ -3649,6 +3648,7 @@ local function snapshotDrone(d)
   ThinkUntil=d.thinkUntil or 0,PressStarted=d.pressJob and d.pressJob.startedAt or 0,
   PressFinish=d.pressJob and d.pressJob.finishAt or 0,
   BatteryPowered=scene.chargingStation~=nil and d.stats.batteryCapacity>0,
+  InMiningPlot=profiles[d.owner].miningSquare~=nil and Mining.selectorContains(profiles[d.owner].miningSquare.center,profiles[d.owner].miningSquare.half,d.pos),
   BatteryWorking=(d.role=='Compactor' and d.state=='Press') or scene.committedWork(d) or combatId~='',
   PressWaiting=d.pressWaiting==true,
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,FlightSteering=d.flightSteering or Vector3.zero,
@@ -4470,7 +4470,7 @@ function scene.placeSquare(p,payload)
  scene.moveSquareWork(p,current,square)
  for _,d in ipairs(p.drones) do
   if d.hp<=0 or d.carrierId then continue end
-  d.thinkUntil=now+seed:NextInteger(32,105)*.01
+  d.thinkPosition=d.pos;d.thinkUntil=now+seed:NextInteger(32,105)*.01
   if DroneRoles.isWorker(d.role) then
    if d.target or d.lingerUntil or d.breaker then scene.releaseSquareApproach(d) end
    d.field=nil;d.autoField=nil;d.squareSearchAt=nil
@@ -4517,7 +4517,7 @@ function scene.focusResource(p,payload)
  square.directId=r.id;square.focusId=r.id
  for _,d in ipairs(p.drones) do
   if DroneRoles.isWorker(d.role) and not d.carrierId and d.target~=r then
-   release(d);d.field=nil;d.autoField=nil;d.squareSearchAt=nil;d.thinkUntil=now+.08*(d.slot%5)
+   release(d);d.field=nil;d.autoField=nil;d.squareSearchAt=nil;d.thinkPosition=d.pos;d.thinkUntil=now+.08*(d.slot%5)
   end
  end
  scene.publishSquareFocus(p,square)
@@ -4530,19 +4530,21 @@ function scene.leaveGeode(d,rock,specialist)
  local localPoint=bed.CFrame:PointToObjectSpace(rock.position)+Vector3.new(3.5,0,3.5)
  localPoint=Vector3.new(math.clamp(localPoint.X,-bed.Size.X*.5+1.5,bed.Size.X*.5-1.5),0,
   math.clamp(localPoint.Z,-bed.Size.Z*.5+1.5,bed.Size.Z*.5-1.5))
- local r=makeResource(rock.field,bed.CFrame:PointToWorldSpace(localPoint),'Geode',11,rock.ore,2.2,3)
+ local r=makeResource(rock.field,bed.CFrame:PointToWorldSpace(localPoint),'Crystal',11,rock.ore,1.8,3,nil,nil,{cut=rock.part:GetAttribute('CrystalCut') or 'Original'})
+ r.kind='Geode';r.referenceCrystal=false;r.part:SetAttribute('Kind','Geode');r.part:SetAttribute('ReferenceCrystal',false)
  r.sealedDrop=true;r.gemReward=true;r.openReady=true;r.openOwner=d.owner;r.openRun=data(p).run.id
  r.openActor={owner=d.owner,role=d.role,stats=Pro.clone(d.stats)};r.openSpecialist=specialist
- r.readyAt=now;r.spawnAt=now-2;r.hp=1;r.consumableWorked=rock.consumableWorked
+ r.readyAt=now+.75;r.spawnAt=now-2;r.hp=1;r.consumableWorked=rock.consumableWorked
  -- Roll once on the server; do not replicate the contents before opening.
  local roll=math.random();r.rewardCount=roll<.80 and 1 or roll<.97 and 2 or 3
  r.modifiers=rock.modifiers or 0
  if math.random()<.18 then r.modifiers=bit32.bor(r.modifiers,Mining.ROCK_MODIFIERS.Big) end
  if math.random()<.12 then r.modifiers=bit32.bor(r.modifiers,Mining.ROCK_MODIFIERS.Charged) end
- r.part.Color=Color3.fromRGB(165,170,179)
+ r.part.Color=Color3.fromRGB(76,67,58);r.part.Material=Enum.Material.Slate
  r.part:SetAttribute('SealedDrop',true);r.part:SetAttribute('OpenReady',true)
  r.part:SetAttribute('OpenOwner',d.owner);r.part:SetAttribute('OpenReadyAt',now)
- r.part:SetAttribute('SpawnAt',r.spawnAt);r.part:SetAttribute('ReadyAt',now)
+ r.part:SetAttribute('SpawnAt',r.spawnAt);r.part:SetAttribute('ReadyAt',r.readyAt)
+ r.part:SetAttribute('DropFrom',rock.part.Position);r.part:SetAttribute('DropAt',now);r.part:SetAttribute('DropLandsAt',r.readyAt)
  r.part:SetAttribute('HP',1);r.part:SetAttribute('CrackProgress',0)
  return r
 end
@@ -4550,7 +4552,7 @@ function scene.openResource(p,payload)
  if type(payload)~='table' or payload.runId~=data(p).run.id then return end
  local r=type(payload.resourceId)=='string' and resources[payload.resourceId]
  local hr=characterRoot(p)
- if not r or not r.openReady or r.openingAt or r.paid or not r.part.Parent or not hr
+ if not r or not r.openReady or r.openingAt or r.paid or now<r.readyAt or not r.part.Parent or not hr
   or r.openOwner~=p.player.UserId or r.openRun~=data(p).run.id or not playerCanMine(p,r.field)
   or (hr.Position-r.position).Magnitude>Mining.OPEN_REACH or not abilityLineOfSight(p,hr.Position,r) then return end
  r.openingAt=now+(r.kind=='Geode' and .85 or .24)

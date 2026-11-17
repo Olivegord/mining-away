@@ -1119,7 +1119,7 @@ local function renderResource(r,now)
  local reference=s:GetAttribute('ReferenceCrystal')==true
  -- The open Mining Away uses the full-size crystal during its readiness delay.
  local growth=1
- if not junk and not reference then
+ if not junk and not reference and not s:GetAttribute('SealedDrop') then
   growth=Feel.growth(now,spawnAt)
   if readyAt-spawnAt~=2 then local g=math.clamp((now-spawnAt)/math.max(.01,readyAt-spawnAt),0,1);growth=1-(1-g)^2 end
  end
@@ -1175,7 +1175,13 @@ local function renderResource(r,now)
     if now<spawnAt then view.Transparency=1 end
    end
   end
-  if s:GetAttribute('Kind')=='Geode' then frame=CFrame.new(pos) end
+  if s:GetAttribute('Kind')=='Geode' and not s:GetAttribute('SealedDrop') then frame=CFrame.new(pos) end
+  local dropAt,lands=s:GetAttribute('DropAt'),s:GetAttribute('DropLandsAt')
+  if dropAt and lands and now<lands then
+   local t=math.clamp((now-dropAt)/(lands-dropAt),0,1)
+   local from=s:GetAttribute('DropFrom') or final
+   frame=CFrame.new(from:Lerp(frame.Position,t)+Vector3.yAxis*(32*t*(1-t)))*frame.Rotation*CFrame.Angles(0,t*math.pi*2,t*math.pi*2)
+  end
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
@@ -1191,7 +1197,9 @@ local function renderResource(r,now)
    end
   end
  else
-  if event=='break' and cut then
+  if event=='break' and s:GetAttribute('SealedDrop') then
+   r.splitSize=full;r.splitPose=r.restPose
+  elseif event=='break' and cut then
    r.splitSize=full*Feel.crystalStageShape(stageCount,stageCount,quarry and full or nil)*Feel.rockShape(s:GetAttribute('SliceScale'),s:GetAttribute('MeltBand'))
    local rest=Feel.groundedRockFrame(final,r.splitSize,ground or final.Y-full.Y*.5+.06,stage,seed,s:GetAttribute('CubicRock')==false,
     reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
@@ -1386,7 +1394,7 @@ local function renderDrone(d,dt,now)
  d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
  local grounded=docking or role=='Courier' and state=='Collect' or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
- local drift=(mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
+ local drift=state=='Thinking' and not motionPaused and not CrystalImpactView.reducedMotion() and math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*.08 or (mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
  -- Reading server time makes every observer see the same hop, and late joins
@@ -1402,7 +1410,7 @@ local function renderDrone(d,dt,now)
  local lift=0
  if prominent and state~='Destroyed' and state~='Reprinting' then
   local distantRole=isRamiel or role=='Orbiter'
-  lift=(distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
+  lift=state=='Thinking' and (d.visualLift or 0) or (distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
  end
  d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*(heavyFlight and 1.8 or 5)))
  local ramielRoll=0
@@ -1877,10 +1885,10 @@ local mouse=player:GetMouse()
   if selectorView.draft then
    if not selectorView.pending then return 'Confirm plot' end
   elseif selectorView:readyRock(resources) then return 'Open geode'
-  elseif player:GetAttribute('MA_OrePickup') then return 'Pick up rock' end
+  elseif selectorView:readyPickup(pickupView.records) then return 'Pick up' end
  end
  pickupView.pickupFocus=function()
-  return available()=='Pick up rock' and player:GetAttribute('MA_OrePickup') or nil
+  return available()=='Pick up' and selectorView.pickupId or nil
  end
  local interaction,lastActionAt
  local function showAction(action)
@@ -1890,8 +1898,8 @@ local mouse=player:GetMouse()
   elseif action=='Open geode' and selectorView.ready then
    local r=selectorView.ready
    target=r.shellModel or r.view;point=r.view.Position;height=r.view.Size.Y
-  elseif action=='Pick up rock' then
-   local r=pickupView.byId[player:GetAttribute('MA_OrePickup')]
+  elseif action=='Pick up' then
+   local r=pickupView.byId[selectorView.pickupId]
    if r then target=r.view;point=r.view.Position;height=r.view.Size.Y;existing=true end
   end
   local input=UIS:GetLastInputType()
@@ -1907,8 +1915,8 @@ local mouse=player:GetMouse()
   if action=='Open geode' then
    command:FireServer('OpenResource',{resourceId=selectorView.ready.id,runId=profile.run.id});return true
   end
-  if action=='Pick up rock' then
-   command:FireServer('PickupOre',player:GetAttribute('MA_OrePickup'));return true
+  if action=='Pick up' then
+   command:FireServer('PickupOre',selectorView.pickupId);return true
   end
   return false
  end

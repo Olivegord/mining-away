@@ -9,11 +9,6 @@ local chargingColor=Color3.fromRGB(121,230,205)
 local readyColor=Color3.fromRGB(236,255,248)
 local boltRed=Color3.fromRGB(239,54,63)
 local boltBright=Color3.fromRGB(255,132,120)
-local busyStates={
- Travel=true, Waiting=true, Collect=true, Pickup=true, Deliver=true, Unload=true,
- Launch=true, Vacuum=true, Intake=true, GrowApproach=true, Plant=true,
- Heal=true, RepairCharge=true, Press=true,
-}
 
 local function rectangle(parent,name,width,height,tint)
  local frame=Instance.new('Frame')
@@ -144,16 +139,15 @@ function Status.draw(drone,source,state,role,alive,now,reducedMotion,reducedFlas
   return
  end
 
- local recallAt=source:GetAttribute('RecallAt') or 0
- local deciding=state=='Return' or (recallAt>0 and now>=recallAt and now-recallAt<1.2)
-  or now<(source:GetAttribute('ThinkUntil') or 0)
+ local deciding=state=='Thinking' and now<(source:GetAttribute('ThinkUntil') or 0)
  local powered=source:GetAttribute('BatteryPowered')==true
- local toCharge=powered and state=='ToCharge'
+ local inPlot=source:GetAttribute('InMiningPlot')==true
+ local toCharge=powered and state=='ToCharge' and not inPlot
  local charging=powered and state=='Charging'
  local working=powered and source:GetAttribute('BatteryWorking')==true and not source:GetAttribute('WorkPaused')
- local bar=charging or working
- local spinner=not toCharge and not bar and (deciding or busyStates[state]==true
-  or role=='Compactor' and source:GetAttribute('PressWaiting')==true)
+ local bar=powered and (inPlot or charging or working)
+ local spinner=deciding
+
  if not toCharge and not bar and not spinner then
   if rig then rig.gui.Enabled=false;rig.powerAt=nil end
   return
@@ -163,6 +157,7 @@ function Status.draw(drone,source,state,role,alive,now,reducedMotion,reducedFlas
  rig.gui.Enabled=true
  rig.track.Visible=bar and not toCharge
  rig.spinner.Visible=spinner
+ rig.spinner.Position=bar and UDim2.new(1,12,.5,0) or UDim2.fromScale(.5,.5)
  rig.bolt.Visible=toCharge
  if rig.track.Visible then
   local capacity=math.max(1,source:GetAttribute('MaxBattery') or Workshop.BATTERY)

@@ -15,12 +15,12 @@ local function drop(chance)
 end
 local stone=drop(0)
 assert(stone.stone and stone.arc and not stone.landed and stone.launchAt==now)
-assert(stone.vy>0 and stone.arc.contact<.25 and stone.arc.contact>0)
+assert(stone.vy>=55 and stone.arc.contact>.5)
 assert(stone.part:GetAttribute('StoneCargo') and stone.part.Material==Enum.Material.Slate and not OreDrops.collectible(stone))
-for _=1,8 do OreDrops.step(stone,{x=stone.x,y=stone.floor,z=stone.z},.04,false) end
+for _=1,math.ceil((stone.arc.contact+1)/.04) do OreDrops.step(stone,{x=stone.x,y=stone.floor,z=stone.z},.04,false) end
 assert(OreDrops.collectible(stone))
 local crystal=drop(1)
-assert(not crystal.stone and crystal.arc and crystal.arc.contact>stone.arc.contact*2 and not OreDrops.collectible(crystal))
+assert(not crystal.stone and crystal.arc and crystal.arc.contact>.5 and not OreDrops.collectible(crystal))
 assert(crystal.part:GetAttribute('RareGemReward') and not stone.part:GetAttribute('RareGemReward'))
 local a,b=Workshop.saleItem(stone.material),Workshop.saleItem(crystal.material)
 assert(a.dust/b.dust==.07 and a.cash<b.cash/8 and a.stoneUnits>0 and b.stoneUnits==0)
@@ -59,4 +59,4 @@ input('ConfirmSale',refreshed.id);input('Sell')
 assert(#messages==before,'duplicate or empty sale emitted a reward')
 Workshop.CRYSTAL_CHANCE=beforeChance
 players.PlayerRemoving:Fire(pl)
-print('PASS production selling: short stone hop, rare crystal cue, one drop per cut, preview/cancel/range checks, stale cargo requote, exact confirmed rewards and duplicate protection')
+print('PASS production selling: full stone arc, rare crystal cue, one drop per cut, preview/cancel/range checks, stale cargo requote, exact confirmed rewards and duplicate protection')

@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 16 — restore every drop arc; reject hinges and oversized prompts
+
+All field stone and gem cargo uses the full existing launch arc. Sealed geodes use the original irregular rock cut and a visible 0.75-second launch, with restrained warm motes/light, no spherical hinged shell or giant halo. Opening trembles briefly and shatters into the existing reward effects; ordinary stone shatters directly. Contents stay hidden until the server accepts opening after landing. The field E prompt is 132×34 px, aim-selected, with the existing white object highlight and selection burst. Thinking means holding position with a tiny float; only that state gets a spinner. Batteries stay visible throughout the accepted plot. This supersedes the shallow stone hops, hinged shell treatment and broad busy-state spinner rules below. Final live visual/motion acceptance remains unverified.
+
 ## November 16 — sealed discoveries and object-anchored E prompts
 
 This supersedes the continuous-field power-test/hinged-mining direction below. Ordinary rocks finish and break automatically, with occasional smaller sealed geode drops. Their neutral shell and soft light do not expose the rolled contents. The shell stays nearly closed until the player's 0.85-second opening anticipation; existing field gem geometry, launch particles and audio reveal the actual rewards. Field E prompts sit above their rendered target with a dark compact caption, white keycap and white target highlight. Interaction emits a short bounded burst of white sparkles; reduced-effects mode lowers its count. This is interaction feedback, not client authority to grant a reward. Native component behavior passed; final in-Play appearance, touch and motion remain unverified.
