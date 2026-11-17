@@ -1,8 +1,8 @@
 # VFX instructions — owner feedback and implementation
 
-## November 16 — sale receipt and compact ore grid
+## November 16 — handwritten sale totals and glowing ore
 
-Manual sales keep the backdrop in the world. The compact grid uses the pickup renderer for the field shade, cut, outline, glints and modifier effects. Portrait screens stack the receipt below the rocks. Each roughly 80 ms break triggers the shared gem particles, and the next rock waits for the current addend to post. The first beat shows the base amount. A modified payout gets a named bonus and adjusted amount, then a short pause before that number joins the running total. Prior addends slide up. The payout chime and HUD balance tick coincide with the addition. The completed receipt remains visible until **E** or the Close button. Automatic sales keep the compact token flights.
+Manual sales keep the backdrop in the world. A loose cluster on the left uses the pickup renderer for the field cut, shade, outline, glints and modifier effects, with a camera-facing glow so the ore reads at sale-camera distance. Portrait screens stack the receipt below the rocks. Each roughly 80 ms break triggers the shared gem particles. The base addend appears in its currency column. A modified payout gets a detached, tilted name and multiplier, which fades as the adjusted value posts. The prior addends slide up and the total sits beneath the rule. The payout chime and HUD balance tick coincide with the addition. The totals remain visible until **E** or Close. Automatic sales keep the compact token flights.
 
 ## November 15 — sale pacing and larger payout text
 

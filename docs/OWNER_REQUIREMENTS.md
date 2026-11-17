@@ -2,7 +2,7 @@
 
 ## November 16 — sale arithmetic and a starter backpack
 
-Keep the break sequence and gem particles. Put much smaller drops in a padded grid on the left, with the same cut, tint, outlines and effects as the drops in the field. Put the receipt on the right. Each currency has its own icon, a column of addends that move up with each break, and a readable total. Show the base reward and play a separate beat for any modifier before adding the adjusted number. Keep the final totals open until the player presses **E**. Give new players a backpack containing randomized rocks and modifiers.
+Put the ore in a loose cluster on the left. Give the rocks more size, a visible glow, and the same cut, tint, outline and particles as their field drops. On the right, show stacked numbers, a line and the totals underneath. Drop the headings, labels, cards and borders. For each modifier, briefly show a tilted name with a larger multiplier below it. Apply the bonus before posting the addend. Keep the totals open until **E**. Give new players a backpack of randomized rocks and modifiers. Publish the completed change to DRONEREVOLUTION.
 
 ## November 15 — larger payouts and slower sale pacing
 

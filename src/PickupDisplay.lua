@@ -44,7 +44,6 @@ function Display.new(parent,slot,stone)
    beam.FaceCamera=true;beam.Segments=9;beam.LightEmission=.9;beam.LightInfluence=0
    beam.Enabled=false;beam.Parent=base;curves[i]=beam
   end
-  for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
   for i=1,3 do
    local a=Instance.new('Attachment');a.Name='DiamondRayStart';a.Parent=base
    local b=Instance.new('Attachment');b.Name='DiamondRayEnd';b.Parent=base
@@ -60,6 +59,7 @@ function Display.new(parent,slot,stone)
    rays[i]={a=a,b=b,beam=beam,flare=flare,glow=glow,star=star}
   end
  end
+ for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
  base.Parent=parent
  -- Separate overlapping translucent ground sprites by a small, stable depth.
  return {base=base,surface=surface,halo=halo,core=core,outline=outline,points=points,curves=curves,motes=motes,
@@ -68,6 +68,7 @@ end
 
 function Display.hide(rig)
  rig.outline.Enabled=false;rig.surface.Enabled=false
+ if rig.saleGlow then rig.saleGlow.gui.Enabled=false end
  if rig.light then rig.light.Enabled=false end
  for _,ray in ipairs(rig.rays) do ray.beam.Enabled=false;ray.flare.Enabled=false end
  if rig.rings then RockModifierView.drawRings(rig.rings,0,0) end
@@ -77,7 +78,7 @@ end
 
 function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffects)
  local tint=record.effectColor or record.color
- if record.stone then reducedEffects=true end
+ if record.stone and not record.sale then reducedEffects=true end
  local displayScale=record.displayScale or (record.physical and 1 or .73)
  if rig.record~=record or rig.tint~=tint or math.abs(rig.scale-displayScale)>.008 then
   rig.record=record
@@ -97,6 +98,18 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  local scale=rig.scale
  ground+=rig.groundOffset
  if rig.base.Position~=ground then rig.base.Position=ground end
+ if record.sale then
+  if not rig.saleGlow then
+   rig.saleGlow=EnergyDisc.sprite(rig.base,'SaleOreGlow');rig.saleGlow.image.Image=SOFT_GLOW
+  end
+  local camera=workspace.CurrentCamera
+  if camera then
+   local size=record.view.Size
+   local width=math.max(size.X,size.Y,size.Z)
+   EnergyDisc.place(rig.saleGlow,record.view.Position+camera.CFrame.LookVector*.36,width*2.8,
+    tint:Lerp(WHITE,.16),strength*(reducedEffects and .24 or .73))
+  end
+ end
  local kind=record.view:GetAttribute('GemKind')
  local optical=kind=='Amber' or kind=='Quartz' or kind=='Diamond'
  rig.outline.OutlineTransparency=1-strength*(optical and .24 or .94)
@@ -165,7 +178,8 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local remaining=1-t
    local tint=rig.moteColor:Lerp(record.color:Lerp(Color3.fromRGB(119,62,166),.24),t*t)
    local opacity=(1-math.exp(-t*18))*math.sqrt(remaining)*strength*.82
-   EnergyDisc.place(mote,position,diameter*scale*remaining*(diamond and .20 or optical and .38 or 1),tint,opacity*(diamond and .30 or optical and .65 or 1))
+   local size=record.sale and 1.85 or 1
+   EnergyDisc.place(mote,position,diameter*scale*remaining*size*(diamond and .20 or optical and .38 or 1),tint,opacity*(diamond and .30 or optical and .65 or 1))
   end
  end
 end
