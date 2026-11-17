@@ -34,7 +34,7 @@ local thinkTimes={}
 for _,worker in ipairs(p.drones) do
  snapshotDrone(worker)
  local ready=worker.model:GetAttribute('ThinkUntil')
- assert(ready>=now+.32-1e-6 and ready<=now+1.05+1e-6)
+ assert(ready>=now+.08-1e-6 and ready<=now+.26+1e-6)
  thinkTimes[ready]=true
 end
 assert(next(thinkTimes,next(thinkTimes)),'target decisions were not staggered')
@@ -116,8 +116,14 @@ do
  scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center,leadId=strong.id})
  local started=now
  searchAll()
- assert(assigned()==3 and miner.target==weak and crew[2].target==medium and crew[3].target==strong,
-  'new assignments did not spread across rocks in remaining-health order')
+ assert(assigned()==3 and miner.target==strong and crew[2].target==weak and crew[3].target==medium,
+  'new assignments did not take the aim target first and spread to weaker rocks')
+ local originalPin=p.miningSquare
+ scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center+Vector3.xAxis*2})
+ assert(p.miningSquare~=originalPin and assigned()==3 and miner.target==strong and miner.squareJob==p.miningSquare,
+  'overlapping repin canceled a cut that still belongs to the new plot')
+ scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center})
+ searchAll()
  now=started+1.95;searchAll()
  assert(assigned()==3,'helpers joined before the delay')
  now=started+2.35;searchAll()
@@ -207,7 +213,7 @@ do
   drones[worker.id]=nil;worker.model:Destroy();table.remove(p.drones,i)
  end
 end
-print('PASS weak-first dispatch, highest-health reinforcements, staggered sharing, mixed contacts, and foreign claim protection')
+print('PASS aimed lead, weak-first dispatch, overlapping repin, highest-health reinforcements, staggered sharing, mixed contacts, and foreign claim protection')
 
 do
  local destination=Vector3.new(-48,9,0)

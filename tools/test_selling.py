@@ -15,15 +15,9 @@ with tempfile.TemporaryDirectory(prefix='selling-') as directory:
    ';(function()\n'+(ROOT/'tests'/f'{fixture}.integration.lua').read_text()+'\nend)()'])
   path=Path(directory)/(fixture+'.lua');path.write_text(source)
   subprocess.run([str(luau/'luau'),str(path)],check=True)
- receipt=(ROOT/'src/SaleLedger.lua').read_text()
- sale=(ROOT/'src/SaleView.lua').read_text().replace("require('./SaleLedger')",'Ledger')
- client_services="""do
- local get=game.GetService
- local empty={GuiService={},UserInputService={},ContextActionService={},TextService={}}
- function game:GetService(name) return empty[name] or get(self,name) end
-end"""
- source='\n'.join(((ROOT/'tests/mock-roblox.lua').read_text(),client_services,module_bundle(('Shops',)),
-  'local Ledger=(function()\n'+receipt+'\nend)()','local SaleView=(function()\n'+sale+'\nend)()',
+ sale=(ROOT/'src/SaleView.lua').read_text()
+ source='\n'.join(((ROOT/'tests/mock-roblox.lua').read_text(),module_bundle(('Shops',)),
+  'local SaleView=(function()\n'+sale+'\nend)()',
   (ROOT/'tests/sale-ledger.integration.lua').read_text()))
- path=Path(directory)/'sale-ledger.lua';path.write_text(source)
+ path=Path(directory)/'world-sale.lua';path.write_text(source)
  subprocess.run([str(luau/'luau'),str(path)],check=True)

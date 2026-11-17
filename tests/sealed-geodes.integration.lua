@@ -73,3 +73,35 @@ assert(plain.paid and plain.cargoProduced and not plain.openReady and #field.res
 math.random=oldRandom
 local spawned,_,native=spawnResource(field,'Geode');assert(spawned and native.kind=='Crystal','field still spawns mining challenge geodes')
 print('PASS full stone break/payout, separate sealed discovery, hidden variable rewards, immediate replenishment, worker release, E range/owner/run/LOS/windup, duplicate guards, abandoned cleanup')
+
+field.cfg.ReferenceCrystals=true
+local lastSize,lastCash=0,0
+for expected,roll in ipairs({50,65,80,93}) do
+ local spec=Mining.fieldCrystal(roll,1,10)
+ assert(spec.stages==expected and spec.size>lastSize)
+ lastSize=spec.size
+ local cash=math.floor(spec.ore*.3)
+ assert(cash>lastCash,'larger Amber rocks must pay visibly more cash per cargo slot')
+ lastCash=cash
+ assert(Mining.fieldCrystal(roll,3,10).work==spec.work*3,'bed hardness must apply to every layer')
+ local staged=makeResource(field,center,'Crystal',spec.work+10,spec.ore,spec.size,spec.stages)
+ assert(staged.readyAt-staged.spawnAt<.7 and staged.readyAt>staged.spawnAt)
+ now=staged.readyAt;station(staged)
+ miner.state='Travel'
+ local speed=travelSpeed(miner)
+ field.cfg.ContinuousCrystals=false
+ local previousSpeed=travelSpeed(miner)
+ field.cfg.ContinuousCrystals=true
+ assert(speed>=previousSpeed*1.39 and scene.miningWarmup(miner,staged)<=.25)
+ for layer=1,expected do
+  local size=staged.part.Size
+  assert(hitResource(miner,staged,19))
+  assert(staged.stage==layer-1 and staged.part.Size==size,'shrank before spending one full layer')
+  assert(hitResource(miner,staged,1))
+  assert(not staged.paid and staged.stage==layer,'missed a shrink at the exact layer boundary')
+  assert(staged.part.Size.X<size.X and staged.part.Size.Y<size.Y and staged.part.Size.Z<size.Z)
+ end
+ assert(hitResource(miner,staged,19) and not staged.paid)
+ assert(hitResource(miner,staged,1) and staged.paid,'final break requires exactly one more layer')
+end
+print('PASS four standardized sizes, exact 1–4 shrinks, equally weighted final break, deeper-field scaling and quicker quarry drones')

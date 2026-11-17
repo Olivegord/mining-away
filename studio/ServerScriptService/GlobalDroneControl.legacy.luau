@@ -1969,7 +1969,7 @@ function F.rockLean(seed)
  return magnitude*math.cos(bearing),magnitude*math.sin(bearing)
 end
 function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,steady,varied)
- local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference and not varied)
+ local yaw=(steady or varied) and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference)
  local pitch,roll=0,0
  if varied then pitch,roll=F.rockLean(seed) end
  local c=math.cos(pitch)
@@ -2335,6 +2335,10 @@ function F.crystalStageShape(stage,count,fullSize)
  local progress=math.clamp(stage/math.max(1,count or 3),0,1)
  return fullSize and shape+Vector3.yAxis*progress/fullSize or shape
 end
+function F.quarryStageShape(stage,count)
+ local loss=1-F.stageScale(stage,count)
+ return Vector3.new(1-loss*.64,1-loss*.78,1-loss*.64)
+end
 F.MaxCrystalDarkness=.38
 function F.crystalDarkness(hp,maxHP)
  local spent=1-math.clamp((hp-10)/math.max(1,maxHP-10),0,1)
@@ -2534,22 +2538,18 @@ function M.deepCrystal(roll: number,hardness: number,baseOre: number)
   ore=math.max(1,math.floor(baseOre*(.65+.9*sizeRoll)+.5)),
  }
 end
-M.FIELD_CRYSTAL_MIN_SIZE=2.10
-M.FIELD_CRYSTAL_SIZE_RANGE=2.30
-function M.fieldCrystal(roll: number,hardness: number,baseOre: number,baseStages: number)
- -- Most deposits stay close to the familiar size. The upper tail makes
- -- occasional outcrops worth choosing when cargo slots are the bottleneck.
- local fraction=math.clamp((roll-50)/50,0,1)
- local growth=fraction^1.55
- local size=M.FIELD_CRYSTAL_MIN_SIZE+M.FIELD_CRYSTAL_SIZE_RANGE*growth
- local mineral=M.deepCrystal(roll,hardness,baseOre)
- -- Preserve the rolled work/reward ladder when adjusting the display scale.
- local stageBonus=if growth>=2.50/3.35 then 3 elseif growth>=1.80/3.35 then 2 elseif growth>=1/3.35 then 1 else 0
- mineral.size=size
- -- Keep the established seven-stage ceiling while reserving extra stages
- -- for the largest rocks at every depth.
- mineral.stages=math.min(7,math.min(5,baseStages)+stageBonus)
- return mineral
+local fieldRockSizes={2.10,2.65,3.35,4.40}
+local fieldRockYield={.65,.95,1.40,1.70}
+M.FIELD_ROCK_LAYER_HP=20
+M.FIELD_ROCK_READY_TIME=.65
+function M.fieldCrystal(roll: number,hardness: number,baseOre: number)
+ -- Every layer, including the final break, takes the same base work within a bed.
+ local stages=if roll<65 then 1 elseif roll<80 then 2 elseif roll<93 then 3 else 4
+ return {
+  size=fieldRockSizes[stages],stages=stages,large=math.max(0,(stages-2)*.5),
+  work=M.FIELD_ROCK_LAYER_HP*(stages+1)*hardness,
+  ore=math.max(1,math.round(baseOre*fieldRockYield[stages])),
+ }
 end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
 -- the final collapse; crossing several layers at once never duplicates ore.
@@ -10228,7 +10228,7 @@ end
 function scene.poseResource(r)
  local cfg,part=r.field.cfg,r.part
  if r.kind=='Geode' then part.Size=r.fullSize;return end
- local scale=cfg.ContinuousCrystals and Feel.crystalStageShape(r.stage,r.stageCount,r.fullSize)
+ local scale=cfg.ContinuousCrystals and Feel.quarryStageShape(r.stage,r.stageCount)
   or cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
  part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
  part.CFrame=Feel.groundedRockFrame(r.position,part.Size,part:GetAttribute('GroundY'),r.stage,r.stageSeed,part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady,r.variedPose)
@@ -10256,8 +10256,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  if mineral and mineral.large then fullSize=CrystalCuts.fieldSize(fullSize,mineral.large,mineral.spire,mineral.landmark) end
  local variedPose=field.cfg.ContinuousCrystals==true and kind=='Crystal' and not junk
  if variedPose then part:SetAttribute('VariedRockPose',true) end
- local steady=field.cfg.ContinuousCrystals==true and (modifiers==Mining.ROCK_MODIFIERS.Massive
-  or size>=Mining.FIELD_CRYSTAL_MIN_SIZE+Mining.FIELD_CRYSTAL_SIZE_RANGE*1.80/3.35)
+ local steady=field.cfg.ContinuousCrystals==true and (modifiers==Mining.ROCK_MODIFIERS.Massive or stageCount==4)
  if steady then part:SetAttribute('SteadyCrystal',true) end
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  -- Anchor every size to the bottom of the reference mesh at its original scale.
@@ -10287,6 +10286,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,referenceCrystal=reference,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
   slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,steady=steady,variedPose=variedPose,
   stageSeed=mineral and mineral.poseSeed or seed:NextInteger(1,1000000),removeAt=nil}
+ if variedPose then r.readyAt=now+Mining.FIELD_ROCK_READY_TIME end
  r.modifiers=modifiers
  if modifiers then part:SetAttribute('RockModifiers',modifiers) end
  if junk then
@@ -10402,11 +10402,10 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  if not mineral then
   local roll=seed:NextInteger(landmark and 97 or 50,100)
   mineral=if continuous and kind=='Geode' then Mining.geode(roll,field.cfg.Hardness,field.cfg.Ore)
-   elseif continuous then Mining.fieldCrystal(roll,field.cfg.Hardness,field.cfg.Ore,field.cfg.Cracks or 3)
+   elseif continuous then Mining.fieldCrystal(roll,field.cfg.Hardness,field.cfg.Ore)
    elseif reference and field.cfg.SelectionOnly and field.cfg.Hardness>1 then Mining.deepCrystal(roll,field.cfg.Hardness,field.cfg.Ore)
    else Mining.resource(roll,kind,field.cfg.Hardness)
   if continuous and kind~='Geode' then
-   mineral.large=math.clamp((roll-74)/26,0,1)
    mineral.spire=roll%3==0
    mineral.poseSeed=seed:NextInteger(1,1000000)
    mineral.landmark=landmark and landmark.shape
@@ -10422,7 +10421,13 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  local ordinarySize=reference and not continuous and (not field.cfg.SelectionOnly or field.cfg.Hardness<=1) and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
  local massive=if plan then plan.massive else not landmark and not ordinaryOnly and field.cfg.RockModifiers and kind=='Crystal'
   and scene.modifierRandom:NextNumber()<Mining.MASSIVE_CHANCE
- local visualSize=ordinarySize*(massive and Mining.MASSIVE_SCALE or 1)
+ if continuous and massive and mineral.stages<4 then
+  local large=Mining.fieldCrystal(100,field.cfg.Hardness,field.cfg.Ore)
+  mineral=table.clone(mineral)
+  mineral.size=large.size;mineral.stages=large.stages;mineral.work=large.work;mineral.ore=large.ore;mineral.large=1
+  ordinarySize=mineral.size
+ end
+ local visualSize=ordinarySize*(massive and not continuous and Mining.MASSIVE_SCALE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
  if continuous and kind~='Geode' then
@@ -11549,7 +11554,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local waiting=false
  local broken=R.damage(r,amount)
  local actual=r.paid and 0 or r.hp+10
- local nextStage=Feel.stage(actual,r.maxHP,r.stageCount)
+ local nextStage=if r.field.cfg.ContinuousCrystals then Feel.stage(r.hp,r.maxHP-10,r.stageCount)
+  else Feel.stage(actual,r.maxHP,r.stageCount)
  local fractured=nextStage>previous and not broken
  if startShift and r.hp<before then
   p.shiftReadyRun=nil;p.shiftSquare=d.squareJob;p.shiftUntil=now+p.shiftSeconds
@@ -11902,7 +11908,7 @@ function scene.nomadTargetScore(d,rock,distance)
 end
 local function chooseResource(d: any,field: any,square: any?)
  local best,score,bestPriority=nil,math.huge,-math.huge
- local bestHelping,bestHealth,bestUsed,hasHelp=true,math.huge,math.huge,false
+ local bestRank,bestHealth,bestUsed,hasHelp=math.huge,math.huge,math.huge,false
  local focused=square and resources[square.directId]
  if focused and (focused.paid or focused.openReady or focused.geodeRejectedOwner==d.owner or not focused.part.Parent) then square.directId=nil;focused=nil end
  local helpReady=focused~=nil or square and d.squareHelpAt and now>=d.squareHelpAt
@@ -11915,8 +11921,11 @@ local function chooseResource(d: any,field: any,square: any?)
    local used=0
    for _ in pairs(r.slots) do used+=1 end
    local helping=square~=nil and used>0
+   -- One worker per unclaimed rock, starting with the rock the player aimed
+   -- the plot at. Once those are taken, reinforce the hardest remaining cut.
+   local rank=if helping then 2 elseif square and square.leadId==r.id then 0 else 1
    local healthRank=helping and -r.hp or r.hp
-   if square and best and (helping and not bestHelping or helping==bestHelping
+   if square and (rank>bestRank or rank==bestRank
     and (healthRank>bestHealth or healthRank==bestHealth and used>bestUsed)) then continue end
    local capacity=if focused then math.max(10,#profiles[d.owner].drones) elseif square then 10 else r.limit
    if used<capacity and sameRockType(d,r,helping) then
@@ -11940,18 +11949,15 @@ local function chooseResource(d: any,field: any,square: any?)
      elseif d.role=='Striker' and not field.junk then
      distance+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
-    -- Start unclaimed rocks weak-first. Reinforcements go where the most
-    -- work remains, with smaller crews taking ties.
     local priority=0
     if square and r.cargoProduced then priority=-1
-    elseif square and square.leadId==r.id then priority=3
     elseif square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
      priority=(d.resumePin==square and d.resumeResourceId==r.id) and 2 or 1
     end
-    if not best or (square and (helping~=bestHelping or healthRank<bestHealth or used<bestUsed))
+    if not best or (square and (rank<bestRank or healthRank<bestHealth or used<bestUsed))
      or priority>bestPriority or priority==bestPriority and value<score then
      best=r;score=value;bestPriority=priority
-     bestHelping=helping;bestHealth=healthRank;bestUsed=used
+     bestRank=rank;bestHealth=healthRank;bestUsed=used
     end
    end
   end
@@ -12146,7 +12152,8 @@ function scene.regrow(r,dt)
  r.nextRegenAt=now+.2
  r.hp=math.min(maxWork,r.hp+maxWork*.42*math.max(.2,dt))
  local previous=r.stage
- r.stage=Feel.stage(r.hp+10,r.maxHP,r.stageCount)
+ r.stage=if r.field.cfg.ContinuousCrystals then Feel.stage(r.hp,maxWork,r.stageCount)
+  else Feel.stage(r.hp+10,r.maxHP,r.stageCount)
  if r.stage~=previous then
   r.part:SetAttribute('Stage',r.stage)
   scene.poseResource(r)
@@ -12283,6 +12290,9 @@ local function travelSpeed(d)
  end
  local variation=d.state=='Follow' and d.swarmTraits and 1+(d.swarmTraits.speed-1)*.35*(d.swarmCruise or 0) or 1
  local baseSpeed=d.stats.maxStep60
+ if d.state=='Travel' and d.target and d.target.field.cfg.ContinuousCrystals then
+  baseSpeed=math.max(baseSpeed,.26)*1.40
+ end
  if d.state=='Follow' then
   local agility=scene.followAgility(d)
   baseSpeed=math.max(baseSpeed,.39*agility)
@@ -12577,10 +12587,12 @@ end
 function scene.miningWarmup(d,r)
  -- Leave enough time for the emitter buildup to show across several snapshots.
  -- Ignition upgrades still shorten it, with a small floor for readability.
- if r and r.field.cfg.ContinuousCrystals and d.role=='Striker' then return math.max(.24,d.stats.warmup*2) end
+ if r and r.field.cfg.ContinuousCrystals and d.role=='Striker' then return math.max(.10,d.stats.warmup*.50) end
  local definition=DroneCatalog.Types[d.role]
  if r and (d.role=='Ramiel' or d.role=='Nomad') then return .08 end
- if r and definition and definition.Projectile then return math.max(.08,d.stats.warmup*.52) end
+ if r and definition and definition.Projectile then
+  return r.field.cfg.ContinuousCrystals and math.max(.065,d.stats.warmup*.28) or math.max(.08,d.stats.warmup*.52)
+ end
  if r and r.field.cfg.SelectionOnly and r.kind=='Crystal' and definition and not definition.Projectile then
   return math.max(.08,d.stats.warmup/Ca.LASER_CHARGE_SCALE)
  end
@@ -12649,7 +12661,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  if projectile and not RoleConfig.DownwardGunDepth[d.role] and arrived then
   d.yaw=Feel.approachYaw(yaw,d.workYaw or Feel.levelYaw(d.pos,r.position,yaw),dt*((RoleConfig.Prominent[d.role] or {}).turn or 1))
  end
- local warmup=scene.miningWarmup(d,r)+(projectile and not d.workShotStarted and ((d.slot*7)%11)*.012 or 0)
+ local warmup=scene.miningWarmup(d,r)+(projectile and not d.workShotStarted and ((d.slot*7)%11)*(r.field.cfg.ContinuousCrystals and .006 or .012) or 0)
  local starting=not job and d.warmAt and now-d.warmAt>=warmup
  local contacting=job and not job.impacted and now>=job.startedAt+job.duration*job.impact
  if arrived and (d.specialClear==nil or now>=(d.specialQueryAt or 0) or starting or contacting) then
@@ -12918,7 +12930,7 @@ local function breakerDrone(d,p,hr,field,dt)
  elseif event=='missed' or event=='canceled' then release(d) end
 end
 function scene.autoSellReady(p,profile,units)
- return (not p.saleQuote or now>=p.saleQuote.expiresAt) and Workshop.starLevel(profile,'autosell')>0 and units>=Ca.capacity(profile,previewPerks(p)) and not activeAssault(p)
+ return Workshop.starLevel(profile,'autosell')>0 and units>=Ca.capacity(profile,previewPerks(p)) and not activeAssault(p)
 end
 function scene.emptierOffset(rank)
  return Vector3.new(rank%2==0 and 2.2 or -2.2,2.4,1)
@@ -13582,9 +13594,10 @@ function scene.saleMilestoneNotice(p,saleQuartz)
   return '+'..saleQuartz..' Quartz · Pack Counter ready'
  end
 end
-function scene.sendSaleReceipt(p,id,result,full)
+function scene.sendSaleReceipt(p,id,result,full,target)
  local receipt={id=id,runId=result.runId,revision=data(p).revision,at=now,
   cargo=result.cargo,resources=result.resources,cash=result.quartz,full=full}
+ if target then receipt.counter={target.X,target.Y,target.Z} end
  -- The profile also carries recent receipts so a balance snapshot arriving
  -- before its RemoteEvent cannot jump ahead of the visual credit.
  p.recentSales=p.recentSales or {}
@@ -13671,35 +13684,7 @@ function scene.canSellBackpack(p)
  return not activeAssault(p) and (atStation(p,scene.converter or scene.packStation,18)
   or atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20))
 end
-function scene.previewSale(p)
- if not scene.canSellBackpack(p) then notice(p,'Visit SELL ORE with your drones out of combat.');return end
- if Pro.cargoUnits(data(p))==0 then notice(p,'Your backpack is empty.');return end
- local run=data(p).run
- local quote={id=Http:GenerateGUID(false),runId=run.id,cargo=Pro.clone(run.cargo),expiresAt=now+45}
- p.saleQuote=quote
- RS.MiningAway.Sale:FireClient(p.player,{kind='preview',id=quote.id,runId=quote.runId,cargo=quote.cargo})
-end
-function scene.confirmSale(p,id,sell)
- local quote=p.saleQuote
- if not quote or id~=quote.id then return end
- p.saleQuote=nil
- local run=data(p).run
- local reason
- if run.id~=quote.runId or now>=quote.expiresAt then reason='Sale preview expired.'
- elseif not scene.canSellBackpack(p) then reason='Return to SELL ORE to confirm.'
- else
-  for key,n in pairs(run.cargo) do if n~=(quote.cargo[key] or 0) then reason='Backpack changed.';break end end
-  for key,n in pairs(quote.cargo) do if n~=(run.cargo[key] or 0) then reason='Backpack changed.';break end end
- end
- if reason then
-  RS.MiningAway.Sale:FireClient(p.player,{kind='rejected',id=id})
-  notice(p,reason)
-  if reason=='Backpack changed.' and Pro.cargoUnits(data(p))>0 then scene.previewSale(p) end
-  return
- end
- sell(p,false,quote)
-end
-local function sellBackpack(p: any,automatic: boolean?,quote: any?)
+local function sellBackpack(p: any,automatic: boolean?)
  if activeAssault(p) then
   if not automatic then notice(p,'Recall your fighting drones before selling.') end
   return
@@ -13709,13 +13694,25 @@ local function sellBackpack(p: any,automatic: boolean?,quote: any?)
   return
  end
  if Pro.cargoUnits(data(p))==0 then notice(p,'Your backpack is empty.');return end
- local tx,runId=quote and quote.id or Http:GenerateGUID(false),data(p).run.id
+ local target
+ if not automatic then
+  local origin=characterRoot(p).Position
+  local nearest=math.huge
+  for _,station in pairs({scene.converter,scene.packStation,shopStations.Quartz}) do
+   local distance=(station.Position-origin).Magnitude
+   if distance<nearest then
+    nearest=distance
+    target=station.Position+Vector3.yAxis*(station.Size.Y*.5+.3)
+   end
+  end
+ end
+ local tx,runId=Http:GenerateGUID(false),data(p).run.id
  transact(p,'sell:'..tx,function(copy)
   local ok,result=Pro.sell(copy,prices,tx,runId)
   if ok then return result end;return nil,result
  end,function(result)
   p.nextEmptierPlan=nil
-  scene.sendSaleReceipt(p,tx,result,not automatic)
+  scene.sendSaleReceipt(p,tx,result,not automatic,target)
   local amounts={}
   for _,key in ipairs(Shops.ORDER) do
    local n=key=='Quartz' and result.quartz or result.cargo[key]
@@ -13724,9 +13721,7 @@ local function sellBackpack(p: any,automatic: boolean?,quote: any?)
   local sale=automatic and 'Auto Sell' or 'Sold '..result.units..' ore'
   notice(p,scene.saleMilestoneNotice(p,result.quartz) or sale..' · +'..table.concat(amounts,', '))
   p.publishDirty=true
- end,quote and function(status)
-  if status=='rejected' then RS.MiningAway.Sale:FireClient(p.player,{kind='rejected',id=tx}) end
- end or nil)
+ end)
 end
 local function validPayload(payload)
  return type(payload)=='table' and type(payload.txId)=='string' and #payload.txId>=1 and #payload.txId<=100 and type(payload.runId)=='string' and #payload.runId<=100
@@ -14188,7 +14183,11 @@ function scene.placeSquare(p,payload)
  scene.moveSquareWork(p,current,square)
  for _,d in ipairs(p.drones) do
   if d.hp<=0 or d.carrierId then continue end
-  d.thinkPosition=d.pos;d.thinkUntil=now+seed:NextInteger(32,105)*.01
+  if current and d.squareJob==current and d.target and not d.target.paid and scene.rockInSquare(square,d.target) then
+   d.squareJob=square
+   continue
+  end
+  d.thinkPosition=d.pos;d.thinkUntil=now+seed:NextInteger(8,26)*.01
   if DroneRoles.isWorker(d.role) then
    if d.target or d.lingerUntil or d.breaker then scene.releaseSquareApproach(d) end
    d.field=nil;d.autoField=nil;d.squareSearchAt=nil
@@ -14235,7 +14234,7 @@ function scene.focusResource(p,payload)
  square.directId=r.id;square.focusId=r.id
  for _,d in ipairs(p.drones) do
   if DroneRoles.isWorker(d.role) and not d.carrierId and d.target~=r then
-   release(d);d.field=nil;d.autoField=nil;d.squareSearchAt=nil;d.thinkPosition=d.pos;d.thinkUntil=now+.08*(d.slot%5)
+   release(d);d.field=nil;d.autoField=nil;d.squareSearchAt=nil;d.thinkPosition=d.pos;d.thinkUntil=now+.045*(d.slot%5)
   end
  end
  scene.publishSquareFocus(p,square)
@@ -14459,7 +14458,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   reply('queued','Queued · next available worker',r)
  elseif action=='ReturnCargo' then
   if payload~=nil and (type(payload)~='string' or #payload>160) then return end
-  scene.previewSale(p)
+  sellBackpack(p,false)
  elseif action=='Patch' then
   local fieldId=type(payload)=='table' and payload.fieldId or payload
   if type(payload)=='table' and not validCommandId(payload.requestId) then return end
@@ -14518,11 +14517,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
    commandReply(pl,payload,'accepted','Fighting guards',field)
   end
  elseif action=='Sell' then
-  scene.previewSale(p)
- elseif action=='ConfirmSale' then
-  scene.confirmSale(p,payload,sellBackpack)
- elseif action=='CancelSale' then
-  if p.saleQuote and p.saleQuote.id==payload then p.saleQuote=nil end
+  sellBackpack(p,false)
  elseif action=='BuyPack' or action=='ChooseCard' or action=='Prestige' then
   if not economyAction(p,pl,action,payload) then return end
  end

@@ -22,7 +22,7 @@ rock:SetAttribute('FullPosition',rock.Position)
 local cosmetic=part(root,'Cosmetic',Vector3.new(4,1,4),center+Vector3.new(0,11,12),false)
 local sent,requests=nil,0
 local view=SelectorView.new({parent=fx,world=root,player=player,profile=function() return {run={id='test'}} end,
- command={FireServer=function(_,action,payload) assert(action=='PlaceSelector');sent=payload;requests+=1 end},
+ command={FireServer=function(_,action,payload) sent=payload;sent.action=action;requests+=1 end},
  hidden=function() return false end,reducedMotion=function() return false end})
 local report={}
 local ok,err=xpcall(function()
@@ -36,8 +36,10 @@ local ok,err=xpcall(function()
  local point,field,lead,inRange=view:aim(shallow)
  assert(point==center+Vector3.zAxis*30 and field==1 and lead=='test' and inRange,'shallow rock hit lost the bed')
  view:step(.08)
- assert(#fx:GetChildren()==5 and not view.activeFloor.gui.Enabled and not view.previewFloor.gui.Enabled
+ assert(#fx:GetChildren()==6 and not view.activeFloor.gui.Enabled and not view.previewFloor.gui.Enabled
   and not view.flash.gui.Enabled,'an unselected bed had a visible marker')
+ view:step(.08,shallow)
+ assert(view.aimEdge.point==point and view.hoverId=='test' and requests==0,'aim did not preview the rock and the proposed plot')
  for _,mark in ipairs(fx:GetChildren()) do
   assert(mark:IsA('BasePart') and mark:FindFirstChildOfClass('SurfaceGui').Face==Enum.NormalId.Top,
    'selector created a cursor or raised effect')
@@ -71,7 +73,7 @@ local ok,err=xpcall(function()
  local confirmRay={Origin=point+Vector3.new(4,30,0),Direction=-Vector3.yAxis}
  assert(view:aimPreview(confirmRay) and requests==0 and view.draft.point==point+Vector3.xAxis*4,
   'click inside the preview did not reposition it locally')
- assert(view:aimPreview(shallow) and view:confirm() and sent.fieldId==1 and sent.position==point and sent.requestId and requests==1,
+ assert(view:aimPreview(shallow) and view:confirm() and sent.action=='PlaceSelector' and sent.fieldId==1 and sent.position==point and sent.requestId and requests==1,
   'confirm did not place the current preview')
  assert(view:aimPreview(confirmRay) and requests==1 and not view:flashState(),'pending placement retriggered the command or flash')
  assert(view:reply({requestId=sent.requestId,status='rejected'}) and view.draft.point==point and not view:flashState(),'reject discarded or flashed the preview')
@@ -92,9 +94,13 @@ local ok,err=xpcall(function()
  RockModifierView.attackOutlines(records,nil,100.3,false)
  assert(rendered.Color==stone and records[1].rockOutline.FillTransparency==1 and records[1].rockOutline.OutlineTransparency<1,'selection failed to restore the rock or interrupted its attack outline')
  assert(view:aimPreview(ray) and view:cancelPreview() and requests==2 and not view:previewState(),'cancelling a draft sent a command')
+ view.aimAt=nil;view:step(.08,shallow)
+ assert(not view.aimEdge.gui.Enabled and view.hoverId=='test','an aimed rock inside the plot previewed a move')
+ assert(view:aimPreview(shallow) and sent.action=='FocusResource' and sent.resourceId=='test' and requests==3
+  and not view:previewState(),'clicking an aimed rock inside the accepted plot failed to focus the crew')
  player:SetAttribute('MA_Selector',nil);view:step(.016)
  assert(not view.activeFloor.gui.Enabled and not view.activeEdge.gui.Enabled,'recall left a footprint')
- report={groundMarkers=5,previewStrength=previewStrength,clickFlash=strength}
+ report={groundMarkers=6,previewStrength=previewStrength,clickFlash=strength,rockFocus=true}
 end,debug.traceback)
 view:destroy();root:Destroy();player:Destroy();assert(ok,err)
 return report

@@ -1,6 +1,7 @@
 -- Local aiming, pinned command feedback and bounded crystal healing cues.
 local V={Interaction=require('./FieldInteractionView')}
 V.__index=V
+local aimColor=Color3.fromRGB(139,160,178)
 local previewColor=Color3.fromRGB(234,245,255)
 local activeColor=Color3.fromRGB(255,147,61)
 local clearColor=Color3.fromRGB(85,243,148)
@@ -35,14 +36,14 @@ local function outline(parent,name)
  end
  return {base=base,gui=gui,edges=edges}
 end
-local function showOutline(mark,point,width,color)
+local function showOutline(mark,point,width,color,lift)
  mark.gui.Enabled=point~=nil
  if not point then return end
  if mark.color~=color then
   for _,edge in ipairs(mark.edges) do edge.BackgroundColor3=color;edge.BackgroundTransparency=.22 end
   mark.color=color
  end
- if mark.point~=point then mark.base.Position=point+Vector3.yAxis*.11;mark.point=point end
+ if mark.point~=point then mark.base.Position=point+Vector3.yAxis*(lift or .11);mark.point=point end
  if mark.width~=width then
   mark.base.Size=Vector3.new(width,.02,width);mark.width=width
   local t=math.min(.24,.46/width)
@@ -96,33 +97,29 @@ function V:aim(ray)
   local part=hit.Instance
   local bed,rootPart=bedFor(part)
   local leadId=bed and rootPart:GetAttribute('ResourceId')
+  if leadId and (rootPart:GetAttribute('SealedDrop') or (rootPart:GetAttribute('BreakSerial') or 0)>0) then
+   table.insert(ignore,rootPart)
+   continue
+  end
   if bed and (part==bed or leadId) then
-   local position=hit.Position
-   local top=bed.Position.Y+bed.Size.Y*.5
-   if leadId and ray.Direction.Y<-.001 then
-    position=ray.Origin+ray.Direction*((top-ray.Origin.Y)/ray.Direction.Y)
-   end
+   local position=leadId and (rootPart:GetAttribute('FullPosition') or rootPart.Position) or hit.Position
    local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
-   local inRange=point and Mining.selectorInRange(hr.Position,point)
-   if leadId then
-    -- A shallow ray can put the floor projection off the bed, out of range,
-    -- or too far from the rock that was actually clicked.
-    local rockPosition=rootPart:GetAttribute('FullPosition') or hit.Position
-    local profile=o.profile()
-    local coversRock=point and profile and Mining.selectorContains(point,Workshop.selectorWidth(profile)*.5,rockPosition)
-    if not inRange or not coversRock then
-     local rockPoint=Mining.selectorCenter(rockPosition,bed.CFrame,bed.Size)
-     if rockPoint and (not point or Mining.selectorInRange(hr.Position,rockPoint)) then
-      point=rockPoint;inRange=Mining.selectorInRange(hr.Position,point)
-     end
-    end
+   if point then
+    return point,bed:GetAttribute('FieldId'),leadId,Mining.selectorInRange(hr.Position,point),leadId and rootPart
    end
-   if point then return point,bed:GetAttribute('FieldId'),leadId,inRange end
    return nil
   end
   if part.CanCollide then return nil end
   table.insert(ignore,part)
  end
+end
+
+function V:inAcceptedPlot(id,rock,width)
+ local player=self.options.player
+ local pin=player:GetAttribute('MA_Selector')
+ return rock and pin and player:GetAttribute('MA_SelectorField')==id
+  and Mining.selectorContains(pin,(player:GetAttribute('MA_SelectorWidth') or width)*.5,
+   rock:GetAttribute('FullPosition') or rock.Position)
 end
 
 function V:canReachStarterPlot()
@@ -192,34 +189,24 @@ function V:readyPickup(records)
  return self.pickupId
 end
 function V:aimPreview(ray)
- local point,id,leadId,inRange=self:aim(ray)
+ local point,id,leadId,inRange,rock=self:aim(ray)
  local profile=self.options.profile()
  if self.pending then return point~=nil end
  if not point or not id or not profile or not profile.run then
   self:cancelPreview()
   return false
  end
- local pin=self.options.player:GetAttribute('MA_Selector')
- local selectedField=self.options.player:GetAttribute('MA_SelectorField')
- if leadId and pin and selectedField==id then
-  local width=self.options.player:GetAttribute('MA_SelectorWidth') or Workshop.selectorWidth(profile)
-  -- The selected resource, rather than the projected floor ray, determines membership.
-  local rock
-  for _,node in ipairs(self.options.world:GetDescendants()) do
-   if node:IsA('BasePart') and node:GetAttribute('ResourceId')==leadId then rock=node;break end
-  end
-  if rock and Mining.selectorContains(pin,width*.5,rock:GetAttribute('FullPosition') or rock.Position) then
-   self:cancelPreview()
-   self.options.command:FireServer('FocusResource',{resourceId=leadId,runId=profile.run.id,
-    requestId=game:GetService('HttpService'):GenerateGUID(false)})
-   return true
-  end
+ local width=Workshop.selectorWidth(profile)
+ if leadId and self:inAcceptedPlot(id,rock,width) then
+  self:cancelPreview()
+  self.options.command:FireServer('FocusResource',{resourceId=leadId,runId=profile.run.id,
+   requestId=game:GetService('HttpService'):GenerateGUID(false)})
+  return true
  end
  if not inRange then
   if self.options.notify then self.options.notify('Move closer to select that area.') end
   return true
  end
- local width=Workshop.selectorWidth(profile)
  local draft=self.draft
  if not draft or draft.field~=id or draft.point~=point or draft.leadId~=leadId
   or draft.runId~=profile.run.id or draft.width~=width then
@@ -283,7 +270,7 @@ function V:flashState()
  local peak=self.options.player:GetAttribute('ReducedFlashing')==true and .29 or .68
  return click,peak*(1-math.clamp((age-.045)/(flashTime-.045),0,1))
 end
-function V:step(dt)
+function V:step(dt,aimRay)
  local o=self.options
  local profile=o.profile()
  local visible=profile and not o.hidden()
@@ -291,6 +278,7 @@ function V:step(dt)
  if not self.activeFloor and profile and o.world.Map:FindFirstChild('CrystalRun') then
   self.flash=fill(o.parent,'SelectorClickFill')
   self.previewEdge=outline(o.parent,'SelectorPreviewOutline')
+  self.aimEdge=outline(o.parent,'SelectorAimOutline')
   self.previewFloor=fill(o.parent,'SelectorPreviewFill')
   self.activeEdge=outline(o.parent,'SelectorOutline')
   self.activeFloor=fill(o.parent,'SelectorFootprint')
@@ -307,6 +295,15 @@ function V:step(dt)
    self:cancelPreview()
   else draft.age=math.min(previewTime,draft.age+dt) end
  end
+ if not visible or not aimRay then
+  self.hoverPoint=nil;self.hoverId=nil;self.aimAt=nil
+ elseif os.clock()>=(self.aimAt or 0) then
+  self.aimAt=os.clock()+.05
+  local point,id,leadId,inRange,rock=self:aim(aimRay)
+  local focus=leadId and self:inAcceptedPlot(id,rock,width)
+  self.hoverId=(focus or inRange) and leadId or nil
+  self.hoverPoint=inRange and not focus and point or nil
+ end
  local color=o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor
  local lowFlash=o.player:GetAttribute('ReducedFlashing')==true
  local pinWidth=o.player:GetAttribute('MA_SelectorWidth') or width
@@ -314,7 +311,8 @@ function V:step(dt)
  showOutline(self.activeEdge,pin,pinWidth,color)
  showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,white,.04)
  local preview,previewWidth,strength=self:previewState()
- showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor)
+ showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor,.13)
+ showOutline(self.aimEdge,not preview and self.hoverPoint~=pin and self.hoverPoint or nil,width,aimColor,.095)
  showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,white,.065)
  showFill(self.flash,click and click.point,click and click.width or width,flashStrength*.86,white,.09)
 end
@@ -355,7 +353,7 @@ function V:updateHealing(now)
 end
 function V:destroy()
  if self.activeFloor then
-  for _,mark in ipairs({self.flash,self.previewEdge,self.previewFloor,self.activeEdge,self.activeFloor}) do mark.base:Destroy() end
+  for _,mark in ipairs({self.flash,self.previewEdge,self.aimEdge,self.previewFloor,self.activeEdge,self.activeFloor}) do mark.base:Destroy() end
  end
  for _,cue in ipairs(self.cues) do cue.gui:Destroy() end
 end

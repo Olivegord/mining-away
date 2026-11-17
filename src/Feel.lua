@@ -61,7 +61,7 @@ function F.rockLean(seed)
  return magnitude*math.cos(bearing),magnitude*math.sin(bearing)
 end
 function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,steady,varied)
- local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference and not varied)
+ local yaw=(steady or varied) and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference)
  local pitch,roll=0,0
  if varied then pitch,roll=F.rockLean(seed) end
  local c=math.cos(pitch)
@@ -426,6 +426,10 @@ function F.crystalStageShape(stage,count,fullSize)
  -- spreading the extra volume across the preceding fractures.
  local progress=math.clamp(stage/math.max(1,count or 3),0,1)
  return fullSize and shape+Vector3.yAxis*progress/fullSize or shape
+end
+function F.quarryStageShape(stage,count)
+ local loss=1-F.stageScale(stage,count)
+ return Vector3.new(1-loss*.64,1-loss*.78,1-loss*.64)
 end
 F.MaxCrystalDarkness=.38
 function F.crystalDarkness(hp,maxHP)

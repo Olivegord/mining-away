@@ -1160,7 +1160,7 @@ local function renderResource(r,now)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and not s:GetAttribute('SealedDrop') and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
-  local shape=s:GetAttribute('Kind')=='Geode' and 1 or quarry and Feel.crystalStageShape(stage,stageCount,full)
+  local shape=s:GetAttribute('Kind')=='Geode' and 1 or quarry and Feel.quarryStageShape(stage,stageCount)
    or s:GetAttribute('ZoneName') and Feel.crystalStageShape(stage,stageCount) or period
   local displaySize=full*math.max(.005,growth)*shape*(s:GetAttribute('Kind')=='Geode' and Vector3.one or Feel.rockShape(s:GetAttribute('SliceScale'),heat))
   view.Size=displaySize*(r.damageScale or Vector3.one)
@@ -1200,10 +1200,14 @@ local function renderResource(r,now)
   if event=='break' and s:GetAttribute('SealedDrop') then
    r.splitSize=full;r.splitPose=r.restPose
   elseif event=='break' and cut then
-   r.splitSize=full*Feel.crystalStageShape(stageCount,stageCount,quarry and full or nil)*Feel.rockShape(s:GetAttribute('SliceScale'),s:GetAttribute('MeltBand'))
-   local rest=Feel.groundedRockFrame(final,r.splitSize,ground or final.Y-full.Y*.5+.06,stage,seed,s:GetAttribute('CubicRock')==false,
-    reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
-   r.splitPose=CFrame.new(rest.Position)*(r.restPose and r.restPose.Rotation or rest.Rotation)*CFrame.new(-r.splitSize*cutOffset)
+   if quarry and r.restSize then
+    r.splitSize=r.restSize;r.splitPose=r.restPose
+   else
+    r.splitSize=full*Feel.crystalStageShape(stageCount,stageCount)*Feel.rockShape(s:GetAttribute('SliceScale'),s:GetAttribute('MeltBand'))
+    local rest=Feel.groundedRockFrame(final,r.splitSize,ground or final.Y-full.Y*.5+.06,stage,seed,s:GetAttribute('CubicRock')==false,
+     reference,s:GetAttribute('SteadyCrystal')==true,s:GetAttribute('VariedRockPose')==true)
+    r.splitPose=CFrame.new(rest.Position)*(r.restPose and r.restPose.Rotation or rest.Rotation)*CFrame.new(-r.splitSize*cutOffset)
+   end
   end
   view.Transparency=1
   if r.rockOutline then r.rockOutline.Enabled=false end
@@ -1216,7 +1220,7 @@ local function renderResource(r,now)
   end
  end
  if not r.visual.broken then
-  r.restPose=view.CFrame
+  r.restPose=view.CFrame;r.restSize=view.Size
  end
  if event=='stage' then
   -- The source plays from Crystal.Primary, not the visible union.
@@ -1741,7 +1745,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
   local click,flash=selectorView:flashState()
   local draft,width,strength=selectorView:previewState()
   RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,
-   click or draft,click and flash or strength,not click and width or nil,(player:GetAttribute('MA_SelectorFocus') or ''):match('^[^:]+:(.+)$'))
+   click or draft,click and flash or strength,not click and width or nil,(player:GetAttribute('MA_SelectorFocus') or ''):match('^[^:]+:(.+)$'),selectorView.hoverId)
  end
  presentation:update(dt,now)
  laserShowcase:step(now,dt)
@@ -1776,9 +1780,7 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
  end})
 pickupView.sales=SaleView.new({hud=tacticalHUD,player=player,world=world,parent=localFX,presentation=presentation,
  audio=soundscape,reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible,
- onCommitted=function(receipt) soundscape:observeSale(receipt) end,
- confirm=function(id) command:FireServer('ConfirmSale',id) end,
- cancel=function(id) command:FireServer('CancelSale',id) end})
+ onCommitted=function(receipt) soundscape:observeSale(receipt) end})
 connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt)
  pickupView.sales:receive(receipt)
 end)
@@ -1808,7 +1810,7 @@ local function stationAction(station)
  elseif kind=='Printer' then return function() logisticsView:toggle() end,'Drone yard','Manage your permanent fleet and transport','Browse'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
-  return cargoAction,'Sell ore','Preview the rocks in your backpack','Review'
+  return cargoAction,'Sell ore','Unload your backpack here','Sell'
  end
  return nil
 end
@@ -1817,7 +1819,7 @@ local function performStation(station)
  local action=stationAction(station)
  local hr=ownerRoot();local prompt=station:FindFirstChildOfClass('ProximityPrompt')
  if not hr or not prompt or not prompt.Enabled or (hr.Position-station.Position).Magnitude>prompt.MaxActivationDistance+1 then return end
- if menusVisible() or pickupView.sales:isOpen() then return end
+ if menusVisible() then return end
  if action and os.clock()-lastStationUse>.25 then lastStationUse=os.clock();menuStation=station;action() end
 end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
@@ -1877,7 +1879,7 @@ local mouse=player:GetMouse()
  connect(service.PromptShown,function(prompt) prompts[prompt]=true end)
  connect(service.PromptHidden,function(prompt) prompts[prompt]=nil end)
  local function available()
-  if pickupView.sales:isOpen() or menusVisible() or not profile or UIS:GetFocusedTextBox() or (toolView and toolView:selected()~=nil)
+  if menusVisible() or not profile or UIS:GetFocusedTextBox() or (toolView and toolView:selected()~=nil)
    or (logisticsView and logisticsView.selected~=nil) then return end
   for prompt in pairs(prompts) do
    if prompt.Enabled and prompt:IsDescendantOf(workspace) and prompt.KeyboardKeyCode==Enum.KeyCode.E then return end
@@ -1924,7 +1926,17 @@ local mouse=player:GetMouse()
  connect(RunService.RenderStepped,function() showAction(available()) end)
 
 end)()
-connect(RunService.RenderStepped,function(dt) selectorView:step(dt) end)
+connect(RunService.RenderStepped,function(dt)
+ local input=UIS:GetLastInputType()
+ local camera=workspace.CurrentCamera
+ local ray
+ if camera and input.Name:match('^Gamepad') then
+  ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2)
+ elseif camera and input~=Enum.UserInputType.Touch and not tacticalHUD:blocksPoint(UIS:GetMouseLocation()) then
+  ray=mouse.UnitRay
+ end
+ selectorView:step(dt,ray)
+end)
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end
@@ -1936,7 +1948,6 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
- if pickupView.sales:isOpen() then return end
  if inspectingFleet() then
   local key=input.KeyCode
   if key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB then closeFleetInspection(true)

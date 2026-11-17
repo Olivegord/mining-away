@@ -33,12 +33,13 @@ function V.clearSelectionFlash(r)
  if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,r.view.Transparency) end
 end
 
-function V.attackOutlines(records,_camera,now,steady,selection,strength,width,focusId)
+function V.attackOutlines(records,_camera,now,steady,selection,strength,width,focusId,hoverId)
  for _,r in pairs(records) do
   local outline=r.rockOutline
   local visible=not r.visual.broken and r.view.Parent and (r.shellModel~=nil or r.view.Transparency<1)
    and (r.view.LocalTransparencyModifier or 0)<1
-  local focused=visible and focusId==r.id
+  local focused=visible and focusId~=nil and focusId==r.id
+  local hovered=visible and hoverId~=nil and hoverId==r.id
   local attacked=focused or visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
   local selected=visible and selection and r.source:GetAttribute('FieldId')==selection.field
    and Mining.selectorContains(selection.point,(width or selection.width)*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
@@ -47,7 +48,7 @@ function V.attackOutlines(records,_camera,now,steady,selection,strength,width,fo
    r.view.Color=r.selectionColor:Lerp(white,strength)
    if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,math.max(r.view.Transparency,strength)) end
   end
-  if not attacked then
+  if not attacked and not hovered then
    if outline then outline:Destroy();r.rockOutline=nil end
   else
    if not outline then
@@ -57,11 +58,11 @@ function V.attackOutlines(records,_camera,now,steady,selection,strength,width,fo
     outline.Parent=r.view;r.rockOutline=outline
    end
    outline.Adornee=r.shellModel or r.view
-   outline.OutlineColor=focused and Color3.fromRGB(255,210,102) or r.baseColor:Lerp(white,.66)
+   outline.OutlineColor=focused and Color3.fromRGB(255,210,102) or hovered and white or r.baseColor:Lerp(white,.66)
    r.outlineStart=r.outlineStart or now
    local wave=steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)
-   outline.OutlineTransparency=.50-.43*wave
-   outline.FillTransparency=1
+   outline.OutlineTransparency=hovered and .04 or .50-.43*wave
+   outline.FillTransparency=hovered and .89 or 1
   end
   if not attacked then r.outlineStart=nil end
  end

@@ -103,8 +103,9 @@ check('Crystal Run preserves two narrow crossings and grows landmark clusters aw
    local occupied={}
    local clustered=0
    local function footprint(roll,landmark)
-    local width,height=Cuts.fieldScales(math.clamp((roll-74)/26,0,1),roll%3==0,landmark)
-    local size=Mining.fieldCrystal(roll,1,10,3).size/3
+    local rock=Mining.fieldCrystal(roll,1,10)
+    local width,height=Cuts.fieldScales(rock.large,roll%3==0,landmark)
+    local size=rock.size/3
     local x,y,z=3.135*size*width,6.567*size*height,4.487*size*width*widestCutDepth[zone]
     return P.leaningRadius(x,y,z,Feel.rockLean(math.floor(random(1,1000001)))),y,z
    end

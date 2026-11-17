@@ -34,7 +34,7 @@ Roblox and GitHub access are independent. MideDibber's Playtest/Edit access to D
 
 - Start from the current integration revision and inspect local modifications before synchronizing. Preserve each contributor's uncommitted work.
 - Keep code changes in `src/`, with relevant verification and a concise handoff. Use a `codex/` contribution branch and review PR in this repository when working concurrently; branch ownership is not a separate project.
-- Only one contributor at a time saves/refreshes the native `.rbxl` or publishes. Agree who owns that step before editing the shared map. Code-only tasks can proceed independently.
+- Only one contributor at a time saves/refreshes the native `.rbxl` or publishes. Work without cross-chat messaging and reconcile diffs at final integration. Code-only tasks can proceed independently.
 - Before editing Sources, retain the exact currently installed Git revision or a `tools/build.py --source-payload` export as the refresh baseline. Use `python3 tools/build.py --previous-commit <installed-revision>` or `--previous-payload <exact-payload>` to apply changes to the canonical file. Never guess a baseline for unknown Studio edits.
 - Commit the synchronized Sources and **the same** `build/DRONE_GAME.rbxl` together. A normal save to disk is not a GitHub update; a GitHub push is not a Roblox publication.
 - If the native binary conflicts, preserve both contributors' edits for reconciliation in the canonical document. Do not text-merge the binary or silently pick a side.
