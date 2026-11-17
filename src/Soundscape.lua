@@ -19,6 +19,11 @@ local TRACKS = {
 }
 local FIELD_CONTEXT = {'Amber','Ruby','Quartz','Violet','Diamond'}
 local CUES = {
+ gem_ready={id='9119816710',volume=.15,pitch=.74,range=38,nearDistance=7,priority=3,attack=.15},
+ geode_crack={id='9125869504',volume=.35,duration=.8,pitch=.65,cooldown=.35,range=65,maxVoices=3},
+ geode_reject={id='9125871199',volume=.55,duration=1.25,pitch=.48,attack=.005,cooldown=.25,range=85,maxVoices=2},
+ geode_windup={id='9114583503',volume=.36,duration=.85,pitch=.58,attack=.04,cooldown=.3,range=75,maxVoices=2},
+ geode_break={id='9125871199',volume=.70,duration=2.2,pitch=.62,attack=.005,cooldown=.2,range=100,maxVoices=3,reserved=true},
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
  sale_confirm={id='9126066421',volume=.26,duration=.22,pitch=.79,cooldown=.14},

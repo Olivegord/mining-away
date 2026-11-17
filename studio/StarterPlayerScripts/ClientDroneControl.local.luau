@@ -1338,6 +1338,31 @@ function M.nextSizeMask(first,second)
 end
 M.MASSIVE_CHANCE=.09
 M.MASSIVE_SCALE=1.38
+-- Geodes test sustained, accepted work after their first visible crack.
+M.GEODE_CHANCE=.045
+M.GEODE_WINDOW=4
+M.OPEN_REACH=16
+function M.geode(roll,hardness,ore)
+ local ordinary=M.fieldCrystal(roll,hardness,ore,3)
+ return {work=ordinary.work*8,ore=ordinary.ore,size=4.6+(roll-50)/50*1.4,stages=7}
+end
+function M.geodeProgress(r,amount,now)
+ local work=r.maxHP-10
+ if not r.geodeTestAt and r.hp-amount<=work*.90 then
+  r.geodeTestAt=now;r.geodeTestDamage=0
+  -- Even a huge single hit must hold the shell open through the power test.
+  return math.min(amount,math.max(0,r.hp-work*.90))
+ end
+ if r.geodeTestAt and not r.geodePassed then
+  r.geodeTestDamage=(r.geodeTestDamage or 0)+amount
+  return math.min(amount,math.max(0,r.hp-work*.20))
+ end
+ return amount
+end
+function M.geodeResult(r,now)
+ if not r.geodeTestAt or r.geodePassed or now-r.geodeTestAt<M.GEODE_WINDOW then return nil end
+ return (r.geodeTestDamage or 0)>= (r.maxHP-10)*.10*M.GEODE_WINDOW
+end
 local SELECTOR_GRID=2
 local DEPOT_ROUTE_RADIUS=54 -- Half the authored Crystal Run bed width.
 function M.selectorCenter(position,frame,size)
@@ -1878,6 +1903,11 @@ local TRACKS = {
 }
 local FIELD_CONTEXT = {'Amber','Ruby','Quartz','Violet','Diamond'}
 local CUES = {
+ gem_ready={id='9119816710',volume=.15,pitch=.74,range=38,nearDistance=7,priority=3,attack=.15},
+ geode_crack={id='9125869504',volume=.35,duration=.8,pitch=.65,cooldown=.35,range=65,maxVoices=3},
+ geode_reject={id='9125871199',volume=.55,duration=1.25,pitch=.48,attack=.005,cooldown=.25,range=85,maxVoices=2},
+ geode_windup={id='9114583503',volume=.36,duration=.85,pitch=.58,attack=.04,cooldown=.3,range=75,maxVoices=2},
+ geode_break={id='9125871199',volume=.70,duration=2.2,pitch=.62,attack=.005,cooldown=.2,range=100,maxVoices=3,reserved=true},
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
  sale_confirm={id='9126066421',volume=.26,duration=.22,pitch=.79,cooldown=.14},
@@ -7808,7 +7838,7 @@ local impactStyles={
  GemReward={speed=NumberRange.new(9,22),spread=72,lift=-12,count=20,dust=0},
  Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
 }
-function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?,saleParent: Instance?)
+function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?,saleParent: Instance?,density: number?)
  local prism=kind=='PrismBlast'
  if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
@@ -7842,7 +7872,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
   sparks.Acceleration=Vector3.new(0,-1.7,0)
   sparks.Lifetime=NumberRange.new(.82,1.29)
  end
- sparks.Parent=root;sparks:Emit(style and style.count or prism and 20 or residual and 9 or orbital and 10 or crystal and 15 or 8)
+ sparks.Parent=root;sparks:Emit(math.max(1,math.floor((style and style.count or prism and 20 or residual and 9 or orbital and 10 or crystal and 15 or 8)*(density or 1)+.5)))
  -- Keep impact signatures distinct: cuts have a short directional snap;
  -- mineral and ice release pinpricks; heavy attacks shed dark debris.
  local fast=kind=='Gridcutter' or kind=='Halver' or kind=='Scrap' or kind=='Starforge'
@@ -7857,7 +7887,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
    accent.Acceleration=Vector3.new(0,-.35,0)
    accent.Lifetime=NumberRange.new(.97,1.47)
   end
-  accent:Emit(prism and 4 or dark and 5 or 3)
+  accent:Emit(math.max(1,math.floor((prism and 4 or dark and 5 or 3)*(density or 1)+.5)))
  end
  if crystal then
   -- A sharp release, drifting colored discs and lingering dust have separate tails.
@@ -7865,7 +7895,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
    diameter*.38,'glint',Enum.NormalId.Top,88)
   glints.Speed=NumberRange.new(9,19);glints.Drag=4.5
   glints.Acceleration=Vector3.new(0,-13,0);glints.Lifetime=NumberRange.new(.24,.65)
-  glints:Emit(5)
+  glints:Emit(math.max(1,math.floor((5)*(density or 1)+.5)))
   local motes=Instance.new('ParticleEmitter');motes.Name='CrystalAfterglow'
   EnergyDisc.configure(motes,diameter*.33,.30,1,0,.48)
   motes.Enabled=false;motes.Rate=0
@@ -7873,17 +7903,17 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
    ColorSequenceKeypoint.new(.45,color),ColorSequenceKeypoint.new(1,color:Lerp(Color3.fromRGB(88,36,141),.32))})
   motes.Speed=NumberRange.new(2,6);motes.Drag=3
   motes.Acceleration=Vector3.new(0,1.8,0);motes.SpreadAngle=Vector2.new(85,85)
-  motes.Lifetime=NumberRange.new(.65,1.3);motes.Parent=root;motes:Emit(6)
+  motes.Lifetime=NumberRange.new(.65,1.3);motes.Parent=root;motes:Emit(math.max(1,math.floor((6)*(density or 1)+.5)))
  end
  if heavy and impactCount+prismImpactCount<=8 then
   local white=Color3.fromRGB(255,244,197)
   local streak=EnergyDisc.accent(root,'FastImpactStreaks',color:Lerp(white,.46),diameter*.78,
    'streak',sparks.EmissionDirection,spread*.82)
   streak.Speed=NumberRange.new(21,38);streak.Lifetime=NumberRange.new(.18,.38)
-  streak:Emit(9)
+  streak:Emit(math.max(1,math.floor((9)*(density or 1)+.5)))
   local glints=EnergyDisc.accent(root,'LingeringImpactGlints',white,diameter*.35,'glint',sparks.EmissionDirection,108)
   glints.Speed=NumberRange.new(4,11);glints.Lifetime=NumberRange.new(.52,1.15)
-  glints.Drag=2.8;glints:Emit(7)
+  glints.Drag=2.8;glints:Emit(math.max(1,math.floor((7)*(density or 1)+.5)))
  end
  local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
  Debris:AddItem(root,saleParent and 1.59 or stoneColor and crystal and 2.35 or residual and 2.7 or 1.4)
@@ -7897,14 +7927,14 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  dust.Lifetime=crystal and NumberRange.new(.32,.78) or NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
  dust.Acceleration=Vector3.new(0,1.1,0)
- dust.Parent=root;dust:Emit(dustCount)
+ dust.Parent=root;dust:Emit(math.max(1,math.floor((dustCount)*(density or 1)+.5)))
  if crystal and stoneColor then
   local fine=Instance.new('ParticleEmitter');fine.Name='LingeringOreDust'
   EnergyDisc.configure(fine,math.clamp(diameter*.20,.13,.24),.34,.68,1.25,.28)
   RockFinish.configureDust(fine,color,true)
   fine.Enabled=false;fine.Rate=0;fine.EmissionDirection=Enum.NormalId.Top;fine.SpreadAngle=Vector2.new(65,65)
   fine.Lifetime=NumberRange.new(1.24,2.18);fine.Speed=NumberRange.new(1,3);fine.Drag=2.5
-  fine.Acceleration=Vector3.new(0,.65,0);fine.Parent=root;fine:Emit(10)
+  fine.Acceleration=Vector3.new(0,.65,0);fine.Parent=root;fine:Emit(math.max(1,math.floor((10)*(density or 1)+.5)))
  end
 end
 
@@ -9529,6 +9559,104 @@ end)()
 local CrystalImpactView = (function()
 -- Local-only feedback. Rest poses and reward objects belong to other systems.
 local V={}
+local GeodeView=(function()
+-- Bounded cosmetic shells; authoritative attributes own every transition.
+local V={}
+function V.new(parent,audio,feedback,findFracture,cameraBeat)
+ local self={rigs={},count=0}
+ function self:remove(r)
+  local rig=self.rigs[r];if not rig then return end
+  if audio then audio:stopLoop(rig) end
+  rig.root:Destroy();r.shellModel=nil;self.rigs[r]=nil;self.count-=1
+ end
+ function self:update(r,now)
+  local source=r.source
+  local geode=source:GetAttribute('Kind')=='Geode'
+  local ready=source:GetAttribute('OpenReady')==true
+  local opening=source:GetAttribute('OpeningAt')
+  local broken=(source:GetAttribute('BreakSerial') or 0)>0
+  local progress=geode and (source:GetAttribute('CrackProgress') or 0) or (ready or opening) and 1 or 0
+  local near=r.restPose and BeamVFX.near(r.restPose.Position,100)
+  local rig=self.rigs[r]
+  if not near or broken or not (geode or ready or opening) then self:remove(r);return end
+  if not rig then
+   if self.count>=24 then return end
+   local template=findFracture(geode and 'Geode' or source:GetAttribute('CrystalCut') or 'Original')
+   if not template then return end -- Replicated templates can arrive after resources.
+   local root=Instance.new('Model');root.Name='OpeningRock';root.Parent=parent
+   rig={root=root,angle=0,lastProgress=progress,lastRecoil=source:GetAttribute('GeodeRecoilAt') or 0}
+   rig.halves={}
+   if template then
+    for index,name in ipairs({'Left','Right'}) do
+     local original=template:FindFirstChild(name)
+     if original then
+      local half=original:Clone();half.Anchored=true;half.CanCollide=false;half.CanQuery=false;half.CanTouch=false
+      half.Material=Enum.Material.Concrete;half.Color=r.stoneColor or r.view.Color;half.Parent=root
+      rig.halves[#rig.halves+1]={part=half,side=index==1 and -1 or 1,
+       size=original:GetAttribute('SizeRatio'),center=original:GetAttribute('CenterRatio')}
+     end
+    end
+   end
+   local core=Instance.new('Part');core.Name='LuminousSeam';core.Shape=Enum.PartType.Ball
+   core.Anchored=true;core.CanCollide=false;core.CanQuery=false;core.CanTouch=false
+   core.Material=Enum.Material.Neon;core.Color=r.baseColor;core.CastShadow=false;core.Parent=root;rig.core=core
+   local glow=Instance.new('PointLight');glow.Color=r.baseColor;glow.Shadows=false;glow.Parent=core;rig.glow=glow
+   local halo=Instance.new('BillboardGui');halo.Name='ReadyGlow';halo.Size=UDim2.fromScale(9,9);halo.AlwaysOnTop=false
+   halo.Adornee=core;halo.LightInfluence=0;halo.MaxDistance=95;halo.Parent=core;rig.halo=halo
+   local image=Instance.new('ImageLabel');image.BackgroundTransparency=1;image.Size=UDim2.fromScale(1,1)
+   image.Image='rbxasset://textures/particles/flare_main.dds';image.ImageColor3=r.baseColor;image.Parent=halo;rig.image=image
+   self.rigs[r]=rig;r.shellModel=root;self.count+=1
+  end
+  local player=game:GetService('Players').LocalPlayer
+  local lowFlash=BeamVFX.reduced() or player and player:GetAttribute('ReducedFlashing')==true
+  local target=geode and (progress>0 and .025+.40*progress or 0) or .23
+  local recoil=source:GetAttribute('GeodeRecoilAt') or 0
+  if recoil>rig.lastRecoil then
+   rig.lastRecoil=recoil
+   if now-recoil<.4 then
+    audio:play('geode_reject',r.restPose.Position)
+    feedback:seamBurst(r,now,.65)
+    cameraBeat('HeavySplit',r.restPose.Position,now,.85)
+   end
+  end
+  local dt=math.min(.1,math.max(0,now-(rig.lastAt or now)));rig.lastAt=now
+  rig.angle+=(target-rig.angle)*(1-math.exp(-dt*(target<rig.angle and 30 or 12)))
+  local size=r.view.Size
+  local frame=r.restPose
+  local hinge=frame*CFrame.new(0,-size.Y*.5,0)
+  for _,half in ipairs(rig.halves) do
+   half.part.Size=size*half.size
+   half.part.CFrame=hinge*CFrame.Angles(0,0,-half.side*rig.angle)*CFrame.new(size*half.center+Vector3.yAxis*size.Y*.5)
+   half.part.Transparency=0
+  end
+  if #rig.halves==2 then r.view.Transparency=1;if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,1) end end
+  local pulse=lowFlash and 1 or .92+.08*math.sin(now*2.7)
+  rig.core.Size=size*(geode and .74 or .66);rig.core.CFrame=frame
+  rig.core.Transparency=progress>0 and .12 or 1
+  rig.glow.Range=(ready or opening) and 18 or 8
+  rig.glow.Brightness=(ready or opening) and (lowFlash and .8 or 2.8)*pulse or progress*.6
+  rig.halo.Enabled=ready or opening~=nil;rig.image.ImageTransparency=lowFlash and .82 or .48+.12*(1-pulse)
+  if (ready or opening) and BeamVFX.near(frame.Position,60) then audio:setLoop(rig,'gem_ready',frame.Position,.7,geode and .77 or 1)
+  else audio:stopLoop(rig) end
+  if opening and rig.opening~=opening then
+   rig.opening=opening
+   if opening>now then audio:play(geode and 'geode_windup' or 'gem_reveal',frame.Position,{level=.7}) end
+  end
+  if geode and progress>rig.lastProgress+.045 and now>=(rig.nextDust or 0) then
+   rig.nextDust=now+.48;rig.lastProgress=progress
+   feedback:seamBurst(r,now,.20)
+   audio:play('geode_crack',frame.Position,{pitch=.82+progress*.27,level=.65})
+  elseif progress<rig.lastProgress then rig.lastProgress=progress end
+ end
+ function self:destroy()
+  local all={};for r in pairs(self.rigs) do all[#all+1]=r end
+  for _,r in ipairs(all) do self:remove(r) end
+ end
+ return self
+end
+return V
+
+end)()
 local HOT=Color3.fromRGB(255,249,216)
 local CHAR=Color3.new(0,0,0)
 local EMBER=Color3.fromRGB(255,27,59)
@@ -9578,11 +9706,11 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
   end
  end
- local function releaseSparks(point,ground,oreColor,strength,now)
+ local function releaseSparks(point,ground,oreColor,strength,now,count)
   local player=Players.LocalPlayer
   local lowFlash=player and player:GetAttribute('ReducedFlashing')==true
   local heading=variation:NextNumber(0,2*math.pi)
-  for i=1,8 do
+  for i=1,count or 8 do
    if #self.sparks>=32 then break end
    local streak=i<=5
    local angle=heading+i*2.39996+variation:NextNumber(-.70,.70)
@@ -9603,6 +9731,16 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    }
   end
  end
+ function self:seamBurst(r,now,strength)
+  local point=r.restPose.Position+Vector3.yAxis*r.view.Size.Y*.22
+  local ground=r.source:GetAttribute('GroundY') or point.Y-3
+  self:chips(now,point,Vector3.yAxis,r.view,strength>.4 and 4 or 1,ground)
+  if not BeamVFX.reduced() then
+   releaseSparks(point,ground,r.baseColor,strength,now,2)
+   RoleVisuals.ImpactParticles(point,r.baseColor,strength,'CrystalBreak',nil,r.stoneColor,nil,strength>.4 and .45 or .16)
+  end
+ end
+ self.openings=GeodeView.new(parent,audio,self,findFracture,onCameraBeat)
  local function sparkPosition(s,t)
   local travel=(1-math.exp(-2.4*t))/2.4
   local bend=math.sin(s.phase+t*s.frequency)-math.sin(s.phase)
@@ -9682,7 +9820,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   end
  end
  local function openHalves(r,frame,size,now,reduced)
-  local cut=r.source:GetAttribute('CrystalCut')
+  local cut=r.source:GetAttribute('Kind')=='Geode' and 'Geode' or r.source:GetAttribute('CrystalCut')
   local template=cut and findFracture and findFracture(cut)
   if not template then return end
   local left,right=template:FindFirstChild('Left'),template:FindFirstChild('Right')
@@ -9711,7 +9849,8 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-size.Y*.5
   local fullSize=s:GetAttribute('FullSize') or v.Size
   if type(fullSize)=='number' then fullSize=Vector3.one*fullSize end
-  local strength=if prism or nomad then math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
+  local geode=s:GetAttribute('Kind')=='Geode'
+  local strength=if geode then 3.2 elseif prism or nomad then math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
    else math.clamp(fullSize.Magnitude*.21,.9,2.45)
   local clusterSize=prism and (s:GetAttribute('BlastClusterSize') or 1) or 1
   local ordinaryStone=s:GetAttribute('CargoReward')=='Stone' and not prism and not nomad
@@ -9723,7 +9862,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   if audio and not nomad then
    local volume=owned and 1 or .62
    if not prismReceipt then
-    audio:play(prism and 'ramiel_blast' or 'crystal_split',point,
+    audio:play(geode and 'geode_break' or prism and 'ramiel_blast' or 'crystal_split',point,
      {level=volume,rockSize=(fullSize.X*fullSize.Y*fullSize.Z)^(1/3)})
    end
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
@@ -9901,6 +10040,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   end
  end
  function self:destroy()
+  self.openings:destroy()
   for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces)
   for _,s in ipairs(self.sparks) do s.p:Destroy() end;table.clear(self.sparks)
   for _,half in ipairs(self.fractures) do half.p:Destroy() end;table.clear(self.fractures)
@@ -14771,12 +14911,13 @@ function V.clearSelectionFlash(r)
  if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,r.view.Transparency) end
 end
 
-function V.attackOutlines(records,_camera,now,steady,selection,strength,width)
+function V.attackOutlines(records,_camera,now,steady,selection,strength,width,focusId)
  for _,r in pairs(records) do
   local outline=r.rockOutline
-  local visible=not r.visual.broken and r.view.Parent and r.view.Transparency<1
+  local visible=not r.visual.broken and r.view.Parent and (r.shellModel~=nil or r.view.Transparency<1)
    and (r.view.LocalTransparencyModifier or 0)<1
-  local attacked=visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
+  local focused=visible and focusId==r.id
+  local attacked=focused or visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
   local selected=visible and selection and r.source:GetAttribute('FieldId')==selection.field
    and Mining.selectorContains(selection.point,(width or selection.width)*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
   if selected and strength>0 then
@@ -14789,10 +14930,12 @@ function V.attackOutlines(records,_camera,now,steady,selection,strength,width)
   else
    if not outline then
     outline=Instance.new('Highlight');outline.Name='MiningRockFeedback'
-    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.Adornee=r.view
+    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.Adornee=r.shellModel or r.view
     outline.OutlineColor=r.baseColor:Lerp(white,.66);outline.FillColor=Color3.new(1,1,1)
     outline.Parent=r.view;r.rockOutline=outline
    end
+   outline.Adornee=r.shellModel or r.view
+   outline.OutlineColor=focused and Color3.fromRGB(255,210,102) or r.baseColor:Lerp(white,.66)
    r.outlineStart=r.outlineStart or now
    local wave=steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)
    outline.OutlineTransparency=.50-.43*wave
@@ -17550,6 +17693,20 @@ function V:canReachStarterPlot()
  local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
  return point~=nil and Mining.selectorInRange(root.Position,point)
 end
+function V:readyRock(resources)
+ self.ready=nil
+ local root=self.options.player.Character and self.options.player.Character:FindFirstChild('HumanoidRootPart')
+ if not root then return nil end
+ local best=Mining.OPEN_REACH
+ for _,r in pairs(resources) do
+  local s=r.source
+  if s:GetAttribute('OpenReady') and s:GetAttribute('OpenOwner')==self.options.player.UserId and not s:GetAttribute('OpeningAt') then
+   local distance=(s.Position-root.Position).Magnitude
+   if distance<best then self.ready=r;best=distance end
+  end
+ end
+ return self.ready
+end
 function V:aimPreview(ray)
  local point,id,leadId,inRange=self:aim(ray)
  local profile=self.options.profile()
@@ -17561,6 +17718,20 @@ function V:aimPreview(ray)
  if not inRange then
   if self.options.notify then self.options.notify('Move closer to select that area.') end
   return true
+ end
+ local pin=self.options.player:GetAttribute('MA_Selector')
+ local selectedField=self.options.player:GetAttribute('MA_SelectorField')
+ if not self.draft and leadId and pin and selectedField==id then
+  local width=self.options.player:GetAttribute('MA_SelectorWidth') or Workshop.selectorWidth(profile)
+  -- The selected resource, rather than the projected floor ray, determines membership.
+  local rock
+  for _,node in ipairs(self.options.world:GetDescendants()) do
+   if node:IsA('BasePart') and node:GetAttribute('ResourceId')==leadId then rock=node;break end
+  end
+  if rock and Mining.selectorContains(pin,width*.5,rock:GetAttribute('FullPosition') or rock.Position) then
+   self.options.command:FireServer('FocusResource',{resourceId=leadId,runId=profile.run.id})
+   return true
+  end
  end
  local width=Workshop.selectorWidth(profile)
  local draft=self.draft
@@ -18785,8 +18956,9 @@ local function registerResource(source)
  for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
  view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
  local stoneColor,stoneGradient
- if source:GetAttribute('Kind')=='Crystal' and (source:GetAttribute('BreakSerial') or 0)==0 then
+ if (source:GetAttribute('Kind')=='Crystal' or source:GetAttribute('Kind')=='Geode') and (source:GetAttribute('BreakSerial') or 0)==0 then
   stoneColor,stoneGradient=RockFinish.apply(view,source.Color)
+  if source:GetAttribute('Kind')=='Geode' then stoneColor=stoneColor:Lerp(source.Color,.09);view.Color=stoneColor end
  end
  view.Parent=localFX;hidePart(source)
  if source:GetAttribute('Kind')=='Junk' then
@@ -18864,7 +19036,7 @@ end
 connect(world.DescendantRemoving,function(source)
  pendingDroneSources[source]=nil
  if drones[source] then destroyDrone(drones[source]);drones[source]=nil end
- if resources[source] then rockDamage.feedback:forget(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
+ if resources[source] then rockDamage.feedback.openings:remove(resources[source]);rockDamage.feedback:forget(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
  if turrets[source] then turretIndex[tostring(source:GetAttribute('TurretId'))]=nil;presentation:destroyTurret(turrets[source]);turrets[source]=nil end
  if observed[source] then observed[source]:Disconnect();observed[source]=nil end
  hiddenParts[source]=nil
@@ -18933,9 +19105,9 @@ local function renderResource(r,now)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
-  local shape=quarry and Feel.crystalStageShape(stage,stageCount,full)
+  local shape=s:GetAttribute('Kind')=='Geode' and 1 or quarry and Feel.crystalStageShape(stage,stageCount,full)
    or s:GetAttribute('ZoneName') and Feel.crystalStageShape(stage,stageCount) or period
-  local displaySize=full*math.max(.005,growth)*shape*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
+  local displaySize=full*math.max(.005,growth)*shape*(s:GetAttribute('Kind')=='Geode' and Vector3.one or Feel.rockShape(s:GetAttribute('SliceScale'),heat))
   view.Size=displaySize*(r.damageScale or Vector3.one)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
   local pos=start:Lerp(final,growth)
@@ -18948,6 +19120,7 @@ local function renderResource(r,now)
     if now<spawnAt then view.Transparency=1 end
    end
   end
+  if s:GetAttribute('Kind')=='Geode' then frame=CFrame.new(pos) end
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
@@ -19468,6 +19641,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
+  rockDamage.feedback.openings:update(r,now)
   if r.modifiers~=0 or r.modifierFX then RockModifierView.rock(r,now,lowFlash,fracture) end
   if r.stoneGradient then RockFinish.veins(r,now,reducedVeins,stillVeins) end
  end
@@ -19504,7 +19678,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
   local click,flash=selectorView:flashState()
   local draft,width,strength=selectorView:previewState()
   RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,
-   click or draft,click and flash or strength,not click and width or nil)
+   click or draft,click and flash or strength,not click and width or nil,(player:GetAttribute('MA_SelectorFocus') or ''):match('^[^:]+:(.+)$'))
  end
  presentation:update(dt,now)
  laserShowcase:step(now,dt)
@@ -19647,6 +19821,7 @@ local mouse=player:GetMouse()
   end
   if selectorView.draft then
    if not selectorView.pending then return 'Confirm plot' end
+  elseif selectorView:readyRock(resources) then return 'Break '..(selectorView.ready.source:GetAttribute('Kind')=='Geode' and 'geode' or 'gem')
   elseif player:GetAttribute('MA_OrePickup') then return 'Pick up rock' end
  end
  pickupView.pickupFocus=function()
@@ -19655,6 +19830,9 @@ local mouse=player:GetMouse()
  selectorView.performFieldAction=function()
   local action=available()
   if action=='Confirm plot' then return selectorView:confirm() end
+  if action=='Break gem' or action=='Break geode' then
+   command:FireServer('OpenResource',{resourceId=selectorView.ready.id,runId=profile.run.id});return true
+  end
   if action=='Pick up rock' then
    command:FireServer('PickupOre',player:GetAttribute('MA_OrePickup'))
    return true

@@ -1,5 +1,6 @@
 -- Local-only feedback. Rest poses and reward objects belong to other systems.
 local V={}
+local GeodeView=require('./GeodeView')
 local HOT=Color3.fromRGB(255,249,216)
 local CHAR=Color3.new(0,0,0)
 local EMBER=Color3.fromRGB(255,27,59)
@@ -49,11 +50,11 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
   end
  end
- local function releaseSparks(point,ground,oreColor,strength,now)
+ local function releaseSparks(point,ground,oreColor,strength,now,count)
   local player=Players.LocalPlayer
   local lowFlash=player and player:GetAttribute('ReducedFlashing')==true
   local heading=variation:NextNumber(0,2*math.pi)
-  for i=1,8 do
+  for i=1,count or 8 do
    if #self.sparks>=32 then break end
    local streak=i<=5
    local angle=heading+i*2.39996+variation:NextNumber(-.70,.70)
@@ -74,6 +75,16 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    }
   end
  end
+ function self:seamBurst(r,now,strength)
+  local point=r.restPose.Position+Vector3.yAxis*r.view.Size.Y*.22
+  local ground=r.source:GetAttribute('GroundY') or point.Y-3
+  self:chips(now,point,Vector3.yAxis,r.view,strength>.4 and 4 or 1,ground)
+  if not BeamVFX.reduced() then
+   releaseSparks(point,ground,r.baseColor,strength,now,2)
+   RoleVisuals.ImpactParticles(point,r.baseColor,strength,'CrystalBreak',nil,r.stoneColor,nil,strength>.4 and .45 or .16)
+  end
+ end
+ self.openings=GeodeView.new(parent,audio,self,findFracture,onCameraBeat)
  local function sparkPosition(s,t)
   local travel=(1-math.exp(-2.4*t))/2.4
   local bend=math.sin(s.phase+t*s.frequency)-math.sin(s.phase)
@@ -153,7 +164,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   end
  end
  local function openHalves(r,frame,size,now,reduced)
-  local cut=r.source:GetAttribute('CrystalCut')
+  local cut=r.source:GetAttribute('Kind')=='Geode' and 'Geode' or r.source:GetAttribute('CrystalCut')
   local template=cut and findFracture and findFracture(cut)
   if not template then return end
   local left,right=template:FindFirstChild('Left'),template:FindFirstChild('Right')
@@ -182,7 +193,8 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-size.Y*.5
   local fullSize=s:GetAttribute('FullSize') or v.Size
   if type(fullSize)=='number' then fullSize=Vector3.one*fullSize end
-  local strength=if prism or nomad then math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
+  local geode=s:GetAttribute('Kind')=='Geode'
+  local strength=if geode then 3.2 elseif prism or nomad then math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
    else math.clamp(fullSize.Magnitude*.21,.9,2.45)
   local clusterSize=prism and (s:GetAttribute('BlastClusterSize') or 1) or 1
   local ordinaryStone=s:GetAttribute('CargoReward')=='Stone' and not prism and not nomad
@@ -194,7 +206,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   if audio and not nomad then
    local volume=owned and 1 or .62
    if not prismReceipt then
-    audio:play(prism and 'ramiel_blast' or 'crystal_split',point,
+    audio:play(geode and 'geode_break' or prism and 'ramiel_blast' or 'crystal_split',point,
      {level=volume,rockSize=(fullSize.X*fullSize.Y*fullSize.Z)^(1/3)})
    end
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
@@ -372,6 +384,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   end
  end
  function self:destroy()
+  self.openings:destroy()
   for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces)
   for _,s in ipairs(self.sparks) do s.p:Destroy() end;table.clear(self.sparks)
   for _,half in ipairs(self.fractures) do half.p:Destroy() end;table.clear(self.fractures)

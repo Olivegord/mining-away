@@ -118,6 +118,17 @@ function HUD.new(refs: any)
  refs.cargoText.Parent=self.cargo;refs.cargoText.TextColor3=C.text;refs.cargoText.TextWrapped=false;refs.cargoText.Font=Enum.Font.SourceSansBold
  refs.cargoText.TextXAlignment=Enum.TextXAlignment.Right;refs.cargoText.TextTruncate=Enum.TextTruncate.AtEnd
  refs.cargoTrack.Visible=false
+ self.cargoSlots={}
+ for i=1,10 do
+  local slot=frame(self.cargo,'Capacity'..i,C.track)
+  slot.ClipsDescendants=true;slot.BackgroundTransparency=.2
+  local fill=frame(slot,'Filled',C.blue)
+  fill.Size=UDim2.fromScale(0,1)
+  self.cargoSlots[i]={track=slot,fill=fill}
+ end
+ self.sellGuide=text(self.cargo,'SellGuide',22,34,158,22,16,C.gold)
+ self.sellArrow=text(self.cargo,'SellDirection',0,34,18,22,18,C.gold)
+ self.sellArrow.Text='▲';self.sellArrow.TextXAlignment=Enum.TextXAlignment.Center
  self.battery=frame(refs.resources,'BatteryCounter',C.panel);plain(self.battery);self.battery.Visible=false
  text(self.battery,'Caption',0,0,78,24,18,C.muted).Text='Battery'
  self.batteryValue=text(self.battery,'Charge',78,0,82,24,18,C.text);self.batteryValue.TextXAlignment=Enum.TextXAlignment.Right
@@ -262,6 +273,75 @@ function HUD:pendingSaleBalances(profile,now)
  end
  return offset,visible
 end
+
+-- Use the same profile snapshot as the numerical counter; separate replicated
+-- attributes can arrive on the other side of a pickup or sale.
+function HUD.backpackState(profile)
+ if not profile or not profile.run then return 0,10 end
+ local amount=tonumber(profile.cargoUnits)
+ if not amount then
+  amount=0
+  for _,count in pairs(profile.run.cargo or {}) do
+   if type(count)=='number' then amount+=math.max(0,count) end
+  end
+ end
+ return math.max(0,amount),math.max(1,tonumber(profile.capacity) or 10)
+end
+
+function HUD:updateBackpack(profile,player,world,now,width,fighting)
+ local amount,capacity=HUD.backpackState(profile)
+ local ratio=math.clamp(amount/capacity,0,1)
+ local full=amount>=capacity
+ local runId=profile and profile.run and profile.run.id
+ if self.bagRun==runId and self.bagAmount and amount>self.bagAmount then
+  self.bagPickupAt=now;self.bagBefore=self.bagAmount
+ elseif self.bagRun~=runId or (self.bagAmount and amount<self.bagAmount) then
+  self.bagPickupAt=nil
+ end
+ self.bagRun=runId;self.bagAmount=amount
+ local lowFlash=player:GetAttribute('ReducedFlashing')==true
+ local glow=not lowFlash and math.clamp(1-(now-(self.bagPickupAt or -10))/.65,0,1) or 0
+ local color=full and C.gold or ratio>=.8 and Color3.fromRGB(245,180,90) or C.blue
+ -- Ten bounded segments remain legible even after large capacity upgrades.
+ for i,slot in ipairs(self.cargoSlots) do
+  local segmentWidth=(width-3*9)/10
+  slot.track.Position=UDim2.fromOffset((i-1)*(segmentWidth+3),25)
+  slot.track.Size=UDim2.fromOffset(segmentWidth,7)
+  slot.fill.Size=UDim2.fromScale(math.clamp(ratio*10-(i-1),0,1),1)
+  local newFill=i>math.floor((self.bagBefore or amount)/capacity*10)
+  slot.fill.BackgroundColor3=color:Lerp(C.text,newFill and glow*.8 or 0)
+ end
+ self.refs.cargoText.TextColor3=full and C.gold or C.text
+ local target=world:GetAttribute('PackCounterPosition')
+ local character=player.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ local converter=workspace:FindFirstChild('Converter')
+ if root and converter and converter:IsA('BasePart')
+  and (typeof(target)~='Vector3' or (converter.Position-root.Position).Magnitude<(target-root.Position).Magnitude) then
+  target=converter.Position
+ end
+ local guide=ratio>=.8 and not fighting and root~=nil and typeof(target)=='Vector3'
+ self.sellGuide.Visible=guide;self.sellArrow.Visible=false
+ if guide then
+  local delta=target-root.Position
+  local distance=math.floor(delta.Magnitude+.5)
+  self.sellGuide.Text=distance<=18 and 'At sell counter' or 'Sell ore · '..distance..' studs'
+  self.sellGuide.TextColor3=full and C.gold or C.muted
+  local camera=workspace.CurrentCamera
+  if camera and distance>18 then
+   local forward=Vector3.new(camera.CFrame.LookVector.X,0,camera.CFrame.LookVector.Z)
+   if forward.Magnitude>.01 then
+    forward=forward.Unit
+    local right=Vector3.new(-forward.Z,0,forward.X)
+    self.sellArrow.Rotation=math.deg(math.atan2(delta:Dot(right),delta:Dot(forward)))
+    self.sellArrow.Visible=true
+   end
+  end
+  self.sellGuide.Position=UDim2.fromOffset(self.sellArrow.Visible and 22 or 0,34)
+  self.sellGuide.Size=UDim2.fromOffset(width-(self.sellArrow.Visible and 22 or 0),22)
+ end
+ return guide and 58 or 36
+end
 function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local r=self.refs;local w=view.X
  local hidden=r.hidden()
@@ -293,14 +373,16 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local batteryVisible=activity.maxBattery>0
  local growth=p and p.prestigePreview
  local growthVisible=growth~=nil and type(growth.saleRequired)=='number'
- local height=(shown+1+(batteryVisible and 1 or 0)+(growthVisible and 1 or 0))*rowHeight
+ local cargoHeight=self:updateBackpack(p,Players.LocalPlayer,world,now,width,fighting)
+ local afterCargo=shown*rowHeight+cargoHeight
+ local height=afterCargo+((batteryVisible and 1 or 0)+(growthVisible and 1 or 0))*rowHeight
  local sideY=8 -- Keep the flat list above the mobile movement controls.
  r.resources.Position=UDim2.fromOffset(0,sideY);r.resources.Size=UDim2.fromOffset(width,height);r.resources.Visible=not hidden
- self.cargo.Position=UDim2.fromOffset(0,shown*rowHeight);self.cargo.Size=UDim2.fromOffset(width,rowHeight)
+ self.cargo.Position=UDim2.fromOffset(0,shown*rowHeight);self.cargo.Size=UDim2.fromOffset(width,cargoHeight)
  self.battery.Visible=batteryVisible
- self.battery.Position=UDim2.fromOffset(0,(shown+1)*rowHeight);self.battery.Size=UDim2.fromOffset(width,rowHeight)
+ self.battery.Position=UDim2.fromOffset(0,afterCargo);self.battery.Size=UDim2.fromOffset(width,rowHeight)
  self.growth.Visible=growthVisible
- self.growth.Position=UDim2.fromOffset(0,(shown+1+(batteryVisible and 1 or 0))*rowHeight);self.growth.Size=UDim2.fromOffset(width,rowHeight)
+ self.growth.Position=UDim2.fromOffset(0,afterCargo+(batteryVisible and 1 or 0)*rowHeight);self.growth.Size=UDim2.fromOffset(width,rowHeight)
  if growthVisible then
   local fraction=math.clamp((growth.earnings or 0)/math.max(1,growth.saleRequired),0,1)
   self.growthValue.Text=growth.eligible and 'Ready' or tostring(math.floor(fraction*100))..'%'
@@ -310,10 +392,6 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.batteryValue.Text=activity.charging>0 and activity.charging..' charging' or activity.docking>0 and 'Docking' or charge..'%'
  self.batteryValue.TextColor3=activity.charging>0 and C.green or charge<25 and C.gold or C.text
  r.cargoText.Position=UDim2.fromOffset(78,0);r.cargoText.Size=UDim2.fromOffset(width-78,rowHeight);r.cargoText.TextSize=18
- local backpack=Players.LocalPlayer:GetAttribute('BackpackUnits') or 0
- local capacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 100
- local full=backpack>=capacity
- r.cargoText.TextColor3=full and C.gold or C.text
  local working=activity.assigned;local delivering=activity.delivering
  local pin=Players.LocalPlayer:GetAttribute('MA_Selector')
  local pinned=pin~=nil

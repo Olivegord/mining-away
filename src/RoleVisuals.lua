@@ -310,7 +310,7 @@ local impactStyles={
  GemReward={speed=NumberRange.new(9,22),spread=72,lift=-12,count=20,dust=0},
  Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
 }
-function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?,saleParent: Instance?)
+function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?,saleParent: Instance?,density: number?)
  local prism=kind=='PrismBlast'
  if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
@@ -344,7 +344,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
   sparks.Acceleration=Vector3.new(0,-1.7,0)
   sparks.Lifetime=NumberRange.new(.82,1.29)
  end
- sparks.Parent=root;sparks:Emit(style and style.count or prism and 20 or residual and 9 or orbital and 10 or crystal and 15 or 8)
+ sparks.Parent=root;sparks:Emit(math.max(1,math.floor((style and style.count or prism and 20 or residual and 9 or orbital and 10 or crystal and 15 or 8)*(density or 1)+.5)))
  -- Keep impact signatures distinct: cuts have a short directional snap;
  -- mineral and ice release pinpricks; heavy attacks shed dark debris.
  local fast=kind=='Gridcutter' or kind=='Halver' or kind=='Scrap' or kind=='Starforge'
@@ -359,7 +359,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
    accent.Acceleration=Vector3.new(0,-.35,0)
    accent.Lifetime=NumberRange.new(.97,1.47)
   end
-  accent:Emit(prism and 4 or dark and 5 or 3)
+  accent:Emit(math.max(1,math.floor((prism and 4 or dark and 5 or 3)*(density or 1)+.5)))
  end
  if crystal then
   -- A sharp release, drifting colored discs and lingering dust have separate tails.
@@ -367,7 +367,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
    diameter*.38,'glint',Enum.NormalId.Top,88)
   glints.Speed=NumberRange.new(9,19);glints.Drag=4.5
   glints.Acceleration=Vector3.new(0,-13,0);glints.Lifetime=NumberRange.new(.24,.65)
-  glints:Emit(5)
+  glints:Emit(math.max(1,math.floor((5)*(density or 1)+.5)))
   local motes=Instance.new('ParticleEmitter');motes.Name='CrystalAfterglow'
   EnergyDisc.configure(motes,diameter*.33,.30,1,0,.48)
   motes.Enabled=false;motes.Rate=0
@@ -375,17 +375,17 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
    ColorSequenceKeypoint.new(.45,color),ColorSequenceKeypoint.new(1,color:Lerp(Color3.fromRGB(88,36,141),.32))})
   motes.Speed=NumberRange.new(2,6);motes.Drag=3
   motes.Acceleration=Vector3.new(0,1.8,0);motes.SpreadAngle=Vector2.new(85,85)
-  motes.Lifetime=NumberRange.new(.65,1.3);motes.Parent=root;motes:Emit(6)
+  motes.Lifetime=NumberRange.new(.65,1.3);motes.Parent=root;motes:Emit(math.max(1,math.floor((6)*(density or 1)+.5)))
  end
  if heavy and impactCount+prismImpactCount<=8 then
   local white=Color3.fromRGB(255,244,197)
   local streak=EnergyDisc.accent(root,'FastImpactStreaks',color:Lerp(white,.46),diameter*.78,
    'streak',sparks.EmissionDirection,spread*.82)
   streak.Speed=NumberRange.new(21,38);streak.Lifetime=NumberRange.new(.18,.38)
-  streak:Emit(9)
+  streak:Emit(math.max(1,math.floor((9)*(density or 1)+.5)))
   local glints=EnergyDisc.accent(root,'LingeringImpactGlints',white,diameter*.35,'glint',sparks.EmissionDirection,108)
   glints.Speed=NumberRange.new(4,11);glints.Lifetime=NumberRange.new(.52,1.15)
-  glints.Drag=2.8;glints:Emit(7)
+  glints.Drag=2.8;glints:Emit(math.max(1,math.floor((7)*(density or 1)+.5)))
  end
  local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
  Debris:AddItem(root,saleParent and 1.59 or stoneColor and crystal and 2.35 or residual and 2.7 or 1.4)
@@ -399,14 +399,14 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  dust.Lifetime=crystal and NumberRange.new(.32,.78) or NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
  dust.Acceleration=Vector3.new(0,1.1,0)
- dust.Parent=root;dust:Emit(dustCount)
+ dust.Parent=root;dust:Emit(math.max(1,math.floor((dustCount)*(density or 1)+.5)))
  if crystal and stoneColor then
   local fine=Instance.new('ParticleEmitter');fine.Name='LingeringOreDust'
   EnergyDisc.configure(fine,math.clamp(diameter*.20,.13,.24),.34,.68,1.25,.28)
   RockFinish.configureDust(fine,color,true)
   fine.Enabled=false;fine.Rate=0;fine.EmissionDirection=Enum.NormalId.Top;fine.SpreadAngle=Vector2.new(65,65)
   fine.Lifetime=NumberRange.new(1.24,2.18);fine.Speed=NumberRange.new(1,3);fine.Drag=2.5
-  fine.Acceleration=Vector3.new(0,.65,0);fine.Parent=root;fine:Emit(10)
+  fine.Acceleration=Vector3.new(0,.65,0);fine.Parent=root;fine:Emit(math.max(1,math.floor((10)*(density or 1)+.5)))
  end
 end
 

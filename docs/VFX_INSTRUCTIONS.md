@@ -1,5 +1,11 @@
 # VFX instructions — owner feedback and implementation
 
+## November 16 — geode shells and ready rewards
+
+Geodes use two spherical native CSG halves sharing a lower hinge. Their dimensions stay fixed while the opening grows to about 24 degrees per half. The field stone finish is lightly shifted; the mineral-colored core appears through the opening. Progressive seams emit small counts of the existing chip, streak/ember, spark, glint, afterglow and dust families. Rejection reverses the hinge quickly and uses a distinct low impact cue plus bounded shake. A ready gem/geode has a large camera-facing glow, local light and spatial hum. E starts a 0.24-second gem or 0.85-second geode anticipation before the server releases the reward. Geodes use the stronger existing split camera envelope and a dedicated lower, longer break cue, followed by gem sounds. Reduced effects/flashing and reduced motion remain respected; loops and shells are cleaned up on removal and at range. No Fortnite audio is copied.
+
+The native Edit component check verifies actual spherical CSG, increasing hinge angle, unchanged size, one recoil cue, ready glow and the requested hum/windup calls with muted audio doubles. It does not establish live sound balance, multiplayer appearance or player satisfaction.
+
 ## November 16 — rock gallery, selected value and footer receipts
 
 The owner rejected the preceding separate-panel pass. Use a gallery in which each real rock has its name, final money value and modifier names directly beneath it. Before selling, click a rock to inspect its base money, actual rounded multiplier/bonus and named material rewards in one consistent detail area. Preview footer totals show the quoted complete bag; confirmation resets the cosmetic adding receipts to zero. Each currency retains its own stack, rule and total across the footer, with earlier addends rolled into the subtotal. Narrow screens scroll currencies horizontally. Bags over ten rendered pieces page through the gallery; the animation follows the active page automatically.

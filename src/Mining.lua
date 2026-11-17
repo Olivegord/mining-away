@@ -18,6 +18,31 @@ function M.nextSizeMask(first,second)
 end
 M.MASSIVE_CHANCE=.09
 M.MASSIVE_SCALE=1.38
+-- Geodes test sustained, accepted work after their first visible crack.
+M.GEODE_CHANCE=.045
+M.GEODE_WINDOW=4
+M.OPEN_REACH=16
+function M.geode(roll,hardness,ore)
+ local ordinary=M.fieldCrystal(roll,hardness,ore,3)
+ return {work=ordinary.work*8,ore=ordinary.ore,size=4.6+(roll-50)/50*1.4,stages=7}
+end
+function M.geodeProgress(r,amount,now)
+ local work=r.maxHP-10
+ if not r.geodeTestAt and r.hp-amount<=work*.90 then
+  r.geodeTestAt=now;r.geodeTestDamage=0
+  -- Even a huge single hit must hold the shell open through the power test.
+  return math.min(amount,math.max(0,r.hp-work*.90))
+ end
+ if r.geodeTestAt and not r.geodePassed then
+  r.geodeTestDamage=(r.geodeTestDamage or 0)+amount
+  return math.min(amount,math.max(0,r.hp-work*.20))
+ end
+ return amount
+end
+function M.geodeResult(r,now)
+ if not r.geodeTestAt or r.geodePassed or now-r.geodeTestAt<M.GEODE_WINDOW then return nil end
+ return (r.geodeTestDamage or 0)>= (r.maxHP-10)*.10*M.GEODE_WINDOW
+end
 local SELECTOR_GRID=2
 local DEPOT_ROUTE_RADIUS=54 -- Half the authored Crystal Run bed width.
 function M.selectorCenter(position,frame,size)

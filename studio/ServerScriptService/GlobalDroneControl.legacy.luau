@@ -2433,6 +2433,31 @@ function M.nextSizeMask(first,second)
 end
 M.MASSIVE_CHANCE=.09
 M.MASSIVE_SCALE=1.38
+-- Geodes test sustained, accepted work after their first visible crack.
+M.GEODE_CHANCE=.045
+M.GEODE_WINDOW=4
+M.OPEN_REACH=16
+function M.geode(roll,hardness,ore)
+ local ordinary=M.fieldCrystal(roll,hardness,ore,3)
+ return {work=ordinary.work*8,ore=ordinary.ore,size=4.6+(roll-50)/50*1.4,stages=7}
+end
+function M.geodeProgress(r,amount,now)
+ local work=r.maxHP-10
+ if not r.geodeTestAt and r.hp-amount<=work*.90 then
+  r.geodeTestAt=now;r.geodeTestDamage=0
+  -- Even a huge single hit must hold the shell open through the power test.
+  return math.min(amount,math.max(0,r.hp-work*.90))
+ end
+ if r.geodeTestAt and not r.geodePassed then
+  r.geodeTestDamage=(r.geodeTestDamage or 0)+amount
+  return math.min(amount,math.max(0,r.hp-work*.20))
+ end
+ return amount
+end
+function M.geodeResult(r,now)
+ if not r.geodeTestAt or r.geodePassed or now-r.geodeTestAt<M.GEODE_WINDOW then return nil end
+ return (r.geodeTestDamage or 0)>= (r.maxHP-10)*.10*M.GEODE_WINDOW
+end
 local SELECTOR_GRID=2
 local DEPOT_ROUTE_RADIUS=54 -- Half the authored Crystal Run bed width.
 function M.selectorCenter(position,frame,size)
@@ -9845,7 +9870,7 @@ local function sameRockType(d,r,allowCrewAssist: boolean?)
  -- Shared pin assignments and Aftershock may span roles within one crew.
  local role=DroneRoles.canonical(d.role)
  if r.clusterShot and r.clusterShot.drone~=d then return false end
- if role=='Nomad' and r.kind=='Geode' then return false end
+ if role=='Nomad' and r.kind=='Geode' and not r.field.cfg.ContinuousCrystals then return false end
  for id in pairs(r.slots) do
   local worker=drones[id]
   if not worker or worker.owner~=d.owner or (not allowCrewAssist and DroneRoles.canonical(worker.role)~=role) then return false end
@@ -10150,6 +10175,9 @@ if scene.runStart and scene.classicCrystal then
    end
   end
  end
+ local shell=Instance.new('Part');shell.Shape=Enum.PartType.Ball;shell.Size=Vector3.one*6
+ local geodeHalves=CrystalCuts.split(shell,'Geode');shell:Destroy()
+ if geodeHalves then geodeHalves.Parent=fractures end
  local originalHalves=CrystalCuts.splitOriginal(scene.classicCrystal)
  if originalHalves then originalHalves.Parent=fractures end
  table.insert(scene.crystalCuts.variants,'Original')
@@ -10182,7 +10210,7 @@ end
 scene.chargeIndicator=scene.chargingStation and scene.chargingStation.Parent:FindFirstChild('ChargeIndicator')
 local resourceSerial=0
 local function nodeUsage(field)
- local count=0;for _,r in ipairs(field.resources) do if not r.paid then count=count+(r.kind=='Geode' and 5 or 1) end end;return count
+ local count=0;for _,r in ipairs(field.resources) do if not r.paid then count=count+(r.kind=='Geode' and not field.cfg.ContinuousCrystals and 5 or 1) end end;return count
 end
 local function respawnRate(field: any)
  local count=0
@@ -10196,6 +10224,7 @@ local function respawnRate(field: any)
 end
 function scene.poseResource(r)
  local cfg,part=r.field.cfg,r.part
+ if r.kind=='Geode' then part.Size=r.fullSize;return end
  local scale=cfg.ContinuousCrystals and Feel.crystalStageShape(r.stage,r.stageCount,r.fullSize)
   or cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
  part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
@@ -10213,10 +10242,10 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  if variant then part:SetAttribute('CrystalCut',variant) end
  if field.cfg.ContinuousCrystals then part:SetAttribute('QuarryCrystal',true) end
  if part:IsA('Part') then
-  part.Shape=Enum.PartType.Block
+  part.Shape=kind=='Geode' and Enum.PartType.Ball or Enum.PartType.Block
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  end
- part:SetAttribute('CubicRock',not original)
+ part:SetAttribute('CubicRock',not original and kind~='Geode')
  local reference=field.cfg.ReferenceCrystals==true and kind=='Crystal'
  local shell=kind=='Geode';local size=visualSize or (reference and 3 or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1))
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
@@ -10354,7 +10383,8 @@ scene.modifierRandom=Random.new()
 local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOnly,vacancy)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((not field.cfg.SelectionOnly and field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
- if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
+ if kind=='Geode' and not field.cfg.ContinuousCrystals and field.cfg.Count-usage<5 then kind='Crystal' end
+ if field.cfg.ContinuousCrystals and not forceKind and not prepareOnly and not plan and not (vacancy and vacancy.landmark) and seed:NextNumber()<Mining.GEODE_CHANCE then kind='Geode' end
  local reference=field.cfg.ReferenceCrystals==true and kind=='Crystal'
  local boulder=not field.cfg.ReferenceCrystals and not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
  local clearance=RaycastParams.new();clearance.FilterType=Enum.RaycastFilterType.Exclude
@@ -10362,15 +10392,16 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  for _,player in ipairs(Players:GetPlayers()) do if player.Character then table.insert(excluded,player.Character) end end
  clearance.FilterDescendantsInstances=excluded
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
- local continuous=reference and field.cfg.ContinuousCrystals
+ local continuous=field.cfg.ContinuousCrystals==true
  local landmark=vacancy and vacancy.landmark
  local mineral=plan and plan.mineral or vacancy and vacancy.landmarkMineral
  if not mineral then
   local roll=seed:NextInteger(landmark and 97 or 50,100)
-  mineral=if continuous then Mining.fieldCrystal(roll,field.cfg.Hardness,field.cfg.Ore,field.cfg.Cracks or 3)
+  mineral=if continuous and kind=='Geode' then Mining.geode(roll,field.cfg.Hardness,field.cfg.Ore)
+   elseif continuous then Mining.fieldCrystal(roll,field.cfg.Hardness,field.cfg.Ore,field.cfg.Cracks or 3)
    elseif reference and field.cfg.SelectionOnly and field.cfg.Hardness>1 then Mining.deepCrystal(roll,field.cfg.Hardness,field.cfg.Ore)
    else Mining.resource(roll,kind,field.cfg.Hardness)
-  if continuous then
+  if continuous and kind~='Geode' then
    mineral.large=math.clamp((roll-74)/26,0,1)
    mineral.spire=roll%3==0
    mineral.poseSeed=seed:NextInteger(1,1000000)
@@ -10390,12 +10421,13 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  local visualSize=ordinarySize*(massive and Mining.MASSIVE_SCALE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
- if continuous then
+ if continuous and kind~='Geode' then
   local cut=mineral.cut and scene.crystalCuts[mineral.cut]
   if cut then dimensions*=CrystalCuts.proportions(cut,original) end
   dimensions=CrystalCuts.fieldSize(dimensions,mineral.large,mineral.spire,mineral.landmark)
  end
- local radius=if continuous then ResourcePlacement.leaningRadius(dimensions.X,dimensions.Y,dimensions.Z,Feel.rockLean(mineral.poseSeed))
+ local radius=if continuous and kind=='Geode' then dimensions.X*.56
+  elseif continuous then ResourcePlacement.leaningRadius(dimensions.X,dimensions.Y,dimensions.Z,Feel.rockLean(mineral.poseSeed))
   else ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,reference)
  local patch=field.part
  local preferred,bounds=landmark,nil
@@ -10471,7 +10503,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
   field.landmarkReserves[landmark]=selected
   resource.landmark=landmark;resource.landmarkMineral=mineral
  end
- return true,kind=='Geode' and 5 or 1,resource
+ return true,kind=='Geode' and not continuous and 5 or 1,resource
 end
 function scene.respawnEarlier(a,b) return a.at<b.at end
 function scene.rockInSquare(square,rock)
@@ -10752,7 +10784,8 @@ local function pendingOre(p)
  return units,count
 end
 local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
- local p=profiles[d.owner];if not healthy(p) or not playerCanMine(p,r.field) or r.kind=='Geode' then return end
+ local p=profiles[d.owner];if not healthy(p) or not playerCanMine(p,r.field) or (r.kind=='Geode' and not r.manualOpened) then return end
+ if r.gemReward and not r.manualOpened then return end
  local profile=data(p);local material=r.field.cfg.Material or r.field.cfg.Key or r.field.cfg.Name
  if r.field.cfg.SelectionOnly and Workshop.CRYSTAL_BY_MATERIAL[material] then
   if r.cargoProduced then return end
@@ -10761,7 +10794,8 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
   local specialist=specialistCut and DroneCatalog.Types[d.role]
   local amount=r.ore*(specialist and specialist.Yield or 1)*d.stats.yieldMultiplier*tier.value+(profile.run.yieldRemainders[material] or 0)
-  local crystal=math.random()<Workshop.CRYSTAL_CHANCE
+  local crystal=r.gemReward
+  if crystal==nil then crystal=math.random()<Workshop.CRYSTAL_CHANCE end
   local mass=math.max(1,math.floor(amount/tier.value+.5))
   local dust=math.min(1000000,mass*(crystal and 100 or Workshop.PITY_PERCENT))
   local stoneUnits=crystal and 0 or math.min(1000000,mass*100)
@@ -11382,7 +11416,7 @@ end
 -- Resolve the full ray before any crystal shrinks or loses CanQuery.
 -- The same path drives the damage and the client beam endpoints.
 local function clusterEligible(d,p,rock,field)
- return rock.field==field and not rock.paid and rock.hp>0 and not rock.clusterShot
+ return rock.field==field and not rock.openReady and not rock.openingAt and not rock.paid and rock.hp>0 and not rock.clusterShot
   and rock.part.Parent and now>=rock.readyAt and rock.kind~='Geode'
   and (not d.squareJob or scene.rockInSquare(d.squareJob,rock))
   and playerCanMine(p,rock.field) and sameRockType(d,rock,d.squareJob~=nil and d.target==rock and rock.slots[d.id]~=nil)
@@ -11437,7 +11471,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if r.clusterShot and not clusterFinish then return false end
  local square=if clusterFinish then shot.square else d.squareJob
  if square and not scene.rockInSquare(square,r) then return false end
- if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not clusterFinish and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
+ if not healthy(p) or d.hp<=0 or r.openReady or r.openingAt or r.geodeRejectedOwner==d.owner or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not clusterFinish and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  local shared=square~=nil and not secondary and d.target==r and r.slots[d.id]~=nil
  if contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r,assist or shared) then return false end
  local recipient=d
@@ -11511,7 +11545,19 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local shapeChanged=false
  local revealed=nil
  local before=r.hp
- local broken=R.damage(r,amount)
+ if r.field.cfg.ContinuousCrystals and r.gemReward==nil then r.gemReward=r.kind=='Geode' or math.random()<Workshop.CRYSTAL_CHANCE end
+ if r.kind=='Geode' and r.field.cfg.ContinuousCrystals then
+  r.geodeAttemptOwner=d.owner;amount=Mining.geodeProgress(r,amount,now)
+ end
+ local waiting=r.gemReward and amount>=r.hp-1 and (r.kind~='Geode' or r.geodePassed)
+ local broken=R.damage(r,waiting and math.max(0,r.hp-1) or amount)
+ if waiting then
+  r.openReady=true;r.openOwner=d.owner;r.openRun=data(p).run.id
+  r.openActor={owner=d.owner,role=d.role,stats=Pro.clone(d.stats)}
+  r.openSpecialist=special==true or clusterFinish or (assist and recipient~=d)
+  r.part:SetAttribute('OpenReady',true);r.part:SetAttribute('OpenOwner',d.owner);r.part:SetAttribute('OpenReadyAt',now)
+ end
+ if r.kind=='Geode' then r.part:SetAttribute('CrackProgress',math.clamp(1-r.hp/(r.maxHP-10),0,1)) end
  local actual=r.paid and 0 or r.hp+10
  local nextStage=Feel.stage(actual,r.maxHP,r.stageCount)
  local fractured=nextStage>previous and not broken
@@ -11616,7 +11662,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
- if not clusterFinish then scene.reclaimBattery(assist and recipient or d,r,broken,abilityOrigin,contactKind) end
+ if not clusterFinish then scene.reclaimBattery(assist and recipient or d,r,broken or waiting,abilityOrigin,contactKind) end
  if broken then
   r.part:SetAttribute('BreakSerial',1);r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false;r.removeAt=now+2
   if r.kind=='Geode' then
@@ -11722,6 +11768,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    d.specialRecovery={part=r.part,serial=job.serial,startedAt=job.startedAt,duration=job.duration,impacted=true}
   end
  end
+ if waiting then scene.releaseOpenWorkers(r) end
  return true,broken,r.stage>previous
 end
 scene.clusterShots={}
@@ -11863,12 +11910,14 @@ end
 local function chooseResource(d: any,field: any,square: any?)
  local best,score,bestPriority=nil,math.huge,-math.huge
  local bestHelping,bestHealth,bestUsed,hasHelp=true,math.huge,math.huge,false
- local helpReady=square and d.squareHelpAt and now>=d.squareHelpAt
+ local focused=square and resources[square.directId]
+ if focused and (focused.paid or focused.openReady or focused.geodeRejectedOwner==d.owner or not focused.part.Parent) then square.directId=nil;focused=nil end
+ local helpReady=focused~=nil or square and d.squareHelpAt and now>=d.squareHelpAt
  local definition=DroneCatalog.Types[d.role]
  local chunkCycle=square and field.cfg.SelectionOnly and definition and not definition.Projectile
   and DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
  for _,r in ipairs(field.resources) do
-  if not r.paid and r.hp>0 and not r.clusterShot and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
+  if not r.openReady and not r.openingAt and r.geodeRejectedOwner~=d.owner and (not focused or r==focused) and not r.paid and r.hp>0 and not r.clusterShot and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
    and (not square or scene.rockInSquare(square,r)) then
    local used=0
    for _ in pairs(r.slots) do used+=1 end
@@ -11876,7 +11925,7 @@ local function chooseResource(d: any,field: any,square: any?)
    local healthRank=helping and -r.hp or r.hp
    if square and best and (helping and not bestHelping or helping==bestHelping
     and (healthRank>bestHealth or healthRank==bestHealth and used>bestUsed)) then continue end
-   local capacity=if square then 10 else r.limit
+   local capacity=if focused then math.max(10,#profiles[d.owner].drones) elseif square then 10 else r.limit
    if used<capacity and sameRockType(d,r,helping) then
     if helping and not helpReady then hasHelp=true;continue end
     local neighbors=0
@@ -12090,6 +12139,7 @@ function scene.squareStep(p,d)
  end
 end
 function scene.regrow(r,dt)
+ if r.kind=='Geode' or r.openReady or r.openingAt then return end
  if not r.field.cfg.SelectionOnly or r.paid or r.clusterShot or not r.lastHitAt or now-r.lastHitAt<.8 or next(r.slots) then return end
  local owner=r.lastPinOwner and profiles[r.lastPinOwner]
  if owner and not owner.leaving and owner.miningSquare==r.lastPin then return end
@@ -12406,7 +12456,7 @@ local function attackDrone(d: any,field: any,dt: number)
 end
 function scene.overheadWorker(d,r)
  local definition=DroneCatalog.Types[d.role]
- return r.field.cfg.SelectionOnly and r.kind~='Geode' and d.role~='Charger'
+ return r.field.cfg.SelectionOnly and d.role~='Charger'
   and (not definition or not definition.Projectile or RoleConfig.DownwardGunDepth[d.role]~=nil)
 end
 function scene.planMiningStations()
@@ -12471,6 +12521,7 @@ function scene.overheadStation(d,r,dt)
   local inner=rank<=5
   local angle=if inner then (rank-1.5)*math.pi*.5 else (rank-6)*2*math.pi/5
   local radius=inner and 4.5 or 9.2
+  if rank>10 then angle=((rank-11)%10)*2*math.pi/10;radius=9.2+(math.floor((rank-11)/10)+1)*4.7 end
   station+=Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius)
  end
  -- Slide into a gap when someone leaves. Retain a launched shot's station
@@ -13460,7 +13511,7 @@ local function dispatchOreQueue(p: any)
  local assigned={};local queue=p.oreQueue or {};local index=1
  while index<=#queue do
   local r=resources[queue[index]]
-  if not r or r.paid or r.hp<=0 or not r.part.Parent or not playerCanMine(p,r.field) then table.remove(queue,index);p.publishDirty=true
+  if not r or r.openReady or r.openingAt or r.paid or r.hp<=0 or not r.part.Parent or not playerCanMine(p,r.field) then table.remove(queue,index);p.publishDirty=true
   elseif now<r.readyAt or not nearMiningField(characterRoot(p).Position,r.field) then index+=1
   else
    local best,distance=nil,math.huge
@@ -13865,7 +13916,7 @@ local function abilityContext(p,fieldId,operator,deployment)
   return false
  end
  local function targetRecord(r)
-  if not r or r.paid or r.hp<=0 or now<r.readyAt or not r.part.Parent then return nil end
+  if not r or r.openReady or r.openingAt or r.geodeRejectedOwner==p.player.UserId or r.paid or r.hp<=0 or now<r.readyAt or not r.part.Parent then return nil end
   if r.field.cfg.SelectionOnly and not deployment and (not p.miningSquare or not scene.rockInSquare(p.miningSquare,r)) then return nil end
   if not deployment and actor and not sameRockType(actor,r) then return nil end
   if deployment then
@@ -14107,7 +14158,7 @@ function scene.placeSquare(p,payload)
  end
  local leadId=payload.leadId
  local lead=type(leadId)=='string' and #leadId<=128 and resources[leadId]
- if lead and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
+ if lead and not lead.openReady and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
   and scene.rockInSquare(square,lead) then
   if not next(lead.slots) then square.leadId=leadId;square.focusId=leadId
   else
@@ -14151,6 +14202,79 @@ function scene.placeSquare(p,payload)
  p.player:SetAttribute('MA_SelectorWidth',square.half*2)
  p.player:SetAttribute('MA_Selector',center)
  commandReply(p.player,payload,'accepted')
+end
+-- Ready rewards are claimed by the mining owner/run. No remote supplies damage or payout.
+function scene.releaseOpenWorkers(r)
+ local workers={};for id in pairs(r.slots) do workers[#workers+1]=drones[id] end
+ for _,worker in ipairs(workers) do if worker and worker.target==r then release(worker);worker.squareSearchAt=nil end end
+end
+function scene.focusResource(p,payload)
+ if type(payload)~='table' or payload.runId~=data(p).run.id then return end
+ local square=p.miningSquare
+ local r=type(payload.resourceId)=='string' and resources[payload.resourceId]
+ local hr=characterRoot(p)
+ if not square or not r or r.paid or r.openReady or r.openingAt or now<r.readyAt or not r.part.Parent
+  or not hr or not scene.squareInRange(hr.Position,square) or not scene.rockInSquare(square,r) or not playerCanMine(p,r.field) then return end
+ for id in pairs(r.slots) do if drones[id] and drones[id].owner~=p.player.UserId then notice(p,'Another crew is mining that rock.');return end end
+ if r.geodeRejectedOwner==p.player.UserId then r.geodeRejectedOwner=nil end
+ square.directId=r.id;square.focusId=r.id
+ for _,d in ipairs(p.drones) do
+  if DroneRoles.isWorker(d.role) and not d.carrierId and d.target~=r then
+   release(d);d.field=nil;d.autoField=nil;d.squareSearchAt=nil;d.thinkUntil=now+.08*(d.slot%5)
+  end
+ end
+ scene.publishSquareFocus(p,square)
+ commandReply(p.player,payload,'accepted')
+end
+function scene.openResource(p,payload)
+ if type(payload)~='table' or payload.runId~=data(p).run.id then return end
+ local r=type(payload.resourceId)=='string' and resources[payload.resourceId]
+ local hr=characterRoot(p)
+ if not r or not r.openReady or r.openingAt or r.paid or not r.part.Parent or not hr
+  or r.openOwner~=p.player.UserId or r.openRun~=data(p).run.id or not playerCanMine(p,r.field)
+  or (hr.Position-r.position).Magnitude>Mining.OPEN_REACH or not abilityLineOfSight(p,hr.Position,r) then return end
+ r.openingAt=now+(r.kind=='Geode' and .85 or .24)
+ r.part:SetAttribute('OpeningAt',r.openingAt)
+ r.part:SetAttribute('OpenReady',false)
+end
+function scene.stepGeode(r)
+ if r.paid then return end
+ if r.openReady then
+  local p=profiles[r.openOwner]
+  if not p or p.leaving or data(p).run.id~=r.openRun then
+   -- Abandoned run claims cannot block a shared field indefinitely.
+   r.openReady=nil;r.openingAt=nil;r.openOwner=nil;r.openRun=nil;r.openActor=nil
+   r.hp=r.maxHP-10;r.stage=0;r.geodeTestAt=nil;r.geodePassed=nil
+   r.part:SetAttribute('OpenReady',false);r.part:SetAttribute('OpeningAt',nil);r.part:SetAttribute('OpenOwner',nil)
+   r.part:SetAttribute('Stage',0);r.part:SetAttribute('HP',r.maxHP);r.part:SetAttribute('CrackProgress',0);r.part:SetAttribute('RegrowAt',now);scene.poseResource(r)
+   return
+  end
+  if r.openingAt and now>=r.openingAt and healthy(p) then
+   r.paid=true;r.hp=0;r.manualOpened=true;r.removeAt=now+3
+   r.splitAt=now
+   r.part:SetAttribute('HP',0);r.part:SetAttribute('CrystalSplitAt',now);r.part:SetAttribute('CrystalBreakAt',now)
+   r.part:SetAttribute('CrystalBreakOwner',r.openOwner);r.part:SetAttribute('BreakSerial',1)
+   r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false
+   local count=r.kind=='Geode' and 6 or 1
+   for _=1,count do r.cargoProduced=nil;award(r.openActor,r,r.openSpecialist,false) end
+   local vacancy={at=now+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn,
+    position=r.position,owner=r.openOwner,landmark=r.landmark,landmarkMineral=r.landmarkMineral}
+   table.insert(r.field.respawnQueue,vacancy)
+  end
+  return
+ end
+ if r.kind~='Geode' or not r.field.cfg.ContinuousCrystals then return end
+ local result=Mining.geodeResult(r,now)
+ if result==true then r.geodePassed=true;r.part:SetAttribute('GeodePassed',true)
+ elseif result==false then
+  local owner=r.geodeAttemptOwner or r.lastPinOwner
+  for id in pairs(r.slots) do if drones[id] then owner=drones[id].owner;break end end
+  r.geodeRejectedOwner=owner;r.geodeTestAt=nil;r.geodeTestDamage=0;r.hp=r.maxHP-10;r.stage=0
+  r.part:SetAttribute('CrackProgress',0);r.part:SetAttribute('Stage',0);r.part:SetAttribute('HP',r.maxHP)
+  r.part:SetAttribute('GeodeRecoilAt',now);scene.releaseOpenWorkers(r)
+  local p=owner and profiles[owner]
+  if p then notice(p,'Not enough mining power — focus more drones or upgrade, then click the geode to retry.') end
+ end
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
@@ -14199,6 +14323,10 @@ local function commandPlayer(pl: any,action: any,payload: any)
   scene.buyStarUpgrade(p,payload)
  elseif action=='PlaceSelector' then
   scene.placeSquare(p,payload)
+ elseif action=='FocusResource' then
+  scene.focusResource(p,payload)
+ elseif action=='OpenResource' then
+  scene.openResource(p,payload)
  elseif action=='PickupOre' then
   scene.requestOrePickup(p,payload)
  elseif action=='DevFillBag' then
@@ -14545,6 +14673,7 @@ RunService.Heartbeat:Connect(function(dt: number)
     scene.stepRockModifiers(field)
    end
    for _,r in ipairs(field.resources) do
+    scene.stepGeode(r)
     scene.regrow(r,snapshotDt)
     local solid=not r.paid and now>=r.readyAt
     if field.junk then
@@ -14582,7 +14711,7 @@ RunService.Heartbeat:Connect(function(dt: number)
     local due=0;for _,vacancy in ipairs(field.respawnQueue) do if scene.replacementDue(field,vacancy) then due+=1 else break end end
     -- A geode reserves five future nodes. Consume five due replenishment tokens,
     -- rather than leaving four immortal retries behind after every shell cycle.
-    local spawned,cost=scene.spawnReplacement(field,due<5 and 'Crystal' or nil,field.respawnQueue[1])
+    local spawned,cost=scene.spawnReplacement(field,not field.cfg.ContinuousCrystals and due<5 and 'Crystal' or nil,field.respawnQueue[1])
     if not spawned then
      -- One failed sample set establishes a field-level backoff for every token
      -- already due, rather than re-running 18 raycasts per snapshot for each

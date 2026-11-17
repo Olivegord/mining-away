@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 16 — geodes, focused mining, and player-opened gems
+
+Add occasional circular geodes, slightly offset from the normal stone color in their field. They take substantially longer to mine and keep their size while a hinged crack opens farther. Leak small amounts of every part of the existing rock-break particle cocktail. After the first crack, insufficient sustained mining power must snap the shell shut with particles, camera feedback and distinct audio. Let players click a rock inside their accepted plot to direct the mining crew onto it. Near depletion, gems and geodes must wait in a visibly cracked, strongly glowing and humming state until the player presses **E** nearby. Opening a geode has a longer anticipation, heavier shake, distinct sounds and a bunch of that field's gems. Ordinary stone continues to break automatically. This request authorizes implementation and routine saves, not publication.
+
 ## November 16 — reject the receipt-panel layout; make the sale understandable
 
 The owner rejects v365 as worse and clarifies that the UI layout itself is confusing. Show the rocks themselves, what each is worth, totals and modifiers. They still somewhat like the adding-up receipts but authorize choosing the best overall solution. Do not interpret structural checks as evidence that selling feels good. Prioritize a coherent layout and clear object-to-value relationships over adding more labels or delay.

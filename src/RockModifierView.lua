@@ -33,12 +33,13 @@ function V.clearSelectionFlash(r)
  if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,r.view.Transparency) end
 end
 
-function V.attackOutlines(records,_camera,now,steady,selection,strength,width)
+function V.attackOutlines(records,_camera,now,steady,selection,strength,width,focusId)
  for _,r in pairs(records) do
   local outline=r.rockOutline
-  local visible=not r.visual.broken and r.view.Parent and r.view.Transparency<1
+  local visible=not r.visual.broken and r.view.Parent and (r.shellModel~=nil or r.view.Transparency<1)
    and (r.view.LocalTransparencyModifier or 0)<1
-  local attacked=visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
+  local focused=visible and focusId==r.id
+  local attacked=focused or visible and now-math.max(r.lastBeamAt or -math.huge,r.lastHitAt or -math.huge)<=.72
   local selected=visible and selection and r.source:GetAttribute('FieldId')==selection.field
    and Mining.selectorContains(selection.point,(width or selection.width)*.5,r.source:GetAttribute('FullPosition') or r.source.Position)
   if selected and strength>0 then
@@ -51,10 +52,12 @@ function V.attackOutlines(records,_camera,now,steady,selection,strength,width)
   else
    if not outline then
     outline=Instance.new('Highlight');outline.Name='MiningRockFeedback'
-    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.Adornee=r.view
+    outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.Adornee=r.shellModel or r.view
     outline.OutlineColor=r.baseColor:Lerp(white,.66);outline.FillColor=Color3.new(1,1,1)
     outline.Parent=r.view;r.rockOutline=outline
    end
+   outline.Adornee=r.shellModel or r.view
+   outline.OutlineColor=focused and Color3.fromRGB(255,210,102) or r.baseColor:Lerp(white,.66)
    r.outlineStart=r.outlineStart or now
    local wave=steady and .5 or .5+.5*math.cos((now-r.outlineStart)*7.5)
    outline.OutlineTransparency=.50-.43*wave

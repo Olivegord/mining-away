@@ -1011,8 +1011,9 @@ local function registerResource(source)
  for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
  view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
  local stoneColor,stoneGradient
- if source:GetAttribute('Kind')=='Crystal' and (source:GetAttribute('BreakSerial') or 0)==0 then
+ if (source:GetAttribute('Kind')=='Crystal' or source:GetAttribute('Kind')=='Geode') and (source:GetAttribute('BreakSerial') or 0)==0 then
   stoneColor,stoneGradient=RockFinish.apply(view,source.Color)
+  if source:GetAttribute('Kind')=='Geode' then stoneColor=stoneColor:Lerp(source.Color,.09);view.Color=stoneColor end
  end
  view.Parent=localFX;hidePart(source)
  if source:GetAttribute('Kind')=='Junk' then
@@ -1090,7 +1091,7 @@ end
 connect(world.DescendantRemoving,function(source)
  pendingDroneSources[source]=nil
  if drones[source] then destroyDrone(drones[source]);drones[source]=nil end
- if resources[source] then rockDamage.feedback:forget(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
+ if resources[source] then rockDamage.feedback.openings:remove(resources[source]);rockDamage.feedback:forget(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
  if turrets[source] then turretIndex[tostring(source:GetAttribute('TurretId'))]=nil;presentation:destroyTurret(turrets[source]);turrets[source]=nil end
  if observed[source] then observed[source]:Disconnect();observed[source]=nil end
  hiddenParts[source]=nil
@@ -1159,9 +1160,9 @@ local function renderResource(r,now)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
-  local shape=quarry and Feel.crystalStageShape(stage,stageCount,full)
+  local shape=s:GetAttribute('Kind')=='Geode' and 1 or quarry and Feel.crystalStageShape(stage,stageCount,full)
    or s:GetAttribute('ZoneName') and Feel.crystalStageShape(stage,stageCount) or period
-  local displaySize=full*math.max(.005,growth)*shape*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
+  local displaySize=full*math.max(.005,growth)*shape*(s:GetAttribute('Kind')=='Geode' and Vector3.one or Feel.rockShape(s:GetAttribute('SliceScale'),heat))
   view.Size=displaySize*(r.damageScale or Vector3.one)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
   local pos=start:Lerp(final,growth)
@@ -1174,6 +1175,7 @@ local function renderResource(r,now)
     if now<spawnAt then view.Transparency=1 end
    end
   end
+  if s:GetAttribute('Kind')=='Geode' then frame=CFrame.new(pos) end
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
@@ -1694,6 +1696,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
+  rockDamage.feedback.openings:update(r,now)
   if r.modifiers~=0 or r.modifierFX then RockModifierView.rock(r,now,lowFlash,fracture) end
   if r.stoneGradient then RockFinish.veins(r,now,reducedVeins,stillVeins) end
  end
@@ -1730,7 +1733,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
   local click,flash=selectorView:flashState()
   local draft,width,strength=selectorView:previewState()
   RockModifierView.attackOutlines(resources,cameraPosition,now,lowFlash or stillVeins,
-   click or draft,click and flash or strength,not click and width or nil)
+   click or draft,click and flash or strength,not click and width or nil,(player:GetAttribute('MA_SelectorFocus') or ''):match('^[^:]+:(.+)$'))
  end
  presentation:update(dt,now)
  laserShowcase:step(now,dt)
@@ -1873,6 +1876,7 @@ local mouse=player:GetMouse()
   end
   if selectorView.draft then
    if not selectorView.pending then return 'Confirm plot' end
+  elseif selectorView:readyRock(resources) then return 'Break '..(selectorView.ready.source:GetAttribute('Kind')=='Geode' and 'geode' or 'gem')
   elseif player:GetAttribute('MA_OrePickup') then return 'Pick up rock' end
  end
  pickupView.pickupFocus=function()
@@ -1881,6 +1885,9 @@ local mouse=player:GetMouse()
  selectorView.performFieldAction=function()
   local action=available()
   if action=='Confirm plot' then return selectorView:confirm() end
+  if action=='Break gem' or action=='Break geode' then
+   command:FireServer('OpenResource',{resourceId=selectorView.ready.id,runId=profile.run.id});return true
+  end
   if action=='Pick up rock' then
    command:FireServer('PickupOre',player:GetAttribute('MA_OrePickup'))
    return true
