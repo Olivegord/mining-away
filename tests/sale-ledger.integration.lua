@@ -21,10 +21,12 @@ view:updateLedger(100.37,false)
 assert(cash.bonus.Visible and cash.bonusName.Text=='Charged' and cash.multiplier.Text=='1.15×')
 assert(ruby.bonusName.Text=='Frosted' and ruby.multiplier.Text=='1.29×' and next(credits)==nil)
 assert(cash.history[1].view.Text=='+ $20' and cash.bonus.Rotation<0)
-view:updateLedger(100.60,false)
+view:updateLedger(100.91,false)
 assert(cash.amount==23 and credits.Money==23 and credits.Ruby==9)
 view:breakRock({item=plain,drop={}},2,nil,101,nil,nil)
 view:updateLedger(101.20,false)
+assert(cash.amount==23 and credits.Money==23,'plain ore must retain its payout travel beat')
+view:updateLedger(101.50,false)
 assert(cash.history[1].view.Text=='+ $10' and cash.history[2].view.Text=='$23')
 assert(cash.history[2].view.Position[4]<cash.history[1].view.Position[4])
 assert(cash.amount==33 and ruby.amount==23 and stone.amount==300)
@@ -32,5 +34,24 @@ assert(credits.Money==33 and credits.Ruby==23 and credits.Stone==300 and not vie
 ledger:finish(receipt,102)
 ledger:update(160,false)
 assert(cash.total.Text=='$33' and ruby.total.Text=='0.23' and stone.total.Text=='3')
-assert(not cash.bonus.Visible and #ledger.rules==1)
+assert(not cash.bonus.Visible and #ledger.rules==3)
 print('PASS sale receipt: base term, modifier beat, upward addition history, exact HUD credit and persistent totals')
+
+assert(cash.title.Text=='Money' and ruby.title.Text=='Ruby shards' and stone.title.Text=='Stone')
+assert(cash.rule.Parent==cash.root and ruby.rule.Parent==ruby.root and cash.rule~=ruby.rule)
+assert(cash.history[1].origin.Text==plain.name..' ×2')
+for i=1,4 do
+ ledger:stage({{key='Money',base=10,bonus=0}},110+i,plain)
+ ledger:add({{key='Money',base=10,bonus=0}},110+i)
+end
+local visible=cash.carried
+for _,line in ipairs(cash.history) do visible+=line.value end
+assert(visible==cash.amount and cash.earlier.Text~='', 'hidden history must remain in the displayed arithmetic')
+ledger:layout(20,300,320,280)
+assert(cash.root.Size[1]<=148 and ruby.root.Position[1]>=0)
+ledger:update(160,true)
+assert(cash.total.TextSize==35 and cash.totalScale.Scale==1 and not cash.bonus.Visible)
+local hidden=cash.carried
+for i,line in ipairs(cash.history) do if i>cash.visibleHistory then hidden+=line.value end end
+assert(cash.earlier.Text=='Earlier  + $'..hidden, 'compact stacks lost their hidden addends')
+print('PASS separate named stacks, source ore identity, carried arithmetic, narrow layout and reduced-motion settling')

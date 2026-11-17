@@ -23,11 +23,11 @@ local function label(parent,text,color,size)
  return v
 end
 function Sale.new(refs)
- local self=setmetatable({refs=refs,queue={},seen={},seenOrder={},flights={},readouts={},tiles={},random=Random.new(),closed=false},Sale)
+ local self=setmetatable({refs=refs,queue={},seen={},seenOrder={},flights={},readouts={},tiles={},ledgerFlights={},random=Random.new(),closed=false},Sale)
  local gui=Instance.new('ScreenGui');gui.Name='OreSaleCascade';gui.ResetOnSpawn=false
  gui.ScreenInsets=Enum.ScreenInsets.DeviceSafeInsets;gui.DisplayOrder=13;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.Parent=refs.player.PlayerGui
  self.gui=gui
- local blocker=Instance.new('Frame');blocker.Name='SaleInputArea';blocker.BackgroundTransparency=1
+ local blocker=Instance.new('Frame');blocker.Name='SaleInputArea';blocker.BackgroundTransparency=.72;blocker.BackgroundColor3=Color3.fromRGB(15,18,28)
  blocker.Active=true;blocker.Visible=false;blocker.Size=UDim2.fromScale(1,1);blocker.Parent=gui
  self.blocker=blocker
  local prompt=Instance.new('TextButton');prompt.Name='ConfirmSale';prompt.Visible=false
@@ -36,6 +36,8 @@ function Sale.new(refs)
  prompt.ZIndex=4;prompt.BorderSizePixel=0;prompt.TextColor3=GOLD;prompt.TextSize=22;prompt.Font=Enum.Font.SourceSansBold;prompt.Parent=gui
  prompt.Activated:Connect(function() self:confirm() end)
  self.prompt=prompt
+ self.itemName=label(gui,'',Color3.fromRGB(249,247,240),28);self.itemName.Name='CurrentOre';self.itemName.Visible=false
+ self.itemDetail=label(gui,'',GOLD,18);self.itemDetail.Name='CurrentOreModifiers';self.itemDetail.Visible=false
  local back=Instance.new('TextButton');back.Name='CancelSale';back.AnchorPoint=Vector2.new(.5,1)
  back.Position=UDim2.new(.5,0,1,-4);back.Size=UDim2.fromOffset(110,26);back.BackgroundTransparency=1
  back.Text='Cancel';back.TextColor3=Color3.new(1,1,1);back.TextSize=17;back.Font=Enum.Font.SourceSansBold
@@ -179,7 +181,7 @@ function Sale:makeOre(item)
 end
 function Sale:start(receipt,now)
  self.active=receipt;self.started=now;self.tiles={}
- self.finished=false;self.pendingTerms=nil
+ self.finished=false;self.pendingTerms=nil;self.nextBreakAt=nil
  self.cascadeAt=receipt.kind~='preview' and now or nil
  if receipt.full then
   local focus=Instance.new('DepthOfFieldEffect');focus.Name='SellingFocus';focus.FocusDistance=4;focus.InFocusRadius=2.5
@@ -193,23 +195,15 @@ function Sale:start(receipt,now)
  self.gemWindup=receipt.full and math.min(GEM_WINDUP,1.15/#receipt.items) or 0
  for i,item in ipairs(receipt.items) do
   local ore,gem=self:makeOre(item)
-  local name=receipt.full and '' or item.name..' '
-  local caption=(not receipt.full or item.units>1) and label(self.gui,name..(item.units>1 and '×'..item.units or ''),Color3.fromRGB(table.unpack(item.color)),14)
+  local caption=label(self.gui,item.name..(item.units>1 and ' ×'..item.units or ''),Color3.fromRGB(table.unpack(item.color)),16)
+  caption.TextStrokeTransparency=.12;caption.TextTruncate=Enum.TextTruncate.AtEnd;caption.ZIndex=3
   local tint=gem and RockFinish.Gems.tint(item.key) or ore.Color
   local effect=RockModifierView.glow(item.mask or 0) or (item.stone and Color3.fromRGB(table.unpack(item.color))) or tint
   local drop={view=ore,seed=i,physical=true,stone=item.stone,modifiers=item.mask or 0,color=tint,effectColor=effect,sale=receipt.full}
   self.tiles[i]={item=item,ore=ore,gem=gem,caption=caption,size=ore.Size,transparency=ore.Transparency,
    display=receipt.full and PickupDisplay.new(self.refs.parent,i,item.stone) or nil,drop=drop}
  end
- if receipt.full then
-  self.cloud={}
-  for i=1,#self.tiles do
-   local angle=i*2.39996-1.1
-   local radius=math.sqrt((i-1)/math.max(1,#self.tiles-1))
-   self.cloud[i]=Vector2.new(math.cos(angle)*radius,math.sin(angle)*radius)
-  end
-  table.sort(self.cloud,function(a,b) return a.Y+a.X*.30<b.Y+b.X*.30 end)
- end
+
 end
 local function createToken(parent,money,color)
  local token=Instance.new('Frame')
@@ -289,23 +283,66 @@ local function saleTerms(item)
  push('Stone',item.stoneUnits,0,'')
  return terms
 end
+function Sale:launchLedgerTokens(terms,point,now,duration)
+ if not point or not self.gui then return end
+ if self.refs.reducedMotion() or self.refs.player:GetAttribute('ReducedEffects')==true then return end
+ for j,term in ipairs(terms) do
+  local row=self.ledger.rows[term.key]
+  for i=1,2 do
+   local angle=-math.pi*.9+(j*2+i)*.61
+   local token=createToken(self.gui,term.key=='Money',row.color)
+   token.Size=UDim2.fromOffset(10,10)
+   local trail=Instance.new('Frame');trail.Name='SaleVelocityTrail';trail.BorderSizePixel=0
+   trail.AnchorPoint=Vector2.new(.5,.5);trail.BackgroundColor3=row.color;trail.ZIndex=4;trail.Parent=self.gui
+   self.ledgerFlights[#self.ledgerFlights+1]={view=token,trail=trail,row=row,from=point,at=now,duration=duration,
+    velocity=Vector2.new(math.cos(angle),math.sin(angle))*230}
+  end
+ end
+end
+function Sale:updateLedgerTokens(now,reduced)
+ for i=#(self.ledgerFlights or {}),1,-1 do
+  local token=self.ledgerFlights[i];local age=now-token.at
+  if reduced or age>=token.duration then
+   token.view:Destroy();token.trail:Destroy();table.remove(self.ledgerFlights,i)
+  else
+   local launch=.13;local decay=7
+   local t=math.clamp((age-launch)/(token.duration-launch),0,1)
+   local endLaunch=token.from+token.velocity*((1-math.exp(-decay*launch))/decay)
+   local tangent=token.velocity*math.exp(-decay*launch)*(token.duration-launch)
+   local target=token.row.terms.AbsolutePosition+token.row.terms.AbsoluteSize-Vector2.new(24,12)-GuiService:GetInsetArea(Enum.ScreenInsets.DeviceSafeInsets).Min
+   local position
+   if age<launch then position=token.from+token.velocity*((1-math.exp(-decay*age))/decay)
+   else position=endLaunch*(2*t^3-3*t*t+1)+tangent*(t^3-2*t*t+t)+target*(-2*t^3+3*t*t) end
+   local delta=position-(token.last or position)
+   local speed=delta.Magnitude/math.max(1/240,now-(token.lastAt or now))
+   token.last=position;token.lastAt=now
+   token.view.Position=UDim2.fromOffset(position.X,position.Y);token.view.Rotation=age*280
+   token.trail.Position=UDim2.fromOffset(position.X-delta.X*.5,position.Y-delta.Y*.5)
+   token.trail.Size=UDim2.fromOffset(math.clamp(speed*.018,0,32),2)
+   token.trail.Rotation=math.deg(math.atan2(delta.Y,delta.X));token.trail.BackgroundTransparency=.45+t*.4
+  end
+ end
+end
+
 function Sale:updateLedger(now,reduced)
  local ledger=self.ledger
  local pending=self.pendingTerms
  if pending then
   if pending.modifierAt and now>=pending.modifierAt then
    ledger:applyModifier(pending.terms,now)
-   pending.modifierAt=nil;pending.addAt=now+.27
+   pending.modifierAt=nil;pending.addAt=now+.58
+   self:launchLedgerTokens(pending.terms,pending.point,now,.58)
    if self.refs.audio then self.refs.audio:play('sale_dust_credit',nil,{pitch=.84}) end
   elseif not pending.modifierAt and now>=pending.addAt then
    ledger:add(pending.terms,now)
    for _,term in ipairs(pending.terms) do
     self.refs.hud:currencyHit(self.active.id,term.key,term.base+term.bonus,reduced)
    end
-   if self.refs.audio then self.refs.audio:play('sale_credit') end
-   self.pendingTerms=nil
+   if self.refs.audio then self.refs.audio:play('sale_credit',nil,{pitch=.94+math.min(8,self.breakIndex or 1)*.035,level=1.35}) end
+   self.pendingTerms=nil;self.nextBreakAt=now+.24
   end
  end
+ self:updateLedgerTokens(now,reduced)
  ledger:update(now,reduced)
 end
 function Sale:breakRock(tile,index,point,now,cameraUp,width)
@@ -314,20 +351,22 @@ function Sale:breakRock(tile,index,point,now,cameraUp,width)
   local terms=saleTerms(item)
   local hasBonus=false
   for _,term in ipairs(terms) do if term.bonus>0 then hasBonus=true;break end end
-  self.ledger:stage(terms,now)
-  self.pendingTerms={terms=terms,addAt=now+.16,modifierAt=hasBonus and now+.3 or nil}
+  self.ledger:stage(terms,now,item)
+  self.pendingTerms={terms=terms,point=point,addAt=now+.48,modifierAt=hasBonus and now+.3 or nil}
+  self.currentItem=item;self.currentIndex=index
+  if not hasBonus then self:launchLedgerTokens(terms,point,now,.48) end
  else
   self:payout('Money',item.cash*item.units,point,0,width,now)
   if item.resource then self:payout(item.resource,item.dust*item.units,point,1,width,now) end
   if item.stoneUnits>0 then self:payout('Stone',item.stoneUnits*item.units,point,2,width,now) end
   if index==#self.tiles then self.active.dustAt=now+.30 end
  end
- if self.refs.audio then self.refs.audio:play(item.stone and 'sale_stone' or 'sale_gem',nil,{pitch=.90+(index%7)*.043,level=item.stone and .9 or 1.18}) end
+ if self.refs.audio then self.refs.audio:play(item.stone and 'sale_stone' or 'sale_gem',nil,{pitch=.90+(index%7)*.043,level=item.stone and 1.05 or 1.25}) end
  if not self.refs.reducedMotion() then
   if self.active.full then
    local character=self.refs.player.Character
    local root=character and character:FindFirstChild('HumanoidRootPart')
-   self.refs.presentation:cameraBeat('Sale',root and root.Position or tile.ore.Position,workspace:GetServerTimeNow(),item.stone and .8 or 1.2)
+   self.refs.presentation:cameraBeat('Sale',root and root.Position or tile.ore.Position,workspace:GetServerTimeNow(),item.stone and 1 or 1.45)
   end
   if self.refs.player:GetAttribute('ReducedEffects')~=true then
    local size=tile.ore.Size
@@ -347,9 +386,12 @@ function Sale:clearGrid()
  end
  for _,tile in ipairs(self.tiles) do if not tile.sold then removeTile(tile) end end
  if self.ledger then self.ledger:destroy();self.ledger=nil end
- self.finished=false;self.pendingTerms=nil
- self.tiles={};self.active=nil;self.cloud=nil;self.pendingAt=nil;self.cascadeAt=nil
+ self.finished=false;self.pendingTerms=nil;self.nextBreakAt=nil
+ self.tiles={};self.active=nil;self.pendingAt=nil;self.cascadeAt=nil
  self.prompt.Visible=false;self.back.Visible=false;self.blocker.Visible=false
+ self.itemName.Visible=false;self.itemDetail.Visible=false;self.currentItem=nil;self.currentIndex=nil
+ for _,token in ipairs(self.ledgerFlights or {}) do token.view:Destroy();token.trail:Destroy() end
+ self.ledgerFlights={}
  if self.bound then
   Actions:UnbindAction(CONFIRM_ACTION);self.bound=false
   game:GetService('ProximityPromptService').Enabled=self.promptsEnabled
@@ -376,16 +418,31 @@ function Sale:update()
   local viewport=camera.ViewportSize
   local stacked=full and viewport.X<650
  local spreadWidth=viewport.X*(stacked and .76 or .39)
- local spreadHeight=viewport.Y*(stacked and .25 or .49)
+ local spreadHeight=viewport.Y*(stacked and .26 or .52)
  local columns=math.min(4,count,math.max(1,math.ceil(math.sqrt(count*1.15))))
   local rows=math.ceil(count/columns)
- local cell=full and math.min(138,math.sqrt(spreadWidth*spreadHeight/math.max(count,3))*.82)
+ local cell=full and math.min(160,spreadWidth/columns,spreadHeight/rows)
   or math.min(55,(viewport.X-40)/columns,viewport.Y*.48/rows)
   local center=full and Vector2.new(viewport.X*(stacked and .5 or .275),viewport.Y*(stacked and .205 or .50))
    or Vector2.new(viewport.X*.5,viewport.Y*.24)
+  if full then
+   self.itemName.Visible=true;self.itemDetail.Visible=true
+   self.itemName.Position=UDim2.fromOffset(center.X,viewport.Y*(stacked and .355 or .82))
+   self.itemName.Size=UDim2.fromOffset(spreadWidth+28,34);self.itemName.TextSize=stacked and 22 or 28
+   self.itemDetail.Position=self.itemName.Position+UDim2.fromOffset(0,31)
+   self.itemDetail.Size=UDim2.fromOffset(spreadWidth+28,28);self.itemDetail.TextSize=stacked and 15 or 18
+   local current=self.currentItem or (self.tiles[self.breakIndex] and self.tiles[self.breakIndex].item)
+   self.itemName.Text=self.finished and 'Backpack sold' or preview and 'Your backpack' or current and current.name or ''
+   local mods={}
+   if current then for _,name in ipairs({'Charged','Frosted','Big','Massive','Titan'}) do
+    if bit32.btest(current.mask or 0,Mining.ROCK_MODIFIERS[name]) then mods[#mods+1]=name end
+   end end
+   self.itemDetail.Text=self.finished and 'All payouts added' or preview and tostring(count)..' pieces'
+    or tostring(self.currentIndex or 1)..' / '..count..(#mods>0 and ' · '..table.concat(mods,' + ') or '')
+  end
   if self.ledger then
    local left=viewport.X*(stacked and .06 or .52)
-   local top=viewport.Y*(stacked and .36 or .13)
+   local top=viewport.Y*(stacked and .44 or .13)
    self.ledger:layout(left,top,viewport.X-left-viewport.X*.055,math.max(100,viewport.Y-top-85))
   end
   local lastHit=self.tiles[count].hitAt
@@ -397,32 +454,35 @@ function Sale:update()
   local nextTile=self.tiles[scheduledIndex]
   local breakAt
   if self.cascadeAt and nextTile and not self.pendingTerms then
-   breakAt=self.lastBreakAt and self.lastBreakAt+self.breakInterval or self.cascadeAt+self.firstHit
+   breakAt=self.nextBreakAt or (self.lastBreakAt and self.lastBreakAt+self.breakInterval or self.cascadeAt+self.firstHit)
    if not nextTile.item.stone then breakAt+=self.gemWindup end
   end
   local depth=4;local unitsPerPixel=2*depth*math.tan(math.rad(camera.FieldOfView*.5))/viewport.Y
   for i,tile in ipairs(self.tiles) do if not tile.sold then
    local row=math.floor((i-1)/columns);local column=(i-1)%columns
-   local spot=self.cloud and self.cloud[i]
-   local point=center+(spot and Vector2.new(spot.X*spreadWidth*.46,spot.Y*spreadHeight*.46)
-    or Vector2.new((column-(columns-1)*.5)*cell,(row-(rows-1)*.5)*cell))
+   local point=center+Vector2.new((column-(columns-1)*.5)*cell+(full and (row%2)*cell*.12 or 0),(row-(rows-1)*.5)*cell)
    local rise=reduced and 1 or smooth((age-(i-1)*.008)/.27)
    point+=Vector2.new(0,(1-rise)*65)
    local ray=camera:ViewportPointToRay(point.X,point.Y)
    local position=ray.Origin+ray.Direction*(depth/math.max(.1,ray.Direction:Dot(camera.CFrame.LookVector)))
    local hit=tile.hitAt and math.clamp((now-tile.hitAt)/BREAK_TIME,0,1) or 0
    local familySize=Mining.ORE_SIZE_SCALE[Mining.sizeTier(tile.item.mask)]
-   local scale=cell*(full and .78*math.min(1.27,familySize^.36) or .70)*unitsPerPixel/math.max(tile.size.X,tile.size.Y,tile.size.Z)
+   local scale=cell*(full and .66*math.min(1.27,familySize^.36) or .70)*unitsPerPixel/math.max(tile.size.X,tile.size.Y,tile.size.Z)
    local winding=not reduced and full and breakAt and i==self.breakIndex and not tile.hitAt
    local anticipation=winding and smooth((now-breakAt+.15)/.15) or 0
-   if tile.hitAt and not reduced then scale*=1-.46*hit end
-   tile.ore.Size=tile.size*Vector3.new(1+.035*anticipation,1-.12*anticipation,1+.035*anticipation)*scale*(.7+.3*rise)
+   if tile.hitAt and not reduced then scale*=1+.16*math.sin(hit*math.pi)-.65*hit*hit end
+   tile.ore.Size=tile.size*Vector3.new(1+.09*anticipation,1-.18*anticipation,1+.09*anticipation)*scale*(.7+.3*rise)
    tile.ore.CFrame=CFrame.new(position)*camera.CFrame.Rotation*CFrame.Angles(.16,(reduced and .3 or age*.45)+i*.6,.12)
    if tile.gem then RockFinish.Gems.update(tile.ore,rise*(1-hit),camera.CFrame.Position) end
    if tile.hitAt then tile.ore.Transparency=tile.transparency+(1-tile.transparency)*hit end
    if tile.caption then
     tile.caption.Position=UDim2.fromOffset(point.X,point.Y+cell*.43)
-    tile.caption.TextSize=cell<56 and 12 or 14;tile.caption.TextTransparency=1-rise*(1-hit)
+    tile.caption.Size=UDim2.fromOffset(cell*.96,26)
+    tile.caption.TextSize=full and (cell<80 and 13 or 16) or 12;tile.caption.TextTransparency=1-rise*(1-hit)
+    if full and self.cascadeAt then
+     tile.caption.Text=(i==self.breakIndex and '› ' or '')..tile.item.name..(tile.item.units>1 and ' ×'..tile.item.units or '')
+     if i~=self.breakIndex then tile.caption.TextTransparency=math.max(.35,tile.caption.TextTransparency) end
+    end
    end
    if tile.display and not tile.hitAt then
     local effects=self.refs.player:GetAttribute('ReducedEffects')==true
