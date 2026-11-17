@@ -1,5 +1,9 @@
 # Shared project context
 
+## November 17 — world-space backpack selling
+
+Gameplay revision `b54ba15` sells a backpack in one counter interaction. A staggered sample of the committed cargo travels from the backpack to the counter while the player keeps control. In one Studio Play session the server sold six rocks for 11 money, 8 stone, 0.43 Amber chips and 0.21 Ruby shards, emptying the backpack. The [silent Studio clip](review/media/world-space-sale.mp4) is a frame-stepped replay of the production animation with sample mixed cargo. The direct transaction test and the illustrative replay used the same gameplay revision. Play ended after capture. Shared Edit save and canonical snapshot details appear below.
+
 ## November 17 — standardized quarry layers and faster mining orders
 
 This mining update is on `codex/restore-feel-prestige`. Crystal Run uses four base size grades (2.10, 2.65, 3.35 and 4.40 before cut and landmark proportions), with exactly one through four shrink thresholds. Each threshold and the final break costs 20 work HP times the bed's hardness. In Amber this gives 40/60/80/100 work HP and 2/3/4/5 unmodified cash per stone at base yield, before geode rewards. Large hits may cross several thresholds in one contact. Massive spawns use the largest grade, and grounded shrink steps hold the initial orientation. Break debris starts from the last rendered size. Original rock cuts, fields and sealed geode interactions remain in use.
