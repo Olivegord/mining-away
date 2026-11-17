@@ -162,13 +162,9 @@ function V:aimPreview(ray)
   self:cancelPreview()
   return false
  end
- if not inRange then
-  if self.options.notify then self.options.notify('Move closer to select that area.') end
-  return true
- end
  local pin=self.options.player:GetAttribute('MA_Selector')
  local selectedField=self.options.player:GetAttribute('MA_SelectorField')
- if not self.draft and leadId and pin and selectedField==id then
+ if leadId and pin and selectedField==id then
   local width=self.options.player:GetAttribute('MA_SelectorWidth') or Workshop.selectorWidth(profile)
   -- The selected resource, rather than the projected floor ray, determines membership.
   local rock
@@ -176,9 +172,15 @@ function V:aimPreview(ray)
    if node:IsA('BasePart') and node:GetAttribute('ResourceId')==leadId then rock=node;break end
   end
   if rock and Mining.selectorContains(pin,width*.5,rock:GetAttribute('FullPosition') or rock.Position) then
-   self.options.command:FireServer('FocusResource',{resourceId=leadId,runId=profile.run.id})
+   self:cancelPreview()
+   self.options.command:FireServer('FocusResource',{resourceId=leadId,runId=profile.run.id,
+    requestId=game:GetService('HttpService'):GenerateGUID(false)})
    return true
   end
+ end
+ if not inRange then
+  if self.options.notify then self.options.notify('Move closer to select that area.') end
+  return true
  end
  local width=Workshop.selectorWidth(profile)
  local draft=self.draft

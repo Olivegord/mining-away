@@ -42,6 +42,9 @@ g.geodeRejectedOwner=pl.UserId;scene.publishSquareFocus(p,square)
 assert(pl:GetAttribute('MA_SelectorFocus')=='Underpowered:'..g.id,'failed geode looks queued')
 g.geodeRejectedOwner=nil
 station(miner,g);hitResource(miner,g,100)
+local firstCrack=g.hp
+hitResource(miner,g,10000);assert(g.hp==firstCrack,'assembly grace counted free damage')
+now=g.geodeTestAt
 for i=1,8 do now+=.5;hitResource(miner,g,70) end
 scene.stepGeode(g);assert(g.geodePassed,'sustained work failed')
 hitResource(miner,g,10000)
@@ -120,3 +123,72 @@ print('PASS production geode spawn uses one field slot, round geometry and exten
 scene.fieldTools=originalTools
 workspace.Raycast=oldRay
 print('PASS one discovery per opened deposit, no tool recursion, honest focus status, return to automatic mining')
+
+-- Exercise the click path and the full travel/warmup loop, not teleported contacts.
+do
+ local moving=rock('Geode',4)
+ moving.maxHP=790;moving.hp=780 -- largest unmodified Quartz geode
+ local runFolder=scene.map:FindFirstChild('CrystalRun')
+ if not runFolder then runFolder=Instance.new('Folder');runFolder.Name='CrystalRun';runFolder.Parent=scene.map end
+ zone.Parent=runFolder;bed:SetAttribute('FieldId',field.id)
+ local localEffects=Instance.new('Folder');localEffects.Parent=workspace
+ local sent
+ local view=SelectorView.new({player=pl,world=root,parent=localEffects,hidden=function() return false end,
+  profile=function() return data(p) end,command={FireServer=function(_,action,payload)
+   sent={action=action,payload=payload};commandPlayer(pl,action,payload)
+  end}})
+ -- An unfinished area preview must not swallow a click inside the accepted plot.
+ view.draft={field=field.id,point=center+Vector3.xAxis*20}
+ workspace.Raycast=function() return {Instance=moving.part,Position=moving.position} end
+ pl.Character:PivotTo(CFrame.new(center-Vector3.xAxis*43+Vector3.yAxis*3))
+ local ray={Origin=moving.position+Vector3.new(0,20,20),Direction=Vector3.new(0,-1,-1).Unit}
+ local _,_,_,inRange=view:aim(ray);assert(inRange==false,'fixture must hit beyond new-area range')
+ local clicked=view:aimPreview(ray)
+ assert(clicked and sent and sent.action=='FocusResource' and sent.payload.requestId,'click did not send an acknowledged focus command')
+ assert(not view.draft and square.directId==moving.id,'draft or projected range swallowed rock click inside accepted area')
+ pl.Character:PivotTo(CFrame.new(center+Vector3.new(0,3,5)))
+ workspace.Raycast=function() return nil end
+ local crew={};local basePower=0
+ for _,d in ipairs(p.drones) do
+  if DroneRoles.isWorker(d.role) and #crew<3 then
+   release(d);d.pos=center+Vector3.new(26,4,(d.slot-2)*5);d.velocity=Vector3.zero
+   d.hp=d.stats.maxHealth;d.battery=d.stats.batteryCapacity;d.recharging=nil;d.thinkUntil=nil
+   crew[#crew+1]=d;basePower+=d.stats.miningDPS
+  elseif DroneRoles.isWorker(d.role) then release(d);d.hp=0 end
+ end
+ for _,d in ipairs(crew) do scene.squareStep(p,d);assert(d.target==moving) end
+ scene.planMiningStations()
+ for _,d in ipairs(crew) do assert(scene.workPlans[moving].ranks[d],'focused miner left in serial approach queue') end
+ assert(#crew==3,'starter regression must use exactly three miners')
+ local deadline=now+45;local together=0;local miningPeak=0
+ while now<deadline and not moving.openReady and not moving.geodeRejectedOwner do
+  now+=.05;scene.planMiningStations()
+  local mining=0
+  for _,d in ipairs(crew) do droneStep(d,.05);if d.mining and d.target==moving then mining+=1 end end
+  miningPeak=math.max(miningPeak,mining)
+  if mining==#crew then together+=.05 end
+  scene.stepGeode(moving)
+ end
+ assert(miningPeak==#crew,'crew never mined together: '..miningPeak..'/'..#crew)
+ assert(moving.geodePassed and moving.openReady and not moving.paid,
+  'traveling starter crew could not open Quartz geode; power='..basePower..' hp='..moving.hp..' state='..tostring(moving.geodeRejectedOwner))
+ print('PASS real ray click with draft -> server command -> parallel travel/warmup -> '..#crew..' miners -> ready geode; power='..basePower)
+ -- A focused but genuinely weak crew still gets the full trial, then snaps shut.
+ local weakShell=rock('Geode',1)
+ scene.focusResource(p,{runId=run.id,resourceId=weakShell.id})
+ local rallyUntil=weakShell.geodeRallyUntil
+ scene.focusResource(p,{runId=run.id,resourceId=weakShell.id})
+ assert(weakShell.geodeRallyUntil==rallyUntil,'repeated focus extended trial grace')
+ local saved={}
+ for _,d in ipairs(crew) do saved[d]=d.stats.miningDPS;d.stats.miningDPS=10;d.battery=d.stats.batteryCapacity end
+ deadline=now+45
+ while now<deadline and not weakShell.geodeRejectedOwner do
+  now+=.05;scene.planMiningStations()
+  for _,d in ipairs(crew) do droneStep(d,.05) end
+  scene.stepGeode(weakShell)
+ end
+ assert(weakShell.geodeRejectedOwner==pl.UserId and weakShell.hp==1000 and not weakShell.openReady,'rally grace removed the power requirement')
+ for _,d in ipairs(crew) do d.stats.miningDPS=saved[d] end
+ localEffects:Destroy();workspace.Raycast=oldRay
+ print('PASS real low-power crew recoils; repeated clicks cannot extend assembly grace')
+end

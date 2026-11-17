@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 16 — repair geode focus and opening
+
+The owner reports that geodes do not work because the drones do not focus together. Fix the real click-to-crew flow and make the power challenge achievable by a sufficient crew. Travel and warmup must not turn sufficient mining power into an accidental failed attempt. Preserve the intended insufficient-power recoil, field gems and player-controlled E opening. Routine shared Edit/canonical saves apply; no publication was requested.
+
 ## November 16 — geodes, focused mining, and player-opened gems
 
 Add occasional circular geodes, slightly offset from the normal stone color in their field. They take substantially longer to mine and keep their size while a hinged crack opens farther. Leak small amounts of every part of the existing rock-break particle cocktail. After the first crack, insufficient sustained mining power must snap the shell shut with particles, camera feedback and distinct audio. Let players click a rock inside their accepted plot to direct the mining crew onto it. Near depletion, gems and geodes must wait in a visibly cracked, strongly glowing and humming state until the player presses **E** nearby. Opening a geode has a longer anticipation, heavier shake, distinct sounds and a bunch of that field's gems. Ordinary stone continues to break automatically. This request authorizes implementation and routine saves, not publication.

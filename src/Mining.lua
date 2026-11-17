@@ -21,6 +21,7 @@ M.MASSIVE_SCALE=1.38
 -- Geodes test sustained, accepted work after their first visible crack.
 M.GEODE_CHANCE=.045
 M.GEODE_WINDOW=4
+M.GEODE_RALLY_TIME=8
 M.OPEN_REACH=16
 function M.geode(roll,hardness,ore)
  local ordinary=M.fieldCrystal(roll,hardness,ore,3)
@@ -29,11 +30,13 @@ end
 function M.geodeProgress(r,amount,now)
  local work=r.maxHP-10
  if not r.geodeTestAt and r.hp-amount<=work*.90 then
-  r.geodeTestAt=now;r.geodeTestDamage=0
+  r.geodeTestAt=math.max(now,r.geodeRallyUntil or now);r.geodeTestDamage=0
   -- Even a huge single hit must hold the shell open through the power test.
   return math.min(amount,math.max(0,r.hp-work*.90))
  end
  if r.geodeTestAt and not r.geodePassed then
+  -- Hold the first crack while the focused crew travels and warms up.
+  if now<r.geodeTestAt then return 0 end
   r.geodeTestDamage=(r.geodeTestDamage or 0)+amount
   return math.min(amount,math.max(0,r.hp-work*.20))
  end

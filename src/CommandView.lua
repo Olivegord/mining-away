@@ -7,7 +7,7 @@ local BLUE=Color3.fromRGB(135,218,255)
 local GOLD=Color3.fromRGB(255,201,100)
 local GREEN=Color3.fromRGB(136,235,163)
 local RED=Color3.fromRGB(233,134,120)
-local orderText={Queued='Queued',Travel='En route',Starting='Starting',Cutting='Cutting',Claimed='Claimed',Paused='Paused',Ready='E to open',Opening='Opening',Underpowered='Upgrade crew · click to retry'}
+local orderText={Queued='Queued',Travel='En route',Starting='Starting',Gathering='Gathering crew',Cutting='Cutting',Claimed='Claimed',Paused='Paused',Ready='E to open',Opening='Opening',Underpowered='Upgrade crew · click to retry'}
 function V.new(ctx)
  return setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
 end

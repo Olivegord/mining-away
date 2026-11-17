@@ -1341,6 +1341,7 @@ M.MASSIVE_SCALE=1.38
 -- Geodes test sustained, accepted work after their first visible crack.
 M.GEODE_CHANCE=.045
 M.GEODE_WINDOW=4
+M.GEODE_RALLY_TIME=8
 M.OPEN_REACH=16
 function M.geode(roll,hardness,ore)
  local ordinary=M.fieldCrystal(roll,hardness,ore,3)
@@ -1349,11 +1350,13 @@ end
 function M.geodeProgress(r,amount,now)
  local work=r.maxHP-10
  if not r.geodeTestAt and r.hp-amount<=work*.90 then
-  r.geodeTestAt=now;r.geodeTestDamage=0
+  r.geodeTestAt=math.max(now,r.geodeRallyUntil or now);r.geodeTestDamage=0
   -- Even a huge single hit must hold the shell open through the power test.
   return math.min(amount,math.max(0,r.hp-work*.90))
  end
  if r.geodeTestAt and not r.geodePassed then
+  -- Hold the first crack while the focused crew travels and warms up.
+  if now<r.geodeTestAt then return 0 end
   r.geodeTestDamage=(r.geodeTestDamage or 0)+amount
   return math.min(amount,math.max(0,r.hp-work*.20))
  end
@@ -17102,7 +17105,7 @@ local BLUE=Color3.fromRGB(135,218,255)
 local GOLD=Color3.fromRGB(255,201,100)
 local GREEN=Color3.fromRGB(136,235,163)
 local RED=Color3.fromRGB(233,134,120)
-local orderText={Queued='Queued',Travel='En route',Starting='Starting',Cutting='Cutting',Claimed='Claimed',Paused='Paused',Ready='E to open',Opening='Opening',Underpowered='Upgrade crew · click to retry'}
+local orderText={Queued='Queued',Travel='En route',Starting='Starting',Gathering='Gathering crew',Cutting='Cutting',Claimed='Claimed',Paused='Paused',Ready='E to open',Opening='Opening',Underpowered='Upgrade crew · click to retry'}
 function V.new(ctx)
  return setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
 end
@@ -17716,13 +17719,9 @@ function V:aimPreview(ray)
   self:cancelPreview()
   return false
  end
- if not inRange then
-  if self.options.notify then self.options.notify('Move closer to select that area.') end
-  return true
- end
  local pin=self.options.player:GetAttribute('MA_Selector')
  local selectedField=self.options.player:GetAttribute('MA_SelectorField')
- if not self.draft and leadId and pin and selectedField==id then
+ if leadId and pin and selectedField==id then
   local width=self.options.player:GetAttribute('MA_SelectorWidth') or Workshop.selectorWidth(profile)
   -- The selected resource, rather than the projected floor ray, determines membership.
   local rock
@@ -17730,9 +17729,15 @@ function V:aimPreview(ray)
    if node:IsA('BasePart') and node:GetAttribute('ResourceId')==leadId then rock=node;break end
   end
   if rock and Mining.selectorContains(pin,width*.5,rock:GetAttribute('FullPosition') or rock.Position) then
-   self.options.command:FireServer('FocusResource',{resourceId=leadId,runId=profile.run.id})
+   self:cancelPreview()
+   self.options.command:FireServer('FocusResource',{resourceId=leadId,runId=profile.run.id,
+    requestId=game:GetService('HttpService'):GenerateGUID(false)})
    return true
   end
+ end
+ if not inRange then
+  if self.options.notify then self.options.notify('Move closer to select that area.') end
+  return true
  end
  local width=Workshop.selectorWidth(profile)
  local draft=self.draft

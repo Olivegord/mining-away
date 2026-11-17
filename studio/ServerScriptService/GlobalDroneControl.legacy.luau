@@ -2436,6 +2436,7 @@ M.MASSIVE_SCALE=1.38
 -- Geodes test sustained, accepted work after their first visible crack.
 M.GEODE_CHANCE=.045
 M.GEODE_WINDOW=4
+M.GEODE_RALLY_TIME=8
 M.OPEN_REACH=16
 function M.geode(roll,hardness,ore)
  local ordinary=M.fieldCrystal(roll,hardness,ore,3)
@@ -2444,11 +2445,13 @@ end
 function M.geodeProgress(r,amount,now)
  local work=r.maxHP-10
  if not r.geodeTestAt and r.hp-amount<=work*.90 then
-  r.geodeTestAt=now;r.geodeTestDamage=0
+  r.geodeTestAt=math.max(now,r.geodeRallyUntil or now);r.geodeTestDamage=0
   -- Even a huge single hit must hold the shell open through the power test.
   return math.min(amount,math.max(0,r.hp-work*.90))
  end
  if r.geodeTestAt and not r.geodePassed then
+  -- Hold the first crack while the focused crew travels and warms up.
+  if now<r.geodeTestAt then return 0 end
   r.geodeTestDamage=(r.geodeTestDamage or 0)+amount
   return math.min(amount,math.max(0,r.hp-work*.20))
  end
@@ -12025,6 +12028,7 @@ function scene.publishSquareFocus(p,square)
   elseif focus.openReady then phase='Ready'
   elseif focus.geodeRejectedOwner==p.player.UserId then phase='Underpowered'
   elseif not healthy(p) then phase='Paused'
+  elseif focus.geodeTestAt and focus.geodeTestAt>now then phase='Gathering'
   elseif foreign and phase=='Queued' then phase='Claimed' end
   receipt=phase..':'..focus.id
  elseif square.focusId then square.focusId=nil end
@@ -12471,7 +12475,10 @@ function scene.planMiningStations()
   if not healthy(p) or not characterRoot(p) or now<(d.thinkUntil or 0) then continue end
   local plan=plans[r]
   if not plan then plan={active={},ranks={},approachDistance=math.huge};plans[r]=plan end
-  if (d.warmAt or d.specialJob or d.mining) and d.workTargetId==r.id and d.workStation
+  local focused=p.miningSquare and p.miningSquare.directId==r.id
+  -- A focus command reserves a seat for every miner immediately. Ordinary
+  -- automatic mining retains its single approaching drone and compact queue.
+  if focused or (d.warmAt or d.specialJob or d.mining) and d.workTargetId==r.id and d.workStation
    and (d.pos-d.workStation).Magnitude<=3.5 then
    table.insert(plan.active,d)
   else
@@ -14218,9 +14225,19 @@ function scene.focusResource(p,payload)
  local r=type(payload.resourceId)=='string' and resources[payload.resourceId]
  local hr=characterRoot(p)
  if not square or not r or r.paid or r.openReady or r.openingAt or now<r.readyAt or not r.part.Parent
-  or not hr or not scene.squareInRange(hr.Position,square) or not scene.rockInSquare(square,r) or not playerCanMine(p,r.field) then return end
- for id in pairs(r.slots) do if drones[id] and drones[id].owner~=p.player.UserId then notice(p,'Another crew is mining that rock.');return end end
+  or not hr or not scene.squareInRange(hr.Position,square) or not scene.rockInSquare(square,r) or not playerCanMine(p,r.field) then
+  commandReply(p.player,payload,'rejected','Select a nearby area containing an available rock.');return
+ end
+ for id in pairs(r.slots) do if drones[id] and drones[id].owner~=p.player.UserId then
+  commandReply(p.player,payload,'rejected','Another crew is mining that rock.');return
+ end end
+ local newAttempt=square.directId~=r.id or r.geodeRejectedOwner==p.player.UserId
  if r.geodeRejectedOwner==p.player.UserId then r.geodeRejectedOwner=nil end
+ if newAttempt and r.kind=='Geode' and not r.geodePassed then
+  -- Bound assembly time; repeated clicks cannot postpone the power check.
+  r.geodeRallyUntil=now+Mining.GEODE_RALLY_TIME
+  if r.geodeTestAt then r.geodeTestAt=r.geodeRallyUntil;r.geodeTestDamage=0 end
+ end
  square.directId=r.id;square.focusId=r.id
  for _,d in ipairs(p.drones) do
   if DroneRoles.isWorker(d.role) and not d.carrierId and d.target~=r then
@@ -14271,6 +14288,20 @@ function scene.stepGeode(r)
   return
  end
  if r.kind~='Geode' or not r.field.cfg.ContinuousCrystals then return end
+ if r.geodeTestAt and r.geodeTestAt>now then
+  local p=profiles[r.geodeAttemptOwner]
+  local assembled=p and p.miningSquare and p.miningSquare.directId==r.id
+  local count=0
+  if assembled then
+   for _,d in ipairs(p.drones) do
+    if DroneRoles.isWorker(d.role) and not d.carrierId and d.hp>0 and not d.recharging then
+     count+=1
+     if d.target~=r or not (d.mining or d.breaker and d.breaker.phase~='Approach') then assembled=false end
+    end
+   end
+  end
+  if assembled and count>0 then r.geodeTestAt=now;r.geodeTestDamage=0 end
+ end
  local result=Mining.geodeResult(r,now)
  if result==true then r.geodePassed=true;r.part:SetAttribute('GeodePassed',true)
  elseif result==false then
