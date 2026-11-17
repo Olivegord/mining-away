@@ -7,7 +7,7 @@ local BLUE=Color3.fromRGB(135,218,255)
 local GOLD=Color3.fromRGB(255,201,100)
 local GREEN=Color3.fromRGB(136,235,163)
 local RED=Color3.fromRGB(233,134,120)
-local orderText={Queued='Queued',Travel='En route',Starting='Starting',Cutting='Cutting',Claimed='Claimed',Paused='Paused'}
+local orderText={Queued='Queued',Travel='En route',Starting='Starting',Cutting='Cutting',Claimed='Claimed',Paused='Paused',Ready='E to open',Opening='Opening',Underpowered='Upgrade crew · click to retry'}
 function V.new(ctx)
  return setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
 end
@@ -99,7 +99,7 @@ function V:update(dt,now)
    local growing=now<(r.source:GetAttribute('ReadyAt') or 0)
    local busy=(r.source:GetAttribute('SlotsUsed') or 0)>=(r.source:GetAttribute('SlotCapacity') or 1)
    local color=working[id] and GREEN or self.queued[id] and GOLD or (growing or busy) and RED or BLUE
-   if id==ordered then color=phase=='Claimed' and RED or phase=='Cutting' and GREEN or GOLD end
+   if id==ordered then color=(phase=='Claimed' or phase=='Underpowered') and RED or phase=='Cutting' and GREEN or GOLD end
    local pulse=flash and flash.id==id and math.clamp(1-(os.clock()-flash.at)/.8,0,1) or 0
    if pulse>0 then color=flash.color end
    h.Adornee=r.view;h.Enabled=true;h.FillColor=color
@@ -132,12 +132,13 @@ function V:update(dt,now)
    elseif ore then ' · '..ore..' base ore'
    elseif capacity>1 then ' · '..usedSlots..'/'..capacity
    else ''
+  if s:GetAttribute('Kind')=='Geode' then name='Geode';label=' · 6 gems' end
   self.title.Text=tostring(name)..label
   local order=if ordered and focused==records[ordered] then orderText[phase] else nil
   local showOrder=order~=nil
-  self.meter.Size=UDim2.fromOffset(value and 188 or ore and 176 or 132,showOrder and 35 or 22)
+  self.meter.Size=UDim2.fromOffset(phase=='Underpowered' and 240 or value and 188 or ore and 176 or 132,showOrder and 35 or 22)
   self.order.Visible=showOrder;self.order.Text=order or ''
-  self.order.TextColor3=order and (phase=='Cutting' and GREEN or phase=='Claimed' and RED or GOLD) or GOLD
+  self.order.TextColor3=order and (phase=='Cutting' and GREEN or (phase=='Claimed' or phase=='Underpowered') and RED or GOLD) or GOLD
  elseif self.meter then self.meter.Enabled=false end
 end
 function V:destroy()

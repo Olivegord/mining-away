@@ -1,9 +1,9 @@
 """Execute temporary equipment and damage against actual server functions, with API doubles."""
 from pathlib import Path
-import subprocess, tempfile
+import subprocess, tempfile, sys
 from build import ROOT, bundle, client_bundle
 
-luau = Path('/private/tmp/mining-away-luau')
+luau = Path(sys.argv[1] if len(sys.argv)>1 else '/private/tmp/drone-luau')
 setup = '''
 function typeof(v)
  if getmetatable(v)==VM and v.R==nil then return 'Vector3' end

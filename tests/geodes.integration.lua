@@ -21,6 +21,13 @@ local function station(d,r)
 end
 local oldRay=workspace.Raycast
 workspace.Raycast=function() return nil end
+local other=player(98881);players.PlayerAdded:Fire(other);local foreign=profiles[other.UserId]
+local discoveries=0
+local originalTools=scene.fieldTools
+scene.fieldTools={refreshStock=function() end,onRock=function(_,owner,resource)
+ assert(owner==p and resource.paid,'discovery before committed opening')
+ discoveries+=1
+end}
 local g=rock('Geode')
 station(miner,g)
 assert(hitResource(miner,g,10000),'initial geode contact rejected')
@@ -31,12 +38,17 @@ assert(g.hp==1000 and g.stage==0 and not miner.target and g.geodeRejectedOwner==
 assert(not chooseResource(miner,field,square),'rejected crew retried without a new focus order')
 scene.focusResource(p,{runId=run.id,resourceId=g.id})
 assert(square.directId==g.id and not g.geodeRejectedOwner,'focus did not reset attempt')
+g.geodeRejectedOwner=pl.UserId;scene.publishSquareFocus(p,square)
+assert(pl:GetAttribute('MA_SelectorFocus')=='Underpowered:'..g.id,'failed geode looks queued')
+g.geodeRejectedOwner=nil
 station(miner,g);hitResource(miner,g,100)
 for i=1,8 do now+=.5;hitResource(miner,g,70) end
 scene.stepGeode(g);assert(g.geodePassed,'sustained work failed')
 hitResource(miner,g,10000)
 assert(g.openReady and not g.paid and g.hp==1 and not miner.target,'geode did not stop ready')
 assert(next(pickups)==nil,'geode paid before E')
+scene.publishSquareFocus(p,square)
+assert(pl:GetAttribute('MA_SelectorFocus')=='Ready:'..g.id and discoveries==0)
 assert(not hitResource(miner,g,10000),'ready shell took more damage')
 assert(not clusterEligible(miner,p,g,field),'ready geode entered an automatic cluster')
 scene.regrow(g,50);assert(g.hp==1,'ready reward healed')
@@ -45,7 +57,6 @@ scene.openResource(p,{runId='stale',resourceId=g.id});assert(not g.openingAt)
 pl.Character:PivotTo(CFrame.new(center+Vector3.xAxis*60))
 scene.openResource(p,{runId=run.id,resourceId=g.id});assert(not g.openingAt)
 pl.Character:PivotTo(CFrame.new(center+Vector3.new(0,3,5)))
-local other=player(98881);players.PlayerAdded:Fire(other);local foreign=profiles[other.UserId]
 other.Character:PivotTo(CFrame.new(center+Vector3.new(0,3,5)))
 scene.openResource(foreign,{runId=data(foreign).run.id,resourceId=g.id});assert(not g.openingAt)
 workspace.Raycast=function() return {Instance=bed} end
@@ -62,6 +73,7 @@ end
 assert(count==6 and g.paid and #field.respawnQueue==1,'geode reward/respawn not exact')
 scene.stepGeode(g);scene.openResource(p,{runId=run.id,resourceId=g.id})
 local after=0;for _ in pairs(pickups) do after+=1 end;assert(after==count)
+assert(discoveries==1,'geode must count as one discovery, not six or zero')
 print('PASS first-crack gate, low-DPS recoil, retry, sustained power, E validation, six field gems, duplicate guard')
 local gem=rock('Crystal',4);gem.gemReward=true
 station(miner,gem);hitResource(miner,gem,10000)
@@ -70,6 +82,14 @@ assert(not clusterEligible(miner,p,gem,field),'ready gem entered an automatic cl
 local stone=rock('Crystal',-4);stone.gemReward=false
 station(miner,stone);hitResource(miner,stone,10000)
 assert(stone.paid and stone.cargoProduced,'ordinary stone no longer automatic')
+local naturalGem=rock('Crystal',6);naturalGem.gemReward=true
+station(miner,naturalGem);hitResource(miner,naturalGem,10000)
+scene.openResource(p,{runId=run.id,resourceId=naturalGem.id});now=naturalGem.openingAt+.01;scene.stepGeode(naturalGem)
+assert(discoveries==3,'ordinary stone and natural gem must each count once')
+local toolGem=rock('Crystal',7);toolGem.gemReward=true;toolGem.consumableWorked=true
+station(miner,toolGem);hitResource(miner,toolGem,10000)
+scene.openResource(p,{runId=run.id,resourceId=toolGem.id});now=toolGem.openingAt+.01;scene.stepGeode(toolGem)
+assert(discoveries==3,'tool-mined gem manufactured more tools')
 local abandoned=gem;local savedRun=run.id;run.id='new-run'
 scene.stepGeode(abandoned);assert(not abandoned.openReady and abandoned.hp==1000,'old run kept ready claim')
 run.id=savedRun
@@ -85,6 +105,11 @@ for _,d in ipairs(p.drones) do
  end
 end
 assert(workers>=3)
+scene.placeSquare(p,{runId=run.id,fieldId=field.id,position=center})
+assert(p.miningSquare==square and not square.directId,'confirming current plot failed to release forced focus')
+for _,d in ipairs(p.drones) do release(d) end
+assert(chooseResource(miner,field,square)==weak,'automatic mining did not return to weakest rock')
+scene.focusResource(p,{runId=run.id,resourceId=focus.id})
 scene.focusResource(foreign,{runId=data(foreign).run.id,resourceId=focus.id})
 for id in pairs(focus.slots) do assert(drones[id].owner==pl.UserId) end
 print('PASS gems wait, stone stays automatic, stale claims reset, full mixed crew focuses without helper delay')
@@ -92,4 +117,6 @@ local spawned,cost,native=spawnResource(field,'Geode')
 assert(spawned and cost==1 and native.kind=='Geode' and native.part.Shape==Enum.PartType.Ball,'continuous geode spawn failed')
 assert(native.maxHP-10>=260 and native.fullSize.X==native.fullSize.Y,'geode work/round silhouette incorrect')
 print('PASS production geode spawn uses one field slot, round geometry and extended work')
+scene.fieldTools=originalTools
 workspace.Raycast=oldRay
+print('PASS one discovery per opened deposit, no tool recursion, honest focus status, return to automatic mining')

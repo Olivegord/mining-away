@@ -237,8 +237,10 @@ check('an interrupted orbital returns the same temporary tool before its first c
  assert(not p.supply and s.slots[6]==orbital and orbital.state=='Held' and orbital.hp==1 and r.hp==hp)
 end)
 check('runtime rocks become solid after growth and stop blocking on depletion',function()
- local _,p=fixture();local r=node(18);r.readyAt=now+.2
- assert(not r.part.CanCollide);advance(.3);heartbeat:Fire(.11);assert(r.part.CanCollide and r.part.CanTouch)
+ local _,p=fixture();local r=node(18);r.gemReward=false;r.readyAt=now+.2
+ -- Earlier fixtures leave avatars nearby; growth deliberately avoids trapping them.
+ for _,avatar in ipairs(players:GetPlayers()) do avatar.Character:PivotTo(CFrame.new(home)) end
+ assert(not r.part.CanCollide,'solid before growth');advance(.3);heartbeat:Fire(.11);assert(r.part.CanCollide and r.part.CanTouch==not r.referenceCrystal,'collision/touch policy after growth')
  rock(p,r);assert(not r.part.CanCollide and not r.part.CanQuery and not r.part.CanTouch)
 end)
 print(checks..' actual-server temporary tool and hazard checks; no native play/render claim')

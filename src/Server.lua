@@ -2306,7 +2306,10 @@ function scene.publishSquareFocus(p,square)
     if worker.warmAt then phase='Starting' elseif phase=='Queued' then phase='Travel' end
    else foreign=true end
   end
-  if not healthy(p) then phase='Paused'
+  if focus.openingAt then phase='Opening'
+  elseif focus.openReady then phase='Ready'
+  elseif focus.geodeRejectedOwner==p.player.UserId then phase='Underpowered'
+  elseif not healthy(p) then phase='Paused'
   elseif foreign and phase=='Queued' then phase='Claimed' end
   receipt=phase..':'..focus.id
  elseif square.focusId then square.focusId=nil end
@@ -4461,6 +4464,7 @@ function scene.placeSquare(p,payload)
  -- This is a command to the fleet within a validated bed and walking range.
  -- Mining itself still checks the worker's contact path and target ownership.
  if samePin then
+  current.directId=nil -- Confirming the plot restores automatic crew assignment.
   current.leadId=square.leadId;current.focusId=square.focusId
   scene.publishSquareFocus(p,current)
   commandReply(p.player,payload,'accepted');return
@@ -4542,6 +4546,9 @@ function scene.stepGeode(r)
    r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false
    local count=r.kind=='Geode' and 6 or 1
    for _=1,count do r.cargoProduced=nil;award(r.openActor,r,r.openSpecialist,false) end
+   -- Opening finishes one mined deposit, even when it contains six gems.
+   -- Keep the same tool discovery cadence and no tool-from-tool rule as stone.
+   if not r.consumableWorked and scene.fieldTools then scene.fieldTools:onRock(p,r) end
    local vacancy={at=now+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn,
     position=r.position,owner=r.openOwner,landmark=r.landmark,landmarkMineral=r.landmarkMineral}
    table.insert(r.field.respawnQueue,vacancy)
