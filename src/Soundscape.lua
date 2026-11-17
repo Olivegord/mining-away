@@ -120,6 +120,10 @@ if DOWNLOADS.rock then
  CUES.crystal_split={id=DOWNLOADS.rock,volume=1.55,duration=2.7,pitch=1,attack=.003,
   cooldown=.065,range=82,maxVoices=5,rockCuts=true,naturalTail=true,fallback='action_jump_land.mp3'}
 end
+CUES.sale_stone=table.clone(CUES.crystal_split)
+CUES.sale_stone.volume=.95;CUES.sale_stone.maxVoices=3;CUES.sale_stone.reserved=true
+CUES.sale_gem.duration=.60;CUES.sale_gem.attack=.003
+CUES.sale_credit.duration=.38;CUES.sale_dust_credit.duration=.45
 if DOWNLOADS.laser then
  CUES.laser_start={id=DOWNLOADS.laser,volume=.44,duration=.821521,pitch=1,attack=.006,
   cooldown=.16,range=65,maxVoices=3,naturalTail=true,fallback='volume_slider.ogg'}

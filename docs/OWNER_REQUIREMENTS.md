@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 16 — reject the receipt-panel layout; make the sale understandable
+
+The owner rejects v365 as worse and clarifies that the UI layout itself is confusing. Show the rocks themselves, what each is worth, totals and modifiers. They still somewhat like the adding-up receipts but authorize choosing the best overall solution. Do not interpret structural checks as evidence that selling feels good. Prioritize a coherent layout and clear object-to-value relationships over adding more labels or delay.
+
 ## November 16 — reject the flat, ambiguous ore sale
 
 Keep the addition system, but replace the single shared bar with separate readable currency calculations. Make it clear which ore is being sold. Research both clarity and satisfaction: stronger text impact, coherent sounds, useful pauses, screen shake, lingering particles and velocity-based motion. This supersedes the earlier removal of all item/currency labels where that made the sale ambiguous. Routine shared Edit/canonical saves apply; this request does not ask for another publication.

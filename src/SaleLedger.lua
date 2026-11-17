@@ -16,6 +16,7 @@ end
 local function rowFor(parent,key)
  local cash=key=='Money'
  local color=cash and MONEY or Color3.fromRGB(table.unpack(Workshop.RESOURCE_COLORS[key]))
+ if key=='Stone' then color=Color3.fromRGB(225,222,213) end
  local root=Instance.new('Frame');root.Name='Currency_'..key
  root.BackgroundTransparency=1;root.BorderSizePixel=0;root.ZIndex=2;root.Parent=parent
  local title=text(root,'CurrencyName',cash and 'Money' or Workshop.RESOURCE_NAMES[key],18,color,Enum.TextXAlignment.Left)
@@ -31,15 +32,9 @@ local function rowFor(parent,key)
  local totalScale=Instance.new('UIScale');totalScale.Parent=total
  total.AnchorPoint=Vector2.new(1,.5);total.Position=UDim2.new(1,-10,1,-21);total.Size=UDim2.new(1,-10,0,40)
  local terms=Instance.new('Frame');terms.BackgroundTransparency=1;terms.ClipsDescendants=true
- terms.Position=UDim2.fromOffset(0,88);terms.Size=UDim2.new(1,0,1,-136);terms.ZIndex=3;terms.Parent=root
- local bonus=Instance.new('Frame');bonus.Name='Modifier';bonus.BackgroundTransparency=1
- bonus.AnchorPoint=Vector2.new(.5,0);bonus.Size=UDim2.fromOffset(112,52)
- bonus.ZIndex=4;bonus.Visible=false;bonus.Parent=root
- local name=text(bonus,'Name','',16,WHITE,Enum.TextXAlignment.Center)
- name.Size=UDim2.new(1,0,0,20);name.ZIndex=4
- local multiplier=text(bonus,'Multiplier','',31,color,Enum.TextXAlignment.Center)
- multiplier.Position=UDim2.fromOffset(0,16);multiplier.Size=UDim2.new(1,0,0,36);multiplier.ZIndex=4
- return {key=key,root=root,terms=terms,total=total,color=color,history={},amount=0,totalScale=totalScale,earlier=earlier,carried=0,title=title,rule=rule,bonus=bonus,bonusName=name,multiplier=multiplier}
+ terms.Position=UDim2.fromOffset(0,42);terms.Size=UDim2.new(1,0,1,-90);terms.ZIndex=3;terms.Parent=root
+
+ return {key=key,root=root,terms=terms,total=total,color=color,history={},amount=0,totalScale=totalScale,earlier=earlier,carried=0,title=title,rule=rule}
 end
 function Ledger.new(gui,items)
  local keys={Money=true}
@@ -58,21 +53,31 @@ function Ledger.new(gui,items)
  end
  return self
 end
+function Ledger:quote(items)
+ local totals={Money=0}
+ for _,item in ipairs(items) do
+  totals.Money+=item.cash*item.units
+  if item.resource then totals[item.resource]=(totals[item.resource] or 0)+item.dust*item.units end
+  totals.Stone=(totals.Stone or 0)+item.stoneUnits*item.units
+ end
+ for _,row in ipairs(self.order) do row.total.Text=format(row.key,totals[row.key] or 0) end
+end
+function Ledger:begin()
+ for _,row in ipairs(self.order) do row.total.Text=format(row.key,0) end
+end
 function Ledger:layout(x,y,width,height)
  self.panel.Position=UDim2.fromOffset(x,y);self.panel.Size=UDim2.fromOffset(width,height)
  local gap=24
- local cols=math.min(#self.order,3,math.max(1,math.floor((width+gap)/172)))
- local bands=math.ceil(#self.order/cols)
- local bandHeight=math.clamp(height/bands,180,228)
- local blockHeight=bands*bandHeight
- self.panel.CanvasSize=UDim2.fromOffset(0,blockHeight)
- local first=math.max(0,math.floor((height-blockHeight)*.3))
- local columnWidth=(width-gap*(cols-1))/cols
+ local cols=#self.order
+ local bandHeight=math.clamp(height,132,174)
+ local columnWidth=math.max(116,(width-gap*(cols-1))/cols)
+ self.panel.ScrollingDirection=Enum.ScrollingDirection.X
+ self.panel.CanvasSize=UDim2.fromOffset(cols*(columnWidth+gap)-gap,bandHeight)
  for i,row in ipairs(self.order) do
-  row.root.Position=UDim2.fromOffset((i-1)%cols*(columnWidth+gap),first+math.floor((i-1)/cols)*bandHeight)
-  row.root.Size=UDim2.fromOffset(columnWidth,bandHeight-18);row.lineHeight=24
-  row.visibleHistory=math.clamp(math.floor((bandHeight-18-136)/24),1,3)
-  row.bonusWidth=columnWidth;self.rules[i]=row.rule
+  row.root.Position=UDim2.fromOffset((i-1)*(columnWidth+gap),0)
+  row.root.Size=UDim2.fromOffset(columnWidth,bandHeight-12);row.lineHeight=22
+  row.visibleHistory=math.clamp(math.floor((bandHeight-12-90)/22),1,3)
+  self.rules[i]=row.rule
  end
 end
 
@@ -85,22 +90,13 @@ function Ledger:stage(terms,now,item)
   local nextLine=text(row.terms,'AdditionTerm','+ '..format(term.key,term.base),23,row.color)
   nextLine.TextScaled=true
   local limits=Instance.new('UITextSizeConstraint');limits.MinTextSize=12;limits.MaxTextSize=23;limits.Parent=nextLine
-  local origin=text(row.terms,'OreName',item and item.name..(item.units>1 and ' ×'..item.units or '') or '',14,WHITE,Enum.TextXAlignment.Left)
-  table.insert(history,1,{view=nextLine,origin=origin,value=term.base+term.bonus,y=7,at=now,from=7,effective=format(term.key,term.base+term.bonus)})
+  local itemName=item and item.name..(item.units>1 and ' ×'..item.units or '') or ''
+  table.insert(history,1,{view=nextLine,itemName=itemName,value=term.base+term.bonus,y=7,at=now,from=7,effective=format(term.key,term.base+term.bonus)})
   if #history>3 then
-   local old=table.remove(history);row.carried+=old.value;old.view:Destroy();old.origin:Destroy()
+   local old=table.remove(history);row.carried+=old.value;old.view:Destroy()
    row.earlier.Text='Earlier  + '..format(row.key,row.carried)
   end
   for _,line in ipairs(history) do line.from=line.y;line.at=now end
- end
-end
-function Ledger:applyModifier(terms,now)
- for _,term in ipairs(terms) do
-  local row=self.rows[term.key]
-  if term.bonus>0 and row then
-   local multiple=string.format('%.2f',1+term.bonus/term.base):gsub('0+$',''):gsub('%.$','')
-   row.bonusName.Text=term.modifier;row.multiplier.Text=multiple..'×';row.modifierAt=now
-  end
  end
 end
 function Ledger:add(terms,now)
@@ -124,17 +120,14 @@ function Ledger:update(now,reduced)
   local carried=row.carried
   for i,line in ipairs(row.history) do
    local shown=i<=(row.visibleHistory or 3)
-   line.view.Visible=shown;line.origin.Visible=shown
+   line.view.Visible=shown
    if not shown then carried+=line.value end
    local t=reduced and 1 or math.clamp((now-line.at)/.19,0,1)
    line.y=line.from+(-(i-1)*height-line.from)*(1-(1-t)^3)
-   line.view.Size=UDim2.new(.53,0,0,height)
-   line.origin.Size=UDim2.new(.46,0,0,height)
-   line.origin.Position=UDim2.new(0,0,1,line.y-height)
-   line.origin.TextTransparency=i==1 and .1 or .35
+   line.view.Size=UDim2.new(1,0,0,height)
    local impactAge=math.max(0,now-(line.hitAt or -100))
    local kick=reduced and 0 or 7*math.exp(-impactAge*12)*math.cos(impactAge*24)
-   line.view.Position=UDim2.new(.47,0,1,line.y-height-kick)
+   line.view.Position=UDim2.new(0,0,1,line.y-height-kick)
    line.view.TextSize=height-2;line.view.TextTransparency=i==1 and 0 or i==2 and .25 or .55
   end
   row.earlier.Text=carried>0 and 'Earlier  + '..format(row.key,carried) or ''
@@ -144,16 +137,7 @@ function Ledger:update(now,reduced)
   row.totalScale.Scale=1+(reduced and 0 or .23*math.exp(-hitAge*9)*math.cos(hitAge*19))
   row.rule.Size=UDim2.new(1,0,0,2+(reduced and 0 or math.floor(impact*2)))
   row.total.TextColor3=row.color:Lerp(WHITE,impact*.8)
-  local age=now-(row.modifierAt or -100)
-  row.bonus.Visible=age<.65
-  row.earlier.Visible=not row.bonus.Visible
-  if row.bonus.Visible then
-   local fade=math.min(math.clamp(age/.043,0,1),1-math.clamp((age-.48)/.17,0,1))
-   row.bonus.Size=UDim2.fromOffset(row.bonusWidth or 105,52)
-   row.bonus.Position=UDim2.new(.55,0,0,reduced and 40 or 44-6*math.clamp(age/.65,0,1))
-   row.bonus.Rotation=reduced and -8 or -8-8*math.exp(-age*16)
-   row.bonusName.TextTransparency=1-fade;row.multiplier.TextTransparency=1-fade
-  end
+
  end
 end
 function Ledger:destroy() self.panel:Destroy() end
