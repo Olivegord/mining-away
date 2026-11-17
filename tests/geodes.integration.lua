@@ -1,3 +1,4 @@
+-- Historical power-trial fixture, superseded by sealed-geodes.integration.lua on November 16.
 local pl=player(98880);players.PlayerAdded:Fire(pl)
 local p=profiles[pl.UserId];local run=data(p).run
 local miner=p.drones[1];assert(miner.role=='Striker')

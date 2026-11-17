@@ -12,7 +12,7 @@ with tempfile.TemporaryDirectory(prefix='geodes-') as directory:
         path=root/(name+'.lua');path.write_text(code)
         subprocess.run([str(luau/'luau-compile'),str(path)],stdout=subprocess.DEVNULL,check=True)
     source='\n'.join([(ROOT/'tests/mock-roblox.lua').read_text(),(ROOT/'tests/gadget-server.setup.lua').read_text(),
-        "do local nativeType=typeof; typeof=function(x) return getmetatable(x)==VM and 'Vector3' or nativeType(x) end end",server,
-        ';(function()\n'+module_bundle(('SelectorView',))+'\n'+(ROOT/'tests/geodes.integration.lua').read_text()+'\nend)()'])
+        "do local nativeType=typeof; typeof=function(x) return getmetatable(x)==VM and 'Vector3' or nativeType(x) end end", "local math=table.clone(math)",server,
+        ';(function()\n'+module_bundle(('SelectorView',))+'\n'+(ROOT/'tests/sealed-geodes.integration.lua').read_text()+'\nend)()'])
     path=root/'integration.lua';path.write_text(source)
     subprocess.run([str(luau/'luau'),str(path)],check=True)

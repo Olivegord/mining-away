@@ -1,5 +1,5 @@
 -- Local aiming, pinned command feedback and bounded crystal healing cues.
-local V={}
+local V={Interaction=require('./FieldInteractionView')}
 V.__index=V
 local previewColor=Color3.fromRGB(234,245,255)
 local activeColor=Color3.fromRGB(255,147,61)
@@ -149,7 +149,12 @@ function V:readyRock(resources)
   local s=r.source
   if s:GetAttribute('OpenReady') and s:GetAttribute('OpenOwner')==self.options.player.UserId and not s:GetAttribute('OpeningAt') then
    local distance=(s.Position-root.Position).Magnitude
-   if distance<best then self.ready=r;best=distance end
+   if distance<best then
+    local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances={self.options.player.Character,self.options.parent}
+    local hit=workspace:Raycast(root.Position,s.Position-root.Position,params)
+    if not hit or hit.Instance==s then self.ready=r;best=distance end
+   end
   end
  end
  return self.ready

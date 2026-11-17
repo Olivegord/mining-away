@@ -1876,39 +1876,45 @@ local mouse=player:GetMouse()
   end
   if selectorView.draft then
    if not selectorView.pending then return 'Confirm plot' end
-  elseif selectorView:readyRock(resources) then return 'Break '..(selectorView.ready.source:GetAttribute('Kind')=='Geode' and 'geode' or 'gem')
+  elseif selectorView:readyRock(resources) then return 'Open geode'
   elseif player:GetAttribute('MA_OrePickup') then return 'Pick up rock' end
  end
  pickupView.pickupFocus=function()
   return available()=='Pick up rock' and player:GetAttribute('MA_OrePickup') or nil
  end
+ local interaction,lastActionAt
+ local function showAction(action)
+  local target,point,height,existing
+  if action=='Confirm plot' and selectorView.draft then
+   point=selectorView.draft.point
+  elseif action=='Open geode' and selectorView.ready then
+   local r=selectorView.ready
+   target=r.shellModel or r.view;point=r.view.Position;height=r.view.Size.Y
+  elseif action=='Pick up rock' then
+   local r=pickupView.byId[player:GetAttribute('MA_OrePickup')]
+   if r then target=r.view;point=r.view.Position;height=r.view.Size.Y;existing=true end
+  end
+  local input=UIS:GetLastInputType()
+  local key=input==Enum.UserInputType.Touch and 'Tap' or input.Name:match('^Gamepad') and 'X' or 'E'
+  interaction:show(action,target,point,height,key,existing)
+ end
  selectorView.performFieldAction=function()
   local action=available()
+  if not action then return false end
+  if lastActionAt and os.clock()-lastActionAt<.3 then return true end
+  showAction(action);interaction:select();lastActionAt=os.clock()
   if action=='Confirm plot' then return selectorView:confirm() end
-  if action=='Break gem' or action=='Break geode' then
+  if action=='Open geode' then
    command:FireServer('OpenResource',{resourceId=selectorView.ready.id,runId=profile.run.id});return true
   end
   if action=='Pick up rock' then
-   command:FireServer('PickupOre',player:GetAttribute('MA_OrePickup'))
-   return true
+   command:FireServer('PickupOre',player:GetAttribute('MA_OrePickup'));return true
   end
   return false
  end
- local prompt=button(safeRoot,UDim2.new(.5,0,1,-68),UDim2.fromOffset(174,38),'',selectorView.performFieldAction,palette.paper)
- prompt.Name='FieldInteraction';prompt.AnchorPoint=Vector2.new(.5,1);prompt.Visible=false;prompt.Active=true
- connect(RunService.RenderStepped,function()
-  local action=available()
-  prompt.Visible=action~=nil
-  if not action then return end
-  local hotbar=toolView and toolView.gui
-  local bottom=hotbar and hotbar.Visible and math.max(68,safeRoot.AbsolutePosition.Y+safeRoot.AbsoluteSize.Y-hotbar.AbsolutePosition.Y+10) or 68
-  local position=UDim2.new(.5,0,1,-bottom)
-  if prompt.Position~=position then prompt.Position=position end
-  local input=UIS:GetLastInputType()
-  local prefix=input==Enum.UserInputType.Touch and '' or input.Name:match('^Gamepad') and '[X]  ' or '[E]  '
-  local caption=prefix..action
-  if prompt.Text~=caption then prompt.Text=caption end
- end)
+ interaction=SelectorView.Interaction.new(gui,localFX,selectorView.performFieldAction)
+ connect(RunService.RenderStepped,function() showAction(available()) end)
+
 end)()
 connect(RunService.RenderStepped,function(dt) selectorView:step(dt) end)
 connect(UIS.TouchTapInWorld,function(position,processed)
@@ -1975,10 +1981,10 @@ connect(UIS.InputEnded,function(input)
  if selectorView.touch and selectorView.touch.input==input then selectorView.touch=nil end
  if input.UserInputType==Enum.UserInputType.MouseButton1 then commandView:endDrag() end
 end)
-local hudClock=0
-local availabilitySignature=''
+selectorView.hudClock=0
+selectorView.availabilitySignature=''
 connect(RunService.Heartbeat,function(dt)
- hudClock=hudClock+dt;if hudClock<.2 then return end;hudClock=0
+ selectorView.hudClock+=dt;if selectorView.hudClock<.2 then return end;selectorView.hudClock=0
  local view=viewport();local l=currentLayout();local touch=UIS.TouchEnabled and not UIS.KeyboardEnabled
  fleetButton.Visible=profile~=nil and not menusVisible()
  fleetButton.Position=UDim2.new(1,-74,0,view.X<680 and 84 or 12)
@@ -2006,7 +2012,7 @@ connect(RunService.Heartbeat,function(dt)
  if modal.Visible and (modalMode=='offer' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
   local action=modalMode=='offer' and 'ChooseCard' or modalMode=='shop' and 'BuyUpgrade' or modalMode=='stars' and 'BuyStarUpgrade' or 'Prestige'
   local allowed,reason=availability(action);local signature=modalMode..':'..tostring(allowed)..':'..reason
-  if signature~=availabilitySignature then availabilitySignature=signature;if modalMode=='offer' then updateOfferControls() else refreshModal() end end
+  if signature~=selectorView.availabilitySignature then selectorView.availabilitySignature=signature;if modalMode=='offer' then updateOfferControls() else refreshModal() end end
  end
  if actionPending and os.clock()-actionPending.at>10 and not (profile and profile.pendingTransaction) then
   if actionPending==offerUI.claim then offerUI.claim=nil end

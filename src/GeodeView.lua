@@ -47,7 +47,8 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
   end
   local player=game:GetService('Players').LocalPlayer
   local lowFlash=BeamVFX.reduced() or player and player:GetAttribute('ReducedFlashing')==true
-  local target=geode and (progress>0 and .025+.40*progress or 0) or .23
+  local target=source:GetAttribute('SealedDrop') and (opening and .32*math.clamp(1-(opening-now)/.85,0,1) or .025)
+   or geode and (progress>0 and .025+.40*progress or 0) or .23
   local recoil=source:GetAttribute('GeodeRecoilAt') or 0
   if recoil>rig.lastRecoil then
    rig.lastRecoil=recoil
@@ -70,7 +71,7 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
   if #rig.halves==2 then r.view.Transparency=1;if r.stoneGradient then RockFinish.setVisibility(r.stoneGradient,1) end end
   local pulse=lowFlash and 1 or .92+.08*math.sin(now*2.7)
   rig.core.Size=size*(geode and .74 or .66);rig.core.CFrame=frame
-  rig.core.Transparency=progress>0 and .12 or 1
+  rig.core.Transparency=(progress>0 or ready or opening) and .12 or 1
   rig.glow.Range=(ready or opening) and 18 or 8
   rig.glow.Brightness=(ready or opening) and (lowFlash and .8 or 2.8)*pulse or progress*.6
   rig.halo.Enabled=ready or opening~=nil;rig.image.ImageTransparency=lowFlash and .82 or .48+.12*(1-pulse)

@@ -99,6 +99,8 @@ def module_bundle(names):
  s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
+  if name=='SelectorView':
+   code=code.replace("require('./FieldInteractionView')",'(function()\n'+(ROOT/'src/FieldInteractionView.lua').read_text()+'\nend)()')
   if name=='CrystalImpactView':
    code=code.replace("require('./GeodeView')",'(function()\n'+(ROOT/'src/GeodeView.lua').read_text()+'\nend)()')
   if name=='Soundscape':

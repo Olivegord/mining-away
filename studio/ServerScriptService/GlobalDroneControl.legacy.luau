@@ -10213,7 +10213,7 @@ end
 scene.chargeIndicator=scene.chargingStation and scene.chargingStation.Parent:FindFirstChild('ChargeIndicator')
 local resourceSerial=0
 local function nodeUsage(field)
- local count=0;for _,r in ipairs(field.resources) do if not r.paid then count=count+(r.kind=='Geode' and not field.cfg.ContinuousCrystals and 5 or 1) end end;return count
+ local count=0;for _,r in ipairs(field.resources) do if not r.paid and not r.sealedDrop then count=count+(r.kind=='Geode' and not field.cfg.ContinuousCrystals and 5 or 1) end end;return count
 end
 local function respawnRate(field: any)
  local count=0
@@ -10387,7 +10387,8 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((not field.cfg.SelectionOnly and field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and not field.cfg.ContinuousCrystals and field.cfg.Count-usage<5 then kind='Crystal' end
- if field.cfg.ContinuousCrystals and not forceKind and not prepareOnly and not plan and not (vacancy and vacancy.landmark) and seed:NextNumber()<Mining.GEODE_CHANCE then kind='Geode' end
+ -- Crystal Run mines ordinary rocks; geodes are discoveries left by completed cuts.
+ if field.cfg.ContinuousCrystals then kind='Crystal' end
  local reference=field.cfg.ReferenceCrystals==true and kind=='Crystal'
  local boulder=not field.cfg.ReferenceCrystals and not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
  local clearance=RaycastParams.new();clearance.FilterType=Enum.RaycastFilterType.Exclude
@@ -10448,7 +10449,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
  end
  local occupied={}
  for _,r in ipairs(field.resources) do
-  if r.landmark or (r.paid and (r.splitAt or 0)<=now) then continue end
+  if r.sealedDrop or r.landmark or (r.paid and (r.splitAt or 0)<=now) then continue end
   local p=patch.CFrame:PointToObjectSpace(r.position)
   local reserved=r.placementRadius
   if not reserved and (not reference or continuous or field.cfg.SelectionOnly and field.cfg.Hardness>1) then
@@ -11548,19 +11549,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local shapeChanged=false
  local revealed=nil
  local before=r.hp
- if r.field.cfg.ContinuousCrystals and r.gemReward==nil then r.gemReward=r.kind=='Geode' or math.random()<Workshop.CRYSTAL_CHANCE end
- if r.kind=='Geode' and r.field.cfg.ContinuousCrystals then
-  r.geodeAttemptOwner=d.owner;amount=Mining.geodeProgress(r,amount,now)
- end
- local waiting=r.gemReward and amount>=r.hp-1 and (r.kind~='Geode' or r.geodePassed)
- local broken=R.damage(r,waiting and math.max(0,r.hp-1) or amount)
- if waiting then
-  r.openReady=true;r.openOwner=d.owner;r.openRun=data(p).run.id
-  r.openActor={owner=d.owner,role=d.role,stats=Pro.clone(d.stats)}
-  r.openSpecialist=special==true or clusterFinish or (assist and recipient~=d)
-  r.part:SetAttribute('OpenReady',true);r.part:SetAttribute('OpenOwner',d.owner);r.part:SetAttribute('OpenReadyAt',now)
- end
- if r.kind=='Geode' then r.part:SetAttribute('CrackProgress',math.clamp(1-r.hp/(r.maxHP-10),0,1)) end
+ if r.field.cfg.ContinuousCrystals then r.gemReward=false end
+ local waiting=false
+ local broken=R.damage(r,amount)
  local actual=r.paid and 0 or r.hp+10
  local nextStage=Feel.stage(actual,r.maxHP,r.stageCount)
  local fractured=nextStage>previous and not broken
@@ -11678,6 +11669,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    for _,child in ipairs(revealed) do child.consumableWorked=r.consumableWorked end
   else
    award(recipient,r,specialistCut)
+   if r.field.cfg.ContinuousCrystals and math.random()<Workshop.CRYSTAL_CHANCE then
+    scene.leaveGeode(recipient,r,specialistCut)
+   end
    if (recipient.stats.oreDuplicator or 0)>0 and not abilityOrigin then
     RoleEffects.Pulse(r.part.Position,Color3.fromRGB(255,211,93),.45,3.5,.20)
    end
@@ -14247,6 +14241,29 @@ function scene.focusResource(p,payload)
  scene.publishSquareFocus(p,square)
  commandReply(p.player,payload,'accepted')
 end
+-- A sealed discovery has its own identity and never occupies a mining/respawn slot.
+function scene.leaveGeode(d,rock,specialist)
+ local p=profiles[d.owner];if not healthy(p) then return end
+ local bed=rock.field.part
+ local localPoint=bed.CFrame:PointToObjectSpace(rock.position)+Vector3.new(3.5,0,3.5)
+ localPoint=Vector3.new(math.clamp(localPoint.X,-bed.Size.X*.5+1.5,bed.Size.X*.5-1.5),0,
+  math.clamp(localPoint.Z,-bed.Size.Z*.5+1.5,bed.Size.Z*.5-1.5))
+ local r=makeResource(rock.field,bed.CFrame:PointToWorldSpace(localPoint),'Geode',11,rock.ore,2.2,3)
+ r.sealedDrop=true;r.gemReward=true;r.openReady=true;r.openOwner=d.owner;r.openRun=data(p).run.id
+ r.openActor={owner=d.owner,role=d.role,stats=Pro.clone(d.stats)};r.openSpecialist=specialist
+ r.readyAt=now;r.spawnAt=now-2;r.hp=1;r.consumableWorked=rock.consumableWorked
+ -- Roll once on the server; do not replicate the contents before opening.
+ local roll=math.random();r.rewardCount=roll<.80 and 1 or roll<.97 and 2 or 3
+ r.modifiers=rock.modifiers or 0
+ if math.random()<.18 then r.modifiers=bit32.bor(r.modifiers,Mining.ROCK_MODIFIERS.Big) end
+ if math.random()<.12 then r.modifiers=bit32.bor(r.modifiers,Mining.ROCK_MODIFIERS.Charged) end
+ r.part.Color=Color3.fromRGB(165,170,179)
+ r.part:SetAttribute('SealedDrop',true);r.part:SetAttribute('OpenReady',true)
+ r.part:SetAttribute('OpenOwner',d.owner);r.part:SetAttribute('OpenReadyAt',now)
+ r.part:SetAttribute('SpawnAt',r.spawnAt);r.part:SetAttribute('ReadyAt',now)
+ r.part:SetAttribute('HP',1);r.part:SetAttribute('CrackProgress',0)
+ return r
+end
 function scene.openResource(p,payload)
  if type(payload)~='table' or payload.runId~=data(p).run.id then return end
  local r=type(payload.resourceId)=='string' and resources[payload.resourceId]
@@ -14263,11 +14280,8 @@ function scene.stepGeode(r)
  if r.openReady then
   local p=profiles[r.openOwner]
   if not p or p.leaving or data(p).run.id~=r.openRun then
-   -- Abandoned run claims cannot block a shared field indefinitely.
-   r.openReady=nil;r.openingAt=nil;r.openOwner=nil;r.openRun=nil;r.openActor=nil
-   r.hp=r.maxHP-10;r.stage=0;r.geodeTestAt=nil;r.geodePassed=nil
-   r.part:SetAttribute('OpenReady',false);r.part:SetAttribute('OpeningAt',nil);r.part:SetAttribute('OpenOwner',nil)
-   r.part:SetAttribute('Stage',0);r.part:SetAttribute('HP',r.maxHP);r.part:SetAttribute('CrackProgress',0);r.part:SetAttribute('RegrowAt',now);scene.poseResource(r)
+   -- Retire abandoned discoveries; their original rocks already replenished.
+   r.paid=true;r.removeAt=now;r.part.CanQuery=false;r.part.CanCollide=false
    return
   end
   if r.openingAt and now>=r.openingAt and healthy(p) then
@@ -14276,43 +14290,14 @@ function scene.stepGeode(r)
    r.part:SetAttribute('HP',0);r.part:SetAttribute('CrystalSplitAt',now);r.part:SetAttribute('CrystalBreakAt',now)
    r.part:SetAttribute('CrystalBreakOwner',r.openOwner);r.part:SetAttribute('BreakSerial',1)
    r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false
-   local count=r.kind=='Geode' and 6 or 1
+   local count=r.rewardCount or 1
    for _=1,count do r.cargoProduced=nil;award(r.openActor,r,r.openSpecialist,false) end
-   -- Opening finishes one mined deposit, even when it contains six gems.
-   -- Keep the same tool discovery cadence and no tool-from-tool rule as stone.
-   if not r.consumableWorked and scene.fieldTools then scene.fieldTools:onRock(p,r) end
-   local vacancy={at=now+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn,
-    position=r.position,owner=r.openOwner,landmark=r.landmark,landmarkMineral=r.landmarkMineral}
-   table.insert(r.field.respawnQueue,vacancy)
+   -- Discovery credit and the field vacancy belong to the original completed rock.
+
   end
   return
  end
- if r.kind~='Geode' or not r.field.cfg.ContinuousCrystals then return end
- if r.geodeTestAt and r.geodeTestAt>now then
-  local p=profiles[r.geodeAttemptOwner]
-  local assembled=p and p.miningSquare and p.miningSquare.directId==r.id
-  local count=0
-  if assembled then
-   for _,d in ipairs(p.drones) do
-    if DroneRoles.isWorker(d.role) and not d.carrierId and d.hp>0 and not d.recharging then
-     count+=1
-     if d.target~=r or not (d.mining or d.breaker and d.breaker.phase~='Approach') then assembled=false end
-    end
-   end
-  end
-  if assembled and count>0 then r.geodeTestAt=now;r.geodeTestDamage=0 end
- end
- local result=Mining.geodeResult(r,now)
- if result==true then r.geodePassed=true;r.part:SetAttribute('GeodePassed',true)
- elseif result==false then
-  local owner=r.geodeAttemptOwner or r.lastPinOwner
-  for id in pairs(r.slots) do if drones[id] then owner=drones[id].owner;break end end
-  r.geodeRejectedOwner=owner;r.geodeTestAt=nil;r.geodeTestDamage=0;r.hp=r.maxHP-10;r.stage=0
-  r.part:SetAttribute('CrackProgress',0);r.part:SetAttribute('Stage',0);r.part:SetAttribute('HP',r.maxHP)
-  r.part:SetAttribute('GeodeRecoilAt',now);scene.releaseOpenWorkers(r)
-  local p=owner and profiles[owner]
-  if p then notice(p,'Not enough mining power — focus more drones or upgrade, then click the geode to retry.') end
- end
+
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
@@ -14713,7 +14698,7 @@ RunService.Heartbeat:Connect(function(dt: number)
    for _,r in ipairs(field.resources) do
     scene.stepGeode(r)
     scene.regrow(r,snapshotDt)
-    local solid=not r.paid and now>=r.readyAt
+    local solid=not r.paid and not r.sealedDrop and now>=r.readyAt
     if field.junk then
      if r.part.CanQuery~=solid then r.part.CanQuery=solid end
      if solid and not r.part.CanCollide then solid=not scene.junkLandingOccupied(r.position,r.fullSize.Magnitude*.5) end

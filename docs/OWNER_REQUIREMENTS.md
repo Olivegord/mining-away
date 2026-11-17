@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 16 — finish mining, leave sealed discoveries; contextual interactions
+
+The owner approves separating geodes from mining: drones completely break ordinary rocks and drop stone, occasionally leaving a sealed geode as a separate discovery. Remove the continuous-field geode power trial, reset and partially finished gem targets. The mystery and reveal wait for the player's interaction; carriers must not take the sealed reward. Improve E interaction UI substantially: put the button above its actual target, highlight that object, and emit white selection particles when interacting. Routine shared Edit/canonical saves only; no publication requested.
+
 ## November 16 — repair geode focus and opening
 
 The owner reports that geodes do not work because the drones do not focus together. Fix the real click-to-crew flow and make the power challenge achievable by a sufficient crew. Travel and warmup must not turn sufficient mining power into an accidental failed attempt. Preserve the intended insufficient-power recoil, field gems and player-controlled E opening. Routine shared Edit/canonical saves apply; no publication was requested.

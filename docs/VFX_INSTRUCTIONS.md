@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 16 — sealed discoveries and object-anchored E prompts
+
+This supersedes the continuous-field power-test/hinged-mining direction below. Ordinary rocks finish and break automatically, with occasional smaller sealed geode drops. Their neutral shell and soft light do not expose the rolled contents. The shell stays nearly closed until the player's 0.85-second opening anticipation; existing field gem geometry, launch particles and audio reveal the actual rewards. Field E prompts sit above their rendered target with a dark compact caption, white keycap and white target highlight. Interaction emits a short bounded burst of white sparkles; reduced-effects mode lowers its count. This is interaction feedback, not client authority to grant a reward. Native component behavior passed; final in-Play appearance, touch and motion remain unverified.
+
 ## November 16 — geode shells and ready rewards
 
 Geodes use two spherical native CSG halves sharing a lower hinge. Their dimensions stay fixed while the opening grows to about 24 degrees per half. The field stone finish is lightly shifted; the mineral-colored core appears through the opening. Progressive seams emit small counts of the existing chip, streak/ember, spark, glint, afterglow and dust families. Rejection reverses the hinge quickly and uses a distinct low impact cue plus bounded shake. A ready gem/geode has a large camera-facing glow, local light and spatial hum. E starts a 0.24-second gem or 0.85-second geode anticipation before the server releases the reward. Geodes use the stronger existing split camera envelope and a dedicated lower, longer break cue, followed by gem sounds. Reduced effects/flashing and reduced motion remain respected; loops and shells are cleaned up on removal and at range. No Fortnite audio is copied.
