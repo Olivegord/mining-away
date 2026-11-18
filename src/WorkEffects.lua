@@ -130,6 +130,9 @@ function W:energyBloom()
  self.bloom=bloom;self.ownsBloom=existing==nil
 end
 function W:burst(position,normal,color,count,now)
+ return EnergyDisc.full(self.burstNow,self,position,normal,color,count,now)
+end
+function W:burstNow(position,normal,color,count,now)
  if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,140) then return end
  self:energyBloom()
  local anchor=part(self.parent,'WorkBurst');anchor.CFrame=facing(position,normal)

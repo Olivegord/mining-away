@@ -43,6 +43,17 @@ function Disc.configure(emitter,diameter,transparency,startScale,endScale,sizeVa
   NumberSequenceKeypoint.new(1,1),
  })
 end
+-- Run fn with the original, full-size opaque discs. Rock breaks and impact
+-- bursts use this: the owner asked for their old look back. Only continuous
+-- effects (mining contact, charge) stay toned down.
+function Disc.full(fn,...)
+ local scale,max,fade=Disc.SCALE,Disc.MAX,Disc.FADE
+ Disc.SCALE=1;Disc.MAX=math.huge;Disc.FADE=0
+ local result=table.pack(pcall(fn,...))
+ Disc.SCALE=scale;Disc.MAX=max;Disc.FADE=fade
+ if not result[1] then error(result[2],0) end
+ return table.unpack(result,2,result.n)
+end
 -- Little hot sparks: thin streaks that point where they fly and shrink out.
 function Disc.sparks(emitter,width)
  emitter.Texture=Disc.texture

@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 18 — rock-break particles back to the original
+
+Owner: "get back the old particle effects please for rock breaking". Rock breaks and impact bursts (`RoleVisuals` `ImpactParticles`, `WorkEffects:burst`) run inside `EnergyDisc.full`, which restores the original full-size, full-opacity discs for that call. The confetti twinkle is back to 0.9. Only continuous effects (mining contact, cube belly sparkles, the charge) keep the toned-down discs. Do not shrink or fade break bursts again.
+
 ## November 18 — no crossfades
 
 Owner, right after the fifth pass: "no crossfades". The glitch colors are exact palette entries again and switch outright; **do not blend between colors**. The switch is timed to the moment the blotches and wisps have melted away. Everything else from the fifth pass stays: eased sizes, melting blotches, blended handovers of size and radius, feathered spikes, eased release. Read "no hard edges or linear cuts" as being about motion, size and opacity, not color.

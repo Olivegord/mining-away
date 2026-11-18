@@ -310,7 +310,7 @@ local impactStyles={
  GemReward={speed=NumberRange.new(9,22),spread=72,lift=-12,count=20,dust=0},
  Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
 }
-function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?,saleParent: Instance?,density: number?)
+local function impactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?,stoneColor: Color3?,saleParent: Instance?,density: number?)
  local prism=kind=='PrismBlast'
  if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
@@ -419,6 +419,10 @@ local specialistHits={
  Frostbite={color=Color3.fromRGB(166,226,255),cue='crystal_snap',pitch=1.31,scale=.8,radius=2.25,tail=.21},
  Resonator={color=Color3.fromRGB(249,165,255),cue='coil_hit',pitch=1.19,scale=.63,radius=3.15,tail=.39},
 }
+-- Rock breaks and impact bursts keep their original full-size discs.
+function Effects.ImpactParticles(...)
+ return EnergyDisc.full(impactParticles,...)
+end
 function Effects.SpecialistContact(kind: string,point: Vector3,normal: Vector3,depleted: boolean,audio: any)
  local hit=specialistHits[kind];if not hit then return end
  local scale=depleted and 1.25 or 1

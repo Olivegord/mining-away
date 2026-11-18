@@ -120,7 +120,7 @@ function Fun.confetti(parent,point,color,strength)
  bits.Rotation=NumberRange.new(0,360);bits.RotSpeed=NumberRange.new(-420,420);bits.Parent=anchor
  local twinkle=Instance.new('ParticleEmitter');twinkle.Texture=SPARKLE;twinkle.Rate=0
  twinkle.Color=ColorSequence.new(WHITE,light);twinkle.LightEmission=1;twinkle.LightInfluence=0
- twinkle.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.65),NumberSequenceKeypoint.new(1,0)})
+ twinkle.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.9),NumberSequenceKeypoint.new(1,0)})
  twinkle.Transparency=NumberSequence.new(0,1);twinkle.Lifetime=NumberRange.new(.35,.6)
  twinkle.Speed=NumberRange.new(5,11);twinkle.SpreadAngle=Vector2.new(180,180);twinkle.Drag=4;twinkle.Parent=anchor
  local flash=Instance.new('PointLight');flash.Color=color;flash.Range=14;flash.Brightness=3;flash.Shadows=false;flash.Parent=anchor
