@@ -376,7 +376,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
   end
  end
  local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)
- local batteryVisible=activity.maxBattery>0
+ local batteryVisible=activity.maxBattery>0 and not Players.LocalPlayer:GetAttribute('MA_InSquareField')
  local growth=p and p.prestigePreview
  local growthVisible=growth~=nil and type(growth.saleRequired)=='number'
  local cargoHeight=self:updateBackpack(p,Players.LocalPlayer,world,now,width,fighting)

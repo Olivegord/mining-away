@@ -75,6 +75,8 @@ function V:aim(ray)
  local o=self.options
  local run=o.world.Map:FindFirstChild('CrystalRun')
  if not run or o.hidden() then return nil end
+ local fields=o.world:FindFirstChild('Fields')
+ local classic=fields and fields:FindFirstChild('CrystalRun')
  local character=o.player.Character
  local hr=character and character:FindFirstChild('HumanoidRootPart')
  if not hr then return nil end
@@ -84,9 +86,11 @@ function V:aim(ray)
  if drones then table.insert(ignore,drones) end
  local direction=ray.Direction*500
  local function bedFor(node)
-  while node and node~=run do
+  while node do
    local zone=node.Parent
-   if zone and zone.Parent==run then return zone:FindFirstChild('Field'),node end
+   if zone and (zone.Parent==run or classic and zone.Parent==classic) then
+    return zone:FindFirstChild('Field'),node
+   end
    node=zone
   end
  end

@@ -1384,6 +1384,11 @@ function M.selectorCenter(position,frame,size)
  local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
  return frame:PointToWorldSpace(Vector3.new(x,size.Y*.5,z))
 end
+function M.inField(position,bed)
+ local offset=bed.CFrame:PointToObjectSpace(position)
+ return math.abs(offset.X)<=bed.Size.X*.5 and math.abs(offset.Z)<=bed.Size.Z*.5
+  and math.abs(offset.Y)<=bed.Size.Y*.5+16
+end
 function M.fieldSelection(position,bed)
  local point=M.selectorCenter(position,bed.CFrame,bed.Size)
  if point and bed:GetAttribute('WholeField') then
@@ -2112,8 +2117,11 @@ function Soundscape:observeMining(world,root,drones,resourceIndex,owner,serverNo
  local context,fieldId
  local map=world:FindFirstChild('Map')
  local run=map and map:FindFirstChild('CrystalRun')
- if root and run then
-  for _,model in ipairs(run:GetChildren()) do
+ local fields=world:FindFirstChild('Fields')
+ local classic=fields and fields:FindFirstChild('CrystalRun')
+ for _,route in ipairs(run and {run,classic} or {}) do
+  if not root or fieldId then break end
+  for _,model in ipairs(route:GetChildren()) do
    local bed=model:FindFirstChild('Field')
    if bed and bed:IsA('BasePart') then
     local field=FIELD_CONTEXT[bed:GetAttribute('CrystalZone')]
@@ -7068,7 +7076,7 @@ function Status.draw(drone,source,state,role,alive,now,reducedMotion,reducedFlas
  end
 
  local deciding=state=='Thinking' and now<(source:GetAttribute('ThinkUntil') or 0)
- local powered=source:GetAttribute('BatteryPowered')==true
+ local powered=source:GetAttribute('BatteryPowered')==true and not source:GetAttribute('HideBattery')
  local inPlot=source:GetAttribute('InMiningPlot')==true
  local toCharge=powered and state=='ToCharge' and not inPlot
  local charging=powered and state=='Charging'
@@ -10483,7 +10491,7 @@ end
 local CRYSTAL_AIM_X = -.5675010681152344 / 3.135000228881836
 local CRYSTAL_AIM_Z = -.24361419677734375 / 4.4872307777404785
 local function followsCrystal(sample)
- return sample.isMining==true and sample.serverSource~=nil and sample.serverSource:GetAttribute('CubicRock')==false
+ return not sample.cube and sample.isMining==true and sample.serverSource~=nil and sample.serverSource:GetAttribute('CubicRock')==false
 end
 function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuery,vertical)
  if not part or not part.Parent or part.Transparency>=1 then cache.anchor=nil;return nil end
@@ -10547,16 +10555,23 @@ local function drawReferenceBeam(beam,visible,width,sample,now)
  local origins=beam.twinOrigins
  if beam.reference and beam.referenceOrigins~=origins then
   for _,layer in ipairs(beam.reference) do layer:Destroy() end
-  beam.reference=nil
+  for _,tip in ipairs(beam.referenceTwinTips or {}) do tip:Destroy() end
+  beam.reference=nil;beam.referenceTwinTips=nil
  end
  if visible and not beam.reference then
   local tip=beam.referenceTip
   if not tip then tip=Instance.new('Attachment');tip.Parent=beam.endpoint;beam.referenceTip=tip end
   local layers={}
   for _,origin in ipairs(origins or {beam.origin}) do
+   local endpoint=tip
+   if origins and sample.cube then
+    endpoint=Instance.new('Attachment');endpoint.Parent=beam.endpoint
+    beam.referenceTwinTips=beam.referenceTwinTips or {}
+    table.insert(beam.referenceTwinTips,endpoint)
+   end
    for i,name in ipairs({'ReferenceInner','ReferenceOuter'}) do
     local b=Instance.new('Beam');b.Name=origins and (i==1 and 'DoubleBeamCore' or 'DoubleBeamHalo') or name
-    b.Attachment0=origin;b.Attachment1=tip;b.FaceCamera=true
+    b.Attachment0=origin;b.Attachment1=endpoint;b.FaceCamera=true
    -- The enabled reference clones MiningFX.Beam, whose inner color differs
    -- from the unused beam embedded in the drone template.
     b.Color=ColorSequence.new(origins and (i==1 and Color3.fromRGB(196,250,255) or Color3.fromRGB(70,197,255)) or (i==1 and Color3.fromRGB(192,134,80) or Color3.new(1,.622278,.0959487)))
@@ -10568,6 +10583,10 @@ local function drawReferenceBeam(beam,visible,width,sample,now)
   beam.reference=layers;beam.referenceOrigins=origins
  end
  if not beam.reference then return end
+ for i,tip in ipairs(beam.referenceTwinTips or {}) do
+  local delta=origins[i].WorldPosition-beam.endpoint.Position
+  tip.Position=Vector3.new(delta.X,0,delta.Z)
+ end
  local t=math.clamp((now-(sample.since or now))/.12,0,1)
  local inner=.3*(1-.45*(1-t)^2)*width
  for i,b in ipairs(beam.reference) do
@@ -17189,6 +17208,8 @@ function V:aim(ray)
  local o=self.options
  local run=o.world.Map:FindFirstChild('CrystalRun')
  if not run or o.hidden() then return nil end
+ local fields=o.world:FindFirstChild('Fields')
+ local classic=fields and fields:FindFirstChild('CrystalRun')
  local character=o.player.Character
  local hr=character and character:FindFirstChild('HumanoidRootPart')
  if not hr then return nil end
@@ -17198,9 +17219,11 @@ function V:aim(ray)
  if drones then table.insert(ignore,drones) end
  local direction=ray.Direction*500
  local function bedFor(node)
-  while node and node~=run do
+  while node do
    local zone=node.Parent
-   if zone and zone.Parent==run then return zone:FindFirstChild('Field'),node end
+   if zone and (zone.Parent==run or classic and zone.Parent==classic) then
+    return zone:FindFirstChild('Field'),node
+   end
    node=zone
   end
  end

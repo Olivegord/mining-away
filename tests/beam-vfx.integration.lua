@@ -418,8 +418,12 @@ check('actual mining envelope surface contact target life and paused work remain
  s.active=true;s.key='next';s.life=2;s.since=302
  blocked=true;p:beginFrame();p:renderMiningBeam(b,s,302.1)
  assert(not outer.Enabled,'new life reused a stale contact')
- blocked=false;s.cube=true
+ blocked=false;s.cube=true;target:SetAttribute('CubicRock',false)
+ b.origin.WorldPosition=from+Vector3.new(.4,0,-.2)
  realTime=302.6;p:beginFrame();p:renderMiningBeam(b,s,realTime)
+ near(b.endpoint.Position.X,b.origin.WorldPosition.X)
+ near(b.endpoint.Position.Z,b.origin.WorldPosition.Z)
+ assert(b.endpoint.Position.Y<b.origin.WorldPosition.Y)
  assert(outer.Enabled and b.work and b.work.impact.Enabled,'cube miner lacked active contact effects')
  local workTail=b.work
  target:Destroy()

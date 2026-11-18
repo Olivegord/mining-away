@@ -216,8 +216,11 @@ function Soundscape:observeMining(world,root,drones,resourceIndex,owner,serverNo
  local context,fieldId
  local map=world:FindFirstChild('Map')
  local run=map and map:FindFirstChild('CrystalRun')
- if root and run then
-  for _,model in ipairs(run:GetChildren()) do
+ local fields=world:FindFirstChild('Fields')
+ local classic=fields and fields:FindFirstChild('CrystalRun')
+ for _,route in ipairs(run and {run,classic} or {}) do
+  if not root or fieldId then break end
+  for _,model in ipairs(route:GetChildren()) do
    local bed=model:FindFirstChild('Field')
    if bed and bed:IsA('BasePart') then
     local field=FIELD_CONTEXT[bed:GetAttribute('CrystalZone')]

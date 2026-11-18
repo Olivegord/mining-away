@@ -239,7 +239,7 @@ end
 local CRYSTAL_AIM_X = -.5675010681152344 / 3.135000228881836
 local CRYSTAL_AIM_Z = -.24361419677734375 / 4.4872307777404785
 local function followsCrystal(sample)
- return sample.isMining==true and sample.serverSource~=nil and sample.serverSource:GetAttribute('CubicRock')==false
+ return not sample.cube and sample.isMining==true and sample.serverSource~=nil and sample.serverSource:GetAttribute('CubicRock')==false
 end
 function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuery,vertical)
  if not part or not part.Parent or part.Transparency>=1 then cache.anchor=nil;return nil end
@@ -303,16 +303,23 @@ local function drawReferenceBeam(beam,visible,width,sample,now)
  local origins=beam.twinOrigins
  if beam.reference and beam.referenceOrigins~=origins then
   for _,layer in ipairs(beam.reference) do layer:Destroy() end
-  beam.reference=nil
+  for _,tip in ipairs(beam.referenceTwinTips or {}) do tip:Destroy() end
+  beam.reference=nil;beam.referenceTwinTips=nil
  end
  if visible and not beam.reference then
   local tip=beam.referenceTip
   if not tip then tip=Instance.new('Attachment');tip.Parent=beam.endpoint;beam.referenceTip=tip end
   local layers={}
   for _,origin in ipairs(origins or {beam.origin}) do
+   local endpoint=tip
+   if origins and sample.cube then
+    endpoint=Instance.new('Attachment');endpoint.Parent=beam.endpoint
+    beam.referenceTwinTips=beam.referenceTwinTips or {}
+    table.insert(beam.referenceTwinTips,endpoint)
+   end
    for i,name in ipairs({'ReferenceInner','ReferenceOuter'}) do
     local b=Instance.new('Beam');b.Name=origins and (i==1 and 'DoubleBeamCore' or 'DoubleBeamHalo') or name
-    b.Attachment0=origin;b.Attachment1=tip;b.FaceCamera=true
+    b.Attachment0=origin;b.Attachment1=endpoint;b.FaceCamera=true
    -- The enabled reference clones MiningFX.Beam, whose inner color differs
    -- from the unused beam embedded in the drone template.
     b.Color=ColorSequence.new(origins and (i==1 and Color3.fromRGB(196,250,255) or Color3.fromRGB(70,197,255)) or (i==1 and Color3.fromRGB(192,134,80) or Color3.new(1,.622278,.0959487)))
@@ -324,6 +331,10 @@ local function drawReferenceBeam(beam,visible,width,sample,now)
   beam.reference=layers;beam.referenceOrigins=origins
  end
  if not beam.reference then return end
+ for i,tip in ipairs(beam.referenceTwinTips or {}) do
+  local delta=origins[i].WorldPosition-beam.endpoint.Position
+  tip.Position=Vector3.new(delta.X,0,delta.Z)
+ end
  local t=math.clamp((now-(sample.since or now))/.12,0,1)
  local inner=.3*(1-.45*(1-t)^2)*width
  for i,b in ipairs(beam.reference) do

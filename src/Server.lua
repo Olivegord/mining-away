@@ -38,6 +38,7 @@ local drones: {[string]: any}={}
 local swarmGrid: any=nil
 local patches: {any}={}
 scene.patchById=scene.flatFields and {} or patches
+scene.squareFields={}
 local resources: {[string]: any}={}
 local logistics: any=nil
 local consumableService: any=nil
@@ -544,6 +545,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  if cut then fullSize*=CrystalCuts.proportions(cut,original) end
  if mineral and mineral.large then fullSize=CrystalCuts.fieldSize(fullSize,mineral.large,mineral.spire,mineral.landmark) end
+ if field.cfg.WholeField then fullSize*=math.min(1,5.8/fullSize.Magnitude) end
  local variedPose=field.cfg.ContinuousCrystals==true and kind=='Crystal' and not junk
  if variedPose then part:SetAttribute('VariedRockPose',true) end
  local steady=field.cfg.ContinuousCrystals==true and (modifiers==Mining.ROCK_MODIFIERS.Massive or stageCount==4)
@@ -734,6 +736,20 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
   else ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,reference)
  local patch=field.part
  local preferred,bounds=landmark,nil
+ local gridSlot
+ if field.cfg.WholeField then
+  local used={}
+  for _,r in ipairs(field.resources) do
+   if r.gridSlot and (not r.paid or now<(r.splitAt or 0)) then used[r.gridSlot]=true end
+  end
+  local wanted=plan and plan.gridSlot or vacancy and vacancy.gridSlot
+  if wanted and not used[wanted] then gridSlot=wanted end
+  if not gridSlot then
+   for slot=1,9 do if not used[slot] then gridSlot=slot;break end end
+  end
+  if not gridSlot then return false end
+  preferred={x=((gridSlot-1)%3-1)*patch.Size.X/3,z=(math.floor((gridSlot-1)/3)-1)*patch.Size.Z/3}
+ end
  if plan and not preferred then
   local p=patch.CFrame:PointToObjectSpace(plan.spot)
   preferred={x=p.X,z=p.Z}
@@ -784,7 +800,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
    end
    return true
  end
- local selected
+ local selected=gridSlot and preferred or nil
  if layout and vacancy and vacancy.position and not preferred then
   local p=patch.CFrame:PointToObjectSpace(vacancy.position)
   selected=ResourcePlacement.sample(patch.Size.X,patch.Size.Z,radius,occupied,draw,clear,
@@ -796,12 +812,13 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
   if massive and not plan then return spawnResource(field,kind,prepareOnly,nil,nearPin,true,vacancy) end
   return false
  end
- if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral,massive=massive} end
+ if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral,massive=massive,gridSlot=gridSlot} end
  local work=mineral.work*(boulder and Mining.BOULDER_WORK or 1)
  local ore=(mineral.ore or field.cfg.Ore)*(boulder and Mining.BOULDER_WORK or 1)
  local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or mineral.stages or field.cfg.Cracks or 3,nil,
   massive and Mining.ROCK_MODIFIERS.Massive or nil,mineral)
  if continuous then resource.placementRadius=radius end
+ resource.gridSlot=gridSlot
  if landmark then
   field.landmarkReserves[landmark]=selected
   resource.landmark=landmark;resource.landmarkMineral=mineral
@@ -955,6 +972,7 @@ for _,f in ipairs(scene.fields) do
  field.model:SetAttribute('JunkClearing',field.junk~=nil)
  field.model:SetAttribute('JunkTheme',field.junkTheme)
  table.insert(patches,field);scene.patchById[f.id]=field;restoreTurrets(field)
+ if f.cfg.WholeField then table.insert(scene.squareFields,f.part) end
  if field.junk then
   field.nextJunkDrop=now+2.4
  else seedField(field) end
@@ -1760,6 +1778,7 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
  return selected and {origin=origin,endpoint=endpoint,hits=hits,selected=selected,groundNormal=groundNormal} or nil
 end
 function scene.cutRange(d,r)
+ if r.field.cfg.WholeField and d.role=='Striker' then return .6 end
  return r.field.cfg.ContinuousCrystals and d.role=='Striker' and 2.2 or 1
 end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
@@ -1983,7 +2002,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     local respawnClock=r.field.cfg.ReferenceCrystals and now or r.field.respawnClock
     -- The legacy field clock can run faster with more drones. Keep the
     -- minimum delay on the server clock for both natural and planted rocks.
-    local vacancy={at=respawnClock+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn}
+    local vacancy={at=respawnClock+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn,gridSlot=r.gridSlot}
     if r.field.cfg.ContinuousCrystals then vacancy.position=r.position end
     vacancy.landmark=r.landmark;vacancy.landmarkMineral=r.landmarkMineral
     if r.field.cfg.SelectionOnly and d.squareJob and d.squareJob==p.miningSquare then
@@ -2224,7 +2243,7 @@ local function chooseResource(d: any,field: any,square: any?)
    local healthRank=helping and -r.hp or r.hp
    if square and (rank>bestRank or rank==bestRank
     and (healthRank>bestHealth or healthRank==bestHealth and used>bestUsed)) then continue end
-   local capacity=if focused then math.max(10,#profiles[d.owner].drones) elseif square then 10 else r.limit
+   local capacity=if field.cfg.WholeField then 1 elseif focused then math.max(10,#profiles[d.owner].drones) elseif square then 10 else r.limit
    if used<capacity and sameRockType(d,r,helping) then
     if helping and not helpReady then hasHelp=true;continue end
     local neighbors=0
@@ -3625,6 +3644,12 @@ function scene.publishCharger()
  local progress=if full then 1 elseif focus then math.clamp(focus.battery/focus.stats.batteryCapacity,0,1) else nil
  if indicator:GetAttribute('ChargeProgress')~=progress then indicator:SetAttribute('ChargeProgress',progress) end
 end
+function scene.insideSquareField(position)
+ for _,bed in ipairs(scene.squareFields) do
+  if Mining.inField(position,bed) then return true end
+ end
+ return false
+end
 local function snapshotDrone(d)
  local pose=CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0)
  if d.publishedPose~=pose then d.model:PivotTo(pose);d.publishedPose=pose end
@@ -3676,6 +3701,7 @@ local function snapshotDrone(d)
   ThinkUntil=d.thinkUntil or 0,PressStarted=d.pressJob and d.pressJob.startedAt or 0,
   PressFinish=d.pressJob and d.pressJob.finishAt or 0,
   BatteryPowered=scene.chargingStation~=nil and d.stats.batteryCapacity>0,
+  HideBattery=scene.insideSquareField(d.pos),
   InMiningPlot=profiles[d.owner].miningSquare~=nil and Mining.selectorContains(profiles[d.owner].miningSquare.center,profiles[d.owner].miningSquare.half,d.pos),
   BatteryWorking=(d.role=='Compactor' and d.state=='Press') or scene.committedWork(d) or combatId~='',
   PressWaiting=d.pressWaiting==true,
@@ -4995,6 +5021,12 @@ RunService.Heartbeat:Connect(function(dt: number)
   local snapshotDt=snapshotElapsed;snapshotElapsed=0
   local occupants
   for _,d in pairs(drones) do snapshotDrone(d) end
+  if scene.flatFields then
+   for _,p in pairs(profiles) do
+    local hr=characterRoot(p)
+    p.player:SetAttribute('MA_InSquareField',hr~=nil and scene.insideSquareField(hr.Position))
+   end
+  end
   scene.publishCharger()
   for _,field in ipairs(patches) do
    if field.cfg.RockModifiers and now>=(field.checkModifiersAt or 0) then

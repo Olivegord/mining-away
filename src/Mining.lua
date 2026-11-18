@@ -58,6 +58,11 @@ function M.selectorCenter(position,frame,size)
  local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
  return frame:PointToWorldSpace(Vector3.new(x,size.Y*.5,z))
 end
+function M.inField(position,bed)
+ local offset=bed.CFrame:PointToObjectSpace(position)
+ return math.abs(offset.X)<=bed.Size.X*.5 and math.abs(offset.Z)<=bed.Size.Z*.5
+  and math.abs(offset.Y)<=bed.Size.Y*.5+16
+end
 function M.fieldSelection(position,bed)
  local point=M.selectorCenter(position,bed.CFrame,bed.Size)
  if point and bed:GetAttribute('WholeField') then

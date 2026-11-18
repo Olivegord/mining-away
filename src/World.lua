@@ -692,21 +692,27 @@ function W.initialize(): any
    end
   end
   local runStart,chargingStation
-  if run then
+  local function addCrystalRun(route,whole,offset)
    for i,tier in ipairs(Workshop.CRYSTAL_TIERS) do
     local original=Config.Fields[i]
-    local model=run:FindFirstChild(original.Key)
+    local model=route:FindFirstChild(original.Key)
     local part=model and model:FindFirstChild('Field')
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
     local cfg={Name=tier.name,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
      Hardness=tier.hardness,Cracks=tier.cracks,Color=tier.color or original.Color,ReferenceCrystals=true,ContinuousCrystals=true,RockModifiers=true,Count=64,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
-    cfg.WholeField=flat
-    if flat then cfg.Count=14 end
-    local id=flat and (#Config.Fields+i) or #fieldMetadata+1
+    cfg.WholeField=whole
+    if whole then cfg.Count=9 end
+    local id=offset+i
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})
-    runStart=runStart or part.Position
+    if i==1 and (whole or not runStart) then runStart=part.Position end
    end
+  end
+  if run then
+   local classic=flat and fields:FindFirstChild('CrystalRun')
+   if classic then addCrystalRun(classic,false,#Config.Fields) end
+   local offset=flat and #Config.Fields+(classic and #Workshop.CRYSTAL_TIERS or 0) or #fieldMetadata
+   addCrystalRun(run,flat,offset)
    chargingStation=run:FindFirstChild('ChargingStation')
    assert(chargingStation and chargingStation:IsA('BasePart'),'Missing Crystal Run charging station')
   end

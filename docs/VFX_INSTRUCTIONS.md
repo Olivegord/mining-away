@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 17 — vertical cube miner lasers and field-scoped battery display
+
+Cube miner lasers use the emitter's X and Z for the visible contact, including each Double Beam ray. The laser taper and particle tails still finish after the cut. In the square fields, hide the over-drone battery and the player's battery HUD row while retaining real charge behavior. Keep the battery indicators in the original quarry.
+
 ## November 17 — finish mining beams and particle tails
 
 Mining lasers narrow to zero when work stops. A retiring beam can finish its taper in world space if a target, branch or drone disappears first. Stop mining particle emission when work ends, and allow existing sparks, contact dust and charge smoke to complete their lifetimes. Keep drone shells simple gray cubes for the flat-field test. See the flat-field entry in [project state](PROJECT_STATE.md) for verification.

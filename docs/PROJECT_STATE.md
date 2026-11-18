@@ -1,5 +1,15 @@
 # Shared project context
 
+## November 17 — original quarry and smaller square fields
+
+The original Crystal Run beds, their seam outcrops and their supporting baseplate are back on the positive-Z side of spawn. The old beds keep their original 216×64-stud footprints and two-step plot controls. The five 32×32-stud test fields stay on the negative-Z side, with a minimum clear gap of 39.8 studs. They keep one-click assignment and grow nine rocks at evenly spaced sites. Respawns reuse the same site when it is free. The old voxel terrain stays archived. The depot has one active charging station.
+
+Cube mining lasers follow a straight vertical line below their emitters, including the two rays from Double Beam. In the square fields, miners take one rock each and engage near the overhead station. The player HUD and over-drone battery indicators are hidden within the square boundaries. Charge behavior and the original area's indicators stay active.
+
+Shared **DRONEREVOLUTION** was already open in Edit at place **124078027733625**, universe **10774898335**. Native raycasts verified both approaches and all ten beds. Script Sync exported the bundles and its three native roots reported Errored. Guarded edits installed the three changed Sources. Team Create save **390** succeeded, and all seven native and editor Sources matched **build/DRONE_GAME.rbxl**, SHA-256 **af07947ea811021820022e62176540c1a1d0e06297e2b9822a95a4c12f69f095**. The next Studio Play loads both areas. No player publication, and the last documented release remains **v363**.
+
+To reproduce from **c4ece80**, stage `tools/studio_restore_classic_fields.lua` in Edit and export `shared.RestoreClassicFields.edits` as a JSON file. Run `tools/refresh_classic_fields.py` against the c4ece80 canonical SHA-256 `7d5b4a1348c59c19fbd72abcb35596c179995f60ad858f8fdc4d4ea93ae1c5e4`, apply the stage, then rerun with `--write` and refresh Sources with `tools/script_sync.py` and `tools/build.py --previous-commit c4ece80`. The flat-field, beam, geode, field/pickup and mining flight suites passed using API doubles. No native Play was started. In-Play appearance, sound and multiplayer remain unverified.
+
 ## November 17 — flat fields, cube fleet and laser shutdown
 
 The five Crystal Run beds are now 46-stud, square, staggered fields beyond the depot on the negative-Z side of spawn. The nearest pair has 22.2 studs of clear space edge to edge. The active field layout and voxel terrain moved into a recovery archive in ServerStorage. The depot, charging station, sale counter, authored specimens and reference templates remain available. The runtime seeds up to 14 rocks per square and uses the existing mining, rock breaks, drops and discoveries. One click or tap selects the entire field, and RB does the same on gamepad.

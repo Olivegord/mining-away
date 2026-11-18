@@ -140,7 +140,7 @@ function Status.draw(drone,source,state,role,alive,now,reducedMotion,reducedFlas
  end
 
  local deciding=state=='Thinking' and now<(source:GetAttribute('ThinkUntil') or 0)
- local powered=source:GetAttribute('BatteryPowered')==true
+ local powered=source:GetAttribute('BatteryPowered')==true and not source:GetAttribute('HideBattery')
  local inPlot=source:GetAttribute('InMiningPlot')==true
  local toCharge=powered and state=='ToCharge' and not inPlot
  local charging=powered and state=='Charging'

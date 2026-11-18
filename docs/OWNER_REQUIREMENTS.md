@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 17 — keep both mining areas
+
+Restore the original Crystal Run on its side of spawn and keep the flat test fields on the opposite side. Make the square fields smaller and fill them evenly with rocks. Mine with straight-down beams and hide battery UI in the square fields. This supersedes the instruction to remove the original mining fields. Routine shared Edit and canonical saves apply.
+
 ## November 17 — flat field and four laser drone test
 
 Replace the old active terrain and 3D quarry with spaced, flat square rock fields on the opposite side of spawn. A single click commands the whole field. Start fresh players with four laser miners, use larger plain gray cubes, and keep coordinated flock flight on a low shared plane. Let beams narrow before retiring and let existing particles finish after emission stops. Routine shared Edit and canonical saves apply.
