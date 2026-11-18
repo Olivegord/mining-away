@@ -1,5 +1,22 @@
 # VFX instructions — owner feedback and implementation
 
+## November 18 — third pass: the charge finally checked in Studio
+
+Owner feedback on the second pass: "really bad, and choppy", "no anticipation and cool effects like the original video", and "some drones are like invisible". **Read this entry first; it supersedes the sizes and timings in the entry below (the video stage table there is still right).**
+
+What was actually wrong, found by rendering it in Studio Edit (`python3 tools/studio_vfx_preview.py OUT_DIR`; see [the preview sheet](review/media/charge-preview.png)):
+
+- **No time.** In the square fields a laser miner's warmup is 0.1–0.4 s per rock. The whole sequence was being squeezed into that, which is the choppiness and the missing anticipation. Now the server gives a miner's **first ignition after six seconds without a beam a 2.6 s charge** (`scene.FIRST_CHARGE`, `scene.FIRST_CHARGE_REST`); moving to the next rock keeps the short warmup. The client plays the full sequence only for charges of 1.4 s or longer (`B.FULL_CHARGE`) and a compact single-pop re-ignite for shorter ones. Never compress the long sequence into a short charge.
+- **Daylight ate the glow.** Additive beams vanish over a bright field. A soft dark "void" circle now grows behind the charge, always facing the camera, with a soft colored aura on the core. Colored glows use low `LightEmission` so they keep their color in daylight. This is a local backdrop, not a screen effect.
+- **Hidden inside the cube.** The charge gathers at `B.focus`: up to 1.7 studs below the emitter on the beam line.
+- **Single-frame flicks.** Slashes, bolts, spikes and the pops ease in and out. Bolts are comets that fall in faster as the charge builds.
+- **Too small.** Sizes are in studs: orb up to 2.5 across, cubes hover 2.3–4.3 studs out, bolts start 5.5–8 studs out, void up to about 13 across. Up to eight drones get the full rig.
+- Beams with a transparency gradient need more than one segment (the flares were invisible with `Segments=1`).
+
+**Invisible drones.** The client fades hulls that sit between the camera and the avatar by up to 86%. With the flock behavior, cubes cross that line constantly. Cubes now fade to 40% of that at most. This is the likely cause; it was not reproduced in Play.
+
+**Rule for future VFX work:** render it with the preview tool and look at the screenshots before installing. API-double tests passed for both rejected passes.
+
 ## November 18 — quieter circles, and a startup rebuilt from the video frame by frame
 
 Owner feedback on the first pass (6228027): a regression. The particles were simplified far too much, the screen flash was unwanted, and the charge was "NOTHING like the video". The owner **likes the circle particles**; they were only overpowering. Do not replace the discs with streaks or smoke again, and do not add full-screen flashes.

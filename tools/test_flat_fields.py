@@ -104,7 +104,7 @@ assert(sent==1 and not selector.draft and p.miningSquare.field==field)
 assert(p.miningSquare.half==16 and p.miningSquare.center.X==p0.X and p.miningSquare.center.Z==p0.Z)
 assert(scene.rockInSquare(p.miningSquare,{field=field,position=p0+Vector3.new(-15,0,15)}))
 workspace.Raycast=oldRay
-for _=1,480 do
+for _=1,660 do -- includes the 2.6 s first ignition
  realTime+=C.Tick;heartbeat:Fire(C.Tick)
 end
 local cut=false

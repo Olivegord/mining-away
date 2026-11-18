@@ -40,12 +40,13 @@ check('charge gathers compresses and changes silhouette before release',function
  assert(full>.99 and compressed<.4)
  local _,glint=BeamVFX.charge(1);near(glint,1)
  local r=BeamVFX.new(root,'Orbital',color)
- BeamVFX.draw(r,from,to,9.7,0,.58,nil)
+ BeamVFX.draw(r,from,to,9.7,0,.5,nil,1,3.2)
  assert(r.rich and r.rich.core.Transparency<.85 and r.rich.rim.Transparency<1 and r.rich.flare.beam.Enabled and not r.core.Enabled)
- assert(r.rich.glass.Transparency==1,'glitch orb appeared before its lead window')
- BeamVFX.draw(r,from,to,10,0,.965,nil)
+ assert(r.rich.void.gui.Enabled and r.rich.aura.gui.Enabled,'the dark void and core glow carry the anticipation')
+ assert(r.rich.glass.Transparency==1,'glitch orb appeared before its window')
+ BeamVFX.draw(r,from,to,10,0,.965,nil,1,3.2)
  assert(not r.paths[1].beam.Enabled,'decorative orbit returned')
- local size=r.rich.glass.Size.X;BeamVFX.draw(r,from,to,10.1,0,.985,nil);assert(r.rich.glass.Size.X<size)
+ local size=r.rich.glass.Size.X;BeamVFX.draw(r,from,to,10.1,0,.985,nil,1,3.2);assert(r.rich.glass.Size.X<size)
  BeamVFX.draw(r,from,to,10.2,1,nil,0)
  assert(r.orb.Transparency==1 and r.stars[1].beam.Enabled and r.stars[1].beam.Width1==0)
  assert(#r.stars==4 and r.paths[4].beam.LightEmission==0,'dark seam must use normal blending')
@@ -172,13 +173,13 @@ check('mixed startup styles and overlapping lenses stay warm across preview cycl
  for _,r in ipairs(rigs) do BeamVFX.destroy(r) end
  local a,b,c,d=BeamVFX.counts();assert(a==0 and b==0 and c==0 and d==0)
 end)
-check('glitch orb follows emitter and overlaps ignition for only 60 milliseconds',function()
+check('glitch orb follows the drone and overlaps ignition for only 70 milliseconds',function()
  local r=BeamVFX.new(root,'Cutter',color)
  local moving=Vector3.new(9,8,3)
  BeamVFX.draw(r,from,to,60,0,.3,nil)
  local h=assert(r.rich);assert(h.glass.Transparency==1, 'lens appeared during early inflow')
  BeamVFX.draw(r,moving,to,60.1,0,.965,nil)
- near((h.glass.CFrame.Position-moving).Magnitude,0)
+ near((h.glass.CFrame.Position-BeamVFX.focus(moving,to,1)).Magnitude,0)
  assert(h.glass.Material==Enum.Material.Neon and not h.glass.CanQuery and h.glass.Transparency>=0 and h.glass.Transparency<1)
  local expanded=h.glass.Size.X
  BeamVFX.draw(r,moving,to,60.15,0,.985,nil);assert(h.glass.Size.X<expanded)
@@ -196,15 +197,15 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  assert(BeamVFX.startupStyles.Bubbler=='Stars' and BeamVFX.startupStyles.Halver=='Ignition' and BeamVFX.startupStyles.Singularity=='Coil')
  assert(not BeamVFX.startupStyles.Blue and not BeamVFX.startupStyles.Striker,'basic miner lost the reference lens')
  local rigs={}
- for i,style in ipairs({'Stars','Ignition','Coil','Stars','Ignition','Coil'}) do
+ for i,style in ipairs({'Stars','Ignition','Coil','Stars','Ignition','Coil','Stars','Ignition','Coil','Stars'}) do
   local r=assert(BeamVFX.new(root,'Cutter',color));rigs[i]=r;BeamVFX.startup(r,style)
   BeamVFX.draw(r,from,to,60,0,.5,nil)
-  if i<=4 then
+  if i<=8 then
    assert(r.rich.startup.style==style and not r.rich.glass)
    near((r.rich.startup.root.Position-from).Magnitude,0)
   else assert(not r.rich,'startup bypassed shared cap') end
  end
- local _,_,count=BeamVFX.counts();assert(count==4)
+ local _,_,count=BeamVFX.counts();assert(count==8)
  for _,r in ipairs(rigs) do
   BeamVFX.draw(r,from,to,60.1,1,nil,0)
   assert(not r.rich and r.body.Enabled);near(r.body.Width0,.405*BeamVFX.WidthScale)
@@ -212,35 +213,53 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
 end)
-check('neon glitch: the orb pops to full size, shrinks and pops again in exact palette colors',function()
+check('neon glitch: long charges pop several times, quick re-ignites pop once, colors are exact',function()
  local r=BeamVFX.new(root,'Cutter',color)
- assert(BeamVFX.glitchState(.5)==nil and BeamVFX.glitchState(BeamVFX.GLITCH_STARTS[1])==1)
- near(BeamVFX.popSize(1,0),1);assert(BeamVFX.popSize(1,1)<.25,'a pop must shrink hard')
- assert(BeamVFX.popSize(2,0)>BeamVFX.popSize(1,.9),'the next pop must jump back up')
- assert(BeamVFX.popSize(4,0)<BeamVFX.popSize(1,0),'later pops must be smaller')
+ local start,count=BeamVFX.glitchPlan(2.6)
+ assert(count==4 and start>.7 and start<.75,'a long charge needs four pops of about 0.18 s')
+ local shortStart,shortCount=BeamVFX.glitchPlan(.3)
+ assert(shortCount==1 and shortStart==.4,'a quick re-ignite is a single pop')
+ assert(BeamVFX.glitchState(.5,2.6)==nil and BeamVFX.glitchState(start,2.6)==1)
+ assert(BeamVFX.popSize(1,.1)>.99 and BeamVFX.popSize(1,1)<.25,'a pop must swell fast and shrink hard')
+ assert(BeamVFX.popSize(2,.1)>BeamVFX.popSize(1,.9),'the next pop must jump back up')
+ assert(BeamVFX.popSize(4,.1)<BeamVFX.popSize(1,.1),'later pops must be smaller')
  local allowed={}
  for _,p in ipairs(BeamVFX.GLITCH_PAIRS) do allowed[p[1]]=true end
- for _,duration in ipairs({.8,3.2}) do
-  BeamVFX.draw(r,from,to,100,0,.6,nil,1,duration)
-  local glass=r.rich.glass
-  assert(glass.Transparency==1,'orb appeared before the glitch')
-  assert(r.rich.core.Transparency<1 and r.rich.debris[1].Transparency<1,'core and lifted cubes missing during the charge')
-  local seen,count,previous={},0,nil
-  for step=0,40 do
-   local q=BeamVFX.GLITCH_STARTS[1]+step*(.999-BeamVFX.GLITCH_STARTS[1])/40
-   BeamVFX.draw(r,from,to,100+q,0,q,nil,1,duration)
-   assert(glass.Transparency==0 and allowed[glass.Color],'orb color must be an exact palette entry (no blending)')
-   assert(glass.Size.X<=1.8 and glass.Size.X>.05,'glitch orb size out of bounds')
-   if previous and glass.Size.X>previous*1.5 then count+=1 end
-   previous=glass.Size.X
-   if not seen[glass.Color] then seen[glass.Color]=true end
-   assert(not r.rich.comets[1].path.beam.Enabled and not r.rich.flare.beam.Enabled,'inflow cluttered the glitch')
-   assert(r.rich.wisps[1].beam.Enabled,'blue wisps missing around the orb')
+ BeamVFX.draw(r,from,to,100,0,.5,nil,1,2.6)
+ local glass=r.rich.glass
+ assert(glass.Transparency==1,'orb appeared before the glitch')
+ assert(r.rich.core.Transparency<1 and r.rich.debris[1].Transparency<1,'core and lifted cubes missing during the long charge')
+ local seen,jumps,previousPop,visible={},0,nil,0
+ for step=0,80 do
+  local q=start+.004+step*(.995-start)/80
+  BeamVFX.draw(r,from,to,100+q,0,q,nil,1,2.6)
+  -- A pop swells from nothing, so the orb is hidden for an instant at each start.
+  if glass.Transparency==0 then
+   visible+=1
+   assert(allowed[glass.Color],'orb color must be an exact palette entry (no blending)')
+   assert(glass.Size.X<=2.6,'glitch orb too large')
+   seen[glass.Color]=true
   end
-  local colors=0;for _ in pairs(seen) do colors+=1 end
-  assert(count==#BeamVFX.GLITCH_STARTS-1,'expected a jump back up at every later pop, saw '..count)
-  assert(colors>=3,'glitch never cut between colors')
+  local pop=BeamVFX.glitchState(q,2.6)
+  if previousPop and pop~=previousPop then jumps+=1 end
+  previousPop=pop
+  assert(not r.rich.comets[1].path.beam.Enabled and not r.rich.flare.beam.Enabled,'inflow cluttered the glitch')
+  assert(r.rich.wisps[1].beam.Enabled and r.rich.void.gui.Enabled,'wisps and void must stay through the glitch')
  end
+ local colors=0;for _ in pairs(seen) do colors+=1 end
+ assert(jumps==count-1,'expected '..(count-1)..' new pops, saw '..jumps)
+ assert(visible>=70,'the orb was hidden for too much of the glitch')
+ assert(colors>=3,'glitch never cut between colors')
+ -- A quick re-ignite: compact, no lifted cubes, one pop.
+ BeamVFX.draw(r,from,to,200,0,.2,nil,1,.3)
+ assert(glass.Transparency==1 and r.rich.debris[1].Transparency==1 and r.rich.void.gui.Enabled)
+ local big=0
+ for step=0,20 do
+  local q=.41+step*.029
+  BeamVFX.draw(r,from,to,200+q,0,q,nil,1,.3);big=math.max(big,glass.Size.X)
+ end
+ assert(big>.4 and big<1.6,'re-ignite pop must be visible but compact, got '..big)
+ BeamVFX.draw(r,from,to,201,0,.999,nil,1,.8)
  local aftermath=assert(r.aftermath)
  BeamVFX.draw(r,from,to,101,1,nil,.04,1)
  assert(r.rich and r.rich.glass.Transparency<1 and r.body.Enabled and r.body.Width0<.17)
@@ -338,16 +357,16 @@ check('resource gravity wells cannot acquire the emitter-only charge lens',funct
 end)
 check('charge lens leases and emissions remain bounded across repeated hide and draw',function()
  local rigs={}
- for i=1,6 do
+ for i=1,10 do
   local r=assert(BeamVFX.new(root,'Orbital',color));rigs[i]=r
-  BeamVFX.draw(r,from,to,61,0,.3,nil)
+  BeamVFX.draw(r,from,to,61,0,.2,nil)
  end
- local _,_,count=BeamVFX.counts();assert(count==4,'lens rig cap exceeded')
+ local _,_,count=BeamVFX.counts();assert(count==8,'lens rig cap exceeded')
  local r=rigs[1];local h=assert(r.rich)
  BeamVFX.hide(r,false);assert(not r.rich and r.detail,'hidden charge kept a lease or lost retained detail')
- BeamVFX.draw(r,from,to,61.1,0,.35,nil)
+ BeamVFX.draw(r,from,to,61.1,0,.25,nil)
  assert(r.rich==h,'hidden charge failed to reuse pooled rig')
- BeamVFX.draw(r,from,to,61.2,0,.4,nil)
+ BeamVFX.draw(r,from,to,61.2,0,.3,nil)
  assert((h.sparks.Emitted or 0)>0,'reused charge failed to emit particles')
  local emitted=h.sparks.Emitted or 0
  BeamVFX.draw(r,from,to,161,0,.4,nil)

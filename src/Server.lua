@@ -2928,7 +2928,17 @@ local function committedStation(d,r,dt)
  end
  return d.workStation
 end
+-- A laser miner's first ignition after a rest is the long, showy charge the
+-- owner asked for; hopping to the next rock re-ignites quickly so mining pace
+-- is unchanged once the crew is working. Flat fields only.
+scene.FIRST_CHARGE=2.6
+scene.FIRST_CHARGE_REST=6
 function scene.miningWarmup(d,r)
+ if r and scene.flatFields and not d.mining
+  and not (DroneCatalog.Types[d.role] and DroneCatalog.Types[d.role].Projectile)
+  and now-(d.lastBeamAt or -math.huge)>scene.FIRST_CHARGE_REST then
+  return scene.FIRST_CHARGE
+ end
  -- Quarry cutters charge during the last part of their approach.
  -- Ignition upgrades can still shorten the beat.
  if r and r.field.cfg.ContinuousCrystals and d.role=='Striker' then return math.max(.05,d.stats.warmup*.25) end
@@ -2957,7 +2967,7 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
    d.warmAt=d.warmAt or now;d.state='Warmup'
    if now-d.warmAt>=scene.miningWarmup(d,r) then
     if not d.mining then d.beamSince=now end
-    d.state='Mine';d.mining=true
+    d.state='Mine';d.mining=true;d.lastBeamAt=now
     local damage,charge=Mining.step('Blue',d.mineCharge,dt,d.stats.miningDPS);d.mineCharge=charge
     if damage>0 then hitResource(d,r,damage,false,nil,nil,DroneCatalog.Types[d.role] and r.kind=='Geode' and 'SpecialShell' or nil) end
    end

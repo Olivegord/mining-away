@@ -1789,8 +1789,10 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  for _,d in pairs(drones) do
   renderDrone(d,dt,now)
   for part in pairs(d.parts) do
+   -- Cubes now fly over the avatar's head all the time; a full fade made them
+   -- look invisible. They only thin slightly when they cross the view line.
    if part.Parent then part.LocalTransparencyModifier=reveal
-    and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5)) or 0 end
+    and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5))*(d.cubeLook and .4 or 1) or 0 end
   end
  end
  pickupView:update(dt,now)

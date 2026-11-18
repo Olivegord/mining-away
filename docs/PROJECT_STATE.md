@@ -1,5 +1,11 @@
 # Shared project context
 
+## November 18 — VFX third pass: charge verified in Edit renders, long first ignition, drone fade capped
+
+The owner found the second pass bad, choppy and without anticipation, and reported some drones looking invisible. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Changes: a 2.6 s first ignition for laser miners in the square fields after six seconds without a beam (server; later rocks keep the short warmup, so steady mining pace is unchanged, but each fresh field visit starts 2.6 s later); the charge redrawn with a dark void backdrop, core glow, larger eased layers and a focus below the cube; a compact re-ignite for short charges; cube hulls fade far less when they cross the camera line. New `tools/studio_vfx_preview.py` renders the charge in Studio Edit and saves screenshots; [the sheet](review/media/charge-preview.png) is from this revision.
+
+Checked: the preview renders of the long charge and the 0.4 s and 0.12 s re-ignites were inspected frame by frame. Beam VFX (29), geodes, flat fields (wait extended for the first ignition), mining flight, field pickup flow, fun FX, rock damage, pickups, selling, interaction aim and field tools pass with API doubles; gadgets and energy effects stop at their baseline assertions. **Not checked:** motion, particles, sound sync and several drones charging together in Play (an agent-started Play was declined), and whether the fade cap is the whole cause of the invisible drones. Install and identifiers are in the `studio_apply` output recorded in `docs/studio-installed.json`. No publication.
+
 ## November 18 — one install command for every chat; VFX second pass installed
 
 `tools/studio_apply.py` is now the way any chat installs the seven Sources (see AGENTS.md, "Several chats at once", and [collaboration](COLLABORATION.md)). It drives Studio's own MCP server over stdio, serializes chats with a lock, bundles only committed code, guards each Source against unknown Studio edits, saves, refreshes the canonical file and writes `docs/studio-installed.json`.
