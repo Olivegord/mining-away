@@ -80,7 +80,7 @@ function Fun.paintCube(view,body,id)
  -- Little sparkles shed from the belly while lasering.
  local motes=Instance.new('ParticleEmitter');motes.Name='FunMotes';motes.Texture=SPARKLE
  motes.Color=ColorSequence.new(color:Lerp(WHITE,.5),color);motes.LightEmission=.8;motes.LightInfluence=0
- motes.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.28),NumberSequenceKeypoint.new(1,0)})
+ motes.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(1,0)})
  motes.Transparency=NumberSequence.new(.1,1);motes.Lifetime=NumberRange.new(.5,.9);motes.Rate=0
  motes.Speed=NumberRange.new(1.5,3.5);motes.SpreadAngle=Vector2.new(70,70);motes.EmissionDirection=Enum.NormalId.Bottom
  motes.Acceleration=Vector3.new(0,2,0);motes.Drag=2;motes.Rotation=NumberRange.new(0,360);motes.RotSpeed=NumberRange.new(-120,120)
@@ -93,7 +93,7 @@ function Fun.stepCube(record,speed,working,hidden,now)
  local calm=reduced()
  local cruising=not hidden and not calm and speed>9
  if record.trail.Enabled~=cruising then record.trail.Enabled=cruising end
- local rate=(working and not hidden and not calm) and 9 or 0
+ local rate=(working and not hidden and not calm) and 14 or 0
  if record.motes.Rate~=rate then record.motes.Rate=rate end
  local pulse=working and (.5+.5*math.sin(now*14)) or 0
  record.light.Brightness=hidden and 0 or (.25+pulse*1.2)

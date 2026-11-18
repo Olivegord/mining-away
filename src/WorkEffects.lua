@@ -130,9 +130,6 @@ function W:energyBloom()
  self.bloom=bloom;self.ownsBloom=existing==nil
 end
 function W:burst(position,normal,color,count,now)
- return EnergyDisc.full(self.burstNow,self,position,normal,color,count,now)
-end
-function W:burstNow(position,normal,color,count,now)
  if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,140) then return end
  self:energyBloom()
  local anchor=part(self.parent,'WorkBurst');anchor.CFrame=facing(position,normal)
@@ -160,7 +157,7 @@ end
 function W:retireMining(beam,now)
  local fx=beam.work
  if not fx then return false end
- fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false;fx.smoke.Enabled=false;fx.hot.Enabled=false
+ fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false
  for _,emitter in ipairs(fx.accents or {}) do emitter.Enabled=false end
  for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
  if fx.contact then fx.contact.Transparency=1 end
@@ -177,7 +174,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local fx=beam.work
  if not visible then
   if fx then
-   fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false;fx.smoke.Enabled=false;fx.hot.Enabled=false
+   fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false
    if fx.contact then fx.contact.Transparency=1 end
    if fx.inner then fx.inner.Transparency=1 end
    for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
@@ -197,16 +194,6 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
-  -- Soft rock smoke at the cut, separate from the sparks so both read.
-  fx.smoke=particle(fx.tip,'CuttingSmoke',Color3.fromRGB(170,170,176))
-  EnergyDisc.smoke(fx.smoke,.75,.6)
-  -- Fine hot streaks thrown off the cut, under the round contact discs.
-  fx.hot=particle(fx.tip,'CuttingStreaks',YELLOW)
-  EnergyDisc.sparks(fx.hot,.11)
-  fx.hot.Lifetime=NumberRange.new(.25,.55);fx.hot.Speed=NumberRange.new(7,14);fx.hot.Drag=2.5
-  fx.hot.Acceleration=Vector3.new(0,-22,0);fx.hot.SpreadAngle=Vector2.new(72,72)
-  fx.smoke.Lifetime=NumberRange.new(.9,1.6);fx.smoke.Speed=NumberRange.new(.8,2);fx.smoke.Drag=2.2
-  fx.smoke.SpreadAngle=Vector2.new(55,55);fx.smoke.Acceleration=Vector3.new(0,1.6,0)
   if ink then
    fx.accents={
     EnergyDisc.accent(anchor,'CyanDrops',Color3.fromRGB(49,246,237),.56,'mote',Enum.NormalId.Front,82),
@@ -262,12 +249,9 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local impactColor=stoneColor or sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
  if fx.impactColor~=impactColor or fx.stoneContact~=(stoneColor~=nil) then
   fx.impactColor=impactColor;fx.stoneContact=stoneColor~=nil
-  -- Discs keep the contact color; hot streaks stay hot; the stone tints the smoke.
-  local hot=stoneColor and stoneColor:Lerp(YELLOW,.7) or impactColor
-  fx.impact.Color=ColorSequence.new(hot)
-  fx.hot.Color=ColorSequence.new(WHITE:Lerp(hot,.35),hot)
-  if stoneColor then RockFinish.configureDust(fx.smoke,stoneColor,false)
-  else fx.smoke.Color=ColorSequence.new(Color3.fromRGB(190,190,198),Color3.fromRGB(140,140,150)) end
+  EnergyDisc.configure(fx.impact,stoneColor and .75 or .94,stoneColor and .37 or .47,.56,stoneColor and 1.16 or .63,.48)
+  if stoneColor then RockFinish.configureDust(fx.impact,stoneColor,false)
+  else fx.impact.Color=ColorSequence.new(impactColor) end
  end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
@@ -275,12 +259,8 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.impact.Drag=resonance and 5 or 4
  -- Keep the large discs readable when an entire pinned field lights up.
  local crowded=self.miningCount>8
- fx.impact.Rate=continuous and (crowded and 2 or (ink or resonance) and 3 or 4) or 0
+ fx.impact.Rate=continuous and (crowded and 3 or (ink or resonance) and 4 or 6) or 0
  fx.impact.Enabled=working and continuous
- fx.hot.Rate=continuous and (crowded and 4 or 8) or 0
- fx.hot.Enabled=working and continuous
- fx.smoke.Rate=crowded and .8 or 1.8
- fx.smoke.Enabled=working
  if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
  if fx.accents and working then
   if (not fx.nextInkAccent or now>=fx.nextInkAccent) then
@@ -293,7 +273,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
-   fx.biteAt=now;fx.impact:Emit(crowded and 3 or 6);fx.hot:Emit(crowded and 4 or 8);fx.smoke:Emit(crowded and 1 or 2);fx.sparks:Emit(crowded and 1 or 3)
+   fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
    if fx.accents then for i,e in ipairs(fx.accents) do e:Emit(i==1 and 3 or 2) end end
   end
  end
@@ -307,8 +287,8 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   if fx.contact then
    local bite=math.max(0,1-(now-(fx.biteAt or -100))/.13)^2
    fx.contact.CFrame=CFrame.new(point+normal*.05)
-   fx.contact.Size=Vector3.one*(.12+.08*width+.04*pulse+.14*bite)
-   fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.8-.05*pulse-.15*bite) or 1
+   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse+.26*bite)
+   fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.68-.05*pulse-.15*bite) or 1
    if fx.inner then
     fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse+.15*bite)
     fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25+.53*bite);fx.inner.Transparency=working and (.45-.15*bite) or 1

@@ -6,9 +6,11 @@ local Disc={texture='rbxasset://textures/ui/VR/circleWhite.png'}
 -- they were overpowering. They are now smaller and more see-through so the
 -- separate smoke and spark layers below read alongside them.
 Disc.smokeTexture='rbxasset://textures/particles/smoke_main.dds'
-Disc.SCALE=.55 -- disc diameter relative to the original sizes
-Disc.MAX=1.25 -- studs
-Disc.FADE=.14 -- extra transparency
+-- The owner asked for the original particles back, so these are neutral: the
+-- discs are exactly their authored size and opacity. Change them only on request.
+Disc.SCALE=1 -- disc diameter relative to the original sizes
+Disc.MAX=math.huge -- studs
+Disc.FADE=0 -- extra transparency
 function Disc.configure(emitter,diameter,transparency,startScale,endScale,sizeVariation)
  diameter=math.min(Disc.MAX,diameter*Disc.SCALE)
  transparency=math.min(.95,transparency+Disc.FADE)

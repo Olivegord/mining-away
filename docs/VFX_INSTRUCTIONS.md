@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 18 — all mining and rock particles back to the original
+
+Owner, after the partial restore below: "those are the new ones. i want the circles, the sparks, all that". By "rock breaking" they meant the laser working the rock as well as the final break. `src/WorkEffects.lua` and `src/RoleVisuals.lua` are byte-identical to 95bff48 again (the round contact discs at full size and rate, origin sparks and glow, contact glow balls; no added smoke or streak layers), `EnergyDisc` scaling is neutral (`SCALE=1`, no cap, no fade), and the cube belly sparkles and confetti twinkle have their original size and rate. **The owner's first request ("too busy, large circles") is withdrawn in practice: do not shrink, fade or replace these particles again unless asked for a specific one.** Only the drone charge and its release burst are new.
+
 ## November 18 — rock-break particles back to the original
 
 Owner: "get back the old particle effects please for rock breaking". Rock breaks and impact bursts (`RoleVisuals` `ImpactParticles`, `WorkEffects:burst`) run inside `EnergyDisc.full`, which restores the original full-size, full-opacity discs for that call. The confetti twinkle is back to 0.9. Only continuous effects (mining contact, cube belly sparkles, the charge) keep the toned-down discs. Do not shrink or fade break bursts again.
