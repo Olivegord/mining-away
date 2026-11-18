@@ -225,6 +225,7 @@ local payoutMods={
  {bit=2,name='Charged',cash=.15}, {bit=4,name='Frosted',dust=.30},
  {bit=8,name='Big',cash=.10}, {bit=1,name='Massive',cash=.20}, {bit=16,name='Titan',cash=.35},
 }
+W.PAYOUT_MODS=payoutMods
 local function payoutBonus(base,dust,mask)
  local moneyRate,dustRate=0,0
  for _,mod in ipairs(payoutMods) do

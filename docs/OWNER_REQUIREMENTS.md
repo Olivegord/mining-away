@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — counter sale shows the rocks, modifiers and a large total
+
+The owner calls the current sale terrible. Show the physical rocks, the effect of their modifiers and large text with the sale amount, using good UI practice and taste. One press at SELL ORE remains the action. Routine shared Edit and canonical saves apply; no player release requested.
+
 ## November 17 — raise drones and fill the squares organically
 
 Raise the cube drone flight. Fill the small test squares evenly without rows or large empty patches. Repair visible glitches while keeping both mining areas and the square-field controls. Routine shared Edit and canonical saves apply.

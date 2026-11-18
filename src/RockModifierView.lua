@@ -412,6 +412,13 @@ function V.rock(record,now,lowFlash,eventKind)
  else ambient(view,state,now,lowFlash,false) end
 end
 
+-- Sale beats reuse the same modifier bursts on a counter display rock.
+V.STYLES=icons
+function V.saleBurst(record,kind)
+ local state=record.modifierFX
+ if state and state.air and record.view.Parent then burst(record.view,state,false,kind) end
+end
+
 function V.drop(record,now,landingAge,lowFlash,displayScale)
  local state=record.modifierFX
  if not state then

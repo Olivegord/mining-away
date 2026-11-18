@@ -1,17 +1,52 @@
--- Manual sales get one counter impact and a short, non-interactive receipt.
+-- A manual sale lines the actual rocks up on the counter, prices each stack in
+-- turn with its modifiers, then breaks them into one large running total.
 local Ledger=require('./SaleLedger')
-local Sale={};Sale.__index=Sale
+local Sale={};Sale.__index=Sale;Sale.Ledger=Ledger
 local CASH=Color3.fromRGB(160,244,182)
 local PAPER=Color3.fromRGB(251,248,234)
+local BONUS=Color3.fromRGB(255,206,84)
+local INK=Color3.fromRGB(14,20,16)
+local SHOWN=5
+local LAND,STAGGER=.34,.07
+local FIRST,STEP,BONUS_DELAY=.55,.38,.16
+local SHATTER_GAP,HOLD,FADE=.5,1.8,.4
+local REDUCED_END=2.4
 
-local function label(parent,contents,size,color)
+local function label(parent,contents,size,color,font)
  local text=Instance.new('TextLabel')
- text.BackgroundTransparency=1;text.Text=contents;text.TextScaled=true
- text.TextColor3=color;text.Font=Enum.Font.GothamBold;text.TextWrapped=true
- text.TextStrokeColor3=Color3.fromRGB(18,24,19);text.TextStrokeTransparency=.34
+ text.BackgroundTransparency=1;text.Text=contents;text.TextScaled=true;text.RichText=true
+ text.TextColor3=color;text.Font=font or Enum.Font.GothamBold;text.TextWrapped=true
+ text.TextStrokeColor3=INK;text.TextStrokeTransparency=.3
  text.Parent=parent
  local limits=Instance.new('UITextSizeConstraint');limits.MinTextSize=10;limits.MaxTextSize=size;limits.Parent=text
  return text
+end
+local function hex(color)
+ return string.format('#%02X%02X%02X',math.floor(color.R*255+.5),math.floor(color.G*255+.5),math.floor(color.B*255+.5))
+end
+local function pulse(age,duration)
+ if age<0 or age>duration then return 0 end
+ return math.sin(age/duration*math.pi)*(1-age/duration)
+end
+local function ease(t) t=math.clamp(t,0,1);return 1-(1-t)^3 end
+local function settle(t)
+ t=math.clamp(t,0,1)
+ local c=1.6;return 1+(c+1)*(t-1)^3+c*(t-1)^2
+end
+
+-- Payout modifiers on this stack, in the order the server applies them.
+local function chips(item)
+ local styles={}
+ for _,style in ipairs(RockModifierView.STYLES) do styles[style.name]=style.color end
+ local list={}
+ for _,mod in ipairs(Workshop.PAYOUT_MODS) do
+  if bit32.btest(item.bonusMask,mod.bit) then
+   local text=mod.cash and string.format('%s +%d%%',mod.name,math.floor(mod.cash*100+.5))
+    or string.format('%s +%d%% dust',mod.name,math.floor(mod.dust*100+.5))
+   list[#list+1]={text=text,color=styles[mod.name] or BONUS}
+  end
+ end
+ return list
 end
 
 function Sale.new(refs)
@@ -55,52 +90,94 @@ function Sale:makeOre(item)
  return ore,gem
 end
 
-
-
+-- Large running total near the top of the screen.
 function Sale:show(batch)
- local sale,read=batch.receipt,batch.read
- local card=Instance.new('Frame');card.Name='OreSaleReceipt'
- card.AnchorPoint=Vector2.new(.5,1);card.Position=UDim2.new(.5,0,.89,0)
- card.Size=UDim2.new(1,-28,0,100);card.BackgroundTransparency=1;card.Parent=self.refs.gui
- local limit=Instance.new('UISizeConstraint');limit.MaxSize=Vector2.new(520,100);limit.Parent=card
- local payout=(sale.cash or 0)>0 and '+'..Ledger.money(sale.cash) or 'Sold '..read.units..' ore'
- local money=label(card,payout,36,CASH);money.Size=UDim2.new(1,0,0,42)
- local materials=label(card,read.materials,17,PAPER);materials.Position=UDim2.fromOffset(0,42)
- materials.Size=UDim2.new(1,0,0,28)
- local detail=sale.milestone
- if not detail and read.bonuses~='' then detail='Modifier bonus  +'..read.bonuses end
- if not detail then
-  local best=read.items[1]
-  if best and #read.items<=2 then
-   detail=best.name..'  '..Ledger.money(best.cash)..' each'
-  else
-   detail=read.units..(read.units==1 and ' piece sold' or ' pieces sold')
-  end
+ local card=Instance.new('Frame');card.Name='OreSaleTotal'
+ card.AnchorPoint=Vector2.new(.5,0);card.Position=UDim2.new(.5,0,.12,0)
+ card.Size=UDim2.new(1,-32,0,150);card.BackgroundTransparency=1;card.Parent=self.refs.gui
+ local limit=Instance.new('UISizeConstraint');limit.MaxSize=Vector2.new(620,150);limit.Parent=card
+ local totalBox=Instance.new('Frame');totalBox.BackgroundTransparency=1;totalBox.Size=UDim2.new(1,0,0,78);totalBox.Parent=card
+ local scale=Instance.new('UIScale');scale.Parent=totalBox
+ local total=label(totalBox,'+$0',78,CASH,Enum.Font.GothamBlack);total.Size=UDim2.fromScale(1,1)
+ total.TextStrokeTransparency=.12
+ local summary=label(card,'',24,PAPER);summary.Position=UDim2.fromOffset(0,80);summary.Size=UDim2.new(1,0,0,28)
+ local materials=label(card,'',18,PAPER);materials.Position=UDim2.fromOffset(0,110);materials.Size=UDim2.new(1,0,0,22)
+ materials.TextTransparency=1;materials.TextStrokeTransparency=1
+ local milestone=label(card,batch.receipt.milestone or '',16,BONUS);milestone.Position=UDim2.fromOffset(0,132);milestone.Size=UDim2.new(1,0,0,18)
+ milestone.TextTransparency=1;milestone.TextStrokeTransparency=1
+ batch.gui=card;batch.total=total;batch.totalScale=scale;batch.summary=summary
+ batch.materials=materials;batch.milestone=milestone
+ batch.labels={total,summary}
+end
+
+function Sale:summary(batch)
+ local units=batch.read.units
+ local text=string.format('<b>%d</b> %s sold',units,units==1 and 'rock' or 'rocks')
+ if batch.bonusShown>0 then
+  text..=string.format('  ·  <font color="%s">modifiers +%s</font>',hex(BONUS),Ledger.money(batch.bonusShown))
  end
- local note=label(card,detail,14,PAPER);note.Position=UDim2.fromOffset(0,71);note.Size=UDim2.new(1,0,0,24)
- batch.gui=card;batch.labels={money,materials,note}
+ batch.summary.Text=text
+end
+
+local function rockLabel(ore,group,width)
+ local gui=Instance.new('BillboardGui');gui.Name='SaleValue'
+ gui.Size=UDim2.new(width,0,1.7,0);gui.AlwaysOnTop=true;gui.LightInfluence=0;gui.MaxDistance=140
+ gui.StudsOffsetWorldSpace=Vector3.yAxis*(ore.Size.Y*.5+1.15);gui.Adornee=ore;gui.Enabled=false
+ local root=Instance.new('Frame');root.BackgroundTransparency=1;root.Size=UDim2.fromScale(1,1);root.Parent=gui
+ local scale=Instance.new('UIScale');scale.Parent=root
+ local value=Instance.new('TextLabel');value.Name='Value';value.BackgroundTransparency=1
+ value.Size=UDim2.fromScale(1,.58);value.TextScaled=true;value.RichText=true;value.Font=Enum.Font.GothamBlack
+ value.TextColor3=CASH;value.TextStrokeColor3=INK;value.TextStrokeTransparency=.15;value.Text='';value.Parent=root
+ local row=Instance.new('Frame');row.Name='Modifiers';row.BackgroundTransparency=1
+ row.Position=UDim2.fromScale(0,.63);row.Size=UDim2.fromScale(1,.33);row.Visible=false;row.Parent=root
+ local layout=Instance.new('UIListLayout');layout.FillDirection=Enum.FillDirection.Horizontal
+ layout.HorizontalAlignment=Enum.HorizontalAlignment.Center;layout.Padding=UDim.new(.03,0);layout.Parent=row
+ local list=chips(group.item)
+ for i,chip in ipairs(list) do
+  local text=Instance.new('TextLabel');text.LayoutOrder=i;text.Text=chip.text
+  text.Size=UDim2.fromScale(math.min(.62,.96/#list-.03),1);text.TextScaled=true;text.Font=Enum.Font.GothamBold
+  text.TextColor3=chip.color;text.BackgroundColor3=chip.color:Lerp(INK,.82);text.BackgroundTransparency=.08
+  text.BorderSizePixel=0;text.Parent=row
+  local pad=Instance.new('UIPadding');pad.PaddingLeft=UDim.new(.06,0);pad.PaddingRight=UDim.new(.06,0)
+  pad.PaddingTop=UDim.new(.12,0);pad.PaddingBottom=UDim.new(.12,0);pad.Parent=text
+  local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(.3,0);corner.Parent=text
+ end
+ gui.Parent=ore
+ return gui,value,row,scale,#list>0 and list[1].color or BONUS
 end
 
 function Sale:stage(batch,root)
  local target=Vector3.new(table.unpack(batch.receipt.counter))
+ local camera=workspace.CurrentCamera
  local toward=root.Position-target;toward=Vector3.new(toward.X,0,toward.Z)
  local forward=toward.Magnitude>.001 and toward.Unit or Vector3.zAxis
- local right=forward:Cross(Vector3.yAxis)
- local count=math.min(4,#batch.read.items)
+ local right=camera and camera.CFrame.RightVector or forward:Cross(Vector3.yAxis)
+ right=Vector3.new(right.X,0,right.Z)
+ right=right.Magnitude>.001 and right.Unit or forward:Cross(Vector3.yAxis)
  batch.target=target;batch.rocks={}
- for i=1,count do
-  local item=batch.read.items[i]
-  local ore,gem=self:makeOre(item)
+ local slots,width={},0
+ for i,group in ipairs(batch.groups) do
+  local ore,gem=self:makeOre(group.item)
   local extent=math.max(ore.Size.X,ore.Size.Y,ore.Size.Z)
-  ore.Size*=math.min(1.1,1.18/extent)
-  local lane=(i-(count+1)*.5)
-  local offset=right*(lane*.92)+forward*(i%2==0 and .14 or -.15)
-  local pose=CFrame.Angles(.17*((i%3)-1),i*1.7,-lane*.16)
-  local position=target+offset+Vector3.yAxis*ore.Size.Y*.55
-  ore.CFrame=CFrame.new(position+Vector3.yAxis*.72)*pose
-  ore.Parent=self.refs.parent
-  if gem then RockFinish.Gems.update(ore,1) end
-  batch.rocks[i]={ore=ore,gem=gem,size=ore.Size,position=position,pose=pose,offset=offset}
+  -- Keep every rock legible while Big, Massive and Titan still read larger.
+  local tier=Mining.sizeTier(group.item.mask)
+  ore.Size*=(1.75*(1+(tier-1)*.22))/extent
+  local slot=math.max(3.1,math.max(ore.Size.X,ore.Size.Z)+.9)
+  slots[i]={ore=ore,gem=gem,slot=slot};width+=slot
+ end
+ local cursor=-width*.5
+ for i,entry in ipairs(slots) do
+  local group,ore=batch.groups[i],entry.ore
+  local lane=cursor+entry.slot*.5;cursor+=entry.slot
+  local position=target+right*lane+forward*1.2+Vector3.yAxis*(ore.Size.Y*.5+.35)
+  local pose=CFrame.lookAt(Vector3.zero,-forward)*CFrame.Angles(.12,(i*1.37)%(2*math.pi),.08)
+  ore.CFrame=CFrame.new(position+Vector3.yAxis*4)*pose;ore.Parent=self.refs.parent
+  if entry.gem then RockFinish.Gems.update(ore,1) end
+  local gui,value,row,scale,chipColor=rockLabel(ore,group,entry.slot-.25)
+  local beat=FIRST+(i-1)*STEP
+  batch.rocks[i]={ore=ore,gem=entry.gem,size=ore.Size,position=position,pose=pose,group=group,
+   gui=gui,value=value,row=row,scale=scale,chipColor=chipColor,land=(i-1)*STAGGER,beat=beat,
+   record={view=ore,modifiers=group.item.mask,seed=i}}
  end
 end
 
@@ -129,54 +206,130 @@ function Sale:receive(receipt)
  if not receipt.full then return end
  self:clear()
  local amounts=table.clone(receipt.resources or {});amounts.Money=receipt.cash or 0
- local batch={receipt=receipt,read=Ledger.read(receipt),amounts=amounts,start=os.clock(),
-  reduced=self.refs.reducedMotion()}
+ local read=Ledger.read(receipt)
+ local groups,rest=Ledger.groups(read,SHOWN)
+ local batch={receipt=receipt,read=read,groups=groups,rest=rest,amounts=amounts,start=os.clock(),
+  reduced=self.refs.reducedMotion(),cashTarget=0,cashShown=0,bonusShown=0,bumpAt=-1,steps={}}
  self.batch=batch
  self.refs.hud:beginSale(receipt,amounts)
  local root=self.refs.player.Character and self.refs.player.Character:FindFirstChild('HumanoidRootPart')
- if root and receipt.counter and not batch.reduced and not self.refs.hidden() then self:stage(batch,root) end
+ if root and receipt.counter and not batch.reduced and not self.refs.hidden() and #groups>0 then self:stage(batch,root) end
  if not batch.rocks or #batch.rocks==0 then batch.reduced=true end
+ if batch.reduced then
+  batch.shatterAt=0;batch.endAt=REDUCED_END
+ else
+  local last=FIRST+(#groups-1)*STEP
+  if rest.count>0 then last+=STEP end
+  batch.restAt=rest.count>0 and last or nil
+  batch.shatterAt=last+SHATTER_GAP;batch.endAt=batch.shatterAt+HOLD+FADE
+ end
+end
+
+function Sale:shatter(batch)
+ batch.shattered=true
+ batch.cashTarget=batch.receipt.cash or 0;batch.cashShown=batch.cashTarget
+ batch.bonusShown=math.max(batch.bonusShown,batch.read.cashBonus or 0)
+ batch.bumpAt=os.clock();batch.bumpSize=.24
+ self:credit(batch)
+ local point=batch.target or (batch.receipt.counter and Vector3.new(table.unpack(batch.receipt.counter)))
+ if point and not batch.reduced then
+  self.refs.audio:play('sale_finish',point,{level=1})
+  local best=batch.groups[#batch.groups]
+  if best then self.refs.audio:play(best.item.stone and 'sale_stone' or 'sale_gem',point,{level=.6}) end
+  if self.refs.presentation then self.refs.presentation:cameraBeat('Sale',point,os.clock(),1.3) end
+ end
+ for _,rock in ipairs(batch.rocks or {}) do
+  local tint=Color3.fromRGB(table.unpack(rock.group.item.color))
+  RoleVisuals.ImpactParticles(rock.ore.Position,tint,.75+rock.size.Magnitude*.12,'CrystalBreak',nil,
+   rock.group.item.stone and rock.ore.Color or nil)
+  if rock.group.item.mask~=0 then RockModifierView.saleBurst(rock.record,'break') end
+  rock.ore:Destroy()
+ end
+ batch.rocks=nil
 end
 
 function Sale:update(now)
  local batch=self.batch
  if not batch then return end
- local age=(now or os.clock())-batch.start
- if age>=3.8 then self:clear();return end
- local impact=batch.reduced and 0 or .32
- if age>=impact and not batch.credited then
-  self:credit(batch)
-  if not self.refs.hidden() then self:show(batch) end
-  if batch.receipt.counter then
-   local point=batch.target or Vector3.new(table.unpack(batch.receipt.counter))
-   self.refs.audio:play('sale_finish',point,{level=.9})
-   local best=batch.read.items[1]
-   if batch.target and best then
-    local tint=Color3.fromRGB(table.unpack(best.color))
-    self.refs.audio:play(best.stone and 'sale_stone' or 'sale_gem',point,{level=.48})
-    RoleVisuals.ImpactParticles(point,tint,.40,'CrystalBreak')
-   end
+ now=now or os.clock()
+ local age=now-batch.start
+ local dt=math.clamp(now-(batch.frame or now),0,.1);batch.frame=now
+ if age>=batch.endAt then self:clear();return end
+ local hidden=self.refs.hidden()
+ if not batch.gui then self:show(batch) end
+ -- Walking away settles the sale at once instead of leaving it behind.
+ if not batch.shattered and batch.target then
+  local character=self.refs.player.Character
+  local root=character and character:FindFirstChild('HumanoidRootPart')
+  if not root or (root.Position-batch.target).Magnitude>60 then
+   batch.start=now-batch.shatterAt;age=batch.shatterAt
+   batch.endAt=batch.shatterAt+HOLD+FADE
   end
  end
- for _,rock in ipairs(batch.rocks or {}) do
-  local fall=math.clamp(age/.32,0,1)
-  local collect=math.clamp((age-.32)/.18,0,1)
-  local offset=Vector3.yAxis*(.72*(1-fall*fall)-collect*.38)-rock.offset*collect^2
-  rock.ore.CFrame=CFrame.new(rock.position+offset)*rock.pose
-  rock.ore.Size=rock.size*math.max(.01,1-collect^2)
-  rock.ore.Transparency=math.max(rock.ore.Transparency,collect)
-  if rock.gem then RockFinish.Gems.update(rock.ore,1-collect) end
- end
- if age>=.50 and batch.rocks then
-  for _,rock in ipairs(batch.rocks) do rock.ore:Destroy() end
-  batch.rocks=nil
- end
- if batch.gui then
-  batch.gui.Visible=not self.refs.hidden()
-  local fade=math.clamp((age-3.2)/.6,0,1)
-  for _,text in ipairs(batch.labels) do
-   text.TextTransparency=fade;text.TextStrokeTransparency=.34+.66*fade
+ local lowFlash=BeamVFX and BeamVFX.reduced and BeamVFX.reduced()
+ for i,rock in ipairs(batch.rocks or {}) do
+  local group=rock.group
+  local fall=(age-rock.land)/LAND
+  if fall>=1 and not rock.landed then
+   rock.landed=true
+   self.refs.audio:play('sale_stone',rock.position,{level=.28,pitch=.9+i*.04})
   end
+  local drop=(1-settle(fall))*4
+  local spin=math.max(0,age-rock.land)*.55
+  local priced=age-rock.beat
+  local bonusAge=priced-BONUS_DELAY
+  local pop=1+.16*pulse(priced,.24)+(group.bonus>0 and .1*pulse(bonusAge,.24) or 0)
+  rock.ore.Size=rock.size*pop
+  rock.ore.CFrame=CFrame.new(rock.position+Vector3.yAxis*(drop+math.sin(age*2.1+i)*.06))*CFrame.Angles(0,spin,0)*rock.pose
+  if rock.gem then RockFinish.Gems.update(rock.ore,1) end
+  if rock.landed and group.item.mask~=0 then RockModifierView.drop(rock.record,now,fall*LAND-LAND,lowFlash,1.3) end
+  -- Base price first, then the modifier lifts it to the paid amount.
+  if priced>=0 and not rock.priced then
+   rock.priced=true;rock.gui.Enabled=not hidden
+   batch.cashTarget+=group.cash-group.bonus;batch.bumpAt=now;batch.bumpSize=.1
+   self.refs.audio:play('sale_credit',rock.position,{level=.9,pitch=1+(i-1)*.07})
+  end
+  if group.bonus+group.dustBonus>0 and bonusAge>=0 and not rock.boosted then
+   rock.boosted=true;rock.row.Visible=true
+   batch.cashTarget+=group.bonus;batch.bonusShown+=group.bonus;batch.bumpAt=now;batch.bumpSize=.14
+   self.refs.audio:play('sale_gem',rock.position,{level=.45,pitch=1.1+(i-1)*.05})
+   RockModifierView.saleBurst(rock.record,'land')
+  end
+  if rock.priced then
+   local lift=group.bonus>0 and ease(bonusAge/.22) or 0
+   local cash=group.cash-group.bonus+group.bonus*lift
+   local count=group.count>1 and string.format('<font color="%s">%d×</font> ',hex(PAPER),group.count) or ''
+   rock.value.Text=count..Ledger.money(math.floor(cash+.5))
+   rock.value.TextColor3=CASH:Lerp(rock.chipColor,group.bonus>0 and pulse(bonusAge,.5)*1.6 or 0)
+   rock.scale.Scale=1+.22*pulse(priced,.22)+.12*pulse(bonusAge,.22)
+   rock.gui.Enabled=not hidden
+  end
+ end
+ if batch.restAt and age>=batch.restAt and not batch.restCounted then
+  batch.restCounted=true
+  batch.cashTarget+=batch.rest.cash;batch.bonusShown+=batch.rest.bonus;batch.bumpAt=now;batch.bumpSize=.1
+  if batch.target then self.refs.audio:play('sale_credit',batch.target,{level=.9,pitch=1.4}) end
+ end
+ if age>=batch.shatterAt and not batch.shattered then self:shatter(batch) end
+ -- The big total chases the priced amount so each beat visibly adds up.
+ batch.cashShown+=(batch.cashTarget-batch.cashShown)*(1-math.exp(-dt*13))
+ if math.abs(batch.cashTarget-batch.cashShown)<.5 then batch.cashShown=batch.cashTarget end
+ local gui=batch.gui
+ gui.Visible=not hidden
+ batch.total.Text='+'..Ledger.money(math.floor(batch.cashShown+.5))
+ if (batch.receipt.cash or 0)<=0 and batch.shattered then batch.total.Text='Sold' end
+ batch.totalScale.Scale=1+(batch.bumpSize or 0)*pulse(now-batch.bumpAt,.26)
+ self:summary(batch)
+ local fade=math.clamp((age-(batch.endAt-FADE))/FADE,0,1)
+ local after=batch.shattered and math.clamp((age-batch.shatterAt)/.25,0,1) or 0
+ batch.total.TextColor3=CASH:Lerp(Color3.new(1,1,1),batch.shattered and pulse(age-batch.shatterAt,.4) or 0)
+ for _,text in ipairs(batch.labels) do
+  text.TextTransparency=fade;text.TextStrokeTransparency=.15+.85*fade
+ end
+ batch.materials.Text=batch.read.materials
+ batch.materials.TextTransparency=1-after*(1-fade)*.85;batch.materials.TextStrokeTransparency=1-after*(1-fade)*.6
+ if batch.receipt.milestone then
+  batch.milestone.TextTransparency=1-after*(1-fade);batch.milestone.TextStrokeTransparency=1-after*(1-fade)*.6
  end
 end
 

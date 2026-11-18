@@ -1786,7 +1786,7 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
    world:GetAttribute('DepotFloorFrame'),world:GetAttribute('DepotFloorSize'))
  end})
 pickupView.sales=SaleView.new({hud=tacticalHUD,player=player,world=world,parent=localFX,gui=safeRoot,
- audio=soundscape,reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible,
+ audio=soundscape,presentation=presentation,reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible,
  onCommitted=function(receipt) soundscape:observeSale(receipt) end})
 connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt)
  pickupView.sales:receive(receipt)
