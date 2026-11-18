@@ -13,6 +13,7 @@ World.placeStart(scene)
 World.applyQuarryTextures(scene)
 local root,home=scene.root,scene.home
 root:SetAttribute('FieldToolsEnabled',scene.runStart==nil)
+if scene.flatFields then root:SetAttribute('WholeFields',true) end
 if scene.runStart then root:SetAttribute('StarterLookAt',scene.runStart) end
 if scene.runStart then
  root:SetAttribute('PackCounterPosition',scene.packStation.Position)
@@ -36,6 +37,7 @@ local profiles: {[number]: any}={}
 local drones: {[string]: any}={}
 local swarmGrid: any=nil
 local patches: {any}={}
+scene.patchById=scene.flatFields and {} or patches
 local resources: {[string]: any}={}
 local logistics: any=nil
 local consumableService: any=nil
@@ -58,7 +60,7 @@ else adapter=Persistence.dataStore(game:GetService('DataStoreService'):GetDataSt
 local store=Persistence.new(adapter,{
  owner=instanceId,now=os.time,wait=task.wait,leaseSeconds=180,maxAttempts=3,
  newProfile=function(uid)
-  local profile=Pro.new(uid,seed:NextInteger(1,2147483000),scene.runStart and RoleConfig or nil)
+  local profile=Pro.new(uid,seed:NextInteger(1,2147483000),scene.runStart and RoleConfig or nil,scene.flatFields)
   if scene.runStart then profile.run.cargo=Workshop.starterCargo(profile.seed) end
   return profile
  end,
@@ -220,7 +222,7 @@ end
 local function dropFieldIfEmpty(p: any,fieldId: any)
  if not fieldId then return end
  for _,d in ipairs(p.drones) do if d.hp>0 and d.field==fieldId then return end end
- local field=patches[fieldId]
+ local field=scene.patchById[fieldId]
  if field then
   R.removeUser(field.e,p.player.UserId,data(p).run.id)
  end
@@ -270,9 +272,9 @@ local function recallFromField(p)
    and Mining.onSelectorDepotRoute(hr.Position,square.center,scene.packStation.Position,floor and floor.CFrame,floor and floor.Size) then return end
  end
  local hasOrders=p.workField~=nil or #(p.oreQueue or {})>0
- local field=p.workField and patches[p.workField]
+ local field=p.workField and scene.patchById[p.workField]
  if not field then
-  for _,d in ipairs(p.drones) do if not d.carrierId and d.field and patches[d.field] then field=patches[d.field];hasOrders=true;break end end
+  for _,d in ipairs(p.drones) do if not d.carrierId and d.field and scene.patchById[d.field] then field=scene.patchById[d.field];hasOrders=true;break end end
  end
  if not square and (not hasOrders or not field or nearMiningField(hr.Position,field)) then return end
  leaveField(p,nil,nil,true)
@@ -292,7 +294,7 @@ function scene.runtimeFleet(p: any)
  local fleet=table.clone(base)
  if scene.runStart then
   local role=RoleConfig.StudioRoles.Courier
-  for slot=1,Workshop.EMPTIERS do
+  for slot=1,(scene.flatFields and 0 or Workshop.EMPTIERS) do
    table.insert(fleet,{id=Workshop.emptierId(profile.run.id,slot),type='Courier',role='Courier',name='Emptier '..slot,flightHeight=role.height,base=role.base})
   end
   local hasPress=false
@@ -376,8 +378,14 @@ local function spawnDrone(p,owned,slot,origin)
  origin=origin or (hr and hr.Position) or (scene.spawnPosition or home)+Vector3.new(0,4,0)
  local followHeight=roleName=='Nomad' and flightHeight or scene.followHeight({role=roleName})
  local pos=Feel.followGoal(origin,slot,#scene.runtimeFleet(p),now,owned.base.maxStep60,roleName=='Ramiel',followHeight)
- local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or RoleConfig.Types[roleName] and RoleConfig.Types[roleName].Color or colors.Blue,roleName=='Striker')
- if roleName~='Striker' then model,body,emitter=RoleConfig.decorate(model,roleName) end
+ if scene.flatFields then pos=Vector3.new(pos.X,home.Y+7.3,pos.Z) end
+ local model,body,emitter
+ if scene.flatFields then
+  model,body,emitter=World.cubeDrone(droneFolder,pos)
+ else
+  model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or RoleConfig.Types[roleName] and RoleConfig.Types[roleName].Color or colors.Blue,roleName=='Striker')
+  if roleName~='Striker' then model,body,emitter=RoleConfig.decorate(model,roleName) end
+ end
  model.Name='Drone_'..owned.id
  local d={id=owned.id,owner=p.player.UserId,owned=owned,name=owned.name,role=owned.role or owned.type,flightHeight=flightHeight,model=model,body=body,emitter=emitter,slot=slot,
   pos=pos,goal=pos,velocity=Vector3.zero,yaw=0,life=1,state='Follow',hp=stats.maxHealth,stats=stats,field=nil,target=nil,mining=false,battery=stats.batteryCapacity,
@@ -594,6 +602,10 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
 end
 function scene.resourceStation(r,slot,quarry)
  local station=Feel.mineGoal(r.position,slot,r.limit>1,r.fullSize,r.referenceCrystal,quarry or r.landmarkTop~=nil)
+ if r.field.cfg.WholeField then
+  local floor=r.field.part.Position.Y+r.field.part.Size.Y*.5
+  return Vector3.new(station.X,math.max(floor+7.3,r.position.Y+r.fullSize.Y*.7+2.6),station.Z)
+ end
  if r.landmarkTop and station.Y<r.landmarkTop+4.5 then
   return Vector3.new(station.X,r.landmarkTop+4.5,station.Z)
  end
@@ -752,7 +764,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
   occupied[#occupied+1]={x=p.X,z=p.Z,radius=math.max(4,ResourcePlacement.radius(t.body.Size.X,t.body.Size.Y,t.body.Size.Z))}
  end
  local integerGrid=reference and not continuous
- if continuous and not field.crystalLayout then
+ if continuous and not field.cfg.WholeField and not field.crystalLayout then
   field.crystalLayout=ResourcePlacement.crystalLayout(patch.Size.X,patch.Size.Z,patch:GetAttribute('CrystalZone') or 1)
  end
  local layout=continuous and field.crystalLayout or nil
@@ -871,7 +883,7 @@ local function seedField(field)
   resources[r.id]=nil;r.part:Destroy()
  end
  field.resources={};field.respawnQueue={};field.respawnClock=now
- if field.cfg.ContinuousCrystals then
+ if field.cfg.ContinuousCrystals and not field.cfg.WholeField then
   local patch=field.part
   field.crystalLayout=ResourcePlacement.crystalLayout(patch.Size.X,patch.Size.Z,patch:GetAttribute('CrystalZone') or 1)
   field.landmarkReserves={}
@@ -942,7 +954,7 @@ for _,f in ipairs(scene.fields) do
  -- pattern templates remain available in the authored waterfront display.
  field.model:SetAttribute('JunkClearing',field.junk~=nil)
  field.model:SetAttribute('JunkTheme',field.junkTheme)
- table.insert(patches,field);restoreTurrets(field)
+ table.insert(patches,field);scene.patchById[f.id]=field;restoreTurrets(field)
  if field.junk then
   field.nextJunkDrop=now+2.4
  else seedField(field) end
@@ -2285,7 +2297,7 @@ function scene.committedWork(d)
   or (d.breaker~=nil and d.breaker.phase~='Approach'))
 end
 function scene.finishingDiscreteCut(d)
- local field=d.field and patches[d.field]
+ local field=d.field and scene.patchById[d.field]
  if not field or not field.cfg.SelectionOnly then return false end
  if d.specialJob then return true end
  local recovery=d.specialRecovery
@@ -2584,7 +2596,7 @@ end
 local function move(d,goal,dt)
  d.intentGoal=goal
  local formation=d.state=='Follow' or d.state=='HoldSelector' or d.state=='Waiting'
- if formation or not scene.runStart then d.descentOrigin=nil
+ if formation or not scene.runStart or scene.flatFields then d.descentOrigin=nil
  elseif d.lastMoveFormation and d.pos.Y-goal.Y>2.5 then d.descentOrigin=d.pos end
  d.lastMoveFormation=formation
  local descentProgress=1
@@ -2598,7 +2610,9 @@ local function move(d,goal,dt)
   or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
  -- Calm escort/holding pressure; strong predictive passing is for job travel.
  local escort=d.state=='Follow' or d.state=='HoldSelector' or d.state=='Waiting' or d.state=='StorageFull' and d.deployedCarrier
- local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)*Feel.SwarmForce*(escort and .22 or .18+.82*descentProgress)
+ local flock=scene.flatFields and (escort and 1 or .45) or nil
+ local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight,flock)*Feel.SwarmForce*(escort and (flock and .66 or .22) or .18+.82*descentProgress)
+ if flock then desired=Vector3.new(desired.X,0,desired.Z) end
  d.flightSteering=weight==0 and Vector3.zero or Feel.smoothSwarm(d.flightSteering,desired,dt)
  d.goal=goal
  local work=d.target~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach' or d.state=='Intake'
@@ -2619,6 +2633,7 @@ function scene.followAgility(d)
  return math.clamp((2.8-span)/.65,0,1)
 end
 function scene.followHeight(d)
+ if scene.flatFields then return 4.3 end
  local agility=scene.followAgility(d)
  if scene.runStart then
   return Feel.quarryFollowHeight(d.role,0,0)-7*agility
@@ -2626,7 +2641,7 @@ function scene.followHeight(d)
  return Feel.ReferenceFollowHeight-3*agility
 end
 function scene.followGoal(d,position,count,velocity,dt)
- if d.role=='Nomad' then return Feel.followGoal(position,d.slot,count,now,d.owned.base.maxStep60,false,d.flightHeight) end
+ if d.role=='Nomad' and not scene.flatFields then return Feel.followGoal(position,d.slot,count,now,d.owned.base.maxStep60,false,d.flightHeight) end
  local goal
  d.swarmTraits=d.swarmTraits or Feel.swarmTraits(d.id)
  local p=profiles[d.owner]
@@ -2638,6 +2653,7 @@ function scene.followGoal(d,position,count,velocity,dt)
  end
  goal,d.swarmCruise=Feel.swarmFollow(position,velocity or Vector3.zero,d.slot,count,now,
   scene.followHeight(d),d.swarmTraits,d.swarmCruise,dt or C.Tick,ring)
+ if scene.flatFields then return Vector3.new(goal.X,home.Y+7.3,goal.Z) end
  return goal
 end
 function scene.movePlotQueue(queue,dt)
@@ -2657,7 +2673,7 @@ function scene.waitAtPlot(d,p,field,square,dt)
   end
   local hr=characterRoot(p)
   local edge,axis,length=Feel.plotQueueEdge(frame,halfX,halfZ,hr and hr.Position or home)
-  layout={edge=edge,axis=axis,length=length,height=square and (scene.runStart and 19.6 or Feel.ReferenceFollowHeight) or 10}
+  layout={edge=edge,axis=axis,length=length,height=square and (scene.flatFields and 7 or scene.runStart and 19.6 or Feel.ReferenceFollowHeight) or 10}
   if square then square.waitEdge=layout else p.plotWaitEdges[field.id]=layout end
  end
  if not scene.plotQueues then
@@ -3045,7 +3061,7 @@ local function roleNodes(p,field,worker)
  return list
 end
 local function workingField(p,hr)
- local field=p.workField and patches[p.workField]
+ local field=p.workField and scene.patchById[p.workField]
  if field and not activeAssault(p) and playerCanMine(p,field) and nearMiningField(hr.Position,field) then return field end
  return nil
 end
@@ -3424,7 +3440,7 @@ local function droneStep(d: any,dt: number)
   end
  end
  local hr=characterRoot(p)
- if not hr and d.deployedCarrier and d.field and patches[d.field] then hr={Position=patches[d.field].center} end
+ if not hr and d.deployedCarrier and d.field and scene.patchById[d.field] then hr={Position=scene.patchById[d.field].center} end
  if not hr then
   if d.field then leaveField(p,nil,nil,true) end
   if d.state=='Follow' then
@@ -3554,7 +3570,7 @@ local function droneStep(d: any,dt: number)
   local selected=workingField(p,hr)
   if selected then d.field=selected.id end
  end
- local field=d.field and patches[d.field]
+ local field=d.field and scene.patchById[d.field]
  -- Cleared/safe mining orders are independent jobs. Combat still has the
  -- owner leash and server-owned guard participation.
  local idleManual=field and not d.autoField and not d.target
@@ -4177,7 +4193,7 @@ do
 end
 local function abilityContext(p,fieldId,operator,deployment)
  local function valid(id)
-  local field=patches[id];local hr=characterRoot(p)
+  local field=scene.patchById[id];local hr=characterRoot(p)
   return healthy(p) and hr~=nil and field~=nil and not activeAssault(p) and playerCanMine(p,field) and nearMiningField(hr.Position,field)
  end
  local state=deployment and deployment.state or p.ability
@@ -4226,7 +4242,7 @@ local function abilityContext(p,fieldId,operator,deployment)
   end,
   targets=function(id,kind)
    local list={};if not valid(id) then return list end
-   for _,r in ipairs(patches[id].resources) do
+   for _,r in ipairs(scene.patchById[id].resources) do
     local target=targetRecord(r)
     if target then
      -- Survey the same vertical path that the authoritative orbital hit uses.
@@ -4262,7 +4278,7 @@ if not scene.runStart then
   placement=function(p,payload)
    if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or not R.finite(payload.x) or not R.finite(payload.z)
     or math.abs(payload.x)>100000 or math.abs(payload.z)>100000 then return nil,'Choose a position inside a mining field' end
-   local field=patches[payload.fieldId];local hr=characterRoot(p)
+   local field=scene.patchById[payload.fieldId];local hr=characterRoot(p)
    if not field or not hr or activeAssault(p) or not playerCanMine(p,field) or not nearMiningField(hr.Position,field) then return nil,'Use tools beside an unlocked, unguarded field' end
    local localPoint=field.part.CFrame:PointToObjectSpace(Vector3.new(payload.x,field.center.Y,payload.z))
    if math.abs(localPoint.X)>field.part.Size.X*.5 or math.abs(localPoint.Z)>field.part.Size.Z*.5 then return nil,'Place the tool inside the field' end
@@ -4365,7 +4381,7 @@ do
  end
 end
 local function miningAbility(p,payload)
- if type(payload)~='table' or payload.runId~=data(p).run.id or (payload.kind~='Orbital' and payload.kind~='Scrap') or not R.finite(payload.fieldId) or payload.fieldId%1~=0 or not patches[payload.fieldId] then return end
+ if type(payload)~='table' or payload.runId~=data(p).run.id or (payload.kind~='Orbital' and payload.kind~='Scrap') or not R.finite(payload.fieldId) or payload.fieldId%1~=0 or not scene.patchById[payload.fieldId] then return end
  if payload.op~='begin' then return end
  p.ability=p.ability or DroneAbilities.new(data(p).run.abilityCooldowns,data(p).run.id)
  local context=abilityContext(p,payload.fieldId)
@@ -4389,7 +4405,7 @@ function scene.buyStarUpgrade(p,payload)
   if ok then return result end;return nil,result
  end,function(result)
   scene.syncRuntimeFleet(p)
-  if result.id=='selector' and p.miningSquare then
+  if result.id=='selector' and p.miningSquare and not p.miningSquare.field.cfg.WholeField then
    local width=Workshop.selectorWidth(data(p))
    -- Keep the pin object so active cuts, deliveries and press jobs stay attached.
    p.miningSquare.half=width*.5
@@ -4422,7 +4438,7 @@ function scene.placeSquare(p,payload)
  if type(payload)~='table' or payload.runId~=data(p).run.id or not R.finite(payload.fieldId) or typeof(payload.position)~='Vector3' then
   commandReply(p.player,payload,'rejected','Field selection is unavailable.');return
  end
- local field=patches[payload.fieldId]
+ local field=scene.patchById[payload.fieldId]
  if not field or not field.cfg.SelectionOnly then
   commandReply(p.player,payload,'rejected','Select a spot on the mining bed.');return
  end
@@ -4432,14 +4448,14 @@ function scene.placeSquare(p,payload)
  local position=payload.position
  if not R.finite(position.X) or not R.finite(position.Z) then return end
  local part=field.part
- local center=Mining.selectorCenter(position,part.CFrame,part.Size)
+ local center,fieldWidth=Mining.fieldSelection(position,part)
  if not center then commandReply(p.player,payload,'rejected','Select a spot on the mining bed.');return end
  local hr=characterRoot(p)
- local square={field=field,center=center,half=Workshop.selectorWidth(data(p))*.5,placedAt=now}
+ local square={field=field,center=center,half=(fieldWidth or Workshop.selectorWidth(data(p)))*.5,placedAt=now}
  if not hr or not scene.squareInRange(hr.Position,square) then
   commandReply(p.player,payload,'rejected','Move closer to select that area.');return
  end
- local leadId=payload.leadId
+ local leadId=not fieldWidth and payload.leadId or nil
  local lead=type(leadId)=='string' and #leadId<=128 and resources[leadId]
  if lead and not lead.openReady and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
   and scene.rockInSquare(square,lead) then
@@ -4639,7 +4655,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   scene.requestOrePickup(p,payload)
  elseif action=='DevFillBag' then
   if not RunService:IsStudio() then return end
-  local field=p.workField and patches[p.workField] or patches[1]
+  local field=p.workField and scene.patchById[p.workField] or patches[1]
   local material=field.cfg.Material or field.cfg.Key or 'Quartz'
   local added=Pro.addCargo(data(p),material,math.max(0,Ca.capacity(data(p),previewPerks(p))-Pro.cargoUnits(data(p))),Ca.capacity(data(p),previewPerks(p)))
   if added>0 then p.dirty=true;p.publishDirty=true end
@@ -4672,7 +4688,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   notice(p,'Orders cleared. Your backpack stays with you.');commandReply(pl,payload,'recalled','Orders cleared')
  elseif action=='Evade' then
   if now<(p.nextEvade or 0) then return end;p.nextEvade=now+2
-  for _,d in ipairs(p.drones) do if d.field and R.participates(patches[d.field].e,d,data(p).run.id) then d.evade=d.evade+1 end end
+  for _,d in ipairs(p.drones) do if d.field and R.participates(scene.patchById[d.field].e,d,data(p).run.id) then d.evade=d.evade+1 end end
  elseif action=='CancelDrone' or action=='AssignSlot' then
   local function reject(why,field,d,r) commandReply(pl,payload,'rejected',why,field,d,r) end
   if not validDroneIntent(payload) then reject('Invalid request');return end
@@ -4683,10 +4699,10 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if d.life~=payload.life or d.hp<=0 or not R.allowed(d.owner,pl.UserId,d.state) then reject('Drone reprinted or unavailable',nil,d);return end
   if action=='CancelDrone' then
    local old=d.field;release(d);spend(d);d.field=nil;d.autoField=nil;d.state='Return';scene.markRecall(d);dropFieldIfEmpty(p,old)
-   commandReply(pl,payload,'accepted','Drone recalled',patches[old],d);return
+   commandReply(pl,payload,'accepted','Drone recalled',scene.patchById[old],d);return
   end
   if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or type(payload.resourceId)~='string' or #payload.resourceId>160 then reject('Invalid request',nil,d);return end
-  local field=patches[payload.fieldId];local r=resources[payload.resourceId]
+  local field=scene.patchById[payload.fieldId];local r=resources[payload.resourceId]
   if field and field.cfg.SelectionOnly then reject('Place the mining square to select crystals',field,d);return end
   if not field or (characterRoot(p).Position-field.center).Magnitude>(C.CommandRadius or 90) then reject('Too far from field',field,d);return end
   if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
@@ -4747,7 +4763,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local fieldId=type(payload)=='table' and payload.fieldId or payload
   if type(payload)=='table' and not validCommandId(payload.requestId) then return end
   if not R.finite(fieldId) or fieldId%1~=0 then commandReply(pl,payload,'rejected','Invalid field');return end
-  local field=patches[fieldId];local hr=characterRoot(p)
+  local field=scene.patchById[fieldId];local hr=characterRoot(p)
   if field and field.cfg.SelectionOnly then return end
   if not field or (hr.Position-field.center).Magnitude>(C.CommandRadius or 90) then commandReply(pl,payload,'rejected','Too far from field',field);return end
   if not field.cfg.AlwaysUnlocked and not Shops.unlocked(data(p),field.cfg.Key) then commandReply(pl,payload,'rejected','Buy access in the previous mineral shop first',field);return end

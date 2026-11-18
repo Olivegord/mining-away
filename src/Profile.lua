@@ -124,14 +124,14 @@ local function starterMiner(uid,serial,seed)
  miner.base.maxStep60=(20+((seed+serial*17)%31))/100
  return miner
 end
-function P.new(uid,seed,roleConfig)
+function P.new(uid,seed,roleConfig,flatFields)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
  local fleet={}
- for serial=1,STARTER_COUNT do fleet[serial]=starterMiner(uid,serial,seed) end
- -- Beam identity persists independently of the Blue upgrade family and Striker work role.
- fleet[3].name='Inkbeam';fleet[3].beamVariant='Inkbeam'
- if roleConfig then
+ for serial=1,(flatFields and 4 or STARTER_COUNT) do fleet[serial]=starterMiner(uid,serial,seed) end
+ -- Keep the old authored starter for legacy worlds and saved fleets.
+ if not flatFields then fleet[3].name='Inkbeam';fleet[3].beamVariant='Inkbeam' end
+ if roleConfig and not flatFields then
   for _,role in ipairs(Workshop.STARTER_SPECIALISTS) do
    local serial=#fleet+1
    local stats=roleConfig.StudioRoles[role]

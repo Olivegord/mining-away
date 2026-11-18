@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 17 — finish mining beams and particle tails
+
+Mining lasers narrow to zero when work stops. A retiring beam can finish its taper in world space if a target, branch or drone disappears first. Stop mining particle emission when work ends, and allow existing sparks, contact dust and charge smoke to complete their lifetimes. Keep drone shells simple gray cubes for the flat-field test. See the flat-field entry in [project state](PROJECT_STATE.md) for verification.
+
 ## November 17 — restore the two-piece rock release
 
 Ordinary field rocks and sealed geodes open with the original two solid halves swinging outward from the bottom seam. Use the last rendered size and pose of the rock and the matching fracture cut. The sealed geode keeps its irregular exterior, anticipation and player-controlled opening. Drop trajectories, dust, chips and reward timing still use the existing gameplay paths.

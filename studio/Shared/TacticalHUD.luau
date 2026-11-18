@@ -208,7 +208,13 @@ function HUD.nextStationHint(profile: any, pinned: boolean?, depotApproach: bool
  end
  return nil
 end
-function HUD.firstCutHint(input: Enum.UserInputType, reachable: boolean): string
+function HUD.firstCutHint(input: Enum.UserInputType, reachable: boolean, wholeFields: boolean?): string
+ if wholeFields then
+  if not reachable then return 'Walk to the Amber field' end
+  if input==Enum.UserInputType.Touch then return 'Tap a field to mine' end
+  if input.Name:match('^Gamepad') then return 'Mine field [RB]' end
+  return 'Click a field to mine'
+ end
  if not reachable then return 'Follow the Crystal Run signs' end
  if input==Enum.UserInputType.Touch then return 'Tap to preview' end
  if input.Name:match('^Gamepad') then return 'Preview field [RB]' end
@@ -401,7 +407,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
   guidance=r.packReadyToOpen and r.packReadyToOpen() and HUD.packHoldHint(self.input)
    or HUD.nextStationHint(p,pinned,pinned and r.depotApproach(pin))
   if not guidance and HUD.needsFirstCutHint(p,pinned) then
-   guidance=HUD.firstCutHint(self.input,r.starterReachable())
+   guidance=HUD.firstCutHint(self.input,r.starterReachable(),world:GetAttribute('WholeFields')==true)
   end
  end
  local statusText=guidance or (pinned and type(status)=='string' and selectorText[status]) or nil

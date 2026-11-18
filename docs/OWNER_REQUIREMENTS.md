@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 17 — flat field and four laser drone test
+
+Replace the old active terrain and 3D quarry with spaced, flat square rock fields on the opposite side of spawn. A single click commands the whole field. Start fresh players with four laser miners, use larger plain gray cubes, and keep coordinated flock flight on a low shared plane. Let beams narrow before retiring and let existing particles finish after emission stops. Routine shared Edit and canonical saves apply.
+
 ## November 17 — reject the backpack appraisal screen
 
 The owner rejected the previous trade-in redesign. The replacement returns to one action at SELL ORE and uses one physical counter payoff with a brief, non-interactive receipt. The prior request to restore two-piece rock openings still applies. No player release requested.

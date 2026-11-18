@@ -160,7 +160,9 @@ function B.hide(r,releaseDetail)
  if releaseDetail then freeDetail(r) end
 end
 function B.destroy(r)
- if r then r.root:Destroy() end
+ if not r or r.destroyed then return end
+ if releaseRich then releaseRich(r) end
+ r.root:Destroy()
 end
 function B.style(r,style,color)
  if not r or r.destroyed or (r.style==style and r.color==color) then return end
@@ -209,9 +211,20 @@ releaseRich=function(r)
  hideRich(r);r.rich=nil
  if h.leased then h.leased=false;richLive-=1 end
  if h.particleSource then
-  h.vapor:Clear();h.sparks:Clear();h.particleSource.Parent=h.root
+  local source=h.particleSource
+  if h.emitted then
+   local tail=Instance.new('Part');tail.Name='LensParticleTail'
+   tail.Anchored=true;tail.CanCollide=false;tail.CanQuery=false;tail.CanTouch=false;tail.CastShadow=false
+   tail.Size=Vector3.one*.05;tail.Transparency=1;tail.CFrame=r.root.CFrame;tail.Parent=workspace
+   h.particleSource=source:Clone()
+   h.vapor=h.particleSource:FindFirstChild('VioletDistortionVapor')
+   h.sparks=h.particleSource:FindFirstChild('LensDischargeSparks')
+   source.Parent=tail
+   game:GetService('Debris'):AddItem(tail,1.35)
+  end
+  h.particleSource.Parent=h.root
  end
- h.lastEmission=nil;h.lastPulse=nil;h.launched=nil;h.root.Parent=nil
+ h.emitted=nil;h.lastEmission=nil;h.lastPulse=nil;h.launched=nil;h.root.Parent=nil
  if #richPool>=richPoolLimit then table.remove(richPool,1).root:Destroy() end
  richPool[#richPool+1]=h
 end
@@ -395,7 +408,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  -- Never emit catch-up batches after a late observer or paused render loop.
  if inflow>.05 then
   if h.lastEmission and now>=h.lastEmission+.08 then
-   h.sparks:Emit(1);h.lastEmission=now
+   h.sparks:Emit(1);h.lastEmission=now;h.emitted=true
   elseif not h.lastEmission or now<h.lastEmission then h.lastEmission=now end
  else h.lastEmission=nil end
 end

@@ -296,16 +296,20 @@ check('electrical spray keeps drifting without gravity and carries chromatic pul
  assert(chargeUpdates==10 and chargeEnds==1,'charge tone failed to track visual lifecycle')
  BeamVFX.onCue=nil;BeamVFX.onCharge=nil;BeamVFX.onChargeEnd=nil;BeamVFX.destroy(r)
 end)
-check('aftermath budget cancellation late receipts and reduced-effects cleanup',function()
+check('aftermath budget stops emission and drains canceled or reduced-effects tails',function()
+ LaunchAftermath.clear()
  local owners={}
  for i=1,8 do owners[i]={};LaunchAftermath.charge(owners[i],from,-Vector3.yAxis,120,.7,1) end
  local active=LaunchAftermath.counts();assert(active==4)
  for _,owner in ipairs(owners) do LaunchAftermath.fire(owner,from,-Vector3.yAxis,120,.8) end
- active=LaunchAftermath.counts();assert(active==0,'late observer replayed the launch')
- LaunchAftermath.charge(owners[1],from,-Vector3.yAxis,121,.7,1)
- LaunchAftermath.fire(owners[1],from,-Vector3.yAxis,121,0)
+ active=LaunchAftermath.counts();assert(active==4,'canceling erased emitted particles')
+ for _,owner in ipairs(owners) do assert(not owner.aftermath,'late observer replayed the launch') end
+ LaunchAftermath.step(121.81);assert(LaunchAftermath.counts()==0)
+ LaunchAftermath.charge(owners[1],from,-Vector3.yAxis,122,.7,1)
+ LaunchAftermath.fire(owners[1],from,-Vector3.yAxis,122,0)
  local p=Instance.new('Player');players.LocalPlayer=p;p:SetAttribute('ReducedEffects',true)
- LaunchAftermath.step(121.1);active=LaunchAftermath.counts();assert(active==0)
+ LaunchAftermath.step(122.1);assert(LaunchAftermath.counts()==1,'changing effects preferences erased the existing tail')
+ LaunchAftermath.step(123.81);assert(LaunchAftermath.counts()==0)
  players.LocalPlayer=nil;p:Destroy()
  for _,fps in ipairs({30,60,144}) do
   local at
@@ -414,7 +418,24 @@ check('actual mining envelope surface contact target life and paused work remain
  s.active=true;s.key='next';s.life=2;s.since=302
  blocked=true;p:beginFrame();p:renderMiningBeam(b,s,302.1)
  assert(not outer.Enabled,'new life reused a stale contact')
- p:destroyMiningBeam(b);p:destroy();target:Destroy();view:Destroy()
+ blocked=false;s.cube=true
+ realTime=302.6;p:beginFrame();p:renderMiningBeam(b,s,realTime)
+ assert(outer.Enabled and b.work and b.work.impact.Enabled,'cube miner lacked active contact effects')
+ local workTail=b.work
+ target:Destroy()
+ realTime=302.61;p:beginFrame();p:renderMiningBeam(b,s,realTime)
+ local tail=p.beamTails[#p.beamTails]
+ assert(tail and tail.core.Parent and not workTail.impact.Enabled,'lost contact cut the beam or kept emitting')
+ local fullWidth=tail.core.Size.Y
+ p:update(0,302.71)
+ assert(tail.core.Parent and tail.core.Size.Y<fullWidth,'the detached beam did not shrink')
+ p:update(0,302.82)
+ assert(not tail.core.Parent,'the detached beam outlived its fade')
+ p:destroyMiningBeam(b)
+ assert(workTail.anchor.Parent and not workTail.impact.Enabled,'drone removal erased the lingering particles')
+ p:update(0,304.7)
+ assert(b.holder.Parent==nil,'the retired particle holder did not clean up')
+ p:destroy();view:Destroy()
 end)
 check('crystal beam follows a turned and shrunk contact between ray checks',function()
  local p=Presentation.new({parent=root})

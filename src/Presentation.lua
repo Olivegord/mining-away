@@ -105,7 +105,7 @@ end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
  return setmetatable({parent=options.parent,audio=options.audio,work=WorkEffects.new(options.parent),drones={},turrets={},fragments={},pulses={},scanCount=0,
-  maxFragments=48,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,cameraBeats={},closed=false},P)
+  maxFragments=48,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,beamTails={},cameraBeats={},closed=false},P)
 end
 -- One budget per render frame; cached anchors remain in the visible part's local
 -- coordinates between queries, so a shrinking or tilted crystal carries its impact.
@@ -144,22 +144,38 @@ function P:createMiningBeam(view,emitter)
  return {holder=holder,origin=muzzle,endpoint=endpoint,marker=impact,secondaryPoint=extra,
   core=core,halo=halo,secondary=branch,envelope=F.newBeam(),surface={},secondarySurface={},lastKey=nil,lastKind=nil}
 end
+-- The latest verified endpoint can vanish before the stop snapshot arrives.
+-- Keep the departing laser in world space and taper from its last drawn width.
+function P:finishBeamTail(segment,now)
+ if not segment or self.closed then return end
+ segment.at=now
+ segment.core=newLaserLayer(self.parent,'FinishingCore',segment.coreColor)
+ segment.halo=newLaserLayer(self.parent,'FinishingHalo',segment.haloColor)
+ WorkEffects.drawCylinder(segment.core,segment.from,segment.to,segment.inner,.14)
+ WorkEffects.drawCylinder(segment.halo,segment.from,segment.to,segment.outer,.82)
+ table.insert(self.beamTails,segment)
+end
 function P:destroyMiningBeam(beam)
  if not beam then return end
  if self.audio and self.audio.stopLoop then self.audio:stopLoop(beam) end
- self.work:destroyMining(beam)
+ local now=workspace:GetServerTimeNow()
+ self:finishBeamTail(beam.lastDraw,now)
+ self:finishBeamTail(beam.lastBranch,now)
+ local retained=not self.closed and self.work:retireMining(beam,now)
+ if not retained then self.work:destroyMining(beam) end
  BeamVFX.destroy(beam.vfx);BeamVFX.destroy(beam.branchVFX)
  for _,rig in pairs(beam.ink or {}) do InkbeamView.destroy(rig) end
  if beam.origin then beam.origin:Destroy() end
- if beam.holder then beam.holder:Destroy() end
+ if beam.holder and not retained then beam.holder:Destroy() end
 end
 -- Fit only parts advertised by the authoritative drone snapshot. These are
 -- local pieces of the existing drone model, including for other observers.
 function P:syncMiningHardware(d,alive)
  local source,beam=d.source,d.beam
+ local cube=source:GetAttribute('CubeDrone')==true
  local double=source:GetAttribute('DoubleBeam')==true
- local boost=source:GetAttribute('TwinThrusters')==true
- local duplicate=source:GetAttribute('OreDuplicator')==true
+ local boost=not cube and source:GetAttribute('TwinThrusters')==true
+ local duplicate=not cube and source:GetAttribute('OreDuplicator')==true
  local key=(double and 1 or 0)+(boost and 2 or 0)+(duplicate and 4 or 0)
  if key~=beam.hardwareKey then
   beam.hardwareKey=key
@@ -180,9 +196,15 @@ function P:syncMiningHardware(d,alive)
    beam.twinOrigins={}
    for i,side in ipairs({-1,1}) do
     local offset=at+Vector3.new(side*math.max(.54,shell.X*.29),-.11,0)
-    piece('DoubleBeamHousing',Vector3.new(.50,.31,.61),offset+Vector3.yAxis*.10,dark,Enum.Material.Metal)
-    local lens=piece('DoubleBeamLens',Vector3.new(.31,.09,.44),offset-Vector3.yAxis*.10,Color3.fromRGB(116,232,255),Enum.Material.Neon)
-    local socket=Instance.new('Attachment');socket.Position=Vector3.new(0,-.045,0);socket.Parent=lens;beam.twinOrigins[i]=socket
+    local socket=Instance.new('Attachment')
+    if cube then
+     socket.Position=offset;socket.Parent=base;table.insert(beam.hardwareParts,socket)
+    else
+     piece('DoubleBeamHousing',Vector3.new(.50,.31,.61),offset+Vector3.yAxis*.10,dark,Enum.Material.Metal)
+     local lens=piece('DoubleBeamLens',Vector3.new(.31,.09,.44),offset-Vector3.yAxis*.10,Color3.fromRGB(116,232,255),Enum.Material.Neon)
+     socket.Position=Vector3.new(0,-.045,0);socket.Parent=lens
+    end
+    beam.twinOrigins[i]=socket
    end
   end
   if boost then
@@ -315,6 +337,8 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.vertical=sample.isMining==true
  beam.followCrystal=followsCrystal(sample)
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
+  self:finishBeamTail(beam.lastDraw,now);beam.lastDraw=nil
+  self:finishBeamTail(beam.lastBranch,now);beam.lastBranch=nil
   beam.surface={};beam.secondarySurface={};beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
  end
  local dt=beam.renderAt and math.clamp(now-beam.renderAt,0,.1) or 1/60;beam.renderAt=now
@@ -357,6 +381,10 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local pulse,newPulse=F.miningCue(beam.miningCue,sample,now)
  if style=='Cutter' then pulse=0;newPulse=false end
  local visible=valid and width>.001
+ if not visible and beam.lastDraw then
+  if not valid then self:finishBeamTail(beam.lastDraw,now) end
+  beam.lastDraw=nil
+ end
  beam.visibility=visible and 1 or 0
  beam.core.Transparency=1;beam.halo.Transparency=1
  local reference=sample.droneRole=='Striker' and sample.isMining
@@ -394,6 +422,8 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
     end
    end
   end
+  beam.lastDraw={from=origin,to=tip,inner=.28*width,outer=(reference and .5 or look.width0)*width,
+   coreColor=beam.core.Color,haloColor=beam.halo.Color}
   if reference then beam.endpoint.Position=tip
   else
    WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.62*alpha)
@@ -422,7 +452,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   for _,rig in pairs(beam.ink) do InkbeamView.destroy(rig) end;beam.ink=nil
  end
  drawReferenceBeam(beam,reference and not ink and visible,width,sample,now)
- drawMiningFlare(beam,reference and visible and (sample.active or predicted) and not sample.paused,width,now,ignition,point,ink)
+ drawMiningFlare(beam,reference and visible,width,now,ignition,point,ink)
  local glow=reference and visible and sample.active and not sample.paused
  local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then
@@ -449,7 +479,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  end
- if not reference or ink then self.work:mining(beam,sample,point,normal,width,pulse,now) end
+ if not reference or ink or sample.cube then self.work:mining(beam,sample,point,normal,width,pulse,now) end
  if glow and sample.resource and sample.resource.cutFeedback then
   sample.resource.cutFeedback:cut(sample.resource,now,beat*math.min(1,width+.25))
   if not ink and beam.contactAccentAt~=sample.since then
@@ -477,12 +507,13 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  elseif visible and newPulse and style=='Resonance' then self:_sound(point,'resonance',now)
  end
  beam.secondary.Transparency=1
- BeamVFX.hide(beam.branchVFX,true)
  local branchDrawn=false
  if visible and sample.active and sample.secondaryPart and sample.secondaryKey then
   local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,branchOrigin(beam,sample.secondaryPart,point,normal),sample.secondaryPart,sample.secondarySource,now,sample.serverSource,noQuery,beam.vertical)
   if secondary and secondaryNormal then
    beam.secondaryPoint.Position=secondary;beam.secondary.Color=sample.secondaryColor or tint
+   beam.lastBranch={from=branchOrigin(beam,sample.secondaryPart,point,normal),to=secondary,
+    inner=.065*width,outer=.15*width,coreColor=WHITE,haloColor=beam.secondary.Color}
    WorkEffects.drawCylinder(beam.secondary,branchOrigin(beam,sample.secondaryPart,point,normal),secondary,(style=='Resonance' and .11+.04*pulse or .085)*width*.58,.35)
    if not beam.branchVFX then beam.branchVFX=BeamVFX.new(beam.holder,'Branch',sample.secondaryColor or tint,false) end
    if beam.branchVFX then
@@ -492,7 +523,10 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
    end
   end
  end
- if not branchDrawn then BeamVFX.destroy(beam.branchVFX);beam.branchVFX=nil end
+ if not branchDrawn then
+  self:finishBeamTail(beam.lastBranch,now);beam.lastBranch=nil
+  BeamVFX.destroy(beam.branchVFX);beam.branchVFX=nil
+ end
 end
 -- Collect a frame before spending any rays. Oldest-due primary contacts are
 -- given at least half of six contact slots and scheduled first. Branches receive
@@ -1271,6 +1305,16 @@ end
 function P:update(_dt,now)
  if self.closed then return end
  self.work:update(now)
+ for i=#self.beamTails,1,-1 do
+  local segment=self.beamTails[i]
+  local width=(1-math.clamp((now-segment.at)/.2,0,1))^2
+  if width==0 then
+   segment.core:Destroy();segment.halo:Destroy();table.remove(self.beamTails,i)
+  else
+   WorkEffects.drawCylinder(segment.core,segment.from,segment.to,segment.inner*width,.14)
+   WorkEffects.drawCylinder(segment.halo,segment.from,segment.to,segment.outer*width,.82)
+  end
+ end
  for i=#self.fragments,1,-1 do
   local item=self.fragments[i];local age=now-item.start
   if age>=item.duration or not item.part.Parent then
@@ -1319,6 +1363,8 @@ function P:destroy()
  for _,item in ipairs(self.fragments) do item.part:Destroy() end
  for _,item in ipairs(self.pulses) do item.part:Destroy() end
  self.work:destroy()
+ for _,tail in ipairs(self.beamTails) do tail.core:Destroy();tail.halo:Destroy() end
+ self.beamTails={}
  self.fragments={};self.pulses={}
 end
 return P

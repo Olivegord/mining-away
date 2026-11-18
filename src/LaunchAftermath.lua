@@ -44,11 +44,14 @@ local function retire(f)
  PlaneBurst.hide(f.plane);f.root.Parent=nil
  if #pool<4 then pool[#pool+1]=f else f.root:Destroy() end
 end
-local function remove(f)
- for i=#active,1,-1 do if active[i]==f then table.remove(active,i);retire(f);return end end
-end
-function A.cancel(owner)
- if owner.aftermath then remove(owner.aftermath) end
+function A.cancel(owner,now)
+ local f=owner.aftermath
+ if not f then return end
+ owner.aftermath=nil;f.owner=nil
+ if f.phase=='charge' then
+  f.phase='settle';f.updatedAt=math.max(f.updatedAt,now or workspace:GetServerTimeNow())
+  for _,s in ipairs(f.smoke) do s.e.Acceleration=Vector3.zero end
+ end
 end
 function A.clear()
  for i=#active,1,-1 do retire(table.remove(active,i)) end
@@ -57,14 +60,12 @@ function A.clear()
  if connection then connection:Disconnect();connection=nil end
 end
 function A.step(now)
- local camera=workspace.CurrentCamera
- local player=game:GetService('Players').LocalPlayer
- local reduced=player and (player:GetAttribute('ReducedEffects') or player:GetAttribute('MA_ReducedEffects') or player:GetAttribute('ReducedMotion') or player:GetAttribute('MA_ReducedMotion'))
  for i=#active,1,-1 do
   local f=active[i];local age=f.firedAt and now-f.firedAt or 0
-  local far=camera and (camera.CFrame.Position-f.root.Position).Magnitude>120
-  if not f.root.Parent or reduced or far or (f.phase=='release' and age>=1.8) or (f.phase=='charge' and now-f.updatedAt>.25) then
+  if not f.root.Parent or (f.phase=='release' and age>=1.8) or (f.phase=='settle' and now-f.updatedAt>=1.8) then
    table.remove(active,i);retire(f)
+  elseif f.phase=='charge' and now-f.updatedAt>.25 then
+   if f.owner then A.cancel(f.owner,now) end
   elseif f.phase=='release' then
    -- Brief pressure impulse acts on particles already emitted during charge.
    local pressure=180*math.exp(-math.max(0,age)*35)
@@ -126,7 +127,7 @@ end
 function A.fire(owner,origin,direction,now,age)
  local f=owner.aftermath
  if not f then return end
- if not age or age<0 or age>.16 then A.cancel(owner);return end
+ if not age or age<0 or age>.16 then A.cancel(owner,now);return end
  f.root.CFrame=CFrame.new(origin);f.direction=direction;f.phase='release';f.firedAt=now-age
  -- The launched tail no longer belongs to a charge lease or moving drone.
  f.owner=nil;owner.aftermath=nil

@@ -21,6 +21,14 @@ local function sanitize(model,query)
  end
 end
 W.sanitize=sanitize
+function W.cubeDrone(parent,pos)
+ local model=Instance.new('Model');model.Name='Drone'
+ local body=W.part(model,'Hull',pos,Vector3.one*3.4,Color3.fromRGB(139,139,139))
+ local emitter=W.part(model,'Emmiter',pos-Vector3.yAxis*1.7,Vector3.one*.05,body.Color)
+ emitter.Transparency=1
+ model.PrimaryPart=body;model:SetAttribute('CubeDrone',true);model.Parent=parent
+ return model,body,emitter
+end
 function W.drone(parent,template,pos,color,referenceMiner)
  local model=template and template:Clone() or Instance.new('Model');model.Name='Drone';sanitize(model,false)
  local part=model.PrimaryPart or model:FindFirstChild('Mesh') or model:FindFirstChildWhichIsA('BasePart',true)
@@ -240,7 +248,7 @@ end
 function W.applyQuarryTextures(scene)
  if not scene.root:GetAttribute('DronerevolutionMapVersion') then return false end
  local terraces=scene.map:FindFirstChild('DronerevolutionTerraces')
- if not terraces then return false end
+ if not terraces and not scene.flatFields then return false end
  local material=Enum.Material
  local rgb=Color3.fromRGB
  -- Roblox restricts material definitions to Studio. The native document
@@ -253,7 +261,7 @@ function W.applyQuarryTextures(scene)
  end
  -- The shared Edit map and canonical file already carry the authored scenery.
  -- Still register materials for runtime ore and debris on every server.
- if scene.root:GetAttribute('QuarrySceneryAuthored') then return true end
+ if scene.flatFields or scene.root:GetAttribute('QuarrySceneryAuthored') then return true end
  local oldFinish={
   DR_MeadowFine={material.Grass,rgb(103,112,77)},
   DR_MeadowMoss={material.LeafyGrass,rgb(87,101,70)},
@@ -671,15 +679,18 @@ function W.initialize(): any
   local hub=map and map:FindFirstChild('HubPad',true)
   local home=existing:GetAttribute('DepotHome') or (hub and hub.Position) or (spawn and spawn.Position) or Vector3.new(-56,.5,-11)
   assert(map and fields,'Editable map is missing required folders')
-  finishEditableMap(existing,map,fields,home)
-  local fieldMetadata={}
-  for id,cfg in ipairs(Config.Fields) do
-   local model=fields:FindFirstChild(cfg.Key)
-   local part=model and model:FindFirstChild('Field')
-   assert(model and part and part:IsA('BasePart'),'Editable map is missing field '..cfg.Key)
-   table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})
-  end
   local run=map:FindFirstChild('CrystalRun')
+  local flat=run and run:GetAttribute('WholeFields')==true
+  local fieldMetadata={}
+  if not flat then
+   finishEditableMap(existing,map,fields,home)
+   for id,cfg in ipairs(Config.Fields) do
+    local model=fields:FindFirstChild(cfg.Key)
+    local part=model and model:FindFirstChild('Field')
+    assert(model and part and part:IsA('BasePart'),'Editable map is missing field '..cfg.Key)
+    table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})
+   end
+  end
   local runStart,chargingStation
   if run then
    for i,tier in ipairs(Workshop.CRYSTAL_TIERS) do
@@ -689,9 +700,11 @@ function W.initialize(): any
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
     local cfg={Name=tier.name,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
      Hardness=tier.hardness,Cracks=tier.cracks,Color=tier.color or original.Color,ReferenceCrystals=true,ContinuousCrystals=true,RockModifiers=true,Count=64,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
-    local id=#fieldMetadata+1
+    cfg.WholeField=flat
+    if flat then cfg.Count=14 end
+    local id=flat and (#Config.Fields+i) or #fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
-    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
+    table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})
     runStart=runStart or part.Position
    end
    chargingStation=run:FindFirstChild('ChargingStation')
@@ -703,7 +716,7 @@ function W.initialize(): any
    packStation=map:FindFirstChild('PackStation',true),
    prestigeStation=map:FindFirstChild('PrestigeStation',true),
    converter=workspace:FindFirstChild('Converter'),
-   fields=fieldMetadata,runStart=runStart,chargingStation=chargingStation,
+   fields=fieldMetadata,runStart=runStart,chargingStation=chargingStation,flatFields=flat,
    turretTemplate=game:GetService('ServerStorage'):FindFirstChild('OriginalConstructTemplate'),
    droneTemplate=workspace:FindFirstChild('Drone'),
    crystalTemplate=workspace:FindFirstChild('Crystal')

@@ -930,26 +930,29 @@ local function registerDrone(source)
  pendingDroneSources[source]=true
  -- Render from the complete preserved asset, never a partially streamed gameplay model.
  -- The historical drone is a Part body plus its nested emitter; it has no SpecialMesh.
- local template=RS:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
+ local cube=source:GetAttribute('CubeDrone')==true
+ local template=cube and source or RS:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
  local mesh=template and template:FindFirstChild('Mesh')
  local templateEmitter=mesh and mesh:FindFirstChild('Emmiter')
  local originalBeam=mesh and mesh:FindFirstChild('Beam')
- if not template or not template:IsA('Model') or not mesh or not mesh:IsA('BasePart')
+ if not cube and (not template or not template:IsA('Model') or not mesh or not mesh:IsA('BasePart')
   or not templateEmitter or not templateEmitter:IsA('BasePart') or not mesh:FindFirstChild('Attachment')
   or not mesh:FindFirstChild('WeldConstraint') or not originalBeam
-  or not originalBeam:FindFirstChild('InnerBeam') or not originalBeam:FindFirstChild('OuterBeam') then
+  or not originalBeam:FindFirstChild('InnerBeam') or not originalBeam:FindFirstChild('OuterBeam')) then
   -- Never make a gameplay drone invisible just because the optional presentation asset is unavailable.
   return false
  end
- if source:GetAttribute('RamielHullAvailable') and not RS:FindFirstChild('RamielHull') then return false end
+ if not cube and source:GetAttribute('RamielHullAvailable') and not RS:FindFirstChild('RamielHull') then return false end
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'
- if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
- DroneConfig.fitBody(clone,role)
+ if not cube then
+  if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
+  DroneConfig.fitBody(clone,role)
+ end
  pendingDroneSources[source]=nil
- local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
+ local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();pendingDroneSources[source]=true;return false end
  clone.PrimaryPart=pivot;clone.Parent=localFX
  local emitter=clone:FindFirstChild('Emmiter',true) or clone:FindFirstChild('MiningEmitter',true) or clone:FindFirstChild('Emitter',true)
  if not emitter or not emitter:IsA('BasePart') then clone:Destroy();pendingDroneSources[source]=true;return false end
@@ -959,7 +962,7 @@ local function registerDrone(source)
  local typeColor=colors[source:GetAttribute('Role')] or colors[source:GetAttribute('Type')]
  emitter.Color=typeColor or emitter.Color
  -- The original 1-stud emitter is enclosed by its 2-stud body; a restrained tint stays visible.
- if referenceMiner then
+ if not cube and referenceMiner then
   local ink=source:GetAttribute('BeamVariant')=='Inkbeam'
   pivot.Color=ink and Color3.fromRGB(22,23,43) or Color3.fromRGB(75,117,175);pivot.Material=Enum.Material.SmoothPlastic;pivot.MaterialVariant=''
   emitter.Color=Color3.fromRGB(42,53,73);emitter.Material=pivot.Material;emitter.MaterialVariant=''
@@ -971,7 +974,7 @@ local function registerDrone(source)
   optic.Shape=Enum.PartType.Cylinder;optic.Size=Vector3.new(.20,ink and .98 or .82,ink and .98 or .82)
   optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
   optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
- elseif typeColor and not clone:GetAttribute('RoleGeometry') then
+ elseif not cube and typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
   local trim=localPart(clone,'LowerChassis',pivot.Position);trim.Size=Vector3.new(pivot.Size.X*1.015,.055,pivot.Size.Z*1.015);trim.Transparency=0;trim.Color=Color3.fromRGB(23,35,46);trim.Material=Enum.Material.Metal;trim.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.35,0)
@@ -985,7 +988,7 @@ local function registerDrone(source)
   if child:IsA('Decal') and child.Face==Enum.NormalId.Front then child:Destroy() end
  end
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
- if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
+ if not cube and role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,
   flightImpulseAt=source:GetAttribute('FlightImpulseAt') or 0,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
@@ -1572,7 +1575,7 @@ local function renderDrone(d,dt,now)
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
   stoneColor=resource and resource.stoneColor,
-  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=s:GetAttribute('BeamVariant'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
+  cube=s:GetAttribute('CubeDrone')==true,style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=not s:GetAttribute('CubeDrone') and s:GetAttribute('BeamVariant') or nil,droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,

@@ -1027,14 +1027,14 @@ end
 function F.swarmGrid(records)
  -- Snapshot once before moving any worker, so update order cannot make the
  -- first drone push the last one differently. Buckets hold immutable poses.
- local grid={buckets={},velocities={}};local cell=F.SwarmRadius
+ local grid={buckets={},velocities={},owners={}};local cell=F.SwarmRadius
  for _,record in pairs(records) do
   if record.id and record.pos and (record.hp==nil or record.hp>0) then
    local pos=record.pos;local key=swarmCell(math.floor(pos.X/cell),math.floor(pos.Y/cell),math.floor(pos.Z/cell))
    local bucket=grid.buckets[key]
    if not bucket then bucket={};grid.buckets[key]=bucket end
    local id=tostring(record.id);local velocity=intentVelocity(record)
-   table.insert(bucket,{id=id,pos=pos,velocity=velocity});grid.velocities[id]=velocity
+   table.insert(bucket,{id=id,pos=pos,velocity=velocity,owner=record.owner});grid.velocities[id]=velocity;grid.owners[id]=record.owner
   end
  end
  -- Stable sampling in crowded cells must not depend on table iteration order.
@@ -1047,6 +1047,7 @@ function F.swarmOffset(position,id,grid,weight,flocking)
  id=tostring(id)
  local cell=F.SwarmRadius;local x,y,z=math.floor(position.X/cell),math.floor(position.Y/cell),math.floor(position.Z/cell)
  local neighbors={}
+ local owner=grid.owners and grid.owners[id]
  local velocity=(grid.velocities and grid.velocities[id]) or Vector3.zero
  -- Read only 27 local bins, at most 12 samples per bin and 12 final contacts.
  -- Even a crowd stacked at exactly one pose cannot cause a fleet-wide scan for
@@ -1064,8 +1065,9 @@ function F.swarmOffset(position,id,grid,weight,flocking)
       local closest=motion>.001 and math.clamp(-delta:Dot(relative)/motion,0,.65) or 0
       local future=delta+relative*closest
       local futureSquare=future:Dot(future)
-      if square>=F.SwarmNear^2 and (closest==0 or futureSquare>=5.5^2) then continue end
-      local candidate={id=other.id,delta=delta,square=square,futureSquare=futureSquare,closest=closest,velocity=other.velocity}
+      local flockmate=flocking and owner~=nil and owner==other.owner
+      if not flockmate and square>=F.SwarmNear^2 and (closest==0 or futureSquare>=5.5^2) then continue end
+      local candidate={id=other.id,delta=delta,square=square,futureSquare=futureSquare,closest=closest,velocity=other.velocity,flockmate=flockmate}
       if #neighbors<12 then table.insert(neighbors,candidate)
       else
        local worst=1
@@ -1080,7 +1082,7 @@ function F.swarmOffset(position,id,grid,weight,flocking)
   end
  end end end
  table.sort(neighbors,function(a,b) return a.id<b.id end)
- local force,alignment,nearby=Vector3.zero,Vector3.zero,0
+ local force,alignment,cohesion,nearby=Vector3.zero,Vector3.zero,Vector3.zero,0
  for _,other in ipairs(neighbors) do
   local first=id<other.id;local pair=swarmHash(first and (id..'/'..other.id) or (other.id..'/'..id))
   local side=first and 1 or -1;local delta=other.delta
@@ -1104,14 +1106,16 @@ function F.swarmOffset(position,id,grid,weight,flocking)
   local lane=distance>.001 and math.clamp(delta.Y/distance,-1,1)*.95 or side*.35
   -- Static separation cannot inject sideways momentum and perpetual orbit.
   force+=normal*(currentPressure*1.9+anticipation*.65)+tangent*(anticipation*4.8)+Vector3.new(0,lane*pressure,0)
-  if flocking and flocking>0 then
-   local blend=math.max(0,1-distance/F.SwarmNear)
-   alignment+=(other.velocity-velocity)*blend;nearby+=blend
+  if other.flockmate then
+   local blend=math.max(0,1-distance/F.SwarmRadius)
+   alignment+=(other.velocity-velocity)*blend
+   cohesion-=flat*(blend*math.max(0,1-F.SwarmNear/math.max(.01,distance)))
+   nearby+=blend
   end
  end
  if nearby>0 then
-  local match=alignment/nearby
-  force+=match*(match.Magnitude>.42 and .42/match.Magnitude or 1)*flocking*math.min(1,nearby)
+  local match=(alignment*.075+cohesion*.06)/nearby
+  force+=match*(match.Magnitude>.48 and .48/match.Magnitude or 1)*flocking*math.min(1,nearby)
  end
  force=Vector3.new(force.X,math.clamp(force.Y,-.85,.85),force.Z)
  if force.Magnitude>F.SwarmMaxOffset then force=force.Unit*F.SwarmMaxOffset end
@@ -1379,6 +1383,13 @@ function M.selectorCenter(position,frame,size)
  local x=math.clamp(math.round(point.X/SELECTOR_GRID),-maxX,maxX)*SELECTOR_GRID
  local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
  return frame:PointToWorldSpace(Vector3.new(x,size.Y*.5,z))
+end
+function M.fieldSelection(position,bed)
+ local point=M.selectorCenter(position,bed.CFrame,bed.Size)
+ if point and bed:GetAttribute('WholeField') then
+  return bed.Position+Vector3.yAxis*(bed.Size.Y*.5),bed.Size.X
+ end
+ return point,nil
 end
 function M.selectorInRange(position,point)
  local delta=point-position
@@ -2618,11 +2629,14 @@ local function retire(f)
  PlaneBurst.hide(f.plane);f.root.Parent=nil
  if #pool<4 then pool[#pool+1]=f else f.root:Destroy() end
 end
-local function remove(f)
- for i=#active,1,-1 do if active[i]==f then table.remove(active,i);retire(f);return end end
-end
-function A.cancel(owner)
- if owner.aftermath then remove(owner.aftermath) end
+function A.cancel(owner,now)
+ local f=owner.aftermath
+ if not f then return end
+ owner.aftermath=nil;f.owner=nil
+ if f.phase=='charge' then
+  f.phase='settle';f.updatedAt=math.max(f.updatedAt,now or workspace:GetServerTimeNow())
+  for _,s in ipairs(f.smoke) do s.e.Acceleration=Vector3.zero end
+ end
 end
 function A.clear()
  for i=#active,1,-1 do retire(table.remove(active,i)) end
@@ -2631,14 +2645,12 @@ function A.clear()
  if connection then connection:Disconnect();connection=nil end
 end
 function A.step(now)
- local camera=workspace.CurrentCamera
- local player=game:GetService('Players').LocalPlayer
- local reduced=player and (player:GetAttribute('ReducedEffects') or player:GetAttribute('MA_ReducedEffects') or player:GetAttribute('ReducedMotion') or player:GetAttribute('MA_ReducedMotion'))
  for i=#active,1,-1 do
   local f=active[i];local age=f.firedAt and now-f.firedAt or 0
-  local far=camera and (camera.CFrame.Position-f.root.Position).Magnitude>120
-  if not f.root.Parent or reduced or far or (f.phase=='release' and age>=1.8) or (f.phase=='charge' and now-f.updatedAt>.25) then
+  if not f.root.Parent or (f.phase=='release' and age>=1.8) or (f.phase=='settle' and now-f.updatedAt>=1.8) then
    table.remove(active,i);retire(f)
+  elseif f.phase=='charge' and now-f.updatedAt>.25 then
+   if f.owner then A.cancel(f.owner,now) end
   elseif f.phase=='release' then
    -- Brief pressure impulse acts on particles already emitted during charge.
    local pressure=180*math.exp(-math.max(0,age)*35)
@@ -2700,7 +2712,7 @@ end
 function A.fire(owner,origin,direction,now,age)
  local f=owner.aftermath
  if not f then return end
- if not age or age<0 or age>.16 then A.cancel(owner);return end
+ if not age or age<0 or age>.16 then A.cancel(owner,now);return end
  f.root.CFrame=CFrame.new(origin);f.direction=direction;f.phase='release';f.firedAt=now-age
  -- The launched tail no longer belongs to a charge lease or moving drone.
  f.owner=nil;owner.aftermath=nil
@@ -2960,7 +2972,9 @@ function B.hide(r,releaseDetail)
  if releaseDetail then freeDetail(r) end
 end
 function B.destroy(r)
- if r then r.root:Destroy() end
+ if not r or r.destroyed then return end
+ if releaseRich then releaseRich(r) end
+ r.root:Destroy()
 end
 function B.style(r,style,color)
  if not r or r.destroyed or (r.style==style and r.color==color) then return end
@@ -3009,9 +3023,20 @@ releaseRich=function(r)
  hideRich(r);r.rich=nil
  if h.leased then h.leased=false;richLive-=1 end
  if h.particleSource then
-  h.vapor:Clear();h.sparks:Clear();h.particleSource.Parent=h.root
+  local source=h.particleSource
+  if h.emitted then
+   local tail=Instance.new('Part');tail.Name='LensParticleTail'
+   tail.Anchored=true;tail.CanCollide=false;tail.CanQuery=false;tail.CanTouch=false;tail.CastShadow=false
+   tail.Size=Vector3.one*.05;tail.Transparency=1;tail.CFrame=r.root.CFrame;tail.Parent=workspace
+   h.particleSource=source:Clone()
+   h.vapor=h.particleSource:FindFirstChild('VioletDistortionVapor')
+   h.sparks=h.particleSource:FindFirstChild('LensDischargeSparks')
+   source.Parent=tail
+   game:GetService('Debris'):AddItem(tail,1.35)
+  end
+  h.particleSource.Parent=h.root
  end
- h.lastEmission=nil;h.lastPulse=nil;h.launched=nil;h.root.Parent=nil
+ h.emitted=nil;h.lastEmission=nil;h.lastPulse=nil;h.launched=nil;h.root.Parent=nil
  if #richPool>=richPoolLimit then table.remove(richPool,1).root:Destroy() end
  richPool[#richPool+1]=h
 end
@@ -3195,7 +3220,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  -- Never emit catch-up batches after a late observer or paused render loop.
  if inflow>.05 then
   if h.lastEmission and now>=h.lastEmission+.08 then
-   h.sparks:Emit(1);h.lastEmission=now
+   h.sparks:Emit(1);h.lastEmission=now;h.emitted=true
   elseif not h.lastEmission or now<h.lastEmission then h.lastEmission=now end
  else h.lastEmission=nil end
 end
@@ -4216,6 +4241,18 @@ function W:destroyMining(beam)
  if not fx then return end
  fx.impact:Destroy();if fx.tip then fx.tip:Destroy() end;fx.anchor:Destroy();beam.work=nil;self.miningBeams[beam]=nil;self.miningCount=math.max(0,self.miningCount-1)
 end
+function W:retireMining(beam,now)
+ local fx=beam.work
+ if not fx then return false end
+ fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false
+ for _,emitter in ipairs(fx.accents or {}) do emitter.Enabled=false end
+ for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
+ if fx.contact then fx.contact.Transparency=1 end
+ if fx.inner then fx.inner.Transparency=1 end
+ table.insert(self.bursts,{part=beam.holder,untilAt=now+ENERGY_TAIL})
+ beam.work=nil;self.miningBeams[beam]=nil;self.miningCount=math.max(0,self.miningCount-1)
+ return true
+end
 function W:mining(beam,sample,point,normal,width,pulse,now)
  local charging=sample.charging and not sample.paused and sample.warmupStart>0
  local ink=sample.beamVariant=='Inkbeam'
@@ -4273,9 +4310,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   beam.work=fx;self.miningBeams[beam]=true;self.miningCount+=1
  end
  if fx.key~=sample.key or fx.life~=sample.life then
-  -- Already-emitted world-space light belongs to the previous contact. Let it
-  -- finish naturally when changing rocks; only a new life invalidates the tail.
-  if fx.life~=sample.life then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear();for _,e in ipairs(fx.accents or {}) do e:Clear() end end
+  -- World-space particles stay at the old contact and finish their own lifetimes.
   fx.key=sample.key;fx.life=sample.life
   fx.pulseSerial=sample.pulseSerial or 0;fx.biteAt=nil
  end
@@ -4425,7 +4460,6 @@ function W:flight(drone,record,dt,now)
   trail.Enabled=alive and not paused and not BeamVFX.reduced() and speed>.6 and not reset
  end
  if fx.wisp then
-  if reset then fx.wisp:Clear() end
   fx.wisp.Enabled=alive and not paused and not BeamVFX.reduced() and cameraNear(root.Position,100)
   fx.wisp.Rate=1+math.min(3,speed*.25)
  end
@@ -10315,7 +10349,7 @@ end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
  return setmetatable({parent=options.parent,audio=options.audio,work=WorkEffects.new(options.parent),drones={},turrets={},fragments={},pulses={},scanCount=0,
-  maxFragments=48,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,cameraBeats={},closed=false},P)
+  maxFragments=48,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,beamTails={},cameraBeats={},closed=false},P)
 end
 -- One budget per render frame; cached anchors remain in the visible part's local
 -- coordinates between queries, so a shrinking or tilted crystal carries its impact.
@@ -10354,22 +10388,38 @@ function P:createMiningBeam(view,emitter)
  return {holder=holder,origin=muzzle,endpoint=endpoint,marker=impact,secondaryPoint=extra,
   core=core,halo=halo,secondary=branch,envelope=F.newBeam(),surface={},secondarySurface={},lastKey=nil,lastKind=nil}
 end
+-- The latest verified endpoint can vanish before the stop snapshot arrives.
+-- Keep the departing laser in world space and taper from its last drawn width.
+function P:finishBeamTail(segment,now)
+ if not segment or self.closed then return end
+ segment.at=now
+ segment.core=newLaserLayer(self.parent,'FinishingCore',segment.coreColor)
+ segment.halo=newLaserLayer(self.parent,'FinishingHalo',segment.haloColor)
+ WorkEffects.drawCylinder(segment.core,segment.from,segment.to,segment.inner,.14)
+ WorkEffects.drawCylinder(segment.halo,segment.from,segment.to,segment.outer,.82)
+ table.insert(self.beamTails,segment)
+end
 function P:destroyMiningBeam(beam)
  if not beam then return end
  if self.audio and self.audio.stopLoop then self.audio:stopLoop(beam) end
- self.work:destroyMining(beam)
+ local now=workspace:GetServerTimeNow()
+ self:finishBeamTail(beam.lastDraw,now)
+ self:finishBeamTail(beam.lastBranch,now)
+ local retained=not self.closed and self.work:retireMining(beam,now)
+ if not retained then self.work:destroyMining(beam) end
  BeamVFX.destroy(beam.vfx);BeamVFX.destroy(beam.branchVFX)
  for _,rig in pairs(beam.ink or {}) do InkbeamView.destroy(rig) end
  if beam.origin then beam.origin:Destroy() end
- if beam.holder then beam.holder:Destroy() end
+ if beam.holder and not retained then beam.holder:Destroy() end
 end
 -- Fit only parts advertised by the authoritative drone snapshot. These are
 -- local pieces of the existing drone model, including for other observers.
 function P:syncMiningHardware(d,alive)
  local source,beam=d.source,d.beam
+ local cube=source:GetAttribute('CubeDrone')==true
  local double=source:GetAttribute('DoubleBeam')==true
- local boost=source:GetAttribute('TwinThrusters')==true
- local duplicate=source:GetAttribute('OreDuplicator')==true
+ local boost=not cube and source:GetAttribute('TwinThrusters')==true
+ local duplicate=not cube and source:GetAttribute('OreDuplicator')==true
  local key=(double and 1 or 0)+(boost and 2 or 0)+(duplicate and 4 or 0)
  if key~=beam.hardwareKey then
   beam.hardwareKey=key
@@ -10390,9 +10440,15 @@ function P:syncMiningHardware(d,alive)
    beam.twinOrigins={}
    for i,side in ipairs({-1,1}) do
     local offset=at+Vector3.new(side*math.max(.54,shell.X*.29),-.11,0)
-    piece('DoubleBeamHousing',Vector3.new(.50,.31,.61),offset+Vector3.yAxis*.10,dark,Enum.Material.Metal)
-    local lens=piece('DoubleBeamLens',Vector3.new(.31,.09,.44),offset-Vector3.yAxis*.10,Color3.fromRGB(116,232,255),Enum.Material.Neon)
-    local socket=Instance.new('Attachment');socket.Position=Vector3.new(0,-.045,0);socket.Parent=lens;beam.twinOrigins[i]=socket
+    local socket=Instance.new('Attachment')
+    if cube then
+     socket.Position=offset;socket.Parent=base;table.insert(beam.hardwareParts,socket)
+    else
+     piece('DoubleBeamHousing',Vector3.new(.50,.31,.61),offset+Vector3.yAxis*.10,dark,Enum.Material.Metal)
+     local lens=piece('DoubleBeamLens',Vector3.new(.31,.09,.44),offset-Vector3.yAxis*.10,Color3.fromRGB(116,232,255),Enum.Material.Neon)
+     socket.Position=Vector3.new(0,-.045,0);socket.Parent=lens
+    end
+    beam.twinOrigins[i]=socket
    end
   end
   if boost then
@@ -10525,6 +10581,8 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.vertical=sample.isMining==true
  beam.followCrystal=followsCrystal(sample)
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
+  self:finishBeamTail(beam.lastDraw,now);beam.lastDraw=nil
+  self:finishBeamTail(beam.lastBranch,now);beam.lastBranch=nil
   beam.surface={};beam.secondarySurface={};beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
  end
  local dt=beam.renderAt and math.clamp(now-beam.renderAt,0,.1) or 1/60;beam.renderAt=now
@@ -10567,6 +10625,10 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local pulse,newPulse=F.miningCue(beam.miningCue,sample,now)
  if style=='Cutter' then pulse=0;newPulse=false end
  local visible=valid and width>.001
+ if not visible and beam.lastDraw then
+  if not valid then self:finishBeamTail(beam.lastDraw,now) end
+  beam.lastDraw=nil
+ end
  beam.visibility=visible and 1 or 0
  beam.core.Transparency=1;beam.halo.Transparency=1
  local reference=sample.droneRole=='Striker' and sample.isMining
@@ -10604,6 +10666,8 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
     end
    end
   end
+  beam.lastDraw={from=origin,to=tip,inner=.28*width,outer=(reference and .5 or look.width0)*width,
+   coreColor=beam.core.Color,haloColor=beam.halo.Color}
   if reference then beam.endpoint.Position=tip
   else
    WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.62*alpha)
@@ -10632,7 +10696,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   for _,rig in pairs(beam.ink) do InkbeamView.destroy(rig) end;beam.ink=nil
  end
  drawReferenceBeam(beam,reference and not ink and visible,width,sample,now)
- drawMiningFlare(beam,reference and visible and (sample.active or predicted) and not sample.paused,width,now,ignition,point,ink)
+ drawMiningFlare(beam,reference and visible,width,now,ignition,point,ink)
  local glow=reference and visible and sample.active and not sample.paused
  local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then
@@ -10659,7 +10723,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  end
- if not reference or ink then self.work:mining(beam,sample,point,normal,width,pulse,now) end
+ if not reference or ink or sample.cube then self.work:mining(beam,sample,point,normal,width,pulse,now) end
  if glow and sample.resource and sample.resource.cutFeedback then
   sample.resource.cutFeedback:cut(sample.resource,now,beat*math.min(1,width+.25))
   if not ink and beam.contactAccentAt~=sample.since then
@@ -10687,12 +10751,13 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  elseif visible and newPulse and style=='Resonance' then self:_sound(point,'resonance',now)
  end
  beam.secondary.Transparency=1
- BeamVFX.hide(beam.branchVFX,true)
  local branchDrawn=false
  if visible and sample.active and sample.secondaryPart and sample.secondaryKey then
   local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,branchOrigin(beam,sample.secondaryPart,point,normal),sample.secondaryPart,sample.secondarySource,now,sample.serverSource,noQuery,beam.vertical)
   if secondary and secondaryNormal then
    beam.secondaryPoint.Position=secondary;beam.secondary.Color=sample.secondaryColor or tint
+   beam.lastBranch={from=branchOrigin(beam,sample.secondaryPart,point,normal),to=secondary,
+    inner=.065*width,outer=.15*width,coreColor=WHITE,haloColor=beam.secondary.Color}
    WorkEffects.drawCylinder(beam.secondary,branchOrigin(beam,sample.secondaryPart,point,normal),secondary,(style=='Resonance' and .11+.04*pulse or .085)*width*.58,.35)
    if not beam.branchVFX then beam.branchVFX=BeamVFX.new(beam.holder,'Branch',sample.secondaryColor or tint,false) end
    if beam.branchVFX then
@@ -10702,7 +10767,10 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
    end
   end
  end
- if not branchDrawn then BeamVFX.destroy(beam.branchVFX);beam.branchVFX=nil end
+ if not branchDrawn then
+  self:finishBeamTail(beam.lastBranch,now);beam.lastBranch=nil
+  BeamVFX.destroy(beam.branchVFX);beam.branchVFX=nil
+ end
 end
 -- Collect a frame before spending any rays. Oldest-due primary contacts are
 -- given at least half of six contact slots and scheduled first. Branches receive
@@ -11481,6 +11549,16 @@ end
 function P:update(_dt,now)
  if self.closed then return end
  self.work:update(now)
+ for i=#self.beamTails,1,-1 do
+  local segment=self.beamTails[i]
+  local width=(1-math.clamp((now-segment.at)/.2,0,1))^2
+  if width==0 then
+   segment.core:Destroy();segment.halo:Destroy();table.remove(self.beamTails,i)
+  else
+   WorkEffects.drawCylinder(segment.core,segment.from,segment.to,segment.inner*width,.14)
+   WorkEffects.drawCylinder(segment.halo,segment.from,segment.to,segment.outer*width,.82)
+  end
+ end
  for i=#self.fragments,1,-1 do
   local item=self.fragments[i];local age=now-item.start
   if age>=item.duration or not item.part.Parent then
@@ -11529,6 +11607,8 @@ function P:destroy()
  for _,item in ipairs(self.fragments) do item.part:Destroy() end
  for _,item in ipairs(self.pulses) do item.part:Destroy() end
  self.work:destroy()
+ for _,tail in ipairs(self.beamTails) do tail.core:Destroy();tail.halo:Destroy() end
+ self.beamTails={}
  self.fragments={};self.pulses={}
 end
 return P
@@ -17137,9 +17217,9 @@ function V:aim(ray)
   end
   if bed and (part==bed or leadId) then
    local position=leadId and (rootPart:GetAttribute('FullPosition') or rootPart.Position) or hit.Position
-   local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
+   local point,fieldWidth=Mining.fieldSelection(position,bed)
    if point then
-    return point,bed:GetAttribute('FieldId'),leadId,Mining.selectorInRange(hr.Position,point),leadId and rootPart
+    return point,bed:GetAttribute('FieldId'),leadId,Mining.selectorInRange(hr.Position,point),leadId and rootPart,fieldWidth
    end
    return nil
   end
@@ -17168,7 +17248,7 @@ function V:canReachStarterPlot()
  local edge=bed.CFrame:PointToWorldSpace(Vector3.new(
   math.clamp(localPosition.X,-bed.Size.X*.5,bed.Size.X*.5),0,
   math.clamp(localPosition.Z,-bed.Size.Z*.5,bed.Size.Z*.5)))
- local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
+ local point=Mining.fieldSelection(edge,bed)
  return point~=nil and Mining.selectorInRange(root.Position,point)
 end
 -- Aim at an object, rather than selecting whichever happens to be nearest.
@@ -17223,12 +17303,23 @@ function V:readyPickup(records)
  return self.pickupId
 end
 function V:aimPreview(ray)
- local point,id,leadId,inRange,rock=self:aim(ray)
+ local point,id,leadId,inRange,rock,fieldWidth=self:aim(ray)
  local profile=self.options.profile()
  if self.pending then return point~=nil end
  if not point or not id or not profile or not profile.run then
   self:cancelPreview()
   return false
+ end
+ if fieldWidth then
+  self:cancelPreview()
+  if not inRange then
+   if self.options.notify then self.options.notify('Move closer to select that field.') end
+   return true
+  end
+  local requestId=game:GetService('HttpService'):GenerateGUID(false)
+  self.pending={draft={point=point,field=id,width=fieldWidth},at=os.clock(),requestId=requestId}
+  self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id,requestId=requestId})
+  return true
  end
  local width=Workshop.selectorWidth(profile)
  if leadId and self:inAcceptedPlot(id,rock,width) then
@@ -17333,9 +17424,10 @@ function V:step(dt,aimRay)
   self.hoverPoint=nil;self.hoverId=nil;self.aimAt=nil
  elseif os.clock()>=(self.aimAt or 0) then
   self.aimAt=os.clock()+.05
-  local point,id,leadId,inRange,rock=self:aim(aimRay)
-  local focus=leadId and self:inAcceptedPlot(id,rock,width)
-  self.hoverId=(focus or inRange) and leadId or nil
+  local point,id,leadId,inRange,rock,fieldWidth=self:aim(aimRay)
+  self.hoverWidth=fieldWidth or width
+  local focus=not fieldWidth and leadId and self:inAcceptedPlot(id,rock,width)
+  self.hoverId=not fieldWidth and (focus or inRange) and leadId or nil
   self.hoverPoint=inRange and not focus and point or nil
  end
  local color=o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor
@@ -17346,7 +17438,7 @@ function V:step(dt,aimRay)
  showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,white,.04)
  local preview,previewWidth,strength=self:previewState()
  showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor,.13)
- showOutline(self.aimEdge,not preview and self.hoverPoint~=pin and self.hoverPoint or nil,width,aimColor,.095)
+ showOutline(self.aimEdge,not preview and self.hoverPoint~=pin and self.hoverPoint or nil,self.hoverWidth or width,aimColor,.095)
  showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,white,.065)
  showFill(self.flash,click and click.point,click and click.width or width,flashStrength*.86,white,.09)
 end
@@ -18393,26 +18485,29 @@ local function registerDrone(source)
  pendingDroneSources[source]=true
  -- Render from the complete preserved asset, never a partially streamed gameplay model.
  -- The historical drone is a Part body plus its nested emitter; it has no SpecialMesh.
- local template=RS:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
+ local cube=source:GetAttribute('CubeDrone')==true
+ local template=cube and source or RS:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
  local mesh=template and template:FindFirstChild('Mesh')
  local templateEmitter=mesh and mesh:FindFirstChild('Emmiter')
  local originalBeam=mesh and mesh:FindFirstChild('Beam')
- if not template or not template:IsA('Model') or not mesh or not mesh:IsA('BasePart')
+ if not cube and (not template or not template:IsA('Model') or not mesh or not mesh:IsA('BasePart')
   or not templateEmitter or not templateEmitter:IsA('BasePart') or not mesh:FindFirstChild('Attachment')
   or not mesh:FindFirstChild('WeldConstraint') or not originalBeam
-  or not originalBeam:FindFirstChild('InnerBeam') or not originalBeam:FindFirstChild('OuterBeam') then
+  or not originalBeam:FindFirstChild('InnerBeam') or not originalBeam:FindFirstChild('OuterBeam')) then
   -- Never make a gameplay drone invisible just because the optional presentation asset is unavailable.
   return false
  end
- if source:GetAttribute('RamielHullAvailable') and not RS:FindFirstChild('RamielHull') then return false end
+ if not cube and source:GetAttribute('RamielHullAvailable') and not RS:FindFirstChild('RamielHull') then return false end
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'
- if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
- DroneConfig.fitBody(clone,role)
+ if not cube then
+  if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
+  DroneConfig.fitBody(clone,role)
+ end
  pendingDroneSources[source]=nil
- local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
+ local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();pendingDroneSources[source]=true;return false end
  clone.PrimaryPart=pivot;clone.Parent=localFX
  local emitter=clone:FindFirstChild('Emmiter',true) or clone:FindFirstChild('MiningEmitter',true) or clone:FindFirstChild('Emitter',true)
  if not emitter or not emitter:IsA('BasePart') then clone:Destroy();pendingDroneSources[source]=true;return false end
@@ -18422,7 +18517,7 @@ local function registerDrone(source)
  local typeColor=colors[source:GetAttribute('Role')] or colors[source:GetAttribute('Type')]
  emitter.Color=typeColor or emitter.Color
  -- The original 1-stud emitter is enclosed by its 2-stud body; a restrained tint stays visible.
- if referenceMiner then
+ if not cube and referenceMiner then
   local ink=source:GetAttribute('BeamVariant')=='Inkbeam'
   pivot.Color=ink and Color3.fromRGB(22,23,43) or Color3.fromRGB(75,117,175);pivot.Material=Enum.Material.SmoothPlastic;pivot.MaterialVariant=''
   emitter.Color=Color3.fromRGB(42,53,73);emitter.Material=pivot.Material;emitter.MaterialVariant=''
@@ -18434,7 +18529,7 @@ local function registerDrone(source)
   optic.Shape=Enum.PartType.Cylinder;optic.Size=Vector3.new(.20,ink and .98 or .82,ink and .98 or .82)
   optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
   optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
- elseif typeColor and not clone:GetAttribute('RoleGeometry') then
+ elseif not cube and typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
   local trim=localPart(clone,'LowerChassis',pivot.Position);trim.Size=Vector3.new(pivot.Size.X*1.015,.055,pivot.Size.Z*1.015);trim.Transparency=0;trim.Color=Color3.fromRGB(23,35,46);trim.Material=Enum.Material.Metal;trim.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.35,0)
@@ -18448,7 +18543,7 @@ local function registerDrone(source)
   if child:IsA('Decal') and child.Face==Enum.NormalId.Front then child:Destroy() end
  end
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
- if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
+ if not cube and role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,
   flightImpulseAt=source:GetAttribute('FlightImpulseAt') or 0,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
@@ -19035,7 +19130,7 @@ local function renderDrone(d,dt,now)
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
   stoneColor=resource and resource.stoneColor,
-  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=s:GetAttribute('BeamVariant'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
+  cube=s:GetAttribute('CubeDrone')==true,style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=not s:GetAttribute('CubeDrone') and s:GetAttribute('BeamVariant') or nil,droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,

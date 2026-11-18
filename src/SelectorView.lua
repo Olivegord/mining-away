@@ -103,9 +103,9 @@ function V:aim(ray)
   end
   if bed and (part==bed or leadId) then
    local position=leadId and (rootPart:GetAttribute('FullPosition') or rootPart.Position) or hit.Position
-   local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
+   local point,fieldWidth=Mining.fieldSelection(position,bed)
    if point then
-    return point,bed:GetAttribute('FieldId'),leadId,Mining.selectorInRange(hr.Position,point),leadId and rootPart
+    return point,bed:GetAttribute('FieldId'),leadId,Mining.selectorInRange(hr.Position,point),leadId and rootPart,fieldWidth
    end
    return nil
   end
@@ -134,7 +134,7 @@ function V:canReachStarterPlot()
  local edge=bed.CFrame:PointToWorldSpace(Vector3.new(
   math.clamp(localPosition.X,-bed.Size.X*.5,bed.Size.X*.5),0,
   math.clamp(localPosition.Z,-bed.Size.Z*.5,bed.Size.Z*.5)))
- local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
+ local point=Mining.fieldSelection(edge,bed)
  return point~=nil and Mining.selectorInRange(root.Position,point)
 end
 -- Aim at an object, rather than selecting whichever happens to be nearest.
@@ -189,12 +189,23 @@ function V:readyPickup(records)
  return self.pickupId
 end
 function V:aimPreview(ray)
- local point,id,leadId,inRange,rock=self:aim(ray)
+ local point,id,leadId,inRange,rock,fieldWidth=self:aim(ray)
  local profile=self.options.profile()
  if self.pending then return point~=nil end
  if not point or not id or not profile or not profile.run then
   self:cancelPreview()
   return false
+ end
+ if fieldWidth then
+  self:cancelPreview()
+  if not inRange then
+   if self.options.notify then self.options.notify('Move closer to select that field.') end
+   return true
+  end
+  local requestId=game:GetService('HttpService'):GenerateGUID(false)
+  self.pending={draft={point=point,field=id,width=fieldWidth},at=os.clock(),requestId=requestId}
+  self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id,requestId=requestId})
+  return true
  end
  local width=Workshop.selectorWidth(profile)
  if leadId and self:inAcceptedPlot(id,rock,width) then
@@ -299,9 +310,10 @@ function V:step(dt,aimRay)
   self.hoverPoint=nil;self.hoverId=nil;self.aimAt=nil
  elseif os.clock()>=(self.aimAt or 0) then
   self.aimAt=os.clock()+.05
-  local point,id,leadId,inRange,rock=self:aim(aimRay)
-  local focus=leadId and self:inAcceptedPlot(id,rock,width)
-  self.hoverId=(focus or inRange) and leadId or nil
+  local point,id,leadId,inRange,rock,fieldWidth=self:aim(aimRay)
+  self.hoverWidth=fieldWidth or width
+  local focus=not fieldWidth and leadId and self:inAcceptedPlot(id,rock,width)
+  self.hoverId=not fieldWidth and (focus or inRange) and leadId or nil
   self.hoverPoint=inRange and not focus and point or nil
  end
  local color=o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor
@@ -312,7 +324,7 @@ function V:step(dt,aimRay)
  showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,white,.04)
  local preview,previewWidth,strength=self:previewState()
  showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor,.13)
- showOutline(self.aimEdge,not preview and self.hoverPoint~=pin and self.hoverPoint or nil,width,aimColor,.095)
+ showOutline(self.aimEdge,not preview and self.hoverPoint~=pin and self.hoverPoint or nil,self.hoverWidth or width,aimColor,.095)
  showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,white,.065)
  showFill(self.flash,click and click.point,click and click.width or width,flashStrength*.86,white,.09)
 end

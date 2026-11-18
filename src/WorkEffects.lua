@@ -154,6 +154,18 @@ function W:destroyMining(beam)
  if not fx then return end
  fx.impact:Destroy();if fx.tip then fx.tip:Destroy() end;fx.anchor:Destroy();beam.work=nil;self.miningBeams[beam]=nil;self.miningCount=math.max(0,self.miningCount-1)
 end
+function W:retireMining(beam,now)
+ local fx=beam.work
+ if not fx then return false end
+ fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false
+ for _,emitter in ipairs(fx.accents or {}) do emitter.Enabled=false end
+ for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
+ if fx.contact then fx.contact.Transparency=1 end
+ if fx.inner then fx.inner.Transparency=1 end
+ table.insert(self.bursts,{part=beam.holder,untilAt=now+ENERGY_TAIL})
+ beam.work=nil;self.miningBeams[beam]=nil;self.miningCount=math.max(0,self.miningCount-1)
+ return true
+end
 function W:mining(beam,sample,point,normal,width,pulse,now)
  local charging=sample.charging and not sample.paused and sample.warmupStart>0
  local ink=sample.beamVariant=='Inkbeam'
@@ -211,9 +223,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   beam.work=fx;self.miningBeams[beam]=true;self.miningCount+=1
  end
  if fx.key~=sample.key or fx.life~=sample.life then
-  -- Already-emitted world-space light belongs to the previous contact. Let it
-  -- finish naturally when changing rocks; only a new life invalidates the tail.
-  if fx.life~=sample.life then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear();for _,e in ipairs(fx.accents or {}) do e:Clear() end end
+  -- World-space particles stay at the old contact and finish their own lifetimes.
   fx.key=sample.key;fx.life=sample.life
   fx.pulseSerial=sample.pulseSerial or 0;fx.biteAt=nil
  end
@@ -363,7 +373,6 @@ function W:flight(drone,record,dt,now)
   trail.Enabled=alive and not paused and not BeamVFX.reduced() and speed>.6 and not reset
  end
  if fx.wisp then
-  if reset then fx.wisp:Clear() end
   fx.wisp.Enabled=alive and not paused and not BeamVFX.reduced() and cameraNear(root.Position,100)
   fx.wisp.Rate=1+math.min(3,speed*.25)
  end

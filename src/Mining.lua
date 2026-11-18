@@ -58,6 +58,13 @@ function M.selectorCenter(position,frame,size)
  local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
  return frame:PointToWorldSpace(Vector3.new(x,size.Y*.5,z))
 end
+function M.fieldSelection(position,bed)
+ local point=M.selectorCenter(position,bed.CFrame,bed.Size)
+ if point and bed:GetAttribute('WholeField') then
+  return bed.Position+Vector3.yAxis*(bed.Size.Y*.5),bed.Size.X
+ end
+ return point,nil
+end
 function M.selectorInRange(position,point)
  local delta=point-position
  return math.abs(delta.Y)<16 and delta.X*delta.X+delta.Z*delta.Z<=M.SELECTOR_RANGE^2

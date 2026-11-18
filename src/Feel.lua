@@ -276,14 +276,14 @@ end
 function F.swarmGrid(records)
  -- Snapshot once before moving any worker, so update order cannot make the
  -- first drone push the last one differently. Buckets hold immutable poses.
- local grid={buckets={},velocities={}};local cell=F.SwarmRadius
+ local grid={buckets={},velocities={},owners={}};local cell=F.SwarmRadius
  for _,record in pairs(records) do
   if record.id and record.pos and (record.hp==nil or record.hp>0) then
    local pos=record.pos;local key=swarmCell(math.floor(pos.X/cell),math.floor(pos.Y/cell),math.floor(pos.Z/cell))
    local bucket=grid.buckets[key]
    if not bucket then bucket={};grid.buckets[key]=bucket end
    local id=tostring(record.id);local velocity=intentVelocity(record)
-   table.insert(bucket,{id=id,pos=pos,velocity=velocity});grid.velocities[id]=velocity
+   table.insert(bucket,{id=id,pos=pos,velocity=velocity,owner=record.owner});grid.velocities[id]=velocity;grid.owners[id]=record.owner
   end
  end
  -- Stable sampling in crowded cells must not depend on table iteration order.
@@ -296,6 +296,7 @@ function F.swarmOffset(position,id,grid,weight,flocking)
  id=tostring(id)
  local cell=F.SwarmRadius;local x,y,z=math.floor(position.X/cell),math.floor(position.Y/cell),math.floor(position.Z/cell)
  local neighbors={}
+ local owner=grid.owners and grid.owners[id]
  local velocity=(grid.velocities and grid.velocities[id]) or Vector3.zero
  -- Read only 27 local bins, at most 12 samples per bin and 12 final contacts.
  -- Even a crowd stacked at exactly one pose cannot cause a fleet-wide scan for
@@ -313,8 +314,9 @@ function F.swarmOffset(position,id,grid,weight,flocking)
       local closest=motion>.001 and math.clamp(-delta:Dot(relative)/motion,0,.65) or 0
       local future=delta+relative*closest
       local futureSquare=future:Dot(future)
-      if square>=F.SwarmNear^2 and (closest==0 or futureSquare>=5.5^2) then continue end
-      local candidate={id=other.id,delta=delta,square=square,futureSquare=futureSquare,closest=closest,velocity=other.velocity}
+      local flockmate=flocking and owner~=nil and owner==other.owner
+      if not flockmate and square>=F.SwarmNear^2 and (closest==0 or futureSquare>=5.5^2) then continue end
+      local candidate={id=other.id,delta=delta,square=square,futureSquare=futureSquare,closest=closest,velocity=other.velocity,flockmate=flockmate}
       if #neighbors<12 then table.insert(neighbors,candidate)
       else
        local worst=1
@@ -329,7 +331,7 @@ function F.swarmOffset(position,id,grid,weight,flocking)
   end
  end end end
  table.sort(neighbors,function(a,b) return a.id<b.id end)
- local force,alignment,nearby=Vector3.zero,Vector3.zero,0
+ local force,alignment,cohesion,nearby=Vector3.zero,Vector3.zero,Vector3.zero,0
  for _,other in ipairs(neighbors) do
   local first=id<other.id;local pair=swarmHash(first and (id..'/'..other.id) or (other.id..'/'..id))
   local side=first and 1 or -1;local delta=other.delta
@@ -353,14 +355,16 @@ function F.swarmOffset(position,id,grid,weight,flocking)
   local lane=distance>.001 and math.clamp(delta.Y/distance,-1,1)*.95 or side*.35
   -- Static separation cannot inject sideways momentum and perpetual orbit.
   force+=normal*(currentPressure*1.9+anticipation*.65)+tangent*(anticipation*4.8)+Vector3.new(0,lane*pressure,0)
-  if flocking and flocking>0 then
-   local blend=math.max(0,1-distance/F.SwarmNear)
-   alignment+=(other.velocity-velocity)*blend;nearby+=blend
+  if other.flockmate then
+   local blend=math.max(0,1-distance/F.SwarmRadius)
+   alignment+=(other.velocity-velocity)*blend
+   cohesion-=flat*(blend*math.max(0,1-F.SwarmNear/math.max(.01,distance)))
+   nearby+=blend
   end
  end
  if nearby>0 then
-  local match=alignment/nearby
-  force+=match*(match.Magnitude>.42 and .42/match.Magnitude or 1)*flocking*math.min(1,nearby)
+  local match=(alignment*.075+cohesion*.06)/nearby
+  force+=match*(match.Magnitude>.48 and .48/match.Magnitude or 1)*flocking*math.min(1,nearby)
  end
  force=Vector3.new(force.X,math.clamp(force.Y,-.85,.85),force.Z)
  if force.Magnitude>F.SwarmMaxOffset then force=force.Unit*F.SwarmMaxOffset end
