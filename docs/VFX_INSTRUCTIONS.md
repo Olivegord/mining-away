@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 18 — ordinary rock breaks get the full older break again
+
+Owner: get the older Codex rock-break effects with lots of different types back. Since `4679617` (Nov 15) rocks whose cargo is Stone skipped the gem-release glint spray and slow colored discs and the release chime, and got a burst at 0.52 instead of 0.83. That gating is removed in `src/CrystalImpactView.lua`: every ordinary break plays chips, split spark, floor pulse, full `CrystalBreak` burst, release spray, colored discs and chime. The confetti layer from `6c631ff` is gone too. Do not tone ordinary breaks down again without a request.
+
 ## November 18 — all mining and rock particles back to the original
 
 Owner, after the partial restore below: "those are the new ones. i want the circles, the sparks, all that". By "rock breaking" they meant the laser working the rock as well as the final break. `src/WorkEffects.lua` and `src/RoleVisuals.lua` are byte-identical to 95bff48 again (the round contact discs at full size and rate, origin sparks and glow, contact glow balls; no added smoke or streak layers), `EnergyDisc` scaling is neutral (`SCALE=1`, no cap, no fade), and the cube belly sparkles and confetti twinkle have their original size and rate. **The owner's first request ("too busy, large circles") is withdrawn in practice: do not shrink, fade or replace these particles again unless asked for a specific one.** Only the drone charge and its release burst are new.
