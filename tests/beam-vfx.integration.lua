@@ -41,7 +41,8 @@ check('charge gathers compresses and changes silhouette before release',function
  local _,glint=BeamVFX.charge(1);near(glint,1)
  local r=BeamVFX.new(root,'Orbital',color)
  BeamVFX.draw(r,from,to,9.7,0,.58,nil)
- assert(r.rich and r.rich.core.Transparency<.85 and r.rich.collars[1].beam.Enabled and not r.core.Enabled)
+ assert(r.rich and r.rich.core.Transparency<.85 and r.rich.rim.Transparency<1 and r.rich.flare.beam.Enabled and not r.core.Enabled)
+ assert(r.rich.glass.Transparency==1,'glitch orb appeared before its lead window')
  BeamVFX.draw(r,from,to,10,0,.965,nil)
  assert(not r.paths[1].beam.Enabled,'decorative orbit returned')
  local size=r.rich.glass.Size.X;BeamVFX.draw(r,from,to,10.1,0,.985,nil);assert(r.rich.glass.Size.X<size)
@@ -167,7 +168,7 @@ check('mixed startup styles and overlapping lenses stay warm across preview cycl
  for _,r in ipairs(rigs) do BeamVFX.destroy(r) end
  local a,b,c,d=BeamVFX.counts();assert(a==0 and b==0 and c==0 and d==0)
 end)
-check('charge lens follows emitter and overlaps ignition for only 80 milliseconds',function()
+check('glitch orb follows emitter and overlaps ignition for only 60 milliseconds',function()
  local r=BeamVFX.new(root,'Cutter',color)
  local moving=Vector3.new(9,8,3)
  BeamVFX.draw(r,from,to,60,0,.3,nil)
@@ -207,26 +208,31 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
 end)
-check('original flash shape and duration with hard colors and overlapping ignition',function()
+check('neon glitch orb: hard two-tone cuts, collapse into ignition, bounded size',function()
  local r=BeamVFX.new(root,'Cutter',color)
- near(BeamVFX.lensEnvelope(.64),0);near(BeamVFX.lensEnvelope(.79),1);near(BeamVFX.lensEnvelope(1),0)
- for _,sample in ipairs({{.75,1,1,0},{.80,1,1,0},{.82,0,1,1},{.88,0,1,1},{.90,1,0,1},{.96,1,0,1},{.98,1,1,0}}) do
-  BeamVFX.draw(r,from,to,99,0,.999,nil,1,.8)
-  if sample[1]<.9 then BeamVFX.draw(r,from,to,99,0,sample[1]+.1,nil,1,.8)
-  else BeamVFX.draw(r,from,to,99,1,nil,(sample[1]-.9)*.8,1) end
-  local c=r.rich.glass.Color
-  near(c.R,sample[2]);near(c.G,sample[3]);near(c.B,sample[4])
- end
+ near(BeamVFX.lensEnvelope(-.01),0);near(BeamVFX.lensEnvelope(1),0)
+ assert(BeamVFX.lensEnvelope(.12)>.99 and BeamVFX.lensEnvelope(.9)<BeamVFX.lensEnvelope(.4),'orb must swell then collapse')
+ local allowed={}
+ for _,p in ipairs(BeamVFX.GLITCH_PAIRS) do allowed[p[1]]=true end
  for _,duration in ipairs({.8,1.6,3.2}) do
-  for _,remaining in ipairs({.3,.25,.168,.1,.02,.001}) do
+  local lead=BeamVFX.glitchLead(duration)
+  local seen={}
+  for _,remaining in ipairs({lead+.2,lead*.95,lead*.7,lead*.5,lead*.3,lead*.1,.001}) do
    local q=1-remaining/duration
-   local oldQ=.9-remaining/.8
-   near(BeamVFX.flashProgress(q,duration),oldQ)
    BeamVFX.draw(r,from,to,100+q,0,q,nil,1,duration)
-   local lens=BeamVFX.lensEnvelope(oldQ)
-   assert(r.rich.glass.Size.X<=1.15 and r.rich.glass.Size.X>=.02)
-   assert((lens==0)==(r.rich.glass.Transparency==1) and r.rich.glass.Transparency>=0)
+   local g=BeamVFX.flashProgress(q,duration)
+   local lens=BeamVFX.lensEnvelope(g)
+   local glass=r.rich.glass
+   assert((lens==0)==(glass.Transparency==1),'orb visibility must follow its envelope')
+   assert(glass.Size.X<=1.35,'glitch orb too large')
+   if lens>0 then
+    assert(allowed[glass.Color],'orb color must be an exact palette entry (no blending)')
+    seen[glass.Color]=true
+    assert(not r.rich.comets[1].path.beam.Enabled and not r.rich.flare.beam.Enabled,'inflow cluttered the glitch')
+   end
   end
+  local n=0;for _ in pairs(seen) do n+=1 end
+  if duration>=1.6 then assert(n>=2,'glitch never cut between colors') end
  end
  local aftermath=assert(r.aftermath)
  BeamVFX.draw(r,from,to,101,1,nil,.04,1)

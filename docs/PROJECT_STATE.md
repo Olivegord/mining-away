@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 18 — calmer particles, reworked drone startup and the neon glitch
+
+Owner request: particles were too busy (large circles hid the smoke and sparks), and the drone startup should follow the reference video, especially the rainbow neon glitch right before the beam. Details and tunables are in [VFX instructions](VFX_INSTRUCTIONS.md). In short: the shared `EnergyDisc` look is now small velocity-stretched sparks and soft smoke instead of flat white discs; mining contacts show hot sparks plus stone-tinted smoke; the charge is a small dark core, thin bright streams with glitter, lifted stone chips and a lens streak; the last 0.55 s is a hard-cutting two-tone posterized orb with an RGB-split edge that collapses into the beam; ignition adds a short, rate-limited client impact frame. Client-only; server, damage, rewards and timing are unchanged.
+
+Tests: beam VFX (29 checks, glitch checks updated), fun FX, flat fields, rock damage, pickups, geodes, mining flight, field pickup flow and selling pass with API doubles. `test_gadgets.py` and `test_energy_effects.py` fail at the same assertions as the untouched baseline; `tests/mining-contact.assert.lua` was updated for the spark/smoke split.
+
+Roblox Studio was already running (shared DRONEREVOLUTION session) and was left open. Script Sync exported the client bundle. This session had no Studio control tool; the Studio log shows the earlier code-25 sync errors and a Script Sync conflict dialog at 22:19 UTC, so **arrival in shared DRONEREVOLUTION Edit (place 124078027733625, universe 10774898335) is unverified and this session did not save it**. Canonical **build/DRONE_GAME.rbxl** was refreshed offline from **95bff48** to SHA-256 **eaf526a6b3420c0b7db4c49e141e628e278dbfded05a6b770b6ed08322ff7507** (Sources only). No Play was started; visual quality, the impact frame's comfort and busy-field readability are unverified. This session made no publication; the Studio log shows publish/save events for 124078027733625 at 22:26 and 22:28 UTC that this session did not make.
+
 ## November 18 — calm scenery applied and f803e13 installed in shared Edit
 
 Roblox Studio's own MCP server (`/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP`) was added to Claude Code at local scope for this project; this session drove it over stdio. `list_roblox_studios` reported exactly one Studio: **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**, in Edit.

@@ -5,37 +5,59 @@ local EnergyDisc = (function()
 -- Shape and opacity read without relying on bloom or additive saturation.
 local Disc={texture='rbxasset://textures/ui/VR/circleWhite.png'}
 
+-- November 18 owner pass: flat white discs read as big circles that hid the
+-- smoke and sparks. Shrinking "light" particles become small sparks stretched
+-- along their own velocity; expanding ones become soft smoke. The callers keep
+-- their colors, counts and motion.
+Disc.smokeTexture='rbxasset://textures/particles/smoke_main.dds'
+Disc.SPARK_SCALE=.24 -- spark width relative to the old disc diameter
+Disc.SPARK_MAX=.16
+Disc.SMOKE_SCALE=.85
+Disc.SMOKE_MAX=1.7
 function Disc.configure(emitter,diameter,transparency,startScale,endScale,sizeVariation)
  emitter.Texture=Disc.texture
- emitter.Orientation=Enum.ParticleOrientation.FacingCamera
- emitter.Squash=NumberSequence.new(0)
  emitter.FlipbookLayout=Enum.ParticleFlipbookLayout.None
- emitter.LightEmission=.36
  emitter.LightInfluence=0
- emitter.Brightness=1.05
  emitter.WindAffectsDrag=false
  emitter.LockedToPart=false
- -- Dust spreads as it dissipates; solid light particles shrink from birth.
  local expanding=(endScale or 0)>1
  if expanding then
+  -- Soft smoke: real smoke texture, slow turn, quieter opacity.
+  emitter.Texture=Disc.smokeTexture
+  emitter.Orientation=Enum.ParticleOrientation.FacingCamera
+  emitter.Squash=NumberSequence.new(0)
+  emitter.LightEmission=.12;emitter.Brightness=1
+  emitter.Rotation=NumberRange.new(-180,180);emitter.RotSpeed=NumberRange.new(-30,30)
+  diameter=math.min(Disc.SMOKE_MAX,diameter*Disc.SMOKE_SCALE)
   local start=diameter*(startScale or .52)
   emitter.Size=NumberSequence.new({
    NumberSequenceKeypoint.new(0,start,start*(sizeVariation or 0)),
    NumberSequenceKeypoint.new(.18,diameter,diameter*(sizeVariation or .13)),
    NumberSequenceKeypoint.new(1,diameter*endScale),
   })
+  local t=math.max(transparency,.55)
+  emitter.Transparency=NumberSequence.new({
+   NumberSequenceKeypoint.new(0,1),
+   NumberSequenceKeypoint.new(.15,t),
+   NumberSequenceKeypoint.new(.6,math.min(.97,t+.12)),
+   NumberSequenceKeypoint.new(1,1),
+  })
  else
+  -- Little sparks: thin hot streaks that point where they fly and shrink out.
+  emitter.Orientation=Enum.ParticleOrientation.VelocityParallel
+  emitter.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,2.2),NumberSequenceKeypoint.new(1,.6)})
+  emitter.LightEmission=.85;emitter.Brightness=2.2
+  diameter=math.min(Disc.SPARK_MAX,diameter*Disc.SPARK_SCALE)
   emitter.Size=NumberSequence.new({
    NumberSequenceKeypoint.new(0,diameter,diameter*(sizeVariation or .13)),
    NumberSequenceKeypoint.new(1,0),
   })
+  emitter.Transparency=NumberSequence.new({
+   NumberSequenceKeypoint.new(0,0),
+   NumberSequenceKeypoint.new(.7,math.min(.6,transparency)),
+   NumberSequenceKeypoint.new(1,1),
+  })
  end
- emitter.Transparency=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,math.min(.97,transparency+.20)),
-  NumberSequenceKeypoint.new(.12,transparency),
-  NumberSequenceKeypoint.new(.78,math.min(.97,transparency+.11)),
-  NumberSequenceKeypoint.new(1,1),
- })
 end
 
 -- An attachment sprite lets a handful of motes follow the existing
@@ -71,6 +93,8 @@ function Disc.accent(parent,name,color,diameter,mode,face,spread)
   p.Orientation=Enum.ParticleOrientation.VelocityParallel
   p.Squash=NumberSequence.new(fast and -.58 or -.34)
  else
+  p.Orientation=Enum.ParticleOrientation.FacingCamera;p.Squash=NumberSequence.new(0)
+  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,math.min(.22,diameter*.35)),NumberSequenceKeypoint.new(1,0)})
   p.Rotation=NumberRange.new(-35,35);p.RotSpeed=NumberRange.new(-46,46)
  end
  p.Color=ColorSequence.new(color);p.Brightness=ink and 1 or 1.25
@@ -3039,10 +3063,30 @@ function B.clearChargeCache()
  for _,h in ipairs(richPool) do h.root:Destroy() end
  table.clear(richPool)
 end
-local GLASS_COLOR=Color3.fromRGB(245,250,255)
 local CYAN=Color3.fromRGB(108,238,255)
 local VIOLET=Color3.fromRGB(166,64,255)
-local LENS_COLORS={Color3.fromRGB(255,255,0),Color3.fromRGB(0,255,255),Color3.fromRGB(255,0,255),Color3.fromRGB(255,255,0)}
+local BLACK=Color3.new(0,0,0)
+local STONE=Color3.fromRGB(46,46,58)
+-- November 18 rework from the owner's reference video. The charge is a tiny
+-- dark core with a bright rim, thin bright streams pulled in with glitter,
+-- stone chips lifting under the drone and a horizontal lens streak. Right
+-- before the beam, a posterized "neon glitch" orb hard-cuts between flat
+-- two-color frames with black blotches and an RGB-split edge, collapsing
+-- into the ignition. Geometry moves smoothly; colors never blend.
+B.GLITCH_LEAD=.55 -- seconds before ignition at a full-length charge
+B.GLITCH_TAIL=.06 -- seconds the collapsing orb overlaps the beam
+B.GLITCH_CUT=.045 -- one flat frame
+B.GLITCH_PAIRS={
+ {Color3.fromRGB(255,255,0),Color3.fromRGB(255,0,0)},
+ {Color3.fromRGB(0,255,60),Color3.fromRGB(0,40,255)},
+ {Color3.fromRGB(0,40,255),BLACK},
+ {Color3.fromRGB(255,0,255),Color3.fromRGB(0,255,255)},
+ {Color3.fromRGB(255,0,0),Color3.fromRGB(255,255,0)},
+ {Color3.fromRGB(0,255,255),Color3.fromRGB(0,40,255)},
+ {Color3.fromRGB(255,255,255),Color3.fromRGB(0,40,255)},
+ {Color3.fromRGB(0,255,60),BLACK},
+}
+B.GLITCH_SPLIT={Color3.fromRGB(0,255,255),Color3.fromRGB(255,0,255),Color3.fromRGB(255,255,0)}
 local function visualPart(parent,name,material,color,shape)
  local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false
  p.Transparency=1;p.Size=Vector3.one*.02;p.Material=material;p.Color=color
@@ -3067,11 +3111,15 @@ releaseRich=function(r)
    h.vapor=h.particleSource:FindFirstChild('VioletDistortionVapor')
    h.sparks=h.particleSource:FindFirstChild('LensDischargeSparks')
    source.Parent=tail
-   game:GetService('Debris'):AddItem(tail,1.35)
+   game:GetService('Debris'):AddItem(tail,1.6)
   end
   h.particleSource.Parent=h.root
  end
- h.emitted=nil;h.lastEmission=nil;h.lastPulse=nil;h.launched=nil;h.root.Parent=nil
+ if h.glitterSource then
+  -- Glitter is world-space; parking its attachment leaves emitted specks alone.
+  h.glitterSource.Parent=h.root
+ end
+ h.emitted=nil;h.lastEmission=nil;h.lastGlitter=nil;h.lastVapor=nil;h.lastPulse=nil;h.launched=nil;h.root.Parent=nil
  if #richPool>=richPoolLimit then table.remove(richPool,1).root:Destroy() end
  richPool[#richPool+1]=h
 end
@@ -3084,21 +3132,30 @@ acquireRich=function(r)
    table.remove(richPool,i);r.rich=h;h.leased=true;richLive+=1
    h.root.Parent=r.root
    if h.particleSource then h.particleSource.Parent=r.root end
+   if h.glitterSource then h.glitterSource.Parent=r.root end
    return
   end
  end
- local folder=Instance.new('Folder');folder.Name='RefractionChoreography';folder.Parent=r.root
- local h={root=folder,paths={},comets={},sweeps={},bolts={},debris={},lastEmission=nil,key=key,leased=true}
+ -- A Part (not a Folder) so stream attachments resolve relative to the emitter.
+ local folder=visualPart(r.root,'RefractionChoreography',Enum.Material.SmoothPlastic,WHITE)
+ folder.CFrame=r.root.CFrame
+ local h={root=folder,paths={},comets={},sweeps={},bolts={},debris={},blotches={},lastEmission=nil,key=key,leased=true}
  r.rich=h;richLive+=1
  folder.Destroying:Connect(function() if h.leased then h.leased=false;richLive-=1 end end)
  if r.startupStyle then
   h.startup=StartupFX.create(folder,r.startupStyle,1)
   return
  end
- h.glass=visualPart(folder,'ChromaticRelease',Enum.Material.Neon,GLASS_COLOR,Enum.PartType.Ball)
- h.collars={}
- for i=1,4 do h.collars[i]=richPath(r,'FocusVane'..i,CYAN,ARC) end
- h.core=visualPart(folder,'ChargeOriginCore',Enum.Material.Neon,CYAN,Enum.PartType.Ball)
+ -- Glitch orb: flat neon base, blotches that poke through its surface and a
+ -- slightly offset complementary ball behind it for the RGB-split edge.
+ h.glass=visualPart(folder,'ChromaticRelease',Enum.Material.Neon,B.GLITCH_PAIRS[1][1],Enum.PartType.Ball)
+ for i=1,4 do
+  h.blotches[i]=visualPart(folder,'GlitchBlotch'..i,Enum.Material.Neon,BLACK,Enum.PartType.Ball)
+ end
+ h.split=visualPart(folder,'GlitchSplit',Enum.Material.Neon,B.GLITCH_SPLIT[1],Enum.PartType.Ball)
+ -- Tiny dark core with a bright rim, like the reference's origin point.
+ h.core=visualPart(folder,'ChargeOriginCore',Enum.Material.SmoothPlastic,DARK,Enum.PartType.Ball)
+ h.rim=visualPart(folder,'ChargeOriginRim',Enum.Material.Neon,VIOLET,Enum.PartType.Ball)
  for i=1,8 do
   h.comets[i]={path=richPath(r,'InwardStream'..i,i%2==0 and CYAN or VIOLET),
    head=EnergyDisc.sprite(h.glass,'InwardSpark')}
@@ -3109,27 +3166,44 @@ acquireRich=function(r)
   ink.beam.LightEmission=0
   h.sweeps[i]={edge=edge,ink=ink}
  end
+ -- Horizontal anamorphic streak through the emitter (colored body + white core).
+ local soft=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.5,.05),NumberSequenceKeypoint.new(1,1)})
+ h.flare=pair(folder,'LensStreak',CYAN,soft);h.flare.beam.Segments=1;h.flare.beam.FaceCamera=true
+ h.flareCore=pair(folder,'LensStreakCore',WHITE,soft);h.flareCore.beam.Segments=1;h.flareCore.beam.FaceCamera=true
+ -- Stone chips lift off below the drone and hover, tumbling, until release.
+ for i=1,6 do
+  local chip=visualPart(folder,'LiftedChip'..i,Enum.Material.SmoothPlastic,STONE)
+  chip.Size=Vector3.one*(.07+(i%3)*.025);h.debris[i]=chip
+ end
  h.vapor=Instance.new('ParticleEmitter');h.vapor.Name='VioletDistortionVapor'
- EnergyDisc.configure(h.vapor,1.35,.74,.58,1.12)
+ EnergyDisc.configure(h.vapor,1.1,.7,.5,1.6)
  h.vapor.Enabled=false;h.vapor.Rate=0;h.vapor.Color=ColorSequence.new(VIOLET)
- h.vapor.LightEmission=.35;h.vapor.LightInfluence=0;h.vapor.Brightness=1
- h.vapor.Lifetime=NumberRange.new(.5,1.3);h.vapor.Speed=NumberRange.new(1,3.5);h.vapor.Drag=3
- h.vapor.SpreadAngle=Vector2.new(180,180);h.vapor.Acceleration=Vector3.new(0,.7,0);h.vapor.WindAffectsDrag=false
- h.vapor.Rotation=NumberRange.new(-180,180);h.vapor.RotSpeed=NumberRange.new(-55,55)
+ h.vapor.Lifetime=NumberRange.new(.8,1.5);h.vapor.Speed=NumberRange.new(.6,1.6);h.vapor.Drag=2.5
+ h.vapor.SpreadAngle=Vector2.new(180,180);h.vapor.Acceleration=Vector3.new(0,.5,0)
  h.particleSource=attachment(r.root,'LensParticleSource');h.vapor.Parent=h.particleSource
  h.sparks=Instance.new('ParticleEmitter');h.sparks.Name='LensDischargeSparks'
- EnergyDisc.configure(h.sparks,.67,.57,.60,.42)
+ EnergyDisc.configure(h.sparks,.5,.3,.60,.42)
  h.sparks.Enabled=false;h.sparks.Rate=0;h.sparks.Color=ColorSequence.new(CYAN)
- h.sparks.Lifetime=NumberRange.new(.26,.52);h.sparks.Speed=NumberRange.new(2,5);h.sparks.Drag=5;h.sparks.SpreadAngle=Vector2.new(180,180)
+ h.sparks.Lifetime=NumberRange.new(.22,.45);h.sparks.Speed=NumberRange.new(3,7);h.sparks.Drag=4;h.sparks.SpreadAngle=Vector2.new(180,180)
  h.sparks.Acceleration=Vector3.new(0,-1,0);h.sparks.Parent=h.particleSource
+ -- Glitter specks left behind by the stream heads (world space, stay put).
+ h.glitterSource=attachment(r.root,'InflowGlitterSource')
+ h.glitter=Instance.new('ParticleEmitter');h.glitter.Name='InflowGlitter'
+ h.glitter.Texture=EnergyDisc.texture;h.glitter.LightEmission=1;h.glitter.LightInfluence=0;h.glitter.Brightness=2.5
+ h.glitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.045),NumberSequenceKeypoint.new(1,0)})
+ h.glitter.Transparency=NumberSequence.new(0,1);h.glitter.Lifetime=NumberRange.new(.25,.5)
+ h.glitter.Speed=NumberRange.new(0,.3);h.glitter.SpreadAngle=Vector2.new(180,180);h.glitter.Drag=3
+ h.glitter.Enabled=false;h.glitter.Rate=0;h.glitter.LockedToPart=false;h.glitter.Color=ColorSequence.new(WHITE)
+ h.glitter.Parent=h.glitterSource
  -- Emitters are outside the detail Folder because their parent is an Attachment.
- folder.Destroying:Connect(function() h.particleSource:Destroy() end)
+ folder.Destroying:Connect(function() h.particleSource:Destroy();h.glitterSource:Destroy() end)
 end
 hideRich=function(r)
  local h=r.rich;if not h then return end
  if h.startup then StartupFX.hide(h.startup);return end
- h.glass.Transparency=1;h.core.Transparency=1
- for _,vane in ipairs(h.collars) do vane.beam.Enabled=false end
+ h.glass.Transparency=1;h.core.Transparency=1;h.rim.Transparency=1;h.split.Transparency=1
+ for _,p in ipairs(h.blotches) do p.Transparency=1 end
+ h.flare.beam.Enabled=false;h.flareCore.beam.Enabled=false
  for _,p in ipairs(h.paths) do p.beam.Enabled=false end
  for _,p in ipairs(h.debris) do p.Transparency=1 end
  for _,p in ipairs(h.comets) do p.head.gui.Enabled=false end
@@ -3145,26 +3219,61 @@ local function curve(path,a,b,ta,tb,bend,width)
  path.beam.Width0=width
  if not path.beam.Enabled then path.beam.Enabled=true end
 end
--- Original pre-revision flash, preserved independently of the longer inflow.
-function B.lensEnvelope(q)
- if q==nil or q<.64 or q>=1 then return 0 end
- if q<.79 then return smooth((q-.64)/.15) end
- return 1-smooth((q-.79)/.21)
+-- Glitch timing in seconds. Shorter charges compress proportionally.
+function B.glitchLead(duration)
+ return math.min(B.GLITCH_LEAD,math.max(.01,duration or .8)*.3)
 end
+-- Normalized glitch progress: 0 at its start, lead/(lead+tail) at ignition, 1 at its end.
 function B.flashProgress(q,duration)
  duration=math.max(.01,duration or .8)
- return 1-(1-q)*duration/math.min(.8,duration)-.1
+ local lead=B.glitchLead(duration)
+ return (lead-(1-q)*duration)/(lead+B.GLITCH_TAIL)
 end
-local function drawFlash(h,from,direction,flashQ,s)
- local lens=B.lensEnvelope(flashQ)
- local radius=math.max(.01,s*(.025+2.8*lens))
+-- Orb radius envelope: a fast swell, then a steady collapse into the beam.
+function B.lensEnvelope(g)
+ if g==nil or g<0 or g>=1 then return 0 end
+ return smooth(g/.12)*(1-.82*smooth((g-.12)/.88))
+end
+local function hash(n)
+ local x=math.sin(n*12.9898)*43758.5453
+ return x-math.floor(x)
+end
+local function drawFlash(h,from,direction,g,s,elapsed)
+ local lens=B.lensEnvelope(g)
  h.glass.CFrame=CFrame.lookAt(from,from+direction)
- h.glass.Size=Vector3.new(radius*2,radius*2,radius*.63)
- local index=math.min(4,math.floor(clamp((flashQ-.73)/.24)*3)+1)
- h.glass.Color=LENS_COLORS[index]
+ if lens<=0 then
+  h.glass.Transparency=1;h.split.Transparency=1
+  for _,p in ipairs(h.blotches) do p.Transparency=1 end
+  return
+ end
  local player=Players.LocalPlayer
- local reduced=player and player:GetAttribute('ReducedFlashing')==true
- h.glass.Transparency=1-(reduced and .21 or .83)*lens
+ local gentle=player and player:GetAttribute('ReducedFlashing')==true
+ local radius=math.max(.01,s*3.2*lens)
+ -- Hard frame index; no tween between palette entries.
+ local cut=math.floor(math.max(0,elapsed)/(gentle and B.GLITCH_CUT*3 or B.GLITCH_CUT))
+ local colors=B.GLITCH_PAIRS[cut%#B.GLITCH_PAIRS+1]
+ h.glass.Size=Vector3.one*radius*2;h.glass.Color=colors[1]
+ h.glass.Transparency=gentle and .55 or 0
+ local camera=workspace.CurrentCamera
+ local right=camera and camera.CFrame.RightVector or Vector3.xAxis
+ local up=camera and camera.CFrame.UpVector or Vector3.yAxis
+ local back=camera and -camera.CFrame.LookVector or Vector3.zAxis
+ -- RGB split: a complementary ball nudged sideways behind the orb shows a crescent.
+ local side=(cut%2==0) and 1 or -1
+ h.split.Size=Vector3.one*radius*2.06;h.split.Color=B.GLITCH_SPLIT[cut%#B.GLITCH_SPLIT+1]
+ h.split.CFrame=CFrame.new(from+right*side*radius*.16-back*radius*.1)
+ h.split.Transparency=gentle and .7 or 0
+ for i,p in ipairs(h.blotches) do
+  -- Blotch caps poke through the visible face; the layout jumps every cut.
+  local a=hash(cut*7+i)*TAU;local b=hash(cut*13+i*3)*.9-.45
+  local dir=(back+right*math.cos(a)*1.1+up*math.sin(a)*1.1+up*b)
+  dir=dir.Magnitude>.01 and dir.Unit or back
+  local size=radius*(i<=2 and .62 or .5)*(0.8+.4*hash(cut*5+i))
+  p.Size=Vector3.one*size*2
+  p.CFrame=CFrame.new(from+dir*(radius-size*.55))
+  p.Color=i<=2 and colors[2] or BLACK
+  p.Transparency=(gentle and .6 or 0)+(hash(cut*3+i)<.2 and 1 or 0)
+ end
 end
 drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDuration)
  local h=r.rich;if not h then return end
@@ -3176,62 +3285,77 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  local s=major*(scale or 1)
  local camera=workspace.CurrentCamera
  local right=camera and camera.CFrame.RightVector or Vector3.new(1,0,0)
- local vertical=camera and camera.CFrame.UpVector or Vector3.yAxis
  local eye=camera and camera.CFrame.Position-from or Vector3.zAxis*40
  local toward=eye.Magnitude>.01 and eye.Unit or Vector3.zAxis
- local inflow=smooth(q/.12)*(1-smooth((q-.62)/.26))
- local flashQ=B.flashProgress(q,chargeDuration)
- h.flashDuration=math.min(.8,math.max(.01,chargeDuration or .8))
+ local duration=math.max(.01,chargeDuration or .8)
+ local g=B.flashProgress(q,duration)
+ local lead=B.glitchLead(duration)
+ h.glitchElapsed=g*(lead+B.GLITCH_TAIL);h.glitchLead=lead
+ if h.root:IsA('BasePart') then h.root.CFrame=CFrame.new(from) end
+ local glitching=g>=0
  if h.tint~=r.color then
   h.tint=r.color
-  for _,vane in ipairs(h.collars) do vane.beam.Color=ColorSequence.new(r.color:Lerp(WHITE,.55)) end
-  h.vapor.Color=ColorSequence.new(r.color);h.sparks.Color=ColorSequence.new(r.color)
+  h.vapor.Color=ColorSequence.new(r.color:Lerp(DARK,.35));h.sparks.Color=ColorSequence.new(r.color:Lerp(WHITE,.4),r.color)
+  h.rim.Color=r.color:Lerp(WHITE,.2)
+  h.flare.beam.Color=ColorSequence.new(r.color:Lerp(WHITE,.25))
   for i,item in ipairs(h.comets) do
-   local color=r.color:Lerp(WHITE,i%2==0 and .64 or .26)
+   local color=r.color:Lerp(WHITE,i%2==0 and .7 or .35)
    item.path.beam.Color=ColorSequence.new(color);item.color=color
   end
  end
  local delta=to-from
  LaunchAftermath.charge(r,from,delta.Unit,now,q,scale)
- local alive=smooth(q/.12)*(1-smooth((q-.82)/.18))
- -- The single surface goes clear -> chromatic -> clear, so nested Glass
- -- cannot hide the color layer. It stays exactly on the emitting attachment.
  local direction=delta.Unit
  local across=direction:Cross(math.abs(direction.Y)>.94 and Vector3.zAxis or Vector3.yAxis).Unit
  local upright=across:Cross(direction).Unit
- -- Four narrow vanes close in the firing plane. Their radius and speed
- -- communicate how close the charge is, even with several drones in view.
- local lock=smooth((q-.12)/.73)
- local vaneAlpha=smooth(q/.18)*(1-smooth((q-.84)/.15))
- for i,vane in ipairs(h.collars) do
-  local angle=(i-1)*math.pi*.5+lock*.63
-  local radial=across*math.cos(angle)+upright*math.sin(angle)
-  local tangent=across*-math.sin(angle)+upright*math.cos(angle)
-  local center=radial*s*(5.05-3.85*lock)-direction*s*(1.1-1.1*lock)
-  local span=s*(1.40-.64*lock)
-  curve(vane,center-tangent*span,center+tangent*span,tangent,tangent,0,s*.52*vaneAlpha)
- end
- drawFlash(h,from,direction,flashQ,s)
+ drawFlash(h,from,direction,g,s,h.glitchElapsed)
+ -- While the glitch orb owns the silhouette, the other layers step aside.
+ local calm=glitching and 0 or 1
  local focus=smooth(q/.78)
- h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.34+1.47*focus)
- h.core.Color=r.color:Lerp(WHITE,.26+.63*focus)
- h.core.Transparency=1-alive*.94
+ local alive=smooth(q/.08)*calm
+ h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.35+.45*focus)
+ h.core.Transparency=1-alive
+ h.rim.CFrame=CFrame.new(from-toward*.01);h.rim.Size=Vector3.one*s*(.35+.45*focus)*1.45
+ h.rim.Transparency=1-alive*(.35+.25*focus)
  h.particleSource.Position=toward*s*.8
+ -- Lens streak lengthens as the charge tightens and flickers slightly.
+ local streak=smooth((q-.2)/.55)*calm
+ if streak>.01 then
+  local length=s*(2+9*streak)*(0.92+.08*math.sin(now*47))
+  local center=from+toward*s*.6
+  h.flare.a.WorldPosition=center-right*length;h.flare.b.WorldPosition=center+right*length
+  h.flareCore.a.WorldPosition=center-right*length*.7;h.flareCore.b.WorldPosition=center+right*length*.7
+  h.flare.beam.Width0=s*.22*streak;h.flare.beam.Width1=h.flare.beam.Width0
+  h.flareCore.beam.Width0=s*.07*streak;h.flareCore.beam.Width1=h.flareCore.beam.Width0
+  h.flare.beam.Enabled=true;h.flareCore.beam.Enabled=true
+ else h.flare.beam.Enabled=false;h.flareCore.beam.Enabled=false end
+ -- Chips rise from below, slow as they arrive and tumble in place.
+ local lift=smooth(q/.85)
+ for i,chip in ipairs(h.debris) do
+  local angle=i*1.047+.4*hash(i)
+  local radial=across*math.cos(angle)+upright*math.sin(angle)
+  local below=s*(9+3*hash(i+9))*(1-lift)+s*(1.5+hash(i+4))
+  local spread=s*(4+2*hash(i+2))*(1-.35*lift)
+  local bob=s*.25*math.sin(now*2.2+i)
+  chip.CFrame=CFrame.new(from+direction*(below+bob)+radial*spread)*CFrame.Angles(now*(.9+i*.3),now*(1.3-i*.17),i)
+  chip.Transparency=1-smooth((q-.03)/.12)*calm*.9
+ end
  -- The video's streams are moving inward immediately. Their curvature is
  -- generated by attraction acting on momentum, not an orbit angle animation.
+ local heads={}
  for i,item in ipairs(h.comets) do
   local a,va,captured=PullMotion.sample(i,q)
   local b,vb=PullMotion.sample(i,math.max(0,q-.13))
-  local visible=smooth(q/.035)*(1-smooth((q-captured+.035)/.035))
+  local visible=smooth(q/.035)*(1-smooth((q-captured+.035)/.035))*calm
   local head=a*s*4.6;local tail=b*s*4.6
   local span=(tail-head).Magnitude
   if va.Magnitude>.01 and vb.Magnitude>.01 and span>.002 then
-   curve(item.path,head,tail,-va.Unit,-vb.Unit,span*.27,(i%2==0 and .24 or .16)*s*visible)
+   curve(item.path,head,tail,-va.Unit,-vb.Unit,span*.27,(i%2==0 and .14 or .1)*s*visible)
   else item.path.beam.Enabled=false end
-  EnergyDisc.place(item.head,from+head,s*(.49+.24*visible),item.color,visible*.57)
+  EnergyDisc.place(item.head,from+head,s*(.32+.12*visible),WHITE,visible*.9)
+  if visible>.2 then heads[#heads+1]=from+head end
  end
  -- Small ink curls have separate arrivals and deform along attracted paths.
- -- No shared orbit angle or reset: each short ribbon is drawn into the mouth.
  for i,item in ipairs(h.sweeps) do
   local start=.035+(i-1)*.12
   local finish=.72+(i-1)*.065
@@ -3240,7 +3364,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
   local progress=t*captured
   local a,va=PullMotion.sample(i*2,progress)
   local b,vb=PullMotion.sample(i*2,math.max(0,progress-.09-.018*i))
-  local visible=smooth(t/.12)*(1-smooth((t-.82)/.18))
+  local visible=smooth(t/.12)*(1-smooth((t-.82)/.18))*calm
   local head=a*s*2;local tail=b*s*2
   local span=(tail-head).Magnitude
   if span>.002 and va.Magnitude>.01 and vb.Magnitude>.01 then
@@ -3251,13 +3375,51 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
    item.edge.beam.Enabled=false;item.ink.beam.Enabled=false
   end
  end
- -- Fine charge motes stop at release; the separately owned smoke persists.
  -- Never emit catch-up batches after a late observer or paused render loop.
+ local inflow=smooth(q/.12)*calm
  if inflow>.05 then
-  if h.lastEmission and now>=h.lastEmission+.08 then
+  if h.lastEmission and now>=h.lastEmission+.09 then
    h.sparks:Emit(1);h.lastEmission=now;h.emitted=true
   elseif not h.lastEmission or now<h.lastEmission then h.lastEmission=now end
+  if #heads>0 and (not h.lastGlitter or now<h.lastGlitter or now>=h.lastGlitter+.03) then
+   h.lastGlitter=now
+   h.glitterSource.WorldPosition=heads[math.floor(now*97)%#heads+1]
+   h.glitter:Emit(1)
+  end
+  if q>.25 and (not h.lastVapor or now<h.lastVapor or now>=h.lastVapor+.35) then
+   h.lastVapor=now;h.vapor:Emit(1);h.emitted=true
+  end
  else h.lastEmission=nil end
+end
+-- One client-local "impact frame" at ignition: the whole view snaps to a
+-- blue posterized frame, then a white one. Rate limited, close drones only,
+-- and skipped for reduced motion/flashing.
+B.IMPACT_RANGE=55
+B.IMPACT_COOLDOWN=2.2
+local impactAt=-math.huge
+function B.impactFrame(position,now)
+ local player=Players.LocalPlayer
+ if B.reduced() or (player and player:GetAttribute('ReducedFlashing')==true) then return false end
+ local camera=workspace.CurrentCamera
+ if not camera then return false end
+ local distance=(camera.CFrame.Position-position).Magnitude
+ if distance>B.IMPACT_RANGE or now-impactAt<B.IMPACT_COOLDOWN then return false end
+ local look=camera.CFrame.LookVector
+ local offset=position-camera.CFrame.Position
+ if offset.Magnitude>.01 and offset.Unit:Dot(look)<.55 then return false end
+ impactAt=now
+ local strength=1-.6*clamp((distance-15)/(B.IMPACT_RANGE-15))
+ local ok,lighting=pcall(function() return game:GetService('Lighting') end)
+ if not ok or not lighting then return false end
+ local grade=lighting:FindFirstChild('StartupImpactFrame')
+ if not grade then grade=Instance.new('ColorCorrectionEffect');grade.Name='StartupImpactFrame';grade.Parent=lighting end
+ grade.TintColor=Color3.new(1,1,1):Lerp(Color3.fromRGB(30,80,255),strength)
+ grade.Contrast=strength;grade.Saturation=strength;grade.Brightness=.1*strength;grade.Enabled=true
+ task.delay(.05,function()
+  grade.TintColor=Color3.new(1,1,1);grade.Contrast=.3*strength;grade.Saturation=-.5*strength;grade.Brightness=.35*strength
+  task.delay(.04,function() grade.Enabled=false end)
+ end)
+ return true
 end
 
 -- width is the caller's authoritative-envelope result. Charge never changes
@@ -3293,15 +3455,19 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale,chargeDuration)
   if h and not h.launched then
    h.launched=true
    if B.onChargeEnd then B.onChargeEnd(r) end
-   if releaseAge and releaseAge>=0 and releaseAge<=.16 and B.onCue then B.onCue('launch',from,now,1) end
+   if releaseAge and releaseAge>=0 and releaseAge<=.16 then
+    if B.onCue then B.onCue('launch',from,now,1) end
+    if not h.startup then B.impactFrame(from,now) end
+   end
   end
   LaunchAftermath.fire(r,from,direction,now,releaseAge)
-  -- Ignition overlaps the final color cuts by 80 ms at normal charge speed.
-  -- Only the lens remains: inflow and charge audio end on authoritative release.
-  if h and not h.startup and releaseAge and releaseAge>=0 and releaseAge<h.flashDuration*.1 then
+  -- The collapsing glitch orb overlaps ignition briefly. Only the orb
+  -- remains: inflow and charge audio end on authoritative release.
+  if h and not h.startup and releaseAge and releaseAge>=0 and releaseAge<B.GLITCH_TAIL then
    hideRich(r)
    local major=r.style=='Orbital' and 1 or r.style=='Singularity' and .34 or .2
-   drawFlash(h,from,direction,.9+releaseAge/h.flashDuration,major*scale)
+   local lead=h.glitchLead or B.GLITCH_LEAD
+   drawFlash(h,from,direction,(lead+releaseAge)/(lead+B.GLITCH_TAIL),major*scale,lead+releaseAge)
   else releaseRich(r) end
  end
  if r.rich and r.rich.startup then
@@ -4279,7 +4445,7 @@ end
 function W:retireMining(beam,now)
  local fx=beam.work
  if not fx then return false end
- fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false
+ fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false;fx.smoke.Enabled=false
  for _,emitter in ipairs(fx.accents or {}) do emitter.Enabled=false end
  for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
  if fx.contact then fx.contact.Transparency=1 end
@@ -4296,7 +4462,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local fx=beam.work
  if not visible then
   if fx then
-   fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false
+   fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false;fx.smoke.Enabled=false
    if fx.contact then fx.contact.Transparency=1 end
    if fx.inner then fx.inner.Transparency=1 end
    for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
@@ -4316,6 +4482,11 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
+  -- Soft rock smoke at the cut, separate from the sparks so both read.
+  fx.smoke=particle(fx.tip,'CuttingSmoke',Color3.fromRGB(170,170,176))
+  EnergyDisc.configure(fx.smoke,.9,.62,.5,1.9,.3)
+  fx.smoke.Lifetime=NumberRange.new(.9,1.6);fx.smoke.Speed=NumberRange.new(.8,2);fx.smoke.Drag=2.2
+  fx.smoke.SpreadAngle=Vector2.new(55,55);fx.smoke.Acceleration=Vector3.new(0,1.6,0)
   if ink then
    fx.accents={
     EnergyDisc.accent(anchor,'CyanDrops',Color3.fromRGB(49,246,237),.56,'mote',Enum.NormalId.Front,82),
@@ -4325,9 +4496,9 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
     EnergyDisc.accent(fx.tip,'YellowCutStreaks',Color3.fromRGB(255,225,50),.74,'streak',Enum.NormalId.Front,34),
    }
   end
-  EnergyDisc.configure(fx.impact,.94,.47,.56,.63,.48)
-  fx.impact.Lifetime=NumberRange.new(.48,.91);fx.impact.Speed=NumberRange.new(5,11)
-  fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
+  EnergyDisc.configure(fx.impact,.6,.3,.56,.63,.4)
+  fx.impact.Lifetime=NumberRange.new(.25,.55);fx.impact.Speed=NumberRange.new(7,14)
+  fx.impact.Acceleration=Vector3.new(0,-22,0);fx.impact.SpreadAngle=Vector2.new(72,72)
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
   local template=templates and templates:FindFirstChild('MiningEffect')
@@ -4365,24 +4536,28 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  drawSpheres(fx,now,strength,q,pulse,beam.tint or WHITE)
  local continuous=sample.style~='Percussion'
  fx.sparks.Rate=2;fx.sparks.Enabled=working
- fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=working
+ fx.glow.Rate=0;fx.glow.Enabled=false
  local resonance=sample.style=='Resonance'
  local stoneColor=sample.stoneColor
  local impactColor=stoneColor or sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
  if fx.impactColor~=impactColor or fx.stoneContact~=(stoneColor~=nil) then
   fx.impactColor=impactColor;fx.stoneContact=stoneColor~=nil
-  EnergyDisc.configure(fx.impact,stoneColor and .75 or .94,stoneColor and .37 or .47,.56,stoneColor and 1.16 or .63,.48)
-  if stoneColor then RockFinish.configureDust(fx.impact,stoneColor,false)
-  else fx.impact.Color=ColorSequence.new(impactColor) end
+  -- Sparks stay hot sparks on every surface; the stone tints the smoke.
+  local hot=stoneColor and stoneColor:Lerp(YELLOW,.7) or impactColor
+  fx.impact.Color=ColorSequence.new(WHITE:Lerp(hot,.35),hot)
+  if stoneColor then RockFinish.configureDust(fx.smoke,stoneColor,false)
+  else fx.smoke.Color=ColorSequence.new(Color3.fromRGB(190,190,198),Color3.fromRGB(140,140,150)) end
  end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
- fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-3,0)
- fx.impact.Drag=resonance and 5 or 4
+ fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-22,0)
+ fx.impact.Drag=resonance and 5 or 2.5
  -- Keep the large discs readable when an entire pinned field lights up.
  local crowded=self.miningCount>8
- fx.impact.Rate=continuous and (crowded and 3 or (ink or resonance) and 4 or 6) or 0
+ fx.impact.Rate=continuous and (crowded and 5 or (ink or resonance) and 6 or 9) or 0
  fx.impact.Enabled=working and continuous
+ fx.smoke.Rate=crowded and .8 or 1.8
+ fx.smoke.Enabled=working
  if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
  if fx.accents and working then
   if (not fx.nextInkAccent or now>=fx.nextInkAccent) then
@@ -4395,7 +4570,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
-   fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
+   fx.biteAt=now;fx.impact:Emit(crowded and 6 or 12);fx.smoke:Emit(crowded and 1 or 2);fx.sparks:Emit(crowded and 1 or 3)
    if fx.accents then for i,e in ipairs(fx.accents) do e:Emit(i==1 and 3 or 2) end end
   end
  end
@@ -4409,8 +4584,8 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   if fx.contact then
    local bite=math.max(0,1-(now-(fx.biteAt or -100))/.13)^2
    fx.contact.CFrame=CFrame.new(point+normal*.05)
-   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse+.26*bite)
-   fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.68-.05*pulse-.15*bite) or 1
+   fx.contact.Size=Vector3.one*(.12+.08*width+.04*pulse+.14*bite)
+   fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.8-.05*pulse-.15*bite) or 1
    if fx.inner then
     fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse+.15*bite)
     fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25+.53*bite);fx.inner.Transparency=working and (.45-.15*bite) or 1
@@ -10472,7 +10647,7 @@ function Fun.paintCube(view,body,id)
  -- Little sparkles shed from the belly while lasering.
  local motes=Instance.new('ParticleEmitter');motes.Name='FunMotes';motes.Texture=SPARKLE
  motes.Color=ColorSequence.new(color:Lerp(WHITE,.5),color);motes.LightEmission=.8;motes.LightInfluence=0
- motes.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(1,0)})
+ motes.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.2),NumberSequenceKeypoint.new(1,0)})
  motes.Transparency=NumberSequence.new(.1,1);motes.Lifetime=NumberRange.new(.5,.9);motes.Rate=0
  motes.Speed=NumberRange.new(1.5,3.5);motes.SpreadAngle=Vector2.new(70,70);motes.EmissionDirection=Enum.NormalId.Bottom
  motes.Acceleration=Vector3.new(0,2,0);motes.Drag=2;motes.Rotation=NumberRange.new(0,360);motes.RotSpeed=NumberRange.new(-120,120)
@@ -10485,7 +10660,7 @@ function Fun.stepCube(record,speed,working,hidden,now)
  local calm=reduced()
  local cruising=not hidden and not calm and speed>9
  if record.trail.Enabled~=cruising then record.trail.Enabled=cruising end
- local rate=(working and not hidden and not calm) and 14 or 0
+ local rate=(working and not hidden and not calm) and 7 or 0
  if record.motes.Rate~=rate then record.motes.Rate=rate end
  local pulse=working and (.5+.5*math.sin(now*14)) or 0
  record.light.Brightness=hidden and 0 or (.25+pulse*1.2)
@@ -10512,7 +10687,7 @@ function Fun.confetti(parent,point,color,strength)
  bits.Rotation=NumberRange.new(0,360);bits.RotSpeed=NumberRange.new(-420,420);bits.Parent=anchor
  local twinkle=Instance.new('ParticleEmitter');twinkle.Texture=SPARKLE;twinkle.Rate=0
  twinkle.Color=ColorSequence.new(WHITE,light);twinkle.LightEmission=1;twinkle.LightInfluence=0
- twinkle.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.9),NumberSequenceKeypoint.new(1,0)})
+ twinkle.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,0)})
  twinkle.Transparency=NumberSequence.new(0,1);twinkle.Lifetime=NumberRange.new(.35,.6)
  twinkle.Speed=NumberRange.new(5,11);twinkle.SpreadAngle=Vector2.new(180,180);twinkle.Drag=4;twinkle.Parent=anchor
  local flash=Instance.new('PointLight');flash.Color=color;flash.Range=14;flash.Brightness=3;flash.Shadows=false;flash.Parent=anchor

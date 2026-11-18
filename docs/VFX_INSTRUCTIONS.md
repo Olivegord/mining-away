@@ -1,5 +1,18 @@
 # VFX instructions — owner feedback and implementation
 
+## November 18 — calmer particles and a reworked startup with the neon glitch
+
+Owner direction: effects were too busy; large circular particles covered everything and hid the smoke and little sparks. Rework the drone startup to follow the reference video, especially the rainbow neon glitch right before the beam. This supersedes the "restored single flash, Glass/Highlight lens, 0.288 s" baseline and the four focus vanes described below.
+
+- **No more big discs.** `EnergyDisc.configure` no longer draws flat white circles. Shrinking "light" particles become small sparks (≤0.16 studs wide) stretched along their velocity (`VelocityParallel`, squash 2.2→0.6, bright). Expanding ones become soft smoke (`smoke_main.dds`, ≤1.7 studs, quieter). Callers keep their colors, counts and motion. Accent motes/glints are capped at 0.22 studs.
+- **Mining contact.** Hot sparks on every surface (fall under gravity, rate 9 / 5 crowded) plus a separate rising smoke layer tinted by the stone. The static glow disc at the emitter is off; the contact glow balls are about half their old size. Cube belly sparkles are smaller and half the rate; confetti twinkles are half size.
+- **Charge (inspired by the video).** A tiny dark core with a bright rim; eight thin bright streams pulled in by `PullMotion` with white heads that leave glitter specks; the organic dark curls stay; stone chips rise from below the drone and hover, tumbling; a horizontal anamorphic lens streak lengthens through the charge. Sparse sparks and wisps of smoke. The four focus vanes are gone.
+- **Neon glitch.** For the last 0.55 s before ignition (30% of shorter charges) a posterized orb replaces the other layers: one flat neon color with blotches of a second color and black poking through, plus an offset complementary ball behind it for an RGB-split edge. Every 45 ms the frame hard-cuts to a new pair (yellow/red, green/blue, blue/black, magenta/cyan, ...) and the blotches jump. It swells in about 70 ms, collapses steadily, and overlaps the beam by 60 ms. Reduced Flashing slows the cuts and makes it translucent.
+- **Impact frame.** At ignition, a client-local `ColorCorrectionEffect` snaps the view to a blue posterized frame (50 ms) and a pale one (40 ms). Only for drones within 55 studs and in front of the camera, at most once per 2.2 s, scaled by distance, skipped for Reduced Motion/Effects/Flashing. Tunables: `BeamVFX.IMPACT_RANGE`, `IMPACT_COOLDOWN`, `GLITCH_LEAD`, `GLITCH_CUT`, `GLITCH_PAIRS`.
+- The charge rig root is now an invisible Part so stream attachments resolve relative to the emitter.
+
+Specialist startup styles (Stars, Ignition, Coil), beam bodies, aftermath ring, smoke push and colored fragments are unchanged. Verification: the beam suite (29 checks, updated for the glitch) and fun, flat-field, rock-damage, pickup, geode, flight, field-pickup and selling suites pass with API doubles. Nothing here has been seen in Studio yet; motion, readability, busy-field behavior and the impact frame need an owner look.
+
 ## November 18 — colorful cubes, confetti breaks and field motes
 
 Owner direction: more colorful, less flat, very simple, more particles. Cubes keep the cube silhouette but each takes a vivid palette color with a light top cap, a glowing belly, simple eyes, a cruise trail and mining sparkles; its laser uses the same color. Rock breaks add a field-colored confetti and twinkle burst on top of the existing two-piece split, chips and audio. Square fields get slow colored motes; a mild client color grade lifts saturation. All of it lives in `src/FunFX.lua`, is client-only, bounded and disabled by Reduced Motion. Do not restore the plain gray cube shells.
@@ -427,7 +440,8 @@ November 7: The home demo and working specialists should carry their startup int
 
 | File | Responsibility |
 | --- | --- |
-| [BeamVFX.lua](../src/BeamVFX.lua) | Thin beam vocabulary, original flash, discrete color cuts, tiny curls, overlap, charge rig pooling and cue lifecycle. |
+| [BeamVFX.lua](../src/BeamVFX.lua) | Thin beam vocabulary, charge (core, streams, glitter, lifted chips, lens streak, curls), neon glitch orb, impact frame, charge rig pooling and cue lifecycle. |
+| [EnergyDisc.lua](../src/EnergyDisc.lua) | Shared particle look: small velocity-stretched sparks and soft smoke (no flat discs). |
 | [PullMotion.lua](../src/PullMotion.lua) | Cached inward attraction and gravity-free electrical discharge trajectories. |
 | [PlaneBurst.lua](../src/PlaneBurst.lua) | Fixed circular plane, fast expansion, braking and continuing fade. |
 | [LaunchAftermath.lua](../src/LaunchAftermath.lua) | Existing smoke pressure response, saturated cuboid cone and independent pooled tail lifetimes. |

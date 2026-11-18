@@ -157,7 +157,7 @@ end
 function W:retireMining(beam,now)
  local fx=beam.work
  if not fx then return false end
- fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false
+ fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false;fx.smoke.Enabled=false
  for _,emitter in ipairs(fx.accents or {}) do emitter.Enabled=false end
  for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
  if fx.contact then fx.contact.Transparency=1 end
@@ -174,7 +174,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local fx=beam.work
  if not visible then
   if fx then
-   fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false
+   fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false;fx.smoke.Enabled=false
    if fx.contact then fx.contact.Transparency=1 end
    if fx.inner then fx.inner.Transparency=1 end
    for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
@@ -194,6 +194,11 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
+  -- Soft rock smoke at the cut, separate from the sparks so both read.
+  fx.smoke=particle(fx.tip,'CuttingSmoke',Color3.fromRGB(170,170,176))
+  EnergyDisc.configure(fx.smoke,.9,.62,.5,1.9,.3)
+  fx.smoke.Lifetime=NumberRange.new(.9,1.6);fx.smoke.Speed=NumberRange.new(.8,2);fx.smoke.Drag=2.2
+  fx.smoke.SpreadAngle=Vector2.new(55,55);fx.smoke.Acceleration=Vector3.new(0,1.6,0)
   if ink then
    fx.accents={
     EnergyDisc.accent(anchor,'CyanDrops',Color3.fromRGB(49,246,237),.56,'mote',Enum.NormalId.Front,82),
@@ -203,9 +208,9 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
     EnergyDisc.accent(fx.tip,'YellowCutStreaks',Color3.fromRGB(255,225,50),.74,'streak',Enum.NormalId.Front,34),
    }
   end
-  EnergyDisc.configure(fx.impact,.94,.47,.56,.63,.48)
-  fx.impact.Lifetime=NumberRange.new(.48,.91);fx.impact.Speed=NumberRange.new(5,11)
-  fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
+  EnergyDisc.configure(fx.impact,.6,.3,.56,.63,.4)
+  fx.impact.Lifetime=NumberRange.new(.25,.55);fx.impact.Speed=NumberRange.new(7,14)
+  fx.impact.Acceleration=Vector3.new(0,-22,0);fx.impact.SpreadAngle=Vector2.new(72,72)
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
   local template=templates and templates:FindFirstChild('MiningEffect')
@@ -243,24 +248,28 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  drawSpheres(fx,now,strength,q,pulse,beam.tint or WHITE)
  local continuous=sample.style~='Percussion'
  fx.sparks.Rate=2;fx.sparks.Enabled=working
- fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=working
+ fx.glow.Rate=0;fx.glow.Enabled=false
  local resonance=sample.style=='Resonance'
  local stoneColor=sample.stoneColor
  local impactColor=stoneColor or sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
  if fx.impactColor~=impactColor or fx.stoneContact~=(stoneColor~=nil) then
   fx.impactColor=impactColor;fx.stoneContact=stoneColor~=nil
-  EnergyDisc.configure(fx.impact,stoneColor and .75 or .94,stoneColor and .37 or .47,.56,stoneColor and 1.16 or .63,.48)
-  if stoneColor then RockFinish.configureDust(fx.impact,stoneColor,false)
-  else fx.impact.Color=ColorSequence.new(impactColor) end
+  -- Sparks stay hot sparks on every surface; the stone tints the smoke.
+  local hot=stoneColor and stoneColor:Lerp(YELLOW,.7) or impactColor
+  fx.impact.Color=ColorSequence.new(WHITE:Lerp(hot,.35),hot)
+  if stoneColor then RockFinish.configureDust(fx.smoke,stoneColor,false)
+  else fx.smoke.Color=ColorSequence.new(Color3.fromRGB(190,190,198),Color3.fromRGB(140,140,150)) end
  end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
- fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-3,0)
- fx.impact.Drag=resonance and 5 or 4
+ fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-22,0)
+ fx.impact.Drag=resonance and 5 or 2.5
  -- Keep the large discs readable when an entire pinned field lights up.
  local crowded=self.miningCount>8
- fx.impact.Rate=continuous and (crowded and 3 or (ink or resonance) and 4 or 6) or 0
+ fx.impact.Rate=continuous and (crowded and 5 or (ink or resonance) and 6 or 9) or 0
  fx.impact.Enabled=working and continuous
+ fx.smoke.Rate=crowded and .8 or 1.8
+ fx.smoke.Enabled=working
  if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
  if fx.accents and working then
   if (not fx.nextInkAccent or now>=fx.nextInkAccent) then
@@ -273,7 +282,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
-   fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
+   fx.biteAt=now;fx.impact:Emit(crowded and 6 or 12);fx.smoke:Emit(crowded and 1 or 2);fx.sparks:Emit(crowded and 1 or 3)
    if fx.accents then for i,e in ipairs(fx.accents) do e:Emit(i==1 and 3 or 2) end end
   end
  end
@@ -287,8 +296,8 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   if fx.contact then
    local bite=math.max(0,1-(now-(fx.biteAt or -100))/.13)^2
    fx.contact.CFrame=CFrame.new(point+normal*.05)
-   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse+.26*bite)
-   fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.68-.05*pulse-.15*bite) or 1
+   fx.contact.Size=Vector3.one*(.12+.08*width+.04*pulse+.14*bite)
+   fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.8-.05*pulse-.15*bite) or 1
    if fx.inner then
     fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse+.15*bite)
     fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25+.53*bite);fx.inner.Transparency=working and (.45-.15*bite) or 1
