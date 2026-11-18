@@ -1,11 +1,77 @@
 -- Bounded cosmetic shells; authoritative attributes own every transition.
 local V={}
+V.TIERS={
+ {name='COMMON',color=Color3.fromRGB(214,222,230),pitch=1.0,burst=.9},
+ {name='RARE',color=Color3.fromRGB(80,170,255),pitch=1.1,burst=1.2},
+ {name='EPIC',color=Color3.fromRGB(190,90,255),pitch=1.2,burst=1.6},
+ {name='LEGENDARY',color=Color3.fromRGB(255,190,40),pitch=1.32,burst=2.1},
+ {name='MYTHIC',color=Color3.fromRGB(255,70,140),pitch=1.45,burst=2.6},
+}
+-- A loot-reveal banner over the burst: tier name, then the gem count.
+function V.reveal(parent,position,tierIndex,gems,audio,cameraBeat,now)
+ local tier=V.TIERS[tierIndex] or V.TIERS[1]
+ local reduced=BeamVFX.reduced()
+ local anchor=Instance.new('Part');anchor.Name='GeodeReveal';anchor.Anchored=true;anchor.Transparency=1
+ anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.Size=Vector3.one*.1
+ anchor.Position=position+Vector3.yAxis*2.4;anchor.Parent=parent
+ local gui=Instance.new('BillboardGui');gui.Size=UDim2.fromOffset(260,90);gui.AlwaysOnTop=true;gui.LightInfluence=0
+ gui.MaxDistance=140;gui.Adornee=anchor;gui.Parent=anchor
+ local title=Instance.new('TextLabel');title.BackgroundTransparency=1;title.Size=UDim2.new(1,0,.62,0)
+ title.Font=Enum.Font.FredokaOne;title.TextScaled=true;title.Text=tier.name..'!';title.TextColor3=tier.color
+ title.TextStrokeTransparency=0;title.TextStrokeColor3=Color3.fromRGB(20,16,30);title.Parent=gui
+ local sub=Instance.new('TextLabel');sub.BackgroundTransparency=1;sub.Position=UDim2.fromScale(0,.6);sub.Size=UDim2.new(1,0,.4,0)
+ sub.Font=Enum.Font.FredokaOne;sub.TextScaled=true;sub.Text='+'..gems..(gems==1 and ' GEM' or ' GEMS')
+ sub.TextColor3=Color3.new(1,1,1);sub.TextStrokeTransparency=0;sub.TextStrokeColor3=Color3.fromRGB(20,16,30);sub.Parent=gui
+ local scale=Instance.new('UIScale');scale.Scale=reduced and 1 or .2;scale.Parent=gui
+ if audio then
+  audio:play('gem_reveal',position,{pitch=tier.pitch,level=1})
+  if tierIndex>=4 then audio:play('prism_blast',position,{pitch=1.1,level=.55}) end
+ end
+ if not reduced then
+  RoleVisuals.ImpactParticles(position,tier.color,tier.burst,'GemReward')
+  RoleVisuals.Pulse(position,tier.color,.6,4+tierIndex*2.2,.5)
+  if tierIndex>=3 then RoleVisuals.Pulse(position,Color3.new(1,1,1),.4,3+tierIndex*1.6,.35) end
+  if tierIndex>=4 then
+   for i=1,3 do task.delay(i*.12,function() RoleVisuals.ImpactParticles(position+Vector3.yAxis*i*.6,V.TIERS[(i%5)+1].color,1.2,'GemReward') end) end
+  end
+  if cameraBeat then cameraBeat(tierIndex>=3 and 'HeavySplit' or 'Split',position,now,math.min(1.4,.6+tierIndex*.18)) end
+ end
+ local started=os.clock();local connection
+ connection=game:GetService('RunService').RenderStepped:Connect(function()
+  local age=os.clock()-started
+  if not anchor.Parent or age>=1.9 then connection:Disconnect();anchor:Destroy();return end
+  if not reduced then
+   local pop=math.clamp(age/.22,0,1)
+   scale.Scale=pop<1 and .2+1.15*(1-(1-pop)^3) or 1+.15*math.exp(-(age-.22)*9)*math.cos((age-.22)*30)
+   anchor.Position=position+Vector3.yAxis*(2.4+age*.9)
+   title.Rotation=tierIndex>=4 and math.sin(age*14)*4*math.exp(-age*2) or 0
+  end
+  local fade=math.clamp((age-1.45)/.45,0,1)
+  title.TextTransparency=fade;title.TextStrokeTransparency=fade;sub.TextTransparency=fade;sub.TextStrokeTransparency=fade
+  sub.Visible=age>=.18 or reduced
+ end)
+ return anchor
+end
 function V.new(parent,audio,feedback,findFracture,cameraBeat)
  local self={rigs={},count=0}
  function self:remove(r)
   local rig=self.rigs[r];if not rig then return end
   if audio then audio:stopLoop(rig) end
   rig.root:Destroy();r.shellModel=nil;self.rigs[r]=nil;self.count-=1
+ end
+ -- One crack beat: louder, higher and brighter with each hit.
+ function self:crack(r,now,hits)
+  if not r.restPose then return end
+  local strength=.25+.18*hits
+  audio:play('geode_crack',r.restPose.Position,{pitch=.8+hits*.18,level=.75+hits*.1})
+  audio:play('crystal_snap',r.restPose.Position,{pitch=1+hits*.12})
+  feedback:seamBurst(r,now,strength)
+  cameraBeat('Fracture',r.restPose.Position,now,.6+hits*.25)
+ end
+ function self:tap(r,now)
+  local rig=self.rigs[r];if not rig then return end
+  rig.tapAt=now
+  self:crack(r,now,math.min(Mining.OPEN_HITS,(rig.hits or 0)+1))
  end
  function self:update(r,now)
   local source=r.source
@@ -16,6 +82,15 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
   local progress=geode and (source:GetAttribute('CrackProgress') or 0) or (ready or opening) and 1 or 0
   local near=r.restPose and BeamVFX.near(r.restPose.Position,100)
   local rig=self.rigs[r]
+  local tierIndex=source:GetAttribute('GeodeTier')
+  if broken and tierIndex and not r.tierRevealed and source:GetAttribute('OpenOwner')~=nil then
+   r.tierRevealed=true
+   local at=r.restPose and r.restPose.Position or source.Position
+   if (source:GetAttribute('CrystalBreakAt') or now)>now-1.5 then
+    V.reveal(parent,at,tierIndex,source:GetAttribute('GeodeGems') or 1,
+     source:GetAttribute('OpenOwner')==game:GetService('Players').LocalPlayer.UserId and audio or nil,cameraBeat,now)
+   end
+  end
   if not near or broken or not (geode or ready or opening) then self:remove(r);return end
   if source:GetAttribute('SealedDrop') then
    if not rig then
@@ -28,11 +103,29 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
     motes.Parent=root;rig={root=root,light=light,motes=motes};self.rigs[r]=rig;self.count+=1
    end
    local reduced=BeamVFX.reduced()
+   rig.baseSize=rig.baseSize or r.view.Size
+   local hits=source:GetAttribute('OpenHits') or 0
+   local hitAt=source:GetAttribute('OpenHitAt') or 0
+   if hits>(rig.hits or 0) then
+    rig.hits=hits
+    -- Skip the echo of a tap this client already predicted.
+    if math.abs((rig.tapAt or -10)-now)>.35 then self:crack(r,now,hits) end
+   end
    rig.motes.Enabled=not reduced and now>=(source:GetAttribute('ReadyAt') or 0)
-   local t=opening and math.clamp(1-(opening-now)/.85,0,1) or 0
-   rig.light.Brightness=.35+t*1.4
+   rig.motes.Rate=1+(rig.hits or 0)*4
+   local t=opening and math.clamp(1-(opening-now)/.32,0,1) or 0
+   local crack=math.clamp((rig.hits or 0)/Mining.OPEN_HITS,0,1)
+   rig.light.Color=r.baseColor or rig.light.Color
+   rig.light.Range=5+crack*9
+   rig.light.Brightness=.35+crack*2.2+t*2
+   -- Squash-and-stretch punch on every tap.
+   local punchAge=now-math.max(rig.tapAt or -10,hitAt)
+   local punch=reduced and 0 or math.exp(-punchAge*14)*math.cos(punchAge*38)
+   r.view.Size=rig.baseSize*Vector3.new(1+.16*punch,1-.2*punch,1+.16*punch)*(1+.06*crack+.12*t)
+   if r.baseColor then r.view.Color=(r.stoneColor or Color3.fromRGB(76,67,58)):Lerp(r.baseColor,crack*.45+t*.4) end
    if r.restPose then
-    r.view.CFrame=r.restPose*(not reduced and opening and CFrame.Angles(math.sin(now*48)*.035*t,0,math.cos(now*43)*.045*t) or CFrame.identity)
+    local shake=reduced and 0 or math.max(t,.5*math.exp(-punchAge*10))
+    r.view.CFrame=r.restPose*CFrame.Angles(math.sin(now*48)*.05*shake,0,math.cos(now*43)*.06*shake)
     if opening and rig.opening~=opening then rig.opening=opening;audio:play('geode_windup',r.restPose.Position,{level=.7}) end
     if ready and now>=(source:GetAttribute('ReadyAt') or 0) then audio:setLoop(rig,'gem_ready',r.restPose.Position,.35,.77) else audio:stopLoop(rig) end
    end

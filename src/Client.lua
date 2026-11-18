@@ -1911,8 +1911,7 @@ local mouse=player:GetMouse()
   end
   if selectorView.draft then
    if not selectorView.pending then return 'Confirm plot' end
-  elseif selectorView:readyRock(resources) then return 'Open geode'
-  elseif selectorView:readyPickup(pickupView.records) then return 'Pick up' end
+  end
  end
  pickupView.pickupFocus=function()
   return available()=='Pick up' and selectorView.pickupId or nil
@@ -1948,7 +1947,29 @@ local mouse=player:GetMouse()
   return false
  end
  interaction=SelectorView.Interaction.new(gui,localFX,selectorView.performFieldAction)
- connect(RunService.RenderStepped,function() showAction(available()) end)
+ -- Sealed geodes: no prompt. Hovering outlines the geode; clicks and taps crack it.
+ local function pointerPoint()
+  local camera=workspace.CurrentCamera;if not camera then return nil end
+  local input=UIS:GetLastInputType()
+  if input==Enum.UserInputType.Touch or input.Name:match('^Gamepad') then return camera.ViewportSize*.5 end
+  return UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
+ end
+ selectorView.crackGeode=function(point)
+  if menusVisible() or not profile or not profile.run then return false end
+  local r=selectorView:geodeAt(resources,point or pointerPoint())
+  if not r then return false end
+  command:FireServer('OpenResource',{resourceId=r.id,runId=profile.run.id})
+  local openings=rockDamage.feedback and rockDamage.feedback.openings
+  if openings and openings.tap then openings:tap(r,workspace:GetServerTimeNow()) end
+  return true
+ end
+ connect(RunService.RenderStepped,function()
+  local action=available();showAction(action)
+  if not action then
+   local hovered=not menusVisible() and profile and selectorView:geodeAt(resources,pointerPoint())
+   interaction:hover(hovered and (hovered.shellModel or hovered.view) or nil)
+  end
+ end)
 
 end)()
 connect(RunService.RenderStepped,function(dt)
@@ -1966,6 +1987,7 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
+ if selectorView.crackGeode and selectorView.crackGeode(Vector2.new(position.X,position.Y)) then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
  if selectorView:aimPreview(ray) then return end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
@@ -1993,6 +2015,7 @@ connect(UIS.InputBegan,function(input,processed)
  if input.UserInputType==Enum.UserInputType.MouseButton1 then
   local point=UIS:GetMouseLocation()
   if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
+   if selectorView.crackGeode and selectorView.crackGeode(point-game:GetService('GuiService'):GetGuiInset()) then return end
    if selectorView:aimPreview(mouse.UnitRay) then return end
    commandView:beginDrag();assignField(mouse.Target)
   end
@@ -2001,6 +2024,7 @@ connect(UIS.InputBegan,function(input,processed)
  local key=input.KeyCode
  if menusVisible() and not modal.Visible then return end
  if (key==Enum.KeyCode.E or key==Enum.KeyCode.ButtonX) and selectorView.performFieldAction() then return end
+ if (key==Enum.KeyCode.E or key==Enum.KeyCode.ButtonR1) and selectorView.crackGeode and selectorView.crackGeode() then return end
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
  elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then
   local cancelled=selectorView:cancelPreview()

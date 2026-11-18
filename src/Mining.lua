@@ -22,7 +22,32 @@ M.MASSIVE_SCALE=1.38
 M.GEODE_CHANCE=.045
 M.GEODE_WINDOW=4
 M.GEODE_RALLY_TIME=8
-M.OPEN_REACH=16
+M.OPEN_REACH=34
+-- Sealed geodes crack open from player taps, not a key prompt.
+M.OPEN_HITS=3
+M.OPEN_HIT_GAP=.12
+-- Mystery geode loot table (earned, never paid). Rolled on the server at drop
+-- and replicated only when the shell bursts.
+M.GEODE_TIERS={
+ {name='Common',weight=55,gems=1,modifiers=0},
+ {name='Rare',weight=28,gems=2,modifiers=0},
+ {name='Epic',weight=12,gems=3,modifiers=8},
+ {name='Legendary',weight=4,gems=4,modifiers=10},
+ {name='Mythic',weight=1,gems=6,modifiers=10},
+}
+function M.rollGeodeTier(roll)
+ local total=0;for _,t in ipairs(M.GEODE_TIERS) do total+=t.weight end
+ local pick=roll*total
+ for index,t in ipairs(M.GEODE_TIERS) do pick-=t.weight;if pick<0 then return index,t end end
+ return 1,M.GEODE_TIERS[1]
+end
+-- Lucky breaks: a small variable-ratio jackpot on ordinary rock rewards.
+M.LUCKY_TABLE={{chance=.01,multiplier=10},{chance=.06,multiplier=3}}
+function M.luckyMultiplier(roll)
+ local edge=0
+ for _,entry in ipairs(M.LUCKY_TABLE) do edge+=entry.chance;if roll<edge then return entry.multiplier end end
+ return 1
+end
 function M.geode(roll,hardness,ore)
  local ordinary=M.fieldCrystal(roll,hardness,ore,3)
  return {work=ordinary.work*8,ore=ordinary.ore,size=4.6+(roll-50)/50*1.4,stages=7}

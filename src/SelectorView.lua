@@ -180,6 +180,33 @@ function V:readyRock(resources)
  end
  return self.ready
 end
+-- Tap-to-crack: the sealed geode nearest a screen point, within reach and sight.
+function V:geodeAt(resources,point)
+ local camera=workspace.CurrentCamera
+ local root=self.options.player.Character and self.options.player.Character:FindFirstChild('HumanoidRootPart')
+ if not camera or not root or not point then return nil end
+ local now=workspace:GetServerTimeNow();local best,bestScore=nil,math.huge
+ for _,r in pairs(resources) do
+  local s=r.source
+  if s:GetAttribute('SealedDrop') and s:GetAttribute('OpenReady') and now>=(s:GetAttribute('ReadyAt') or 0)
+   and s:GetAttribute('OpenOwner')==self.options.player.UserId and not s:GetAttribute('OpeningAt')
+   and r.view and r.view.Parent and (s.Position-root.Position).Magnitude<=Mining.OPEN_REACH then
+   local screen,visible=camera:WorldToViewportPoint(r.view.Position)
+   if visible then
+    local edge=camera:WorldToViewportPoint(r.view.Position+camera.CFrame.RightVector*r.view.Size.Magnitude*.5)
+    local radius=math.max(44,(Vector2.new(edge.X,edge.Y)-Vector2.new(screen.X,screen.Y)).Magnitude*1.25)
+    local d=(Vector2.new(screen.X,screen.Y)-point).Magnitude
+    if d<=radius and d/radius<bestScore then
+     local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
+     params.FilterDescendantsInstances={self.options.player.Character,self.options.parent}
+     local hit=workspace:Raycast(root.Position,s.Position-root.Position,params)
+     if not hit or hit.Instance==s then best=r;bestScore=d/radius end
+    end
+   end
+  end
+ end
+ return best
+end
 function V:readyPickup(records)
  local previous=self.pickupId;self.pickupId=nil;local best=math.huge
  for source,r in pairs(records) do

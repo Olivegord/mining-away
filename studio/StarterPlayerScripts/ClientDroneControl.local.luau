@@ -1349,7 +1349,32 @@ M.MASSIVE_SCALE=1.38
 M.GEODE_CHANCE=.045
 M.GEODE_WINDOW=4
 M.GEODE_RALLY_TIME=8
-M.OPEN_REACH=16
+M.OPEN_REACH=34
+-- Sealed geodes crack open from player taps, not a key prompt.
+M.OPEN_HITS=3
+M.OPEN_HIT_GAP=.12
+-- Mystery geode loot table (earned, never paid). Rolled on the server at drop
+-- and replicated only when the shell bursts.
+M.GEODE_TIERS={
+ {name='Common',weight=55,gems=1,modifiers=0},
+ {name='Rare',weight=28,gems=2,modifiers=0},
+ {name='Epic',weight=12,gems=3,modifiers=8},
+ {name='Legendary',weight=4,gems=4,modifiers=10},
+ {name='Mythic',weight=1,gems=6,modifiers=10},
+}
+function M.rollGeodeTier(roll)
+ local total=0;for _,t in ipairs(M.GEODE_TIERS) do total+=t.weight end
+ local pick=roll*total
+ for index,t in ipairs(M.GEODE_TIERS) do pick-=t.weight;if pick<0 then return index,t end end
+ return 1,M.GEODE_TIERS[1]
+end
+-- Lucky breaks: a small variable-ratio jackpot on ordinary rock rewards.
+M.LUCKY_TABLE={{chance=.01,multiplier=10},{chance=.06,multiplier=3}}
+function M.luckyMultiplier(roll)
+ local edge=0
+ for _,entry in ipairs(M.LUCKY_TABLE) do edge+=entry.chance;if roll<edge then return entry.multiplier end end
+ return 1
+end
 function M.geode(roll,hardness,ore)
  local ordinary=M.fieldCrystal(roll,hardness,ore,3)
  return {work=ordinary.work*8,ore=ordinary.ore,size=4.6+(roll-50)/50*1.4,stages=7}
@@ -9601,12 +9626,78 @@ local V={}
 local GeodeView=(function()
 -- Bounded cosmetic shells; authoritative attributes own every transition.
 local V={}
+V.TIERS={
+ {name='COMMON',color=Color3.fromRGB(214,222,230),pitch=1.0,burst=.9},
+ {name='RARE',color=Color3.fromRGB(80,170,255),pitch=1.1,burst=1.2},
+ {name='EPIC',color=Color3.fromRGB(190,90,255),pitch=1.2,burst=1.6},
+ {name='LEGENDARY',color=Color3.fromRGB(255,190,40),pitch=1.32,burst=2.1},
+ {name='MYTHIC',color=Color3.fromRGB(255,70,140),pitch=1.45,burst=2.6},
+}
+-- A loot-reveal banner over the burst: tier name, then the gem count.
+function V.reveal(parent,position,tierIndex,gems,audio,cameraBeat,now)
+ local tier=V.TIERS[tierIndex] or V.TIERS[1]
+ local reduced=BeamVFX.reduced()
+ local anchor=Instance.new('Part');anchor.Name='GeodeReveal';anchor.Anchored=true;anchor.Transparency=1
+ anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.Size=Vector3.one*.1
+ anchor.Position=position+Vector3.yAxis*2.4;anchor.Parent=parent
+ local gui=Instance.new('BillboardGui');gui.Size=UDim2.fromOffset(260,90);gui.AlwaysOnTop=true;gui.LightInfluence=0
+ gui.MaxDistance=140;gui.Adornee=anchor;gui.Parent=anchor
+ local title=Instance.new('TextLabel');title.BackgroundTransparency=1;title.Size=UDim2.new(1,0,.62,0)
+ title.Font=Enum.Font.FredokaOne;title.TextScaled=true;title.Text=tier.name..'!';title.TextColor3=tier.color
+ title.TextStrokeTransparency=0;title.TextStrokeColor3=Color3.fromRGB(20,16,30);title.Parent=gui
+ local sub=Instance.new('TextLabel');sub.BackgroundTransparency=1;sub.Position=UDim2.fromScale(0,.6);sub.Size=UDim2.new(1,0,.4,0)
+ sub.Font=Enum.Font.FredokaOne;sub.TextScaled=true;sub.Text='+'..gems..(gems==1 and ' GEM' or ' GEMS')
+ sub.TextColor3=Color3.new(1,1,1);sub.TextStrokeTransparency=0;sub.TextStrokeColor3=Color3.fromRGB(20,16,30);sub.Parent=gui
+ local scale=Instance.new('UIScale');scale.Scale=reduced and 1 or .2;scale.Parent=gui
+ if audio then
+  audio:play('gem_reveal',position,{pitch=tier.pitch,level=1})
+  if tierIndex>=4 then audio:play('prism_blast',position,{pitch=1.1,level=.55}) end
+ end
+ if not reduced then
+  RoleVisuals.ImpactParticles(position,tier.color,tier.burst,'GemReward')
+  RoleVisuals.Pulse(position,tier.color,.6,4+tierIndex*2.2,.5)
+  if tierIndex>=3 then RoleVisuals.Pulse(position,Color3.new(1,1,1),.4,3+tierIndex*1.6,.35) end
+  if tierIndex>=4 then
+   for i=1,3 do task.delay(i*.12,function() RoleVisuals.ImpactParticles(position+Vector3.yAxis*i*.6,V.TIERS[(i%5)+1].color,1.2,'GemReward') end) end
+  end
+  if cameraBeat then cameraBeat(tierIndex>=3 and 'HeavySplit' or 'Split',position,now,math.min(1.4,.6+tierIndex*.18)) end
+ end
+ local started=os.clock();local connection
+ connection=game:GetService('RunService').RenderStepped:Connect(function()
+  local age=os.clock()-started
+  if not anchor.Parent or age>=1.9 then connection:Disconnect();anchor:Destroy();return end
+  if not reduced then
+   local pop=math.clamp(age/.22,0,1)
+   scale.Scale=pop<1 and .2+1.15*(1-(1-pop)^3) or 1+.15*math.exp(-(age-.22)*9)*math.cos((age-.22)*30)
+   anchor.Position=position+Vector3.yAxis*(2.4+age*.9)
+   title.Rotation=tierIndex>=4 and math.sin(age*14)*4*math.exp(-age*2) or 0
+  end
+  local fade=math.clamp((age-1.45)/.45,0,1)
+  title.TextTransparency=fade;title.TextStrokeTransparency=fade;sub.TextTransparency=fade;sub.TextStrokeTransparency=fade
+  sub.Visible=age>=.18 or reduced
+ end)
+ return anchor
+end
 function V.new(parent,audio,feedback,findFracture,cameraBeat)
  local self={rigs={},count=0}
  function self:remove(r)
   local rig=self.rigs[r];if not rig then return end
   if audio then audio:stopLoop(rig) end
   rig.root:Destroy();r.shellModel=nil;self.rigs[r]=nil;self.count-=1
+ end
+ -- One crack beat: louder, higher and brighter with each hit.
+ function self:crack(r,now,hits)
+  if not r.restPose then return end
+  local strength=.25+.18*hits
+  audio:play('geode_crack',r.restPose.Position,{pitch=.8+hits*.18,level=.75+hits*.1})
+  audio:play('crystal_snap',r.restPose.Position,{pitch=1+hits*.12})
+  feedback:seamBurst(r,now,strength)
+  cameraBeat('Fracture',r.restPose.Position,now,.6+hits*.25)
+ end
+ function self:tap(r,now)
+  local rig=self.rigs[r];if not rig then return end
+  rig.tapAt=now
+  self:crack(r,now,math.min(Mining.OPEN_HITS,(rig.hits or 0)+1))
  end
  function self:update(r,now)
   local source=r.source
@@ -9617,6 +9708,15 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
   local progress=geode and (source:GetAttribute('CrackProgress') or 0) or (ready or opening) and 1 or 0
   local near=r.restPose and BeamVFX.near(r.restPose.Position,100)
   local rig=self.rigs[r]
+  local tierIndex=source:GetAttribute('GeodeTier')
+  if broken and tierIndex and not r.tierRevealed and source:GetAttribute('OpenOwner')~=nil then
+   r.tierRevealed=true
+   local at=r.restPose and r.restPose.Position or source.Position
+   if (source:GetAttribute('CrystalBreakAt') or now)>now-1.5 then
+    V.reveal(parent,at,tierIndex,source:GetAttribute('GeodeGems') or 1,
+     source:GetAttribute('OpenOwner')==game:GetService('Players').LocalPlayer.UserId and audio or nil,cameraBeat,now)
+   end
+  end
   if not near or broken or not (geode or ready or opening) then self:remove(r);return end
   if source:GetAttribute('SealedDrop') then
    if not rig then
@@ -9629,11 +9729,29 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
     motes.Parent=root;rig={root=root,light=light,motes=motes};self.rigs[r]=rig;self.count+=1
    end
    local reduced=BeamVFX.reduced()
+   rig.baseSize=rig.baseSize or r.view.Size
+   local hits=source:GetAttribute('OpenHits') or 0
+   local hitAt=source:GetAttribute('OpenHitAt') or 0
+   if hits>(rig.hits or 0) then
+    rig.hits=hits
+    -- Skip the echo of a tap this client already predicted.
+    if math.abs((rig.tapAt or -10)-now)>.35 then self:crack(r,now,hits) end
+   end
    rig.motes.Enabled=not reduced and now>=(source:GetAttribute('ReadyAt') or 0)
-   local t=opening and math.clamp(1-(opening-now)/.85,0,1) or 0
-   rig.light.Brightness=.35+t*1.4
+   rig.motes.Rate=1+(rig.hits or 0)*4
+   local t=opening and math.clamp(1-(opening-now)/.32,0,1) or 0
+   local crack=math.clamp((rig.hits or 0)/Mining.OPEN_HITS,0,1)
+   rig.light.Color=r.baseColor or rig.light.Color
+   rig.light.Range=5+crack*9
+   rig.light.Brightness=.35+crack*2.2+t*2
+   -- Squash-and-stretch punch on every tap.
+   local punchAge=now-math.max(rig.tapAt or -10,hitAt)
+   local punch=reduced and 0 or math.exp(-punchAge*14)*math.cos(punchAge*38)
+   r.view.Size=rig.baseSize*Vector3.new(1+.16*punch,1-.2*punch,1+.16*punch)*(1+.06*crack+.12*t)
+   if r.baseColor then r.view.Color=(r.stoneColor or Color3.fromRGB(76,67,58)):Lerp(r.baseColor,crack*.45+t*.4) end
    if r.restPose then
-    r.view.CFrame=r.restPose*(not reduced and opening and CFrame.Angles(math.sin(now*48)*.035*t,0,math.cos(now*43)*.045*t) or CFrame.identity)
+    local shake=reduced and 0 or math.max(t,.5*math.exp(-punchAge*10))
+    r.view.CFrame=r.restPose*CFrame.Angles(math.sin(now*48)*.05*shake,0,math.cos(now*43)*.06*shake)
     if opening and rig.opening~=opening then rig.opening=opening;audio:play('geode_windup',r.restPose.Position,{level=.7}) end
     if ready and now>=(source:GetAttribute('ReadyAt') or 0) then audio:setLoop(rig,'gem_ready',r.restPose.Position,.35,.77) else audio:stopLoop(rig) end
    end
@@ -16208,6 +16326,27 @@ local function showSelection(self,r,selected,marked)
  if not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
  r.label.AlwaysOnTop=selected;r.label.MaxDistance=selected and 100 or 62
 end
+-- Short pop-up word for a lucky drop or collected gem.
+local function popText(parent,position,text,color,size)
+ local anchor=Instance.new('Part');anchor.Name='PickupPop';anchor.Anchored=true;anchor.Transparency=1
+ anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.Size=Vector3.one*.1;anchor.Position=position;anchor.Parent=parent
+ local gui=Instance.new('BillboardGui');gui.Size=UDim2.fromOffset(size*5,size*1.3);gui.AlwaysOnTop=true;gui.LightInfluence=0
+ gui.MaxDistance=120;gui.Adornee=anchor;gui.Parent=anchor
+ local label=Instance.new('TextLabel');label.BackgroundTransparency=1;label.Size=UDim2.fromScale(1,1)
+ label.Font=Enum.Font.FredokaOne;label.TextScaled=true;label.Text=text;label.TextColor3=color
+ label.TextStrokeTransparency=0;label.TextStrokeColor3=Color3.fromRGB(25,18,10);label.Parent=gui
+ local scale=Instance.new('UIScale');scale.Scale=.3;scale.Parent=gui
+ local started=os.clock();local connection
+ connection=game:GetService('RunService').RenderStepped:Connect(function()
+  local age=os.clock()-started
+  if not anchor.Parent or age>=1.2 then connection:Disconnect();anchor:Destroy();return end
+  local pop=math.clamp(age/.16,0,1)
+  scale.Scale=pop<1 and .3+.95*(1-(1-pop)^3) or 1+.25*math.exp(-(age-.16)*10)*math.cos((age-.16)*28)
+  anchor.Position=position+Vector3.yAxis*age*1.6
+  local fade=math.clamp((age-.85)/.35,0,1);label.TextTransparency=fade;label.TextStrokeTransparency=fade
+ end)
+end
+V.popText=popText
 function V.new(root,parent,audio,reducedMotion)
  GemAppearance.prepare()
  local player=Players.LocalPlayer
@@ -16222,7 +16361,7 @@ function V.new(root,parent,audio,reducedMotion)
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
   source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
-  local r={view=view,faceted=faceted,gemOpacity=view:GetAttribute('GemOpacity') or .76,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
+  local r={lucky=source:GetAttribute('LuckyMultiplier'),view=view,faceted=faceted,gemOpacity=view:GetAttribute('GemOpacity') or .76,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    stone=source:GetAttribute('StoneCargo')==true,rareGem=source:GetAttribute('RareGemReward')==true,samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
@@ -16348,6 +16487,15 @@ function V:update(dt,now)
    heldPose=r.view.CFrame
    r.pos=heldPose.Position
   elseif r.collectAt then
+   if (r.rareGem or r.lucky) and not r.collectCue and r.owner==self.player.UserId then
+    r.collectCue=true
+    self.gemChain=now-(self.lastGemAt or -10)<1.2 and math.min(8,(self.gemChain or 0)+1) or 0
+    self.lastGemAt=now
+    local at=r.drawPosition or r.pos
+    if self.audio then self.audio:play('sale_gem',at,{pitch=1.25+self.gemChain*.09,level=1.1}) end
+    if r.rareGem then popText(self.parent,at+Vector3.yAxis*1.5,'+GEM',r.effectColor or r.color,20) end
+    if not reducedEffects and not reducedMotion then RoleVisuals.ImpactParticles(at,r.effectColor or r.color,.7,'GemReward') end
+   end
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
    local target=backpack(owner,r.collectTarget or r.collectFrom)
@@ -16395,6 +16543,19 @@ function V:update(dt,now)
    local docking=live and source:GetAttribute('CourierDocking')~=nil
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
+   if r.lucky and not r.luckyCue and displayAt>=r.born then
+    r.luckyCue=true
+    local launch=source:GetAttribute('OreLaunchOrigin') or r.pos
+    if age<.5 and cameraPosition and (cameraPosition-launch).Magnitude<110 and r.owner==self.player.UserId then
+     local gold=Color3.fromRGB(255,206,64)
+     popText(self.parent,launch+Vector3.yAxis*2,'LUCKY x'..r.lucky..'!',gold,r.lucky>=10 and 34 or 26)
+     if self.audio then self.audio:play('gem_reveal',launch,{pitch=r.lucky>=10 and 1.5 or 1.2,level=.9}) end
+     if not reducedEffects and not reducedMotion then
+      RoleVisuals.ImpactParticles(launch,gold,r.lucky>=10 and 2.2 or 1.3,'GemReward')
+      RoleVisuals.Pulse(launch,gold,.5,r.lucky>=10 and 9 or 5.5,.45)
+     end
+    end
+   end
    if r.rareGem and not r.rewardCue and displayAt>=r.born then
     r.rewardCue=true
     local launch=source:GetAttribute('OreLaunchOrigin') or r.pos
@@ -17498,6 +17659,10 @@ function V:show(action,target,point,height,key,alreadyHighlighted)
  self.key.Text=key;self.caption.Text=action
  if target and not alreadyHighlighted then self.highlight.Adornee=target;self.highlight.Enabled=true end
 end
+function V:hover(target)
+ if self.gui.Enabled then return end
+ self.highlight.Adornee=target;self.highlight.Enabled=target~=nil
+end
 function V:select()
  if not self.point then return end
  local player=game:GetService('Players').LocalPlayer
@@ -17698,6 +17863,33 @@ function V:readyRock(resources)
   end
  end
  return self.ready
+end
+-- Tap-to-crack: the sealed geode nearest a screen point, within reach and sight.
+function V:geodeAt(resources,point)
+ local camera=workspace.CurrentCamera
+ local root=self.options.player.Character and self.options.player.Character:FindFirstChild('HumanoidRootPart')
+ if not camera or not root or not point then return nil end
+ local now=workspace:GetServerTimeNow();local best,bestScore=nil,math.huge
+ for _,r in pairs(resources) do
+  local s=r.source
+  if s:GetAttribute('SealedDrop') and s:GetAttribute('OpenReady') and now>=(s:GetAttribute('ReadyAt') or 0)
+   and s:GetAttribute('OpenOwner')==self.options.player.UserId and not s:GetAttribute('OpeningAt')
+   and r.view and r.view.Parent and (s.Position-root.Position).Magnitude<=Mining.OPEN_REACH then
+   local screen,visible=camera:WorldToViewportPoint(r.view.Position)
+   if visible then
+    local edge=camera:WorldToViewportPoint(r.view.Position+camera.CFrame.RightVector*r.view.Size.Magnitude*.5)
+    local radius=math.max(44,(Vector2.new(edge.X,edge.Y)-Vector2.new(screen.X,screen.Y)).Magnitude*1.25)
+    local d=(Vector2.new(screen.X,screen.Y)-point).Magnitude
+    if d<=radius and d/radius<bestScore then
+     local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
+     params.FilterDescendantsInstances={self.options.player.Character,self.options.parent}
+     local hit=workspace:Raycast(root.Position,s.Position-root.Position,params)
+     if not hit or hit.Instance==s then best=r;bestScore=d/radius end
+    end
+   end
+  end
+ end
+ return best
 end
 function V:readyPickup(records)
  local previous=self.pickupId;self.pickupId=nil;local best=math.huge
@@ -19875,8 +20067,7 @@ local mouse=player:GetMouse()
   end
   if selectorView.draft then
    if not selectorView.pending then return 'Confirm plot' end
-  elseif selectorView:readyRock(resources) then return 'Open geode'
-  elseif selectorView:readyPickup(pickupView.records) then return 'Pick up' end
+  end
  end
  pickupView.pickupFocus=function()
   return available()=='Pick up' and selectorView.pickupId or nil
@@ -19912,7 +20103,29 @@ local mouse=player:GetMouse()
   return false
  end
  interaction=SelectorView.Interaction.new(gui,localFX,selectorView.performFieldAction)
- connect(RunService.RenderStepped,function() showAction(available()) end)
+ -- Sealed geodes: no prompt. Hovering outlines the geode; clicks and taps crack it.
+ local function pointerPoint()
+  local camera=workspace.CurrentCamera;if not camera then return nil end
+  local input=UIS:GetLastInputType()
+  if input==Enum.UserInputType.Touch or input.Name:match('^Gamepad') then return camera.ViewportSize*.5 end
+  return UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
+ end
+ selectorView.crackGeode=function(point)
+  if menusVisible() or not profile or not profile.run then return false end
+  local r=selectorView:geodeAt(resources,point or pointerPoint())
+  if not r then return false end
+  command:FireServer('OpenResource',{resourceId=r.id,runId=profile.run.id})
+  local openings=rockDamage.feedback and rockDamage.feedback.openings
+  if openings and openings.tap then openings:tap(r,workspace:GetServerTimeNow()) end
+  return true
+ end
+ connect(RunService.RenderStepped,function()
+  local action=available();showAction(action)
+  if not action then
+   local hovered=not menusVisible() and profile and selectorView:geodeAt(resources,pointerPoint())
+   interaction:hover(hovered and (hovered.shellModel or hovered.view) or nil)
+  end
+ end)
 
 end)()
 connect(RunService.RenderStepped,function(dt)
@@ -19930,6 +20143,7 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
+ if selectorView.crackGeode and selectorView.crackGeode(Vector2.new(position.X,position.Y)) then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
  if selectorView:aimPreview(ray) then return end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
@@ -19957,6 +20171,7 @@ connect(UIS.InputBegan,function(input,processed)
  if input.UserInputType==Enum.UserInputType.MouseButton1 then
   local point=UIS:GetMouseLocation()
   if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
+   if selectorView.crackGeode and selectorView.crackGeode(point-game:GetService('GuiService'):GetGuiInset()) then return end
    if selectorView:aimPreview(mouse.UnitRay) then return end
    commandView:beginDrag();assignField(mouse.Target)
   end
@@ -19965,6 +20180,7 @@ connect(UIS.InputBegan,function(input,processed)
  local key=input.KeyCode
  if menusVisible() and not modal.Visible then return end
  if (key==Enum.KeyCode.E or key==Enum.KeyCode.ButtonX) and selectorView.performFieldAction() then return end
+ if (key==Enum.KeyCode.E or key==Enum.KeyCode.ButtonR1) and selectorView.crackGeode and selectorView.crackGeode() then return end
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
  elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then
   local cancelled=selectorView:cancelPreview()

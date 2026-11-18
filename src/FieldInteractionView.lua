@@ -36,6 +36,10 @@ function V:show(action,target,point,height,key,alreadyHighlighted)
  self.key.Text=key;self.caption.Text=action
  if target and not alreadyHighlighted then self.highlight.Adornee=target;self.highlight.Enabled=true end
 end
+function V:hover(target)
+ if self.gui.Enabled then return end
+ self.highlight.Adornee=target;self.highlight.Enabled=target~=nil
+end
 function V:select()
  if not self.point then return end
  local player=game:GetService('Players').LocalPlayer

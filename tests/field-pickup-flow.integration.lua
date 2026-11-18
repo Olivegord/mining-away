@@ -260,18 +260,11 @@ assert(not scene.rockCanSolidify({part=rock},{pl}),'a growing rock would trap a 
 rock.CFrame=CFrame.new(center)
 assert(scene.rockCanSolidify({part=rock},{pl}),'a clear rock cannot turn solid')
 local near,nearId=loose(hr.Position-Vector3.yAxis*2)
-local spare,spareId=loose(hr.Position+Vector3.xAxis*4-Vector3.yAxis*2)
 workspace.Raycast=function(_,_,_,params)
  return not table.find(params.FilterDescendantsInstances,rock) and {Instance=rock} or nil
 end
-for _=1,12 do now+=C.Tick;pickupStep(C.Tick) end
-assert(pickups[nearId] and not near.homing and Pro.cargoUnits(data(p))==0,'nearby rock collected without E')
-assert(pl:GetAttribute('MA_OrePickup')==nearId,'reachable ore did not expose its pickup action')
-commandPlayer(pl,'PickupOre',nearId)
-for _=1,12 do now+=C.Tick;pickupStep(C.Tick) end
-assert(not pickups[nearId] and Pro.cargoUnits(data(p))==1,'E pickup did not pass a solid mineable rock')
-assert(pickups[spareId] and not spare.homing,'one pickup press pulled more than one rock')
-spare.part:Destroy();pickups[spareId]=nil
+for _=1,math.ceil((Workshop.COMPACTOR_PAIR_WINDOW+1)/C.Tick) do now+=C.Tick;pickupStep(C.Tick) end
+assert(not pickups[nearId] and Pro.cargoUnits(data(p))==1,'nearby rock did not fly into the bag on its own')
 workspace.Raycast=initialRay
 
 do
@@ -288,9 +281,7 @@ do
  workspace.Raycast=initialRay
  -- Move before the cached obstructed ray expires; collection should respond now.
  pl.Character:PivotTo(CFrame.new(hr.Position+Vector3.zAxis*1.5))
- now+=.12;pickupStep(C.Tick)
- assert(pl:GetAttribute('MA_OrePickup')==offeredId and d.orePickupId==offeredId and not offered.homing,'the prompt preempted a courier before E')
- commandPlayer(pl,'PickupOre',offeredId)
+ for _=1,math.ceil((Workshop.COMPACTOR_PAIR_WINDOW+1)/C.Tick) do now+=C.Tick;pickupStep(C.Tick);if not d.orePickupId then break end end
  assert(not d.orePickupId and not d.oreDock and not offered.part:GetAttribute('CourierDocking'),'nearby player did not take over a reserved pickup')
  for _=1,12 do now+=C.Tick;pickupStep(C.Tick) end
  assert(not pickups[offeredId] and Pro.cargoUnits(data(p))==2 and Pro.droneCargoUnits(data(p),d.id)==0,'pickup did not credit the player exactly once')

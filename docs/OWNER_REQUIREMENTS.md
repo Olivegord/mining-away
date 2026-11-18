@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — satisfying gems, no E to open geodes, a simpler Roblox loop with luck
+
+The owner asks to make the game more satisfying and fun, make gems very satisfying, and rework the weird "press E to open the crystal" interaction. They add that this includes making the game loop a lot better: simpler, befitting a Roblox game, including gambling, and fun. Gambling here is interpreted as earned in-game luck (loot tiers, lucky rolls) — no Robux or paid random items, per the standing rule. Routine saves only; no release requested.
+
 ## November 18 — make the game more fun, colorful and less flat
 
 The owner says the game is not much fun yet. Polish effects, fix bugs, and make it more colorful and less flat while keeping it very simple. Use particle effects. This supersedes the plain gray cube look for the flat-field fleet; cubes stay cubes. Routine saves only; no release requested.

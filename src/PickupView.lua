@@ -264,6 +264,27 @@ local function showSelection(self,r,selected,marked)
  if not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
  r.label.AlwaysOnTop=selected;r.label.MaxDistance=selected and 100 or 62
 end
+-- Short pop-up word for a lucky drop or collected gem.
+local function popText(parent,position,text,color,size)
+ local anchor=Instance.new('Part');anchor.Name='PickupPop';anchor.Anchored=true;anchor.Transparency=1
+ anchor.CanCollide=false;anchor.CanQuery=false;anchor.CanTouch=false;anchor.Size=Vector3.one*.1;anchor.Position=position;anchor.Parent=parent
+ local gui=Instance.new('BillboardGui');gui.Size=UDim2.fromOffset(size*5,size*1.3);gui.AlwaysOnTop=true;gui.LightInfluence=0
+ gui.MaxDistance=120;gui.Adornee=anchor;gui.Parent=anchor
+ local label=Instance.new('TextLabel');label.BackgroundTransparency=1;label.Size=UDim2.fromScale(1,1)
+ label.Font=Enum.Font.FredokaOne;label.TextScaled=true;label.Text=text;label.TextColor3=color
+ label.TextStrokeTransparency=0;label.TextStrokeColor3=Color3.fromRGB(25,18,10);label.Parent=gui
+ local scale=Instance.new('UIScale');scale.Scale=.3;scale.Parent=gui
+ local started=os.clock();local connection
+ connection=game:GetService('RunService').RenderStepped:Connect(function()
+  local age=os.clock()-started
+  if not anchor.Parent or age>=1.2 then connection:Disconnect();anchor:Destroy();return end
+  local pop=math.clamp(age/.16,0,1)
+  scale.Scale=pop<1 and .3+.95*(1-(1-pop)^3) or 1+.25*math.exp(-(age-.16)*10)*math.cos((age-.16)*28)
+  anchor.Position=position+Vector3.yAxis*age*1.6
+  local fade=math.clamp((age-.85)/.35,0,1);label.TextTransparency=fade;label.TextStrokeTransparency=fade
+ end)
+end
+V.popText=popText
 function V.new(root,parent,audio,reducedMotion)
  GemAppearance.prepare()
  local player=Players.LocalPlayer
@@ -278,7 +299,7 @@ function V.new(root,parent,audio,reducedMotion)
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
   source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
-  local r={view=view,faceted=faceted,gemOpacity=view:GetAttribute('GemOpacity') or .76,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
+  local r={lucky=source:GetAttribute('LuckyMultiplier'),view=view,faceted=faceted,gemOpacity=view:GetAttribute('GemOpacity') or .76,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    stone=source:GetAttribute('StoneCargo')==true,rareGem=source:GetAttribute('RareGemReward')==true,samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
@@ -404,6 +425,15 @@ function V:update(dt,now)
    heldPose=r.view.CFrame
    r.pos=heldPose.Position
   elseif r.collectAt then
+   if (r.rareGem or r.lucky) and not r.collectCue and r.owner==self.player.UserId then
+    r.collectCue=true
+    self.gemChain=now-(self.lastGemAt or -10)<1.2 and math.min(8,(self.gemChain or 0)+1) or 0
+    self.lastGemAt=now
+    local at=r.drawPosition or r.pos
+    if self.audio then self.audio:play('sale_gem',at,{pitch=1.25+self.gemChain*.09,level=1.1}) end
+    if r.rareGem then popText(self.parent,at+Vector3.yAxis*1.5,'+GEM',r.effectColor or r.color,20) end
+    if not reducedEffects and not reducedMotion then RoleVisuals.ImpactParticles(at,r.effectColor or r.color,.7,'GemReward') end
+   end
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
    local target=backpack(owner,r.collectTarget or r.collectFrom)
@@ -451,6 +481,19 @@ function V:update(dt,now)
    local docking=live and source:GetAttribute('CourierDocking')~=nil
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
+   if r.lucky and not r.luckyCue and displayAt>=r.born then
+    r.luckyCue=true
+    local launch=source:GetAttribute('OreLaunchOrigin') or r.pos
+    if age<.5 and cameraPosition and (cameraPosition-launch).Magnitude<110 and r.owner==self.player.UserId then
+     local gold=Color3.fromRGB(255,206,64)
+     popText(self.parent,launch+Vector3.yAxis*2,'LUCKY x'..r.lucky..'!',gold,r.lucky>=10 and 34 or 26)
+     if self.audio then self.audio:play('gem_reveal',launch,{pitch=r.lucky>=10 and 1.5 or 1.2,level=.9}) end
+     if not reducedEffects and not reducedMotion then
+      RoleVisuals.ImpactParticles(launch,gold,r.lucky>=10 and 2.2 or 1.3,'GemReward')
+      RoleVisuals.Pulse(launch,gold,.5,r.lucky>=10 and 9 or 5.5,.45)
+     end
+    end
+   end
    if r.rareGem and not r.rewardCue and displayAt>=r.born then
     r.rewardCue=true
     local launch=source:GetAttribute('OreLaunchOrigin') or r.pos

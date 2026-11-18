@@ -1048,6 +1048,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Color=color
  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
  chip:SetAttribute('StoneCargo',drop.stone==true);chip:SetAttribute('RareGemReward',drop.rareGem==true)
+ if drop.lucky then chip:SetAttribute('LuckyMultiplier',drop.lucky) end
  if drop.stone then chip.Color=drop.compactorOutput and color or Color3.fromRGB(88,84,81):Lerp(color,.32);chip.Material=Enum.Material.Slate end
  chip.MaterialVariant='';chip.Reflectance=(drop.compacted or drop.stone) and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
  if drop.raw then
@@ -1124,7 +1125,8 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local mass=math.max(1,math.floor(amount/tier.value+.5))
   local dust=math.min(1000000,mass*(crystal and 100 or Workshop.PITY_PERCENT))
   local stoneUnits=crystal and 0 or math.min(1000000,mass*100)
-  local value=math.clamp(math.floor(amount*(crystal and 8 or .3)),1,1000000)
+  local lucky=not r.gemReward and Mining.luckyMultiplier(math.random()) or 1
+  local value=math.clamp(math.floor(amount*(crystal and 8 or .3)*lucky),1,1000000)
   profile.run.yieldRemainders[material]=amount-math.floor(amount)
   r.cargoProduced=true;r.extractedOre=r.ore;r.part:SetAttribute('CargoReward',crystal and 'Gem' or 'Stone');r.part:SetAttribute('ExtractedOre',r.ore)
   local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
@@ -1138,7 +1140,7 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,
    material=cargo,tierMaterial=material,value=Workshop.saleItem(cargo).cash,
    stone=not crystal,rareGem=crystal,units=1,raw=true,oreArc=true,finishing=not extraction,
-   floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14,modifiers=r.modifiers},
+   floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14,modifiers=r.modifiers,lucky=lucky>1 and lucky or nil},
    position,Vector3.new(vx,vy,vz),r.field.color)
   p.dirty=true;p.publishDirty=true;return
  end
@@ -1598,8 +1600,10 @@ local function pickupStep(dt)
    if updatePrompt and drop.part:GetAttribute('ManualPickupReady')~=(withinReach==true) then drop.part:SetAttribute('ManualPickupReady',withinReach==true) end
    local playerPull=drop.playerPickup and withinReach
    if drop.playerPickup and not playerPull then drop.playerPickup=nil end
-   if updatePrompt and withinReach and not playerPull then
-    scene.offerOrePickup(p,id,(target-from).Magnitude)
+   if updatePrompt and withinReach and not playerPull and not drop.pressCarrier and not scene.pressPairingWindow(p,drop,from) then
+    -- Simulator-style magnet: anything you walk near flies into the bag.
+    scene.requestOrePickup(p,id)
+    playerPull=drop.playerPickup==true
    end
    if playerPull then
     reach=naturalReach
@@ -4588,10 +4592,10 @@ function scene.leaveGeode(d,rock,specialist)
  r.openActor={owner=d.owner,role=d.role,stats=Pro.clone(d.stats)};r.openSpecialist=specialist
  r.readyAt=now+.75;r.spawnAt=now-2;r.hp=1;r.consumableWorked=rock.consumableWorked
  -- Roll once on the server; do not replicate the contents before opening.
- local roll=math.random();r.rewardCount=roll<.80 and 1 or roll<.97 and 2 or 3
- r.modifiers=rock.modifiers or 0
- if math.random()<.18 then r.modifiers=bit32.bor(r.modifiers,Mining.ROCK_MODIFIERS.Big) end
- if math.random()<.12 then r.modifiers=bit32.bor(r.modifiers,Mining.ROCK_MODIFIERS.Charged) end
+ local tierIndex,tier=Mining.rollGeodeTier(math.random())
+ r.geodeTier=tierIndex;r.rewardCount=tier.gems
+ r.modifiers=bit32.bor(rock.modifiers or 0,tier.modifiers)
+ r.openHits=0
  r.part.Color=Color3.fromRGB(76,67,58);r.part.Material=Enum.Material.Slate
  r.part:SetAttribute('SealedDrop',true);r.part:SetAttribute('OpenReady',true)
  r.part:SetAttribute('OpenOwner',d.owner);r.part:SetAttribute('OpenReadyAt',now)
@@ -4607,7 +4611,16 @@ function scene.openResource(p,payload)
  if not r or not r.openReady or r.openingAt or r.paid or now<r.readyAt or not r.part.Parent or not hr
   or r.openOwner~=p.player.UserId or r.openRun~=data(p).run.id or not playerCanMine(p,r.field)
   or (hr.Position-r.position).Magnitude>Mining.OPEN_REACH or not abilityLineOfSight(p,hr.Position,r) then return end
- r.openingAt=now+(r.kind=='Geode' and .85 or .24)
+ -- Each tap cracks the shell further; the last tap starts a short burst.
+ if r.sealedDrop then
+  if now<(r.openHitAt or -math.huge)+Mining.OPEN_HIT_GAP then return end
+  r.openHits=(r.openHits or 0)+1;r.openHitAt=now
+  r.part:SetAttribute('OpenHits',r.openHits);r.part:SetAttribute('OpenHitAt',now)
+  if r.openHits<Mining.OPEN_HITS then return end
+  r.openingAt=now+.32
+ else
+  r.openingAt=now+(r.kind=='Geode' and .85 or .24)
+ end
  r.part:SetAttribute('OpeningAt',r.openingAt)
  r.part:SetAttribute('OpenReady',false)
 end
@@ -4625,6 +4638,7 @@ function scene.stepGeode(r)
    r.splitAt=now
    r.part:SetAttribute('HP',0);r.part:SetAttribute('CrystalSplitAt',now);r.part:SetAttribute('CrystalBreakAt',now)
    r.part:SetAttribute('CrystalBreakOwner',r.openOwner);r.part:SetAttribute('BreakSerial',1)
+   if r.geodeTier then r.part:SetAttribute('GeodeTier',r.geodeTier);r.part:SetAttribute('GeodeGems',r.rewardCount or 1) end
    r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false
    local count=r.rewardCount or 1
    for _=1,count do r.cargoProduced=nil;award(r.openActor,r,r.openSpecialist,false) end

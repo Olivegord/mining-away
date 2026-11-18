@@ -53,16 +53,19 @@ pl.Character:PivotTo(CFrame.new(center+Vector3.new(0,3,5)))
 workspace.Raycast=function() return {Instance=bed} end
 scene.openResource(p,{runId=run.id,resourceId=g.id});assert(not g.openingAt,'opened through wall')
 workspace.Raycast=function() return nil end
-scene.openResource(p,{runId=run.id,resourceId=g.id});local opens=g.openingAt;assert(opens and opens-now>.8)
-scene.openResource(p,{runId=run.id,resourceId=g.id});assert(g.openingAt==opens)
+scene.openResource(p,{runId=run.id,resourceId=g.id});assert(not g.openingAt and g.openHits==1,'first tap must only crack the shell')
+scene.openResource(p,{runId=run.id,resourceId=g.id});assert(g.openHits==1,'taps faster than the gap counted twice')
+now+=.2;scene.openResource(p,{runId=run.id,resourceId=g.id});assert(not g.openingAt and g.part:GetAttribute('OpenHits')==2)
+now+=.2;scene.openResource(p,{runId=run.id,resourceId=g.id});local opens=g.openingAt;assert(opens and opens-now>.3)
+now+=.2;scene.openResource(p,{runId=run.id,resourceId=g.id});assert(g.openingAt==opens)
 scene.stepGeode(g);assert(not g.paid)
-now=opens+.01;scene.stepGeode(g);assert(g.paid)
+now=opens+.01;scene.stepGeode(g);assert(g.paid and g.part:GetAttribute('GeodeTier')==1 and g.part:GetAttribute('GeodeGems')==1,'tier not revealed on burst')
 count=0;local gems=0
 for _,drop in pairs(pickups) do count+=1;if drop.rareGem then gems+=1;assert(drop.tierMaterial=='Amber') end end
 assert(count==2 and gems==1 and #field.respawnQueue==1 and discoveries==1,'opening duplicated progress or wrong reward')
 scene.stepGeode(g);scene.openResource(p,{runId=run.id,resourceId=g.id})
 local after=0;for _ in pairs(pickups) do after+=1 end;assert(after==count)
-for _,case in ipairs({{.85,2},{.99,3}}) do
+for _,case in ipairs({{.70,2},{.90,3},{.97,4},{.995,6}}) do
  math.random=function(...) if select('#',...)==0 then return case[1] end;return oldRandom(...) end
  local drop=scene.leaveGeode(miner,original,false);assert(drop.rewardCount==case[2])
  local saved=run.id;run.id='new';scene.stepGeode(drop);assert(drop.paid and drop.removeAt==now);run.id=saved
@@ -72,7 +75,7 @@ local plain=rock(-4);station(plain);hitResource(miner,plain,10000)
 assert(plain.paid and plain.cargoProduced and not plain.openReady and #field.respawnQueue==2)
 math.random=oldRandom
 local spawned,_,native=spawnResource(field,'Geode');assert(spawned and native.kind=='Crystal','field still spawns mining challenge geodes')
-print('PASS full stone break/payout, separate sealed discovery, hidden variable rewards, immediate replenishment, worker release, E range/owner/run/LOS/windup, duplicate guards, abandoned cleanup')
+print('PASS full stone break/payout, separate sealed discovery, hidden variable rewards, immediate replenishment, worker release, tap range/owner/run/LOS/three-crack burst, loot tiers, duplicate guards, abandoned cleanup')
 
 field.cfg.ReferenceCrystals=true
 local lastSize,lastCash=0,0
