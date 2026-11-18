@@ -982,7 +982,20 @@ local function registerDrone(source)
   return false
  end
  if not cube and source:GetAttribute('RamielHullAvailable') and not RS:FindFirstChild('RamielHull') then return false end
+ if cube then
+  -- A cube's parts can arrive a moment after the model itself. Cloning early
+  -- used to adopt the tiny invisible emitter as the hull, leaving the drone
+  -- permanently invisible while its beam and battery bar kept working. Wait
+  -- for the real hull and emitter; the pending list retries.
+  local hull=source:FindFirstChild('Hull');local nozzle=source:FindFirstChild('Emmiter')
+  if not (hull and hull:IsA('BasePart') and nozzle and nozzle:IsA('BasePart')) then return false end
+ end
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
+ if cube then
+  local hull=clone:FindFirstChild('Hull')
+  if not hull or not hull:IsA('BasePart') then clone:Destroy();return false end
+  clone.PrimaryPart=hull;hull.Transparency=0
+ end
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'

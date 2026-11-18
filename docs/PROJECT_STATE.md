@@ -1,5 +1,11 @@
 # Shared project context
 
+## November 18 — invisible cubes: cause found from the visibility log and fixed
+
+The owner sent a screenshot of four beams and battery bars with one visible cube. The `[DroneVisibility]` log from that Play showed drones 1–3 with hull `Transparency 1.00` and camera fade 0 in every state. Cause: `registerDrone` in `src/Client.lua` cloned a cube's server model as soon as its attributes arrived. When the `Hull` part had not arrived yet, the fallback picked the first BasePart, the 0.05-stud transparent `Emmiter`, as the hull, and the drone stayed invisible for the session while its beam and battery bar worked. Registration now waits for both `Hull` and `Emmiter` (the pending list retries) and uses `Hull` explicitly. The earlier camera-fade cap and backdrop move were real but secondary. The log line stays in place.
+
+Not verified in Play by this session (the owner was in Play; an agent-started Play is not allowed). Flat fields, mining flight, field pickup flow, beam VFX and fun FX pass with API doubles; none of them exercises the arrival race. Also in this revision: glitch colors switch outright again ("no crossfades"). Install details are in `docs/studio-installed.json` once Studio returns to Edit.
+
 ## November 18 — VFX fifth pass: fully eased charge and release; drone visibility self-check
 
 Owner asked for no hard edges or linear cuts anywhere in the effect, and reported drones still occasionally invisible. See [VFX instructions](VFX_INSTRUCTIONS.md). The glitch now crossfades colors and melts its blotches, layers hand over through blends, and the release is eased. The charge's dark backdrop was covering neighboring drones and has been moved far behind them. The remaining cause of invisible drones is not known: this session cannot start Play, and reading the code did not settle it. `src/Client.lua` now logs `[DroneVisibility] drone <id> in state <state>: <reason>` when a cube is hidden, see-through, tiny or drawn far from its server position, at most once every eight seconds per drone. **Next step:** after an owner playtest in which a drone vanishes, read the Studio output and fix from that evidence.
