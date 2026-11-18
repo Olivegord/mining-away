@@ -1,5 +1,11 @@
 # Shared project context
 
+## November 17 — quarry lasers fire on approach
+
+Strikers begin charging within 2.2 studs of their assigned hover station when the rock is ready and in line of sight. The base ignition still takes 0.10 seconds, and the drone keeps moving toward the station while it cuts. The server uses the same range for startup and damage validation. A production logic check measured the first cut outside the previous one-stud gate and verified that the drone settled while cutting.
+
+Shared DRONEREVOLUTION was already open in Edit, place 124078027733625, universe 10774898335. All three Script Sync roots reported Errored. A guarded Script Editor update applied only the mining change, Save to Roblox succeeded, and all seven Sources matched canonical `build/DRONE_GAME.rbxl` afterward. Canonical SHA-256 `f829510771236ee9160492d0c257fdf832f7595ecf96d11cd3cba7c2322b5cab`. The next shared Studio Play loads early ignition. No player release or agent-started Play. Mining flight, observer and field pickup checks passed with API doubles. Native appearance still needs a Play check.
+
 ## November 17 — lighter drone flight and faster quarry lasers
 
 Ported the distance-eased, speed-capped approach from the older Drone Blower revolution place (136098934779395, universe 10773006567). Server and observer motion use the same thrust-limited controller. Neighbor avoidance, cargo mass and gun recoil carry through the faster steering. A quarry Striker reaches its one-stud mining gate in about 1.18 seconds in a 16-stud straight-line controller check, down from 2.47 seconds. The standard post-arrival ignition is 0.10 seconds, down from 0.20. Charge and release send an immediate state update, and the laser core starts visibly at ignition and reaches full width in 0.12 seconds.

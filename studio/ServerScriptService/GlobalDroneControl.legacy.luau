@@ -11453,6 +11453,9 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
  end
  return selected and {origin=origin,endpoint=endpoint,hits=hits,selected=selected,groundNormal=groundNormal} or nil
 end
+function scene.cutRange(d,r)
+ return r.field.cfg.ContinuousCrystals and d.role=='Striker' and 2.2 or 1
+end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
  local assist=secondary and not abilityOrigin and contactKind=='Aftershock' and r.field.cfg.SelectionOnly==true
@@ -11491,12 +11494,12 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   local primary=d.target
   -- The synchronous primary resolver alone can retain its contact through a
   -- final hit. No saved state/remote can authorize an echo from a retired node.
-  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-(d.workStation or scene.resourceStation(primary,d.targetSlot))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-(d.workStation or scene.resourceStation(primary,d.targetSlot))).Magnitude>scene.cutRange(d,primary) or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
   if assist and primary.processingPrimary~=d.id then return false end
  elseif not clusterFinish then
   local released=special and job.launched
   local station=d.workStation or scene.resourceStation(r,d.targetSlot)
-  if d.target~=r or (d.pos-station).Magnitude>(released and 3 or 1)
+  if d.target~=r or (d.pos-station).Magnitude>(released and 3 or scene.cutRange(d,r))
    or (not clusterHit and not los(released and job.from or d.pos,released and job.contact or r.position,r.part,{droneFolder})) then return false end
  end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
@@ -12573,7 +12576,7 @@ local function committedStation(d,r,dt)
  return d.workStation
 end
 function scene.miningWarmup(d,r)
- -- A quarry cutter starts on its first short ignition beat after arrival.
+ -- Quarry cutters charge during the last part of their approach.
  -- Ignition upgrades can still shorten the beat.
  if r and r.field.cfg.ContinuousCrystals and d.role=='Striker' then return math.max(.05,d.stats.warmup*.25) end
  local definition=DroneCatalog.Types[d.role]
@@ -12595,7 +12598,8 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
  if r then
   if scene.awaitWorkStation(d,p,r,dt) then return end
   local goal=committedStation(d,r,dt);d.state='Travel';move(d,goal,dt)
-  if Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0) and los(d.pos,r.position,r.part,{droneFolder}) then
+  local distance=(d.pos-goal).Magnitude
+  if distance<=scene.cutRange(d,r) and now>=r.readyAt and d.hp>0 and los(d.pos,r.position,r.part,{droneFolder}) then
    d.obstructedAt=nil
    d.warmAt=d.warmAt or now;d.state='Warmup'
    if now-d.warmAt>=scene.miningWarmup(d,r) then
@@ -12606,7 +12610,7 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
    end
   else
    d.warmAt=nil;d.mineCharge=0;d.mining=false
-   if (d.pos-goal).Magnitude<=1 and now>=r.readyAt then
+   if distance<=1 and now>=r.readyAt then
     d.obstructedAt=d.obstructedAt or now
     if now-d.obstructedAt>=2 then
      r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+6;release(d)

@@ -47,6 +47,27 @@ check('warmup has an honest arrival gate and a separate replicated phase',functi
  snapshotDrone(d);assert(d.model:GetAttribute('WarmupDuration')==d.stats.warmup and d.stats.warmup==.4)
  tick(d,4);assert(d.mining and d.state=='Mine' and r.hp<hp)
 end)
+check('quarry laser charges on approach and cuts before reaching its hover station',function()
+ local _,p,roles=fixture();local d=roles.Striker;local r=rock(Vector3.zero)
+ r.field.cfg.ContinuousCrystals=true
+ assert(assignOre(p,d,r))
+ local station=committedStation(d,r)
+ d.pos=station+Vector3.xAxis*6;d.velocity=Vector3.zero
+ local hp=r.hp
+ for _=1,120 do
+  tick(d,1)
+  if d.warmAt then break end
+  assert(r.hp==hp,'cut before charging')
+ end
+ local distance=(d.pos-station).Magnitude
+ assert(d.state=='Warmup' and distance>1 and distance<=2.2 and r.hp==hp)
+ for _=1,12 do tick(d,1);if d.mining then break end end
+ assert(d.state=='Mine' and r.hp<hp and (d.pos-station).Magnitude>1,'laser waited until arrival')
+ assert((station-d.pos):Dot(d.velocity)>0,'laser stopped the approach')
+ tick(d,60)
+ assert(d.mining and (d.pos-station).Magnitude<.15,'flight failed to finish during the cut')
+ r.field.cfg.ContinuousCrystals=nil
+end)
 check('queued orders and nearby owner travel never replace a running job',function()
  local pl,p,roles=fixture();local d=roles.Striker;roles.Charger.hp=0
  local a=rock(Vector3.zero);local b=rock(Vector3.new(10,0,0));assert(assignOre(p,d,a))
