@@ -431,9 +431,9 @@ local function hideOrb(h)
  h.glass.Transparency=1;h.split.Transparency=1
  for _,p in ipairs(h.blotches) do p.Transparency=1 end
 end
--- frame picks the palette entry; blend (0..1) crossfades toward the next entry
--- and melt (0..1) grows and shrinks the blotches, so neither color nor layout
--- ever changes in a single step.
+-- frame picks the palette entry. Colors are exact and never crossfade; melt
+-- (0..1) grows and shrinks the blotches so the layout does not jump. (blend is
+-- kept at 0; it exists only so a crossfade is one argument away if wanted.)
 local function drawOrb(h,center,radius,frame,blend,melt)
  blend=blend or 0;melt=melt or 1
  h.glass.CFrame=CFrame.new(center)
@@ -583,8 +583,9 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
   else frame=(pop-1)*2+2;progress=(u-.55)/.45 end
   if not full then frame=frame+math.floor(now*.9)%4*2 end -- re-ignites vary their colors
   h.frame=frame
-  -- Colors crossfade into the next frame; blotches and wisps melt out and back in.
-  h.blend=smooth((progress-.8)/.2)
+  -- Colors never crossfade (owner): each frame is one exact palette entry. The
+  -- switch lands while the blotches and wisps are melted away, so it is not jarring.
+  h.blend=0
   h.melt=smooth(progress/.22)*(1-smooth((progress-.78)/.22))
   -- A small per-frame shake sells the "glitch".
   local tick=math.floor(now*28)
@@ -809,7 +810,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale,chargeDuration)
    local _,pops=B.glitchPlan(h.duration)
    local remaining=1-smooth(releaseAge/B.GLITCH_TAIL)
    local snap=(h.duration or 1)>=B.FULL_CHARGE and 1 or math.clamp((h.duration or .4)/.4,.45,1)*.7
-   drawOrb(h,focus,B.ORB_RADIUS*k*snap*B.popSize(pops,1)*remaining,h.frame or pops*2,1,remaining)
+   drawOrb(h,focus,B.ORB_RADIUS*k*snap*B.popSize(pops,1)*remaining,h.frame or pops*2,0,remaining)
   else releaseRich(r) end
  end
  if r.rich and r.rich.startup then

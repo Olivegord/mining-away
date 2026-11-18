@@ -1,10 +1,14 @@
 # VFX instructions — owner feedback and implementation
 
+## November 18 — no crossfades
+
+Owner, right after the fifth pass: "no crossfades". The glitch colors are exact palette entries again and switch outright; **do not blend between colors**. The switch is timed to the moment the blotches and wisps have melted away. Everything else from the fifth pass stays: eased sizes, melting blotches, blended handovers of size and radius, feathered spikes, eased release. Read "no hard edges or linear cuts" as being about motion, size and opacity, not color.
+
 ## November 18 — fifth pass: no hard edges or cuts anywhere; invisible-drone work
 
 Owner: "tune the effect so there are no hard edges or linear cuts ANYWHERE", and some drones are still occasionally invisible. **This replaces the older "hard color cuts, never blend" rule.** Nothing in the charge or release may appear, vanish, change color or change size in a single step, and fades use eased curves rather than straight lines.
 
-- Glitch colors crossfade into the next palette frame over the last fifth of each frame; blotches and the RGB-split offset melt out and grow back (`h.blend`, `h.melt`). Each pop grows out of what the previous one shrank to. Wisps melt with the blotches.
+- (Superseded for color, see above.) Glitch colors crossfaded into the next palette frame; blotches and the RGB-split offset melt out and grow back (`h.melt`). Each pop grows out of what the previous one shrank to. Wisps melt with the blotches.
 - The build-up hands over to the glitch through one blend weight (`glitching`), used for void size and ring radius as well as opacity. Rings, wisps and spikes bow out (`final`) before the flash instead of being switched off at ignition.
 - Spikes have a feathered base and tip. Bolt and ribbon heads use the soft glow image.
 - Release: lightning forks swell and fade and overlap by half a beat; shock arcs ease in; cube shrink, flash, void and fragment fades are eased.

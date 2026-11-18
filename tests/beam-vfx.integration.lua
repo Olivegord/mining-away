@@ -213,7 +213,7 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
 end)
-check('neon glitch: long charges pop several times, quick re-ignites pop once, nothing cuts in one step',function()
+check('neon glitch: long charges pop several times, quick re-ignites pop once, exact colors, no size jumps',function()
  local r=BeamVFX.new(root,'Cutter',color)
  local start,count=BeamVFX.glitchPlan(2.6)
  assert(count==4 and start>.7 and start<.75,'a long charge needs four pops of about 0.18 s')
@@ -238,13 +238,14 @@ check('neon glitch: long charges pop several times, quick re-ignites pop once, n
   -- A pop swells from nothing, so the orb is hidden for an instant at each start.
   if glass.Transparency==0 then
    visible+=1
-   -- Colors crossfade between palette frames: no single-step color cut, no size jump.
+   -- Colors are exact palette entries (the owner wants no crossfades); size never jumps.
    local c=glass.Color
-   if lastColor then
-    local delta=math.abs(c.R-lastColor.R)+math.abs(c.G-lastColor.G)+math.abs(c.B-lastColor.B)
-    assert(delta<1.2,'orb color cut in one step ('..delta..')')
-    assert(math.abs(glass.Size.X-lastSize)<.75,'orb size jumped in one step')
+   local exact=false
+   for _,pair in ipairs(BeamVFX.GLITCH_PAIRS) do
+    if math.abs(c.R-pair[1].R)+math.abs(c.G-pair[1].G)+math.abs(c.B-pair[1].B)<1e-4 then exact=true end
    end
+   assert(exact,'orb color was blended between palette entries')
+   if lastColor then assert(math.abs(glass.Size.X-lastSize)<.75,'orb size jumped in one step') end
    lastColor=c;lastSize=glass.Size.X
    assert(glass.Size.X<=2.6,'glitch orb too large')
    seen[string.format('%d,%d,%d',math.floor(c.R*4+.5),math.floor(c.G*4+.5),math.floor(c.B*4+.5))]=true
