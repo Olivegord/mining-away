@@ -42,7 +42,8 @@ end,function(from,to,level,now)
  if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
 end,cameraBeat,function(at) return impactFreeze:holdsNomad(at) end)
 -- Break combo: owned breaks within 1.6 s of each other stack a counter that
--- makes each following shake, sound and confetti burst a little bigger.
+-- makes each following shake and sound a little bigger. Rock breaks use only
+-- the original break particles (no confetti layer).
 do
 local combo={count=0,at=-10}
 local function comboBreak(now)
@@ -71,8 +72,6 @@ local function comboBreak(now)
 end
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism,owned,mineral)
  if owned and not prism then strength*=comboBreak(now) end
- local pop=not prism and Presentation.Fun.mineralColor(mineral)
- if pop then Presentation.Fun.confetti(localFX,position,pop,strength*(owned and 1 or .7)) end
  if prism then
   presentation:crystalKick(position,strength,now,true)
  else
