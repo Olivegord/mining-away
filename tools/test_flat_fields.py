@@ -79,11 +79,11 @@ for _,d in ipairs(p.drones) do
  assert(#d.model:GetChildren()==2 and d.emitter.Transparency==1 and not d.owned.beamVariant)
  local first=scene.followGoal(d,Vector3.new(0,4,0),4,Vector3.zero,C.Tick)
  local jumping=scene.followGoal(d,Vector3.new(0,16,0),4,Vector3.new(4,5,0),C.Tick)
- assert(first.Y==home.Y+14 and first.Y==jumping.Y,'raised cruise plane must stay level across avatar jumps')
+ assert(first.Y==home.Y+scene.cubeCruiseHeight and first.Y==jumping.Y,'raised cruise plane must stay level across avatar jumps')
 end
 local field=patches[6]
 local previous=field.resources[4]
-assert(scene.resourceStation(previous,1).Y>=field.part.Position.Y+field.part.Size.Y*.5+14,'work hover was not raised')
+assert(scene.resourceStation(previous,1).Y>=field.part.Position.Y+field.part.Size.Y*.5+scene.cubeCruiseHeight,'work hover was not raised')
 previous.paid=true;previous.part:Destroy()
 assert(scene.spawnReplacement(field,'Crystal',{siteIndex=4,position=previous.position}))
 local replacement=field.resources[#field.resources]

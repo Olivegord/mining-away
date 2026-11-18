@@ -1,5 +1,15 @@
 # Owner requirements
 
+## November 18 — game direction: mining feel first, automation that brings the work to you, a clean view
+
+The owner rejected the three-click geode opening. After a design discussion they set the direction below and asked for all of it ("do everything"). Routine saves only; no release requested.
+
+- **Mining feel is the most important thing.** The owner loves watching rocks explode with screenshake and effects, the feeling of automating away work, and seeing cool things unearthed. They also love the RTS/automation feel of Mindustry.
+- **Automation brings more mining to the player; it never sends the mining away.** The player stays where the breaks happen. Automate chores (collecting, selling, recharging, choosing the next rock), never the spectacle. Progression should make the storm of breaks around the player bigger (multi-break combos, later chain reactions).
+- **Player engagement comes from commands, not chores.** Walking onto a field puts the crew to work there. A geode is opened by calling a swarm strike (walk up to it or click it once); the drones charge and blast it open in front of the player. Rare geodes should stay the player's moment even after automation.
+- **Clean view.** The owner finds the screen cluttered and ugly: giant white drones, scenery that looks like mineable rocks, outlines and glows on everything, a double field border and a broken-looking HUD. Fix these; keep floating text only for payoffs.
+- Still open for later discussion: making rare finds change what the player can do (for example gems as drone cores), one currency, and an explicit automation ladder.
+
 ## November 18 — satisfying gems, no E to open geodes, a simpler Roblox loop with luck
 
 The owner asks to make the game more satisfying and fun, make gems very satisfying, and rework the weird "press E to open the crystal" interaction. They add that this includes making the game loop a lot better: simpler, befitting a Roblox game, including gambling, and fun. Gambling here is interpreted as earned in-game luck (loot tiers, lucky rolls) — no Robux or paid random items, per the standing rule. Routine saves only; no release requested.

@@ -113,10 +113,13 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  local kind=record.view:GetAttribute('GemKind')
  local optical=kind=='Amber' or kind=='Quartz' or kind=='Diamond'
  rig.outline.OutlineTransparency=1-strength*(optical and .24 or .94)
- rig.outline.Enabled=not record.selection and kind~='Diamond' and record.view.Parent~=nil and record.view.Transparency<1
+ -- Calm field: plain stone gets no outline or ground glow. Only gems and
+ -- modifier drops keep a soft pool; nothing gets a constant outline.
+ local special=not record.stone or (record.modifiers or 0)~=0
+ rig.outline.Enabled=false
  rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
  rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
- rig.surface.Enabled=true
+ rig.surface.Enabled=special
  local mask=record.modifiers or 0
  if mask~=0 and not rig.rings then rig.rings=RockModifierView.groundRings(rig.surface) end
  if rig.rings then RockModifierView.drawRings(rig.rings,mask,strength) end

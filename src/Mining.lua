@@ -23,9 +23,10 @@ M.GEODE_CHANCE=.045
 M.GEODE_WINDOW=4
 M.GEODE_RALLY_TIME=8
 M.OPEN_REACH=34
--- Sealed geodes crack open from player taps, not a key prompt.
-M.OPEN_HITS=3
-M.OPEN_HIT_GAP=.12
+-- Sealed geodes: walking up to one (or one click on it) calls a swarm strike.
+-- The crew charges together, then blasts it open.
+M.STRIKE_PROXIMITY=9
+M.STRIKE_CHARGE=1.35
 -- Mystery geode loot table (earned, never paid). Rolled on the server at drop
 -- and replicated only when the shell bursts.
 M.GEODE_TIERS={

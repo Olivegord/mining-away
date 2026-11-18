@@ -57,21 +57,36 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
  function self:remove(r)
   local rig=self.rigs[r];if not rig then return end
   if audio then audio:stopLoop(rig) end
+  if rig.beams then for _,beam in ipairs(rig.beams) do beam:Destroy() end end
   rig.root:Destroy();r.shellModel=nil;self.rigs[r]=nil;self.count-=1
  end
- -- One crack beat: louder, higher and brighter with each hit.
- function self:crack(r,now,hits)
-  if not r.restPose then return end
-  local strength=.25+.18*hits
-  audio:play('geode_crack',r.restPose.Position,{pitch=.8+hits*.18,level=.75+hits*.1})
-  audio:play('crystal_snap',r.restPose.Position,{pitch=1+hits*.12})
-  feedback:seamBurst(r,now,strength)
-  cameraBeat('Fracture',r.restPose.Position,now,.6+hits*.25)
+ -- Swarm strike: a thin beam from each of the owner's drones converges on the geode.
+ local function strikeBeams(rig,r,t,reduced)
+  rig.beams=rig.beams or {}
+  local positions=self.dronePositions and self.dronePositions(r.source:GetAttribute('OpenOwner')) or {}
+  local target=r.restPose.Position
+  for i=1,math.min(#positions,12) do
+   local beam=rig.beams[i]
+   if not beam then
+    beam=Instance.new('Part');beam.Name='StrikeBeam';beam.Anchored=true;beam.CanCollide=false;beam.CanQuery=false
+    beam.CanTouch=false;beam.CastShadow=false;beam.Material=Enum.Material.Neon;beam.Shape=Enum.PartType.Cylinder
+    beam.Parent=parent;rig.beams[i]=beam
+   end
+   local from=positions[i];local length=(target-from).Magnitude
+   beam.Color=(r.baseColor or Color3.new(1,1,1)):Lerp(Color3.new(1,1,1),t*.6)
+   beam.Size=Vector3.new(length,.08+.22*t,.08+.22*t)
+   beam.CFrame=CFrame.lookAt((from+target)*.5,target)*CFrame.Angles(0,math.pi/2,0)
+   beam.Transparency=reduced and .5 or .55-.4*t
+  end
+  for i=#rig.beams,math.min(#positions,12)+1,-1 do rig.beams[i]:Destroy();rig.beams[i]=nil end
  end
+ local function clearBeams(rig)
+  if rig.beams then for _,beam in ipairs(rig.beams) do beam:Destroy() end;rig.beams=nil end
+ end
+ self.clearBeams=clearBeams
  function self:tap(r,now)
-  local rig=self.rigs[r];if not rig then return end
-  rig.tapAt=now
-  self:crack(r,now,math.min(Mining.OPEN_HITS,(rig.hits or 0)+1))
+  local rig=self.rigs[r];if not rig or not r.restPose then return end
+  audio:play('crystal_snap',r.restPose.Position,{pitch=1.2})
  end
  function self:update(r,now)
   local source=r.source
@@ -104,29 +119,23 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
    end
    local reduced=BeamVFX.reduced()
    rig.baseSize=rig.baseSize or r.view.Size
-   local hits=source:GetAttribute('OpenHits') or 0
-   local hitAt=source:GetAttribute('OpenHitAt') or 0
-   if hits>(rig.hits or 0) then
-    rig.hits=hits
-    -- Skip the echo of a tap this client already predicted.
-    if math.abs((rig.tapAt or -10)-now)>.35 then self:crack(r,now,hits) end
-   end
    rig.motes.Enabled=not reduced and now>=(source:GetAttribute('ReadyAt') or 0)
-   rig.motes.Rate=1+(rig.hits or 0)*4
-   local t=opening and math.clamp(1-(opening-now)/.32,0,1) or 0
-   local crack=math.clamp((rig.hits or 0)/Mining.OPEN_HITS,0,1)
-   rig.light.Color=r.baseColor or rig.light.Color
-   rig.light.Range=5+crack*9
-   rig.light.Brightness=.35+crack*2.2+t*2
-   -- Squash-and-stretch punch on every tap.
-   local punchAge=now-math.max(rig.tapAt or -10,hitAt)
-   local punch=reduced and 0 or math.exp(-punchAge*14)*math.cos(punchAge*38)
-   r.view.Size=rig.baseSize*Vector3.new(1+.16*punch,1-.2*punch,1+.16*punch)*(1+.06*crack+.12*t)
-   if r.baseColor then r.view.Color=(r.stoneColor or Color3.fromRGB(76,67,58)):Lerp(r.baseColor,crack*.45+t*.4) end
+   local strikeAt=source:GetAttribute('StrikeAt')
+   local t=opening and strikeAt and math.clamp((now-strikeAt)/math.max(.05,opening-strikeAt),0,1) or 0
+   rig.motes.Rate=1+t*30
+   -- The glow hints at the geode's minimum rarity before the strike.
+   local hint=V.TIERS[source:GetAttribute('TierHint') or 1] or V.TIERS[1]
+   rig.light.Color=hint.color;rig.motes.Color=ColorSequence.new(hint.color)
+   rig.light.Range=7+t*14
+   rig.light.Brightness=.8+t*t*4
+   -- The charge swells the shell and shakes it harder until the burst.
+   r.view.Size=rig.baseSize*(1+.14*t*t)
+   if r.baseColor then r.view.Color=(r.stoneColor or Color3.fromRGB(76,67,58)):Lerp(r.baseColor,t*.7) end
+   if opening and r.restPose then strikeBeams(rig,r,t,reduced) else clearBeams(rig) end
    if r.restPose then
-    local shake=reduced and 0 or math.max(t,.5*math.exp(-punchAge*10))
-    r.view.CFrame=r.restPose*CFrame.Angles(math.sin(now*48)*.05*shake,0,math.cos(now*43)*.06*shake)
-    if opening and rig.opening~=opening then rig.opening=opening;audio:play('geode_windup',r.restPose.Position,{level=.7}) end
+    local shake=reduced and 0 or t*t
+    r.view.CFrame=r.restPose*CFrame.Angles(math.sin(now*52)*.07*shake,0,math.cos(now*47)*.08*shake)
+    if opening and rig.opening~=opening then rig.opening=opening;audio:play('prism_charge',r.restPose.Position,{pitch=1.45,level=.8});audio:play('geode_windup',r.restPose.Position,{level=.6}) end
     if ready and now>=(source:GetAttribute('ReadyAt') or 0) then audio:setLoop(rig,'gem_ready',r.restPose.Position,.35,.77) else audio:stopLoop(rig) end
    end
    return

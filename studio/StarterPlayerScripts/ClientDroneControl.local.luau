@@ -1350,9 +1350,10 @@ M.GEODE_CHANCE=.045
 M.GEODE_WINDOW=4
 M.GEODE_RALLY_TIME=8
 M.OPEN_REACH=34
--- Sealed geodes crack open from player taps, not a key prompt.
-M.OPEN_HITS=3
-M.OPEN_HIT_GAP=.12
+-- Sealed geodes: walking up to one (or one click on it) calls a swarm strike.
+-- The crew charges together, then blasts it open.
+M.STRIKE_PROXIMITY=9
+M.STRIKE_CHARGE=1.35
 -- Mystery geode loot table (earned, never paid). Rolled on the server at drop
 -- and replicated only when the shell bursts.
 M.GEODE_TIERS={
@@ -9683,21 +9684,36 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
  function self:remove(r)
   local rig=self.rigs[r];if not rig then return end
   if audio then audio:stopLoop(rig) end
+  if rig.beams then for _,beam in ipairs(rig.beams) do beam:Destroy() end end
   rig.root:Destroy();r.shellModel=nil;self.rigs[r]=nil;self.count-=1
  end
- -- One crack beat: louder, higher and brighter with each hit.
- function self:crack(r,now,hits)
-  if not r.restPose then return end
-  local strength=.25+.18*hits
-  audio:play('geode_crack',r.restPose.Position,{pitch=.8+hits*.18,level=.75+hits*.1})
-  audio:play('crystal_snap',r.restPose.Position,{pitch=1+hits*.12})
-  feedback:seamBurst(r,now,strength)
-  cameraBeat('Fracture',r.restPose.Position,now,.6+hits*.25)
+ -- Swarm strike: a thin beam from each of the owner's drones converges on the geode.
+ local function strikeBeams(rig,r,t,reduced)
+  rig.beams=rig.beams or {}
+  local positions=self.dronePositions and self.dronePositions(r.source:GetAttribute('OpenOwner')) or {}
+  local target=r.restPose.Position
+  for i=1,math.min(#positions,12) do
+   local beam=rig.beams[i]
+   if not beam then
+    beam=Instance.new('Part');beam.Name='StrikeBeam';beam.Anchored=true;beam.CanCollide=false;beam.CanQuery=false
+    beam.CanTouch=false;beam.CastShadow=false;beam.Material=Enum.Material.Neon;beam.Shape=Enum.PartType.Cylinder
+    beam.Parent=parent;rig.beams[i]=beam
+   end
+   local from=positions[i];local length=(target-from).Magnitude
+   beam.Color=(r.baseColor or Color3.new(1,1,1)):Lerp(Color3.new(1,1,1),t*.6)
+   beam.Size=Vector3.new(length,.08+.22*t,.08+.22*t)
+   beam.CFrame=CFrame.lookAt((from+target)*.5,target)*CFrame.Angles(0,math.pi/2,0)
+   beam.Transparency=reduced and .5 or .55-.4*t
+  end
+  for i=#rig.beams,math.min(#positions,12)+1,-1 do rig.beams[i]:Destroy();rig.beams[i]=nil end
  end
+ local function clearBeams(rig)
+  if rig.beams then for _,beam in ipairs(rig.beams) do beam:Destroy() end;rig.beams=nil end
+ end
+ self.clearBeams=clearBeams
  function self:tap(r,now)
-  local rig=self.rigs[r];if not rig then return end
-  rig.tapAt=now
-  self:crack(r,now,math.min(Mining.OPEN_HITS,(rig.hits or 0)+1))
+  local rig=self.rigs[r];if not rig or not r.restPose then return end
+  audio:play('crystal_snap',r.restPose.Position,{pitch=1.2})
  end
  function self:update(r,now)
   local source=r.source
@@ -9730,29 +9746,23 @@ function V.new(parent,audio,feedback,findFracture,cameraBeat)
    end
    local reduced=BeamVFX.reduced()
    rig.baseSize=rig.baseSize or r.view.Size
-   local hits=source:GetAttribute('OpenHits') or 0
-   local hitAt=source:GetAttribute('OpenHitAt') or 0
-   if hits>(rig.hits or 0) then
-    rig.hits=hits
-    -- Skip the echo of a tap this client already predicted.
-    if math.abs((rig.tapAt or -10)-now)>.35 then self:crack(r,now,hits) end
-   end
    rig.motes.Enabled=not reduced and now>=(source:GetAttribute('ReadyAt') or 0)
-   rig.motes.Rate=1+(rig.hits or 0)*4
-   local t=opening and math.clamp(1-(opening-now)/.32,0,1) or 0
-   local crack=math.clamp((rig.hits or 0)/Mining.OPEN_HITS,0,1)
-   rig.light.Color=r.baseColor or rig.light.Color
-   rig.light.Range=5+crack*9
-   rig.light.Brightness=.35+crack*2.2+t*2
-   -- Squash-and-stretch punch on every tap.
-   local punchAge=now-math.max(rig.tapAt or -10,hitAt)
-   local punch=reduced and 0 or math.exp(-punchAge*14)*math.cos(punchAge*38)
-   r.view.Size=rig.baseSize*Vector3.new(1+.16*punch,1-.2*punch,1+.16*punch)*(1+.06*crack+.12*t)
-   if r.baseColor then r.view.Color=(r.stoneColor or Color3.fromRGB(76,67,58)):Lerp(r.baseColor,crack*.45+t*.4) end
+   local strikeAt=source:GetAttribute('StrikeAt')
+   local t=opening and strikeAt and math.clamp((now-strikeAt)/math.max(.05,opening-strikeAt),0,1) or 0
+   rig.motes.Rate=1+t*30
+   -- The glow hints at the geode's minimum rarity before the strike.
+   local hint=V.TIERS[source:GetAttribute('TierHint') or 1] or V.TIERS[1]
+   rig.light.Color=hint.color;rig.motes.Color=ColorSequence.new(hint.color)
+   rig.light.Range=7+t*14
+   rig.light.Brightness=.8+t*t*4
+   -- The charge swells the shell and shakes it harder until the burst.
+   r.view.Size=rig.baseSize*(1+.14*t*t)
+   if r.baseColor then r.view.Color=(r.stoneColor or Color3.fromRGB(76,67,58)):Lerp(r.baseColor,t*.7) end
+   if opening and r.restPose then strikeBeams(rig,r,t,reduced) else clearBeams(rig) end
    if r.restPose then
-    local shake=reduced and 0 or math.max(t,.5*math.exp(-punchAge*10))
-    r.view.CFrame=r.restPose*CFrame.Angles(math.sin(now*48)*.05*shake,0,math.cos(now*43)*.06*shake)
-    if opening and rig.opening~=opening then rig.opening=opening;audio:play('geode_windup',r.restPose.Position,{level=.7}) end
+    local shake=reduced and 0 or t*t
+    r.view.CFrame=r.restPose*CFrame.Angles(math.sin(now*52)*.07*shake,0,math.cos(now*47)*.08*shake)
+    if opening and rig.opening~=opening then rig.opening=opening;audio:play('prism_charge',r.restPose.Position,{pitch=1.45,level=.8});audio:play('geode_windup',r.restPose.Position,{level=.6}) end
     if ready and now>=(source:GetAttribute('ReadyAt') or 0) then audio:setLoop(rig,'gem_ready',r.restPose.Position,.35,.77) else audio:stopLoop(rig) end
    end
    return
@@ -10426,9 +10436,15 @@ local function attach(part,body,offset)
  part.CFrame=body.CFrame*offset
 end
 -- Paint a cube drone's local render clone. Returns a small record for stepCube.
+Fun.CUBE_VIEW_SCALE=.56
 function Fun.paintCube(view,body,id)
  local color=Fun.colorFor(id)
+ -- Render the cube smaller than its 3.4-stud gameplay hull so the fleet frames
+ -- the action instead of covering it. The emitter moves up to the new belly.
+ body.Size=body.Size*Fun.CUBE_VIEW_SCALE
  local s=body.Size
+ local emitter=view:FindFirstChild('Emmiter')
+ if emitter and emitter:IsA('BasePart') then emitter.CFrame=body.CFrame*CFrame.new(0,-s.Y*.5,0) end
  body.Color=color;body.Material=Enum.Material.SmoothPlastic;body.Reflectance=0
  -- A lighter cap gives the cube a lit top and a darker underside: instant depth.
  local cap=bare(view,'FunCap',Vector3.new(s.X*.86,.08,s.Z*.86),color:Lerp(WHITE,.45))
@@ -10436,7 +10452,7 @@ function Fun.paintCube(view,body,id)
  -- The glowing belly the laser comes out of.
  local glow=bare(view,'FunGlow',Vector3.new(s.X*.62,.06,s.Z*.62),color:Lerp(WHITE,.25),Enum.Material.Neon)
  attach(glow,body,CFrame.new(0,-s.Y*.5-.025,0))
- local light=Instance.new('PointLight');light.Name='FunLight';light.Color=color;light.Range=9;light.Brightness=.7
+ local light=Instance.new('PointLight');light.Name='FunLight';light.Color=color;light.Range=6;light.Brightness=.35
  light.Shadows=false;light.Parent=glow
  -- Two simple eyes on the front face read as a friendly little robot.
  for _,side in ipairs({-1,1}) do
@@ -10472,7 +10488,7 @@ function Fun.stepCube(record,speed,working,hidden,now)
  local rate=(working and not hidden and not calm) and 14 or 0
  if record.motes.Rate~=rate then record.motes.Rate=rate end
  local pulse=working and (.5+.5*math.sin(now*14)) or 0
- record.light.Brightness=hidden and 0 or (.7+pulse*1.6)
+ record.light.Brightness=hidden and 0 or (.25+pulse*1.2)
  record.light.Range=working and 11 or 8
  record.glow.Color=record.glowBase:Lerp(WHITE,pulse*.45)
 end
@@ -10541,7 +10557,7 @@ function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end
  local grade=Instance.new('ColorCorrectionEffect');grade.Name='FunColorPop'
- grade.Saturation=.14;grade.Contrast=.05;grade.Brightness=.01;grade.Parent=lighting
+ grade.Saturation=.04;grade.Contrast=.04;grade.Brightness=-.02;grade.Parent=lighting
 end
 return Fun
 
@@ -15892,10 +15908,13 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  local kind=record.view:GetAttribute('GemKind')
  local optical=kind=='Amber' or kind=='Quartz' or kind=='Diamond'
  rig.outline.OutlineTransparency=1-strength*(optical and .24 or .94)
- rig.outline.Enabled=not record.selection and kind~='Diamond' and record.view.Parent~=nil and record.view.Transparency<1
+ -- Calm field: plain stone gets no outline or ground glow. Only gems and
+ -- modifier drops keep a soft pool; nothing gets a constant outline.
+ local special=not record.stone or (record.modifiers or 0)~=0
+ rig.outline.Enabled=false
  rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
  rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
- rig.surface.Enabled=true
+ rig.surface.Enabled=special
  local mask=record.modifiers or 0
  if mask~=0 and not rig.rings then rig.rings=RockModifierView.groundRings(rig.surface) end
  if rig.rings then RockModifierView.drawRings(rig.rings,mask,strength) end
@@ -18039,7 +18058,8 @@ function V:step(dt,aimRay)
  showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,white,.04)
  local preview,previewWidth,strength=self:previewState()
  showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor,.13)
- showOutline(self.aimEdge,not preview and self.hoverPoint~=pin and self.hoverPoint or nil,self.hoverWidth or width,aimColor,.095)
+ -- Whole fields need no hover frame: walking in assigns them. One border at a time.
+ showOutline(self.aimEdge,not preview and not pin and not self.hoverWidth and self.hoverPoint or nil,self.hoverWidth or width,aimColor,.095)
  showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,white,.065)
  showFill(self.flash,click and click.point,click and click.width or width,flashStrength*.86,white,.09)
 end
@@ -18168,14 +18188,7 @@ local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';local
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 Presentation.Fun.colorPop()
-task.spawn(function()
- -- The authored map can stream in after the controller starts.
- for _=1,20 do
-  Presentation.Fun.fieldMotes(localFX,world)
-  if Presentation.Fun.motesReady then break end
-  task.wait(1)
- end
-end)
+-- Ambient field motes stay off: a quiet world lets the breaks pop.
 local rockDamage=RockDamage.new()
 -- Startup is silent. The established cut and contact cues remain spatial.
 soundscape.chargeFromRenderer=true
@@ -18204,7 +18217,36 @@ end,function(position,strength)
 end,function(from,to,level,now)
  if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
 end,cameraBeat,function(at) return impactFreeze:holdsNomad(at) end)
+-- Break combo: owned breaks within 1.6 s of each other stack a counter that
+-- makes each following shake, sound and confetti burst a little bigger.
+do
+local combo={count=0,at=-10}
+local function comboBreak(now)
+ combo.count=now-combo.at<=1.6 and combo.count+1 or 1;combo.at=now
+ if combo.count<2 then return 1 end
+ if not combo.gui then
+  local screen=Instance.new('ScreenGui');screen.Name='BreakCombo';screen.ResetOnSpawn=false;screen.IgnoreGuiInset=true
+  local label=Instance.new('TextLabel');label.AnchorPoint=Vector2.new(.5,.5);label.Position=UDim2.fromScale(.5,.2)
+  label.Size=UDim2.fromOffset(240,64);label.BackgroundTransparency=1;label.Font=Enum.Font.FredokaOne;label.TextScaled=true
+  label.TextColor3=Color3.fromRGB(255,214,90);label.TextStrokeTransparency=0;label.TextStrokeColor3=Color3.fromRGB(40,24,8);label.Parent=screen
+  local scale=Instance.new('UIScale');scale.Parent=label
+  screen.Parent=player:WaitForChild('PlayerGui');combo.gui=screen;combo.label=label;combo.scale=scale
+  table.insert(connections,RunService.RenderStepped:Connect(function()
+   local age=workspace:GetServerTimeNow()-combo.at
+   combo.gui.Enabled=combo.count>=2 and age<1.9
+   if combo.gui.Enabled then
+    combo.scale.Scale=CrystalImpactView.reducedMotion() and 1 or 1+.45*math.exp(-age*12)
+    local fade=math.clamp((age-1.3)/.6,0,1);combo.label.TextTransparency=fade;combo.label.TextStrokeTransparency=fade
+   end
+  end))
+ end
+ combo.label.Text='x'..combo.count..' COMBO'
+ combo.label.TextColor3=Color3.fromRGB(255,214,90):Lerp(Color3.fromRGB(255,80,120),math.clamp((combo.count-2)/10,0,1))
+ soundscape:play('crystal_release_tink',nil,{pitch=1+math.min(combo.count,12)*.06,level=.8})
+ return 1+math.min(combo.count-1,10)*.07
+end
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism,owned,mineral)
+ if owned and not prism then strength*=comboBreak(now) end
  local pop=not prism and Presentation.Fun.mineralColor(mineral)
  if pop then Presentation.Fun.confetti(localFX,position,pop,strength*(owned and 1 or .7)) end
  if prism then
@@ -18217,6 +18259,7 @@ end,cameraBeat,function(name)
  local folder=command.Parent:FindFirstChild('CrystalFractures')
  return folder and folder:FindFirstChild(name)
 end)
+end
 local previousShake=CFrame.new();local shakeCamera=nil
 local celestialRain=RunService:IsStudio() and CelestialRainPreview.new(world,localFX,player)
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'})
@@ -18366,9 +18409,14 @@ local function restoreCamera(ch)
    if typeof(spawn)=='Vector3' and (hr.Position-spawn).Magnitude>24 then return end
    local delta=Vector3.new(first.X-hr.Position.X,0,first.Z-hr.Position.Z)
    if delta.Magnitude>1 then
+    -- Start higher and steeper so the fleet and fields sit below the view.
     local focus=hr.Position+Vector3.yAxis*2
-    camera.CFrame=CFrame.lookAt(focus-delta.Unit*19+Vector3.yAxis*10,focus+delta.Unit*8)
+    camera.CFrame=CFrame.lookAt(focus-delta.Unit*20+Vector3.yAxis*20,focus+delta.Unit*4)
    end
+   -- Begin zoomed out; the player can still scroll in. Clamp once, then release.
+   player.CameraMaxZoomDistance=math.max(player.CameraMaxZoomDistance,70)
+   local minimum=player.CameraMinZoomDistance;player.CameraMinZoomDistance=28
+   task.delay(.25,function() player.CameraMinZoomDistance=minimum end)
    RunService:UnbindFromRenderStep('MiningAwayInitialView')
   end)
  end
@@ -20103,6 +20151,13 @@ local mouse=player:GetMouse()
   return false
  end
  interaction=SelectorView.Interaction.new(gui,localFX,selectorView.performFieldAction)
+ rockDamage.feedback.openings.dronePositions=function(owner)
+  local list={}
+  for _,d in pairs(drones) do
+   if d.pos and d.source and d.source:GetAttribute('Owner')==owner then list[#list+1]=d.pos end
+  end
+  return list
+ end
  -- Sealed geodes: no prompt. Hovering outlines the geode; clicks and taps crack it.
  local function pointerPoint()
   local camera=workspace.CurrentCamera;if not camera then return nil end

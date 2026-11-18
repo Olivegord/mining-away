@@ -2445,9 +2445,10 @@ M.GEODE_CHANCE=.045
 M.GEODE_WINDOW=4
 M.GEODE_RALLY_TIME=8
 M.OPEN_REACH=34
--- Sealed geodes crack open from player taps, not a key prompt.
-M.OPEN_HITS=3
-M.OPEN_HIT_GAP=.12
+-- Sealed geodes: walking up to one (or one click on it) calls a swarm strike.
+-- The crew charges together, then blasts it open.
+M.STRIKE_PROXIMITY=9
+M.STRIKE_CHARGE=1.35
 -- Mystery geode loot table (earned, never paid). Rolled on the server at drop
 -- and replicated only when the shell bursts.
 M.GEODE_TIERS={
@@ -9838,7 +9839,7 @@ local swarmGrid: any=nil
 local patches: {any}={}
 scene.patchById=scene.flatFields and {} or patches
 scene.squareFields={}
-scene.cubeCruiseHeight=14
+scene.cubeCruiseHeight=20
 local resources: {[string]: any}={}
 local logistics: any=nil
 local consumableService: any=nil
@@ -14272,6 +14273,26 @@ function scene.moveSquareWork(p,current,square)
  end
 
 end
+-- Walking onto a square field puts the crew to work there; no click needed.
+-- After a recall, the same field waits until the player leaves and returns.
+function scene.autoField(p)
+ if not scene.flatFields or now<(p.autoFieldAt or 0) or not healthy(p) then return end
+ p.autoFieldAt=now+.4
+ local hr=characterRoot(p);if not hr then return end
+ local inside
+ for _,field in ipairs(patches) do
+  if field.cfg.WholeField and field.cfg.SelectionOnly then
+   local point=field.part.CFrame:PointToObjectSpace(hr.Position)
+   if math.abs(point.X)<=field.part.Size.X*.5 and math.abs(point.Z)<=field.part.Size.Z*.5 and point.Y>-2 and point.Y<12 then inside=field;break end
+  end
+ end
+ if not inside then p.autoFieldSeen=nil;return end
+ if p.autoFieldSeen==inside then return end
+ p.autoFieldSeen=inside
+ if p.miningSquare and p.miningSquare.field==inside then return end
+ if activeAssault(p) or not playerCanMine(p,inside) then return end
+ scene.placeSquare(p,{runId=data(p).run.id,fieldId=inside.id,position=inside.part.Position+Vector3.yAxis*inside.part.Size.Y*.5})
+end
 function scene.placeSquare(p,payload)
  if type(payload)~='table' or payload.runId~=data(p).run.id or not R.finite(payload.fieldId) or typeof(payload.position)~='Vector3' then
   commandReply(p.player,payload,'rejected','Field selection is unavailable.');return
@@ -14394,9 +14415,9 @@ function scene.leaveGeode(d,rock,specialist)
  local tierIndex,tier=Mining.rollGeodeTier(math.random())
  r.geodeTier=tierIndex;r.rewardCount=tier.gems
  r.modifiers=bit32.bor(rock.modifiers or 0,tier.modifiers)
- r.openHits=0
  r.part.Color=Color3.fromRGB(76,67,58);r.part.Material=Enum.Material.Slate
  r.part:SetAttribute('SealedDrop',true);r.part:SetAttribute('OpenReady',true)
+ r.part:SetAttribute('TierHint',math.max(1,(r.geodeTier or 1)-1))
  r.part:SetAttribute('OpenOwner',d.owner);r.part:SetAttribute('OpenReadyAt',now)
  r.part:SetAttribute('SpawnAt',r.spawnAt);r.part:SetAttribute('ReadyAt',r.readyAt)
  r.part:SetAttribute('DropFrom',rock.part.Position);r.part:SetAttribute('DropAt',now);r.part:SetAttribute('DropLandsAt',r.readyAt)
@@ -14410,13 +14431,13 @@ function scene.openResource(p,payload)
  if not r or not r.openReady or r.openingAt or r.paid or now<r.readyAt or not r.part.Parent or not hr
   or r.openOwner~=p.player.UserId or r.openRun~=data(p).run.id or not playerCanMine(p,r.field)
   or (hr.Position-r.position).Magnitude>Mining.OPEN_REACH or not abilityLineOfSight(p,hr.Position,r) then return end
- -- Each tap cracks the shell further; the last tap starts a short burst.
+ scene.startStrike(r)
+end
+-- One order: the owner's crew charges a combined strike, then the shell bursts.
+function scene.startStrike(r)
  if r.sealedDrop then
-  if now<(r.openHitAt or -math.huge)+Mining.OPEN_HIT_GAP then return end
-  r.openHits=(r.openHits or 0)+1;r.openHitAt=now
-  r.part:SetAttribute('OpenHits',r.openHits);r.part:SetAttribute('OpenHitAt',now)
-  if r.openHits<Mining.OPEN_HITS then return end
-  r.openingAt=now+.32
+  r.openingAt=now+Mining.STRIKE_CHARGE
+  r.part:SetAttribute('StrikeAt',now)
  else
   r.openingAt=now+(r.kind=='Geode' and .85 or .24)
  end
@@ -14431,6 +14452,12 @@ function scene.stepGeode(r)
    -- Retire abandoned discoveries; their original rocks already replenished.
    r.paid=true;r.removeAt=now;r.part.CanQuery=false;r.part.CanCollide=false
    return
+  end
+  if not r.openingAt and r.sealedDrop and now>=r.readyAt and healthy(p) then
+   local hr=characterRoot(p)
+   if hr and (hr.Position-r.position).Magnitude<=Mining.STRIKE_PROXIMITY and playerCanMine(p,r.field) then
+    scene.startStrike(r);r.part:SetAttribute('OpenReady',false)
+   end
   end
   if r.openingAt and now>=r.openingAt and healthy(p) then
    r.paid=true;r.hp=0;r.manualOpened=true;r.removeAt=now+3
@@ -14797,6 +14824,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   logistics:tick(C.Tick)
   for _,p in pairs(profiles) do
    packDelivery:step(p,now)
+   scene.autoField(p)
    recallFromField(p)
    dispatchOreQueue(p)
    if consumableService then consumableService:step(p,C.Tick) end

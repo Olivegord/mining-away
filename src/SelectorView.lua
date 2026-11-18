@@ -355,7 +355,8 @@ function V:step(dt,aimRay)
  showFill(self.activeFloor,pin,pinWidth,lowFlash and .13 or .19,white,.04)
  local preview,previewWidth,strength=self:previewState()
  showOutline(self.previewEdge,preview and preview.point,previewWidth,previewColor,.13)
- showOutline(self.aimEdge,not preview and self.hoverPoint~=pin and self.hoverPoint or nil,self.hoverWidth or width,aimColor,.095)
+ -- Whole fields need no hover frame: walking in assigns them. One border at a time.
+ showOutline(self.aimEdge,not preview and not pin and not self.hoverWidth and self.hoverPoint or nil,self.hoverWidth or width,aimColor,.095)
  showFill(self.previewFloor,preview and preview.point,previewWidth,strength*.62,white,.065)
  showFill(self.flash,click and click.point,click and click.width or width,flashStrength*.86,white,.09)
 end

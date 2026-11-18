@@ -51,9 +51,15 @@ local function attach(part,body,offset)
  part.CFrame=body.CFrame*offset
 end
 -- Paint a cube drone's local render clone. Returns a small record for stepCube.
+Fun.CUBE_VIEW_SCALE=.56
 function Fun.paintCube(view,body,id)
  local color=Fun.colorFor(id)
+ -- Render the cube smaller than its 3.4-stud gameplay hull so the fleet frames
+ -- the action instead of covering it. The emitter moves up to the new belly.
+ body.Size=body.Size*Fun.CUBE_VIEW_SCALE
  local s=body.Size
+ local emitter=view:FindFirstChild('Emmiter')
+ if emitter and emitter:IsA('BasePart') then emitter.CFrame=body.CFrame*CFrame.new(0,-s.Y*.5,0) end
  body.Color=color;body.Material=Enum.Material.SmoothPlastic;body.Reflectance=0
  -- A lighter cap gives the cube a lit top and a darker underside: instant depth.
  local cap=bare(view,'FunCap',Vector3.new(s.X*.86,.08,s.Z*.86),color:Lerp(WHITE,.45))
@@ -61,7 +67,7 @@ function Fun.paintCube(view,body,id)
  -- The glowing belly the laser comes out of.
  local glow=bare(view,'FunGlow',Vector3.new(s.X*.62,.06,s.Z*.62),color:Lerp(WHITE,.25),Enum.Material.Neon)
  attach(glow,body,CFrame.new(0,-s.Y*.5-.025,0))
- local light=Instance.new('PointLight');light.Name='FunLight';light.Color=color;light.Range=9;light.Brightness=.7
+ local light=Instance.new('PointLight');light.Name='FunLight';light.Color=color;light.Range=6;light.Brightness=.35
  light.Shadows=false;light.Parent=glow
  -- Two simple eyes on the front face read as a friendly little robot.
  for _,side in ipairs({-1,1}) do
@@ -97,7 +103,7 @@ function Fun.stepCube(record,speed,working,hidden,now)
  local rate=(working and not hidden and not calm) and 14 or 0
  if record.motes.Rate~=rate then record.motes.Rate=rate end
  local pulse=working and (.5+.5*math.sin(now*14)) or 0
- record.light.Brightness=hidden and 0 or (.7+pulse*1.6)
+ record.light.Brightness=hidden and 0 or (.25+pulse*1.2)
  record.light.Range=working and 11 or 8
  record.glow.Color=record.glowBase:Lerp(WHITE,pulse*.45)
 end
@@ -166,6 +172,6 @@ function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end
  local grade=Instance.new('ColorCorrectionEffect');grade.Name='FunColorPop'
- grade.Saturation=.14;grade.Contrast=.05;grade.Brightness=.01;grade.Parent=lighting
+ grade.Saturation=.04;grade.Contrast=.04;grade.Brightness=-.02;grade.Parent=lighting
 end
 return Fun

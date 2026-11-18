@@ -508,6 +508,8 @@ do
   if merge==1 then assert(not press.recharging,'the first merge sent a half-full drone to charge') end
  end
 
+ -- Stand clear: ore within reach now flies to the player on its own.
+ pl.Character:PivotTo(CFrame.new(spot+Vector3.new(24,3,0)))
  local waitingA=loose(spot-Vector3.xAxis*3)
  local waitingB=loose(spot+Vector3.xAxis*3)
  stepUntil(function() return press.state=='ToCharge' end,1,'an empty Compactor did not fly to the charger')

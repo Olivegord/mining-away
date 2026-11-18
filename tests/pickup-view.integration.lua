@@ -189,7 +189,7 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  renderer:update(1/60,contact+.001)
  assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land')
  local display=assert(r.displayRig,'touchdown waited for a stationary packet before starting its effects')
- assert(display.surface.Enabled and display.outline.Enabled and display.curves[1].Enabled)
+ assert(display.surface.Enabled and not display.outline.Enabled and display.curves[1].Enabled)
  assert(display.base.Position.X==r.arc.landX and display.base.Position.Z==r.arc.landZ)
  local ribbon=assert(r.ribbon)
  assert(not ribbon.trail.Enabled and ribbon.trail.Parent==r.view,'a clean gem arc deleted its trail on contact')
@@ -225,7 +225,7 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  assert(r.hoverAlpha==1,'arc handoff restarted the settled hover')
  renderer:destroy();cargo:Destroy();workspace.CurrentCamera=camera
 end)
-check('resting gems hover with a bounded swirl, rising motes, ground glow and outline',function()
+check('resting gems hover with a bounded swirl, rising motes, ground glow, no constant outline',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,2,0)}
  local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
  local visuals=Instance.new('Folder');visuals.Parent=workspace
@@ -268,7 +268,7 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  end
  assert(#renderer.displays==12 and #visuals:GetChildren()==92,'the display pool exceeded its budget')
  local rig=renderer.displays[1]
- assert(rig.record==renderer.records[sources[1]] and rig.outline.Adornee==rig.record.view and rig.outline.Enabled
+ assert(rig.record==renderer.records[sources[1]] and rig.outline.Adornee==rig.record.view and not rig.outline.Enabled
   and rig.outline.DepthMode==Enum.HighlightDepthMode.Occluded and rig.outline.FillTransparency==1)
  assert(rig.surface.Enabled and math.abs(rig.base.Position.Y-.01)<1e-8 and not rig.base:FindFirstChildWhichIsA('PointLight',true))
  assert(rig.core.ImageTransparency<rig.halo.ImageTransparency and rig.core.Image==rig.halo.Image)
@@ -306,7 +306,7 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  for _,phase in ipairs({{14.05,1},{14.25,0},{14.55,1},{14.75,0}}) do
   renderer:update(1/60,realTime+phase[1])
   rig=assert(first.displayRig)
-  assert(rig.record==first and rig.outline.Enabled==(phase[2]==0) and rig.surface.Enabled==(phase[2]==0)
+  assert(rig.record==first and not rig.outline.Enabled and rig.surface.Enabled==(phase[2]==0)
    and rig.curves[1].Enabled==(phase[2]==0),'the display did not blink with the ore')
   assert((first.view.Position-pose.Position).Magnitude<1e-8 and first.view.Transparency==phase[2],'expiry blink moved the hover or used partial opacity')
   for _,mote in ipairs(rig.motes) do assert(not mote.gui.Enabled,'reduced motion left a rising mote active') end
@@ -320,7 +320,7 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  assert(first.view.Transparency==0 and (first.view.Position-pose.Position).Magnitude<1e-8,'renewing a static pile failed to restore visibility')
  pl:SetAttribute('ReducedEffects',true);renderer:update(1/60,realTime+15.2)
  rig=assert(first.displayRig)
- assert(renderer.idleCount==0 and rig.record==first and rig.outline.Enabled and rig.surface.Enabled
+ assert(renderer.idleCount==0 and rig.record==first and not rig.outline.Enabled and rig.surface.Enabled
   and not rig.curves[1].Enabled,'reduced effects did not simplify the ore display')
  pl:SetAttribute('ReducedEffects',false)
  sources[2]:SetAttribute('RockModifiers',Mining.ROCK_MODIFIERS.Big)

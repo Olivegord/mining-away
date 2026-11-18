@@ -12,14 +12,7 @@ local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';local
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 Presentation.Fun.colorPop()
-task.spawn(function()
- -- The authored map can stream in after the controller starts.
- for _=1,20 do
-  Presentation.Fun.fieldMotes(localFX,world)
-  if Presentation.Fun.motesReady then break end
-  task.wait(1)
- end
-end)
+-- Ambient field motes stay off: a quiet world lets the breaks pop.
 local rockDamage=RockDamage.new()
 -- Startup is silent. The established cut and contact cues remain spatial.
 soundscape.chargeFromRenderer=true
@@ -48,7 +41,36 @@ end,function(position,strength)
 end,function(from,to,level,now)
  if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
 end,cameraBeat,function(at) return impactFreeze:holdsNomad(at) end)
+-- Break combo: owned breaks within 1.6 s of each other stack a counter that
+-- makes each following shake, sound and confetti burst a little bigger.
+do
+local combo={count=0,at=-10}
+local function comboBreak(now)
+ combo.count=now-combo.at<=1.6 and combo.count+1 or 1;combo.at=now
+ if combo.count<2 then return 1 end
+ if not combo.gui then
+  local screen=Instance.new('ScreenGui');screen.Name='BreakCombo';screen.ResetOnSpawn=false;screen.IgnoreGuiInset=true
+  local label=Instance.new('TextLabel');label.AnchorPoint=Vector2.new(.5,.5);label.Position=UDim2.fromScale(.5,.2)
+  label.Size=UDim2.fromOffset(240,64);label.BackgroundTransparency=1;label.Font=Enum.Font.FredokaOne;label.TextScaled=true
+  label.TextColor3=Color3.fromRGB(255,214,90);label.TextStrokeTransparency=0;label.TextStrokeColor3=Color3.fromRGB(40,24,8);label.Parent=screen
+  local scale=Instance.new('UIScale');scale.Parent=label
+  screen.Parent=player:WaitForChild('PlayerGui');combo.gui=screen;combo.label=label;combo.scale=scale
+  table.insert(connections,RunService.RenderStepped:Connect(function()
+   local age=workspace:GetServerTimeNow()-combo.at
+   combo.gui.Enabled=combo.count>=2 and age<1.9
+   if combo.gui.Enabled then
+    combo.scale.Scale=CrystalImpactView.reducedMotion() and 1 or 1+.45*math.exp(-age*12)
+    local fade=math.clamp((age-1.3)/.6,0,1);combo.label.TextTransparency=fade;combo.label.TextStrokeTransparency=fade
+   end
+  end))
+ end
+ combo.label.Text='x'..combo.count..' COMBO'
+ combo.label.TextColor3=Color3.fromRGB(255,214,90):Lerp(Color3.fromRGB(255,80,120),math.clamp((combo.count-2)/10,0,1))
+ soundscape:play('crystal_release_tink',nil,{pitch=1+math.min(combo.count,12)*.06,level=.8})
+ return 1+math.min(combo.count-1,10)*.07
+end
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism,owned,mineral)
+ if owned and not prism then strength*=comboBreak(now) end
  local pop=not prism and Presentation.Fun.mineralColor(mineral)
  if pop then Presentation.Fun.confetti(localFX,position,pop,strength*(owned and 1 or .7)) end
  if prism then
@@ -61,6 +83,7 @@ end,cameraBeat,function(name)
  local folder=command.Parent:FindFirstChild('CrystalFractures')
  return folder and folder:FindFirstChild(name)
 end)
+end
 local previousShake=CFrame.new();local shakeCamera=nil
 local celestialRain=RunService:IsStudio() and CelestialRainPreview.new(world,localFX,player)
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'})
@@ -210,9 +233,14 @@ local function restoreCamera(ch)
    if typeof(spawn)=='Vector3' and (hr.Position-spawn).Magnitude>24 then return end
    local delta=Vector3.new(first.X-hr.Position.X,0,first.Z-hr.Position.Z)
    if delta.Magnitude>1 then
+    -- Start higher and steeper so the fleet and fields sit below the view.
     local focus=hr.Position+Vector3.yAxis*2
-    camera.CFrame=CFrame.lookAt(focus-delta.Unit*19+Vector3.yAxis*10,focus+delta.Unit*8)
+    camera.CFrame=CFrame.lookAt(focus-delta.Unit*20+Vector3.yAxis*20,focus+delta.Unit*4)
    end
+   -- Begin zoomed out; the player can still scroll in. Clamp once, then release.
+   player.CameraMaxZoomDistance=math.max(player.CameraMaxZoomDistance,70)
+   local minimum=player.CameraMinZoomDistance;player.CameraMinZoomDistance=28
+   task.delay(.25,function() player.CameraMinZoomDistance=minimum end)
    RunService:UnbindFromRenderStep('MiningAwayInitialView')
   end)
  end
@@ -1947,6 +1975,13 @@ local mouse=player:GetMouse()
   return false
  end
  interaction=SelectorView.Interaction.new(gui,localFX,selectorView.performFieldAction)
+ rockDamage.feedback.openings.dronePositions=function(owner)
+  local list={}
+  for _,d in pairs(drones) do
+   if d.pos and d.source and d.source:GetAttribute('Owner')==owner then list[#list+1]=d.pos end
+  end
+  return list
+ end
  -- Sealed geodes: no prompt. Hovering outlines the geode; clicks and taps crack it.
  local function pointerPoint()
   local camera=workspace.CurrentCamera;if not camera then return nil end

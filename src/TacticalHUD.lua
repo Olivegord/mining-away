@@ -383,7 +383,20 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local afterCargo=shown*rowHeight+cargoHeight
  local height=afterCargo+((batteryVisible and 1 or 0)+(growthVisible and 1 or 0))*rowHeight
  local sideY=8 -- Keep the flat list above the mobile movement controls.
- r.resources.Position=UDim2.fromOffset(0,sideY);r.resources.Size=UDim2.fromOffset(width,height);r.resources.Visible=not hidden
+ -- One framed card, clear of Roblox's own buttons, instead of bare text over the world.
+ local pad=8
+ if not self.cardStyled then
+  self.cardStyled=true
+  r.resources.BackgroundColor3=Color3.fromRGB(16,20,28);r.resources.BackgroundTransparency=.3;r.resources.BorderSizePixel=0
+  local corner=r.resources:FindFirstChildOfClass('UICorner') or Instance.new('UICorner');corner.CornerRadius=UDim.new(0,10);corner.Parent=r.resources
+  local padding=Instance.new('UIPadding');padding.PaddingLeft=UDim.new(0,pad);padding.PaddingRight=UDim.new(0,pad)
+  padding.PaddingTop=UDim.new(0,pad*.5);padding.PaddingBottom=UDim.new(0,pad*.5);padding.Parent=r.resources
+  local stroke=r.resources:FindFirstChildOfClass('UIStroke');if stroke then stroke.Enabled=false end
+  self.selectorStatus.BackgroundColor3=Color3.fromRGB(16,20,28);self.selectorStatus.BackgroundTransparency=.3
+  local statusCorner=Instance.new('UICorner');statusCorner.CornerRadius=UDim.new(0,8);statusCorner.Parent=self.selectorStatus
+  local statusPad=Instance.new('UIPadding');statusPad.PaddingLeft=UDim.new(0,8);statusPad.Parent=self.selectorStatus
+ end
+ r.resources.Position=UDim2.fromOffset(12,sideY);r.resources.Size=UDim2.fromOffset(width+pad*2,height+pad);r.resources.Visible=not hidden
  self.cargo.Position=UDim2.fromOffset(0,shown*rowHeight);self.cargo.Size=UDim2.fromOffset(width,cargoHeight)
  self.battery.Visible=batteryVisible
  self.battery.Position=UDim2.fromOffset(0,afterCargo);self.battery.Size=UDim2.fromOffset(width,rowHeight)
@@ -419,7 +432,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local recallWidth=showRecall and (statusText and 84 or width) or 0
  local dockWidth=statusText and math.min(w,232) or width
  self.dock.Size=UDim2.fromOffset(dockWidth,actions*buttonHeight)
- self.dock.Position=UDim2.fromOffset(0,sideY+height+24)
+ self.dock.Position=UDim2.fromOffset(12,sideY+height+pad+10)
  r.recall.Visible=showRecall;r.recall.Position=UDim2.fromOffset(0,0);r.recall.Size=UDim2.fromOffset(recallWidth,buttonHeight)
  r.evade.Visible=fighting;r.evade.Position=UDim2.fromOffset(0,showStatusRow and buttonHeight or 0);r.evade.Size=UDim2.fromOffset(width,buttonHeight)
  self.selectorStatus.Visible=statusText~=nil
