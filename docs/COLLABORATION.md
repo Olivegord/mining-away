@@ -14,6 +14,22 @@ The shared project is **https://github.com/Olivegord/mining-away**. Its integrat
 
 The canonical map/recovery snapshot is **`build/DRONE_GAME.rbxl`**. Normal script work uses the existing shared **DRONEREVOLUTION** cloud document with native Script Sync; do not reopen/overwrite a local file for each source change. Do not use `assets/*.rbxl`, an old review ZIP or another game as a working copy.
 
+## Installing changes into Studio (any chat, several at once)
+
+Run `python3 tools/studio_apply.py` after committing. It talks to the MCP server inside Roblox Studio directly, so it works from any chat on this Mac while **DRONEREVOLUTION** (place 124078027733625, universe 10774898335) is open in Edit.
+
+| Situation | What the tool does |
+| --- | --- |
+| Two chats apply at the same time | The second waits for the first (lock in the shared `.git` folder), then installs on top. |
+| Another chat has unfinished edits in the same folder | Ignored: the bundle comes from `git archive` of the commit, not the working files. |
+| Studio holds a script that matches no recent commit (someone edited in Studio) | Stops with the script's name; nothing is changed. Bring the edit into `src/` first. |
+| The owner is in Play | Stops, or waits with `--wait SECONDS`. It never stops Play. |
+| The wrong place, or two copies, are open | Stops. |
+| Something fails midway | Scripts already replaced are put back, and nothing is saved. |
+| Run from a worktree | Requires your branch to contain the integration branch, fast-forwards it, then installs. |
+
+It never publishes. Sources travel through the connector in 60 KB pieces because Studio's assistant refuses localhost HTTP; the reassembled text must match the commit's fingerprint before any script is touched. `docs/studio-installed.json` records the last installed commit, time and hashes. The section below describes the older Script Sync path, kept for reference; it is not the install path while its roots error in Studio.
+
 ## Native Script Sync
 
 Studio is connected to the three tracked folders under `studio/`: **ServerScriptService**, **Shared** (ReplicatedStorage.Shared), and **StarterPlayerScripts**. Run `python3 tools/script_sync.py` after editing `src/`, or keep `python3 tools/script_sync.py --watch` running. It bundles only the seven managed Sources, refuses unmerged disk/Studio edits, and leaves additional files alone. Merge edits to generated bundles back into `src/` before exporting again. Commit generated Sources with their modular inputs. The ignored `build/script-sync-state.json` records the last exported hashes locally.

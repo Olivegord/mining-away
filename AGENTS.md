@@ -3,6 +3,17 @@
 - Read `docs/OWNER_REQUIREMENTS.md` first, then `docs/PROJECT_STATE.md` and `docs/COLLABORATION.md`. These checked-in files carry the working context to other computers; do not assume another person's Codex has this chat history.
 - There is ONE shared GitHub repository: https://github.com/Olivegord/mining-away. The owner wants this repository public and shared. Do not create a replacement repository, fork, or competing game project. Use `codex/restore-feel-prestige` as the integration branch; publish contributions through this same repository.
 
+## Several chats at once — how changes reach Studio
+
+The owner runs several chats in parallel and needs every chat's work to arrive in the game reliably. Follow this in every chat:
+
+1. **Commit your work**, then run **`python3 tools/studio_apply.py`**. That one command is the install path for the seven managed Sources. It needs no Studio connector in the chat and no owner action. It takes a machine-wide lock, bundles only committed code, checks the exact place and universe, replaces Sources only when what is in Studio matches a recent commit, saves the place, refreshes `build/DRONE_GAME.rbxl`, records the result in `docs/studio-installed.json` and commits those two files.
+2. `python3 tools/studio_apply.py --status` is a read-only check of what Studio has. Use it before a handoff and quote its output.
+3. If it prints `STOPPED:` nothing was changed. Read the reason, fix that, and run it again. Do not work around it, edit its guard, or fall back to another install method. If Studio is in Play it stops; pass `--wait 900` to wait for the owner to finish, and never end their Play.
+4. Only committed code is installed. Uncommitted edits by another chat in the same folder are ignored by the install, and you must not commit, revert or overwrite files you did not change. Stage files by name (`git add <your files>`), never `git add -A`. Check `git log` before using `HEAD~1`: another chat may have committed since you started.
+5. Prefer your own worktree and branch (`codex/<topic>`) for anything longer than a quick fix. Before applying from a worktree, run `git merge codex/restore-feel-prestige`, re-test and commit; the tool then fast-forwards the integration branch and installs.
+6. Script Sync (`tools/script_sync.py`, the `studio/` folders) is no longer the install path; its roots have been erroring in Studio. Do not rely on it or repair its state file. Map and scenery edits still follow the scoped export tools below, one chat at a time.
+
 ## Exact identity — never conflate these names again
 
 | Item | Exact identity | Meaning |

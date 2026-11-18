@@ -1,6 +1,12 @@
 # Shared project context
 
-## November 18 — VFX second pass: quieter circles and a video-faithful startup (NOT installed)
+## November 18 — one install command for every chat; VFX second pass installed
+
+`tools/studio_apply.py` is now the way any chat installs the seven Sources (see AGENTS.md, "Several chats at once", and [collaboration](COLLABORATION.md)). It drives Studio's own MCP server over stdio, serializes chats with a lock, bundles only committed code, guards each Source against unknown Studio edits, saves, refreshes the canonical file and writes `docs/studio-installed.json`.
+
+First real use: it found the client Source at f563d99 and the other six current, installed the client from **9e4f5f7** (the VFX second pass below) in shared **DRONEREVOLUTION** Edit, place **124078027733625**, universe **10774898335**, and saved (Studio log: Save To Cloud at 22:55:30 UTC). A follow-up `--status` reported all seven Sources up to date. Canonical **build/DRONE_GAME.rbxl** SHA-256 **a4568d55fb9ec1f005ec4aa7b972d0250b8f8bbfa9960d0110ed657bd6231ed7**. The next Play loads 9e4f5f7. No Play was started; no publication; last documented release remains **v363**. Not exercised yet: applying from a separate worktree, and waiting out a Play session. Studio was already open and was left open. The `studio/` Script Sync export folders are stale and were left as another session wrote them.
+
+## November 18 — VFX second pass: quieter circles and a video-faithful startup (installed later; see above)
 
 The owner called 6228027 a regression: particles oversimplified, an unwanted screen flash, and a charge unlike the reference. This pass restores the round disc particles at 55% size and lower opacity with separate smoke and spark layers, removes the screen flash, and rebuilds the charge from a 15 fps read of the video (lifted cubes, crescent slashes, incoming white bolts, glitter ribbons, orbiting lens flares, rings, a black orb with wedge spikes, then four posterized pops). See [VFX instructions](VFX_INSTRUCTIONS.md) for the stage table and tunables. Client-only.
 
