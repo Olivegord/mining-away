@@ -1,5 +1,11 @@
 # Shared project context
 
+## November 18 — VFX fifth pass: fully eased charge and release; drone visibility self-check
+
+Owner asked for no hard edges or linear cuts anywhere in the effect, and reported drones still occasionally invisible. See [VFX instructions](VFX_INSTRUCTIONS.md). The glitch now crossfades colors and melts its blotches, layers hand over through blends, and the release is eased. The charge's dark backdrop was covering neighboring drones and has been moved far behind them. The remaining cause of invisible drones is not known: this session cannot start Play, and reading the code did not settle it. `src/Client.lua` now logs `[DroneVisibility] drone <id> in state <state>: <reason>` when a cube is hidden, see-through, tiny or drawn far from its server position, at most once every eight seconds per drone. **Next step:** after an owner playtest in which a drone vanishes, read the Studio output and fix from that evidence.
+
+Checked in Studio Edit renders. Beam VFX (29, with the palette test changed from "exact colors" to "no single-step color or size change"), flat fields, mining flight, field pickup flow, geodes, fun FX, pickups, selling and rock damage pass with API doubles. Not checked in Play. Install details are in `docs/studio-installed.json`. No publication.
+
 ## November 18 — VFX fourth pass: release burst, expressive charge, 1.9 s first ignition, calmer cube flight
 
 Owner feedback on 7aeb7df: pretty good, but too linear, effects vanished at ignition, slightly too much for small drones, and drones bucked in flight. See [VFX instructions](VFX_INSTRUCTIONS.md). The ignition burst lives in `LaunchAftermath`; the first ignition is now 1.9 s with the opening trimmed rather than sped up; cube lean is filtered and capped; the flock's goal no longer jumps when the player starts or stops walking (`Feel.boidFollow`).

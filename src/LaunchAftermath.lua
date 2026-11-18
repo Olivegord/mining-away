@@ -22,6 +22,7 @@ end
 A.LIMIT=8
 local SOFT='rbxasset://textures/ui/AvatarExperience/glowLight.png'
 local WHITE=Color3.new(1,1,1)
+local function smooth(v) v=math.clamp(v,0,1);return v*v*(3-2*v) end
 local function hash(n)
  local x=math.sin(n*12.9898)*43758.5453
  return x-math.floor(x)
@@ -104,7 +105,7 @@ function A.drawBlast(f,age)
    local speed=k*(20+16*hash(i+3))
    local travel=speed*(1-math.exp(-age*6))/6
    local position=c.position+(out+Vector3.yAxis*.25).Unit*travel-Vector3.yAxis*k*4*age*age
-   local size=c.size*(1-math.clamp((age-.3)/.55,0,1)^2)
+   local size=c.size*(1-smooth((age-.25)/.6))
    p.Size=Vector3.one*math.max(.02,size)
    p.CFrame=CFrame.new(position)*CFrame.Angles(age*(9+i),age*(7-i*.6),i)
    p.Transparency=size<=.03 and 1 or 0
@@ -112,26 +113,29 @@ function A.drawBlast(f,age)
  end
  -- Flash: blooms in a couple of frames, then fades from white to the beam color.
  local bloom=1-math.exp(-age*28)
- local fade=1-math.clamp(age/.3,0,1)
- EnergyDisc.place(f.flash,focus+toward*.6*k,k*(1.5+5.5*bloom),WHITE:Lerp(b.color,math.clamp(age/.25,0,1)*.7),fade^1.3)
+ local fade=1-smooth(age/.34)
+ EnergyDisc.place(f.flash,focus+toward*.6*k,k*(1.5+5.5*bloom),WHITE:Lerp(b.color,smooth(age/.25)*.7),fade*smooth(age/.025+.35))
  -- The dark void blows open and thins away.
- local open=math.clamp(age/.28,0,1)
- EnergyDisc.place(f.dark,focus-toward*3*k,k*(9+11*(1-(1-open)^3)),Color3.new(0,0,0),.85*(1-open)^1.5)
- -- Lightning forks: two jagged paths that re-strike every few frames.
- local strike=math.floor(age/.045)
+ local open=smooth(age/.34)
+ EnergyDisc.place(f.dark,focus+(b.voidOffset or -toward*3*k),k*(9+11*open)*(b.voidGrow or 1),Color3.new(0,0,0),.72*(1-open))
+ -- Lightning forks: two jagged paths. Each strike swells and fades, and the two
+ -- are half a beat apart, so one is always handing over to the other.
  for fork=1,2 do
+  local clock=age/.11+(fork-1)*.5
+  local strike=math.floor(clock);local phase=clock-strike
   local seed=strike*7.3+fork*31+b.seed
   local a=hash(seed)*math.pi*2
   local heading=(f.right*math.cos(a)+f.up*math.sin(a)+Vector3.yAxis*(hash(seed+1)-.3)).Unit
   local side=heading:Cross(toward);side=side.Magnitude>.01 and side.Unit or f.right
+  local strength=b.full and math.sin(math.pi*phase)^1.5*(1-smooth(age/.36)) or 0
   local previous=Vector3.zero
   for segment=1,4 do
    local z=f.zig[(fork-1)*4+segment]
-   if age>.3 or not b.full then z.beam.Enabled=false else
+   if strength<.03 then z.beam.Enabled=false else
     local point=heading*k*(.8*segment+.4*hash(seed+segment))+side*k*(hash(seed+segment*3)-.5)*1.1
     z.a.Position=b.focus-f.root.Position+previous;z.b.Position=b.focus-f.root.Position+point
-    local w=k*.07*(1-age/.3)
-    z.beam.Width0=w;z.beam.Width1=w;z.beam.Enabled=true
+    local w=k*.07*strength
+    z.beam.Width0=w;z.beam.Width1=w*.8;z.beam.Enabled=true
     previous=point
    end
   end
@@ -150,7 +154,7 @@ function A.drawBlast(f,age)
    arc.a.CFrame=CFrame.fromMatrix(offset+at(a0),t0,up0,t0:Cross(up0))
    arc.b.CFrame=CFrame.fromMatrix(offset+at(a0+span),t1,up0,t1:Cross(up0))
    arc.beam.CurveSize0=radius*span/3;arc.beam.CurveSize1=radius*span/3
-   local w=k*.16*(1-life)
+   local w=k*.16*(1-smooth(life))*smooth(age/.05)
    arc.beam.Width0=w;arc.beam.Width1=w;arc.beam.Enabled=true
   end
  end
@@ -195,7 +199,7 @@ function A.step(now)
      if direction.Magnitude>.0001 then
       p.CFrame=CFrame.lookAt(position,position+direction, f.direction)*CFrame.Angles(0,0,n*2.399963)
      else p.CFrame=CFrame.new(position) end
-     p.Transparency=.40+.60*math.clamp((t-.45)/(life-.45),0,1)
+     p.Transparency=1-.6*smooth(t/.05)*(1-smooth((t-.45)/(life-.45)))
     else p.Transparency=1 end
    end
   end

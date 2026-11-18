@@ -1,5 +1,15 @@
 # VFX instructions — owner feedback and implementation
 
+## November 18 — fifth pass: no hard edges or cuts anywhere; invisible-drone work
+
+Owner: "tune the effect so there are no hard edges or linear cuts ANYWHERE", and some drones are still occasionally invisible. **This replaces the older "hard color cuts, never blend" rule.** Nothing in the charge or release may appear, vanish, change color or change size in a single step, and fades use eased curves rather than straight lines.
+
+- Glitch colors crossfade into the next palette frame over the last fifth of each frame; blotches and the RGB-split offset melt out and grow back (`h.blend`, `h.melt`). Each pop grows out of what the previous one shrank to. Wisps melt with the blotches.
+- The build-up hands over to the glitch through one blend weight (`glitching`), used for void size and ring radius as well as opacity. Rings, wisps and spikes bow out (`final`) before the flash instead of being switched off at ignition.
+- Spikes have a feathered base and tip. Bolt and ribbon heads use the soft glow image.
+- Release: lightning forks swell and fade and overlap by half a beat; shock arcs ease in; cube shrink, flash, void and fragment fades are eased.
+- **Invisible drones.** One cause was the dark backdrop: it sat three studs behind each charging drone and blacked out any drone farther from the camera, worst when the crew charges together. `B.voidPlacement` now puts it up to twelve studs back along the view line (never below the rock), enlarged to look the same, at 78% opacity. Any remaining cause is unknown; the client now writes a `[DroneVisibility]` line to the output once per affected cube (state, hull opacity, camera fade, size, distance from its server position), which can be read after a playtest.
+
 ## November 18 — fourth pass: expressive motion, a release burst, a shorter charge, no bucking
 
 Owner on the third pass: "pretty good", but some effects were too linear, everything just disappeared when the beam started, the whole thing was a little too much for tiny drones, and the drones bucked constantly in flight.

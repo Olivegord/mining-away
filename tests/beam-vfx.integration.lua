@@ -213,7 +213,7 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
 end)
-check('neon glitch: long charges pop several times, quick re-ignites pop once, colors are exact',function()
+check('neon glitch: long charges pop several times, quick re-ignites pop once, nothing cuts in one step',function()
  local r=BeamVFX.new(root,'Cutter',color)
  local start,count=BeamVFX.glitchPlan(2.6)
  assert(count==4 and start>.7 and start<.75,'a long charge needs four pops of about 0.18 s')
@@ -230,26 +230,37 @@ check('neon glitch: long charges pop several times, quick re-ignites pop once, c
  assert(glass.Transparency==1,'orb appeared before the glitch')
  assert(r.rich.core.Transparency<1 and r.rich.debris[1].Transparency<1,'core and lifted cubes missing during the long charge')
  local seen,jumps,previousPop,visible={},0,nil,0
- for step=0,80 do
-  local q=start+.004+step*(.995-start)/80
+ local lastColor,lastSize
+ local wisps=0
+ for step=0,240 do
+  local q=start+.004+step*(.995-start)/240
   BeamVFX.draw(r,from,to,100+q,0,q,nil,1,2.6)
   -- A pop swells from nothing, so the orb is hidden for an instant at each start.
   if glass.Transparency==0 then
    visible+=1
-   assert(allowed[glass.Color],'orb color must be an exact palette entry (no blending)')
+   -- Colors crossfade between palette frames: no single-step color cut, no size jump.
+   local c=glass.Color
+   if lastColor then
+    local delta=math.abs(c.R-lastColor.R)+math.abs(c.G-lastColor.G)+math.abs(c.B-lastColor.B)
+    assert(delta<1.2,'orb color cut in one step ('..delta..')')
+    assert(math.abs(glass.Size.X-lastSize)<.75,'orb size jumped in one step')
+   end
+   lastColor=c;lastSize=glass.Size.X
    assert(glass.Size.X<=2.6,'glitch orb too large')
-   seen[glass.Color]=true
+   seen[string.format('%d,%d,%d',math.floor(c.R*4+.5),math.floor(c.G*4+.5),math.floor(c.B*4+.5))]=true
   end
   local pop=BeamVFX.glitchState(q,2.6)
   if previousPop and pop~=previousPop then jumps+=1 end
   previousPop=pop
   assert(not r.rich.comets[1].path.beam.Enabled and not r.rich.flare.beam.Enabled,'inflow cluttered the glitch')
-  assert(r.rich.wisps[1].beam.Enabled and r.rich.void.gui.Enabled,'wisps and void must stay through the glitch')
+  assert(r.rich.void.gui.Enabled,'the void must stay through the glitch')
+  if r.rich.wisps[1].beam.Enabled then wisps+=1 end
  end
  local colors=0;for _ in pairs(seen) do colors+=1 end
  assert(jumps==count-1,'expected '..(count-1)..' new pops, saw '..jumps)
- assert(visible>=70,'the orb was hidden for too much of the glitch')
- assert(colors>=3,'glitch never cut between colors')
+ assert(visible>=225,'the orb was hidden for too much of the glitch')
+ assert(wisps>=120,'blue wisps should melt in and out, not vanish')
+ assert(colors>=4,'the glitch never moved through its colors')
  -- A quick re-ignite: compact, no lifted cubes, one pop.
  BeamVFX.draw(r,from,to,200,0,.2,nil,1,.3)
  assert(glass.Transparency==1 and r.rich.debris[1].Transparency==1 and r.rich.void.gui.Enabled)

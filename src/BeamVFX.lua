@@ -235,6 +235,8 @@ B.GLITCH_PAIRS={
 }
 B.GLITCH_SPLIT={Color3.fromRGB(0,255,255),Color3.fromRGB(255,0,255),Color3.fromRGB(255,255,0)}
 local SOLID=NumberSequence.new(0)
+-- Spikes fade in from the orb and feather out at the tip.
+local SPIKE=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.22,.12),NumberSequenceKeypoint.new(.65,.2),NumberSequenceKeypoint.new(1,1)})
 local SOFT=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.5,.05),NumberSequenceKeypoint.new(1,1)})
 local HALO=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(.7,.6),NumberSequenceKeypoint.new(1,1)})
 local TRAIL=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.6,.25),NumberSequenceKeypoint.new(1,1)})
@@ -314,6 +316,7 @@ acquireRich=function(r)
  for i=1,3 do
   local line=glowPath(r,'InwardStream'..i,CYAN)
   h.comets[i]={path=line.core,halo=line.halo,head=EnergyDisc.sprite(h.glass,'InwardSpark')}
+  h.comets[i].head.image.Image=SOFT_GLOW
  end
  for i=1,2 do
   local edge=richPath(r,'SlashEdge'..i,WHITE,ARC)
@@ -324,9 +327,10 @@ acquireRich=function(r)
  for i=1,3 do
   local line=glowPath(r,'IncomingBolt'..i,CYAN)
   h.bolts[i]={path=line.core,halo=line.halo,head=EnergyDisc.sprite(h.glass,'BoltHead')}
+  h.bolts[i].head.image.Image=SOFT_GLOW
  end
  for i=1,4 do
-  local path=richPath(r,'WedgeSpike'..i,WHITE,SOLID);path.beam.Segments=1;path.beam.LightEmission=1
+  local path=richPath(r,'WedgeSpike'..i,WHITE,SPIKE);path.beam.Segments=10;path.beam.LightEmission=.8
   h.spikes[i]=path
  end
  for i=1,3 do
@@ -418,37 +422,51 @@ function B.popSize(k,u)
  u=clamp(u)
  -- Lands with a brief overshoot, like something snapping into place.
  local overshoot=1+.2*math.exp(-((u-.1)/.06)^2)
- return (1-.13*(k-1))*smooth(u/.1)*(1-.82*clamp((u-.1)/.9)^.75)*overshoot
+ -- Each pop grows out of what the previous one shrank to, so size never jumps.
+ local peak=1-.13*(k-1)
+ local floor=k>1 and .18*(1-.13*(k-2)) or 0
+ return (floor+(peak-floor)*smooth(u/.1))*(1-.82*smooth(clamp((u-.1)/.9)^.8))*overshoot
 end
 local function hideOrb(h)
  h.glass.Transparency=1;h.split.Transparency=1
  for _,p in ipairs(h.blotches) do p.Transparency=1 end
 end
-local function drawOrb(h,center,radius,frame)
+-- frame picks the palette entry; blend (0..1) crossfades toward the next entry
+-- and melt (0..1) grows and shrinks the blotches, so neither color nor layout
+-- ever changes in a single step.
+local function drawOrb(h,center,radius,frame,blend,melt)
+ blend=blend or 0;melt=melt or 1
  h.glass.CFrame=CFrame.new(center)
  if radius<=.01 then hideOrb(h);return 0 end
  local player=Players.LocalPlayer
  local gentle=player and player:GetAttribute('ReducedFlashing')==true
- local colors=B.GLITCH_PAIRS[(frame-1)%#B.GLITCH_PAIRS+1]
- h.glass.Size=Vector3.one*radius*2;h.glass.Color=colors[1]
+ local count=#B.GLITCH_PAIRS
+ local colors=B.GLITCH_PAIRS[(frame-1)%count+1]
+ local after=B.GLITCH_PAIRS[frame%count+1]
+ h.glass.Size=Vector3.one*radius*2;h.glass.Color=colors[1]:Lerp(after[1],blend)
+ -- A whisper of see-through at the rim end of the shrink keeps the silhouette soft.
  h.glass.Transparency=gentle and .6 or 0
  local camera=workspace.CurrentCamera
  local right=camera and camera.CFrame.RightVector or Vector3.xAxis
  local up=camera and camera.CFrame.UpVector or Vector3.yAxis
  local back=camera and -camera.CFrame.LookVector or Vector3.zAxis
  local side=(frame%2==0) and 1 or -1
- h.split.Size=Vector3.one*radius*2.05;h.split.Color=B.GLITCH_SPLIT[frame%#B.GLITCH_SPLIT+1]
- h.split.CFrame=CFrame.new(center+right*side*radius*.16-back*radius*.1)
+ local splits=#B.GLITCH_SPLIT
+ h.split.Size=Vector3.one*radius*2.05
+ h.split.Color=B.GLITCH_SPLIT[frame%splits+1]:Lerp(B.GLITCH_SPLIT[(frame+1)%splits+1],blend)
+ h.split.CFrame=CFrame.new(center+right*side*radius*.16*melt-back*radius*.1)
  h.split.Transparency=gentle and .75 or 0
  for i,p in ipairs(h.blotches) do
   local a=hash(frame*7+i)*TAU;local b=hash(frame*13+i*3)*.9-.45
   local dir=back+right*math.cos(a)*1.1+up*math.sin(a)*1.1+up*b
   dir=dir.Magnitude>.01 and dir.Unit or back
-  local blotch=radius*(i<=2 and .62 or .5)*(.8+.4*hash(frame*5+i))
-  p.Size=Vector3.one*blotch*2
-  p.CFrame=CFrame.new(center+dir*(radius-blotch*.55))
-  p.Color=i<=2 and colors[2] or BLACK
-  p.Transparency=gentle and .65 or 0
+  local blotch=radius*(i<=2 and .62 or .5)*(.8+.4*hash(frame*5+i))*melt
+  if blotch<.02 then p.Transparency=1 else
+   p.Size=Vector3.one*blotch*2
+   p.CFrame=CFrame.new(center+dir*(radius-blotch*.55))
+   p.Color=i<=2 and colors[2]:Lerp(after[2],blend) or BLACK
+   p.Transparency=gentle and .65 or 0
+  end
  end
  return radius
 end
@@ -471,6 +489,15 @@ local function drawSpikes(h,k,seed,strength,inner,colors)
  end
 end
 local SPIKE_PALE={WHITE,CYAN,WHITE,Color3.fromRGB(190,220,255)}
+-- The dark backdrop sits far behind the charge along the view line (and is
+-- enlarged to look the same size), so drones hovering nearby stay in front of
+-- it instead of being blacked out. It never dips below the rock.
+function B.voidPlacement(focus,toward,eyeDistance,floorY,k)
+ local distance=12*k
+ if toward.Y>.05 then distance=math.clamp((focus.Y-(floorY+1))/toward.Y,3*k,12*k) end
+ local grow=(eyeDistance+distance)/math.max(1,eyeDistance)
+ return focus-toward*distance,grow
+end
 -- Where the charge gathers: a little below the emitter, on the beam line.
 function B.focus(from,to,k)
  local delta=to-from
@@ -529,9 +556,13 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  local implode=full and smooth((q-.95)/.045) or 0
  local kick=0
  -- Void: the dark the neon reads against. It swells with the charge.
+ local glitching=1-calm -- 0 during the build-up, 1 in the glitch, blended across the handover
+ local final=full and 1-smooth((q-.962)/.03) or 1-smooth((q-.9)/.08) -- thin layers bow out before the flash
  local voidSize=k*snap*(3.5+7.5*build)*(1+.04*math.sin(now*5)-.06*beat)
- if pop then voidSize=k*snap*(9.5+2.5*B.popSize(pop,u))*(1-.35*implode) end
- EnergyDisc.place(h.void,focus-toward*3*k,voidSize,BLACK,.9*intro)
+ if pop then voidSize=voidSize+(k*snap*(9.5+2.5*B.popSize(pop,u))*(1-.35*implode)-voidSize)*glitching end
+ local voidAt,voidGrow=B.voidPlacement(focus,toward,eye.Magnitude,to.Y,k)
+ h.voidOffset=voidAt-focus;h.voidGrow=voidGrow
+ EnergyDisc.place(h.void,voidAt,voidSize*voidGrow,BLACK,.78*intro)
  -- Core: small and dark with a bright rim; it swells black before the glitch.
  local swell=full and math.sin(math.pi*clamp((q-.58)/(start-.58))) or 0
  local coreRadius=k*snap*(.16+.16*build+.62*swell)*(1+.3*beat)
@@ -545,21 +576,26 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  -- Glitch orb.
  local orbRadius=0
  if pop then
-  local frame=(pop-1)*2+(u>.55 and 2 or 1)
   local player=Players.LocalPlayer
-  if player and player:GetAttribute('ReducedFlashing')==true then frame=(pop-1)*2+1 end
+  local frame,progress
+  if player and player:GetAttribute('ReducedFlashing')==true then frame=(pop-1)*2+1;progress=u
+  elseif u<.55 then frame=(pop-1)*2+1;progress=u/.55
+  else frame=(pop-1)*2+2;progress=(u-.55)/.45 end
   if not full then frame=frame+math.floor(now*.9)%4*2 end -- re-ignites vary their colors
   h.frame=frame
+  -- Colors crossfade into the next frame; blotches and wisps melt out and back in.
+  h.blend=smooth((progress-.8)/.2)
+  h.melt=smooth(progress/.22)*(1-smooth((progress-.78)/.22))
   -- A small per-frame shake sells the "glitch".
   local tick=math.floor(now*28)
   local shake=(right*(hash(tick)-.5)+Vector3.yAxis*(hash(tick+9)-.5))*k*snap*.1
-  orbRadius=drawOrb(h,focus+shake,B.ORB_RADIUS*k*snap*B.popSize(pop,u),frame)
+  orbRadius=drawOrb(h,focus+shake,B.ORB_RADIUS*k*snap*B.popSize(pop,u),frame,h.blend,h.melt)
  else hideOrb(h) end
  h.orbRadius=orbRadius
  -- Wedge spikes ease out as the black core peaks and at the low point of each pop.
  if pop and u>.55 then
   local colors=B.GLITCH_PAIRS[(h.frame-1)%#B.GLITCH_PAIRS+1]
-  drawSpikes(h,k*snap,pop*11+1,smooth((u-.55)/.2),orbRadius,pop%2==0 and {colors[1],WHITE,CYAN,Color3.fromRGB(255,255,0)} or SPIKE_PALE)
+  drawSpikes(h,k*snap,pop*11+1,smooth((u-.55)/.2)*(1-smooth((u-.86)/.14))*final,orbRadius,pop%2==0 and {colors[1],WHITE,CYAN,Color3.fromRGB(255,255,0)} or SPIKE_PALE)
  elseif not pop and swell>.6 then
   drawSpikes(h,k,7,smooth((swell-.6)/.3),coreRadius,SPIKE_PALE)
  else drawSpikes(h,k,0,0,0,SPIKE_PALE) end
@@ -573,14 +609,15 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
    local e1=(across*math.cos(tilt)+direction*math.sin(tilt)).Unit
    local function at(a) return e1*math.cos(a)*radius+upright*math.sin(a)*radius end
    local function tan(a) return (-e1*math.sin(a)+upright*math.cos(a)).Unit end
-   curve(path,at(a0),at(a0+span),tan(a0),tan(a0+span),radius*span/3,k*snap*(.35+.3*hash(seed+3)))
+   curve(path,at(a0),at(a0+span),tan(a0),tan(a0+span),radius*span/3,k*snap*(.35+.3*hash(seed+3))*h.melt*final)
    path.beam.Width1=k*.05
   end
  end
  -- Thin rings tighten around the core and hug the orb through the glitch.
- local ringAlpha=smooth((q-(full and .42 or .1))/.12)
+ local ringAlpha=smooth((q-(full and .42 or .1))/.12)*final
  for i,ring in ipairs(h.rings) do
-  local radius=(pop and orbRadius*1.12+k*snap*(.12+.16*i) or coreRadius+k*snap*(.5+.5*i)*(1.6-.6*build)*(1+.12*beat))
+  local radius=coreRadius+k*snap*(.5+.5*i)*(1.6-.6*build)*(1+.12*beat)
+  if pop then radius=radius+(orbRadius*1.12+k*snap*(.12+.16*i)-radius)*glitching end
   local tilt=.5+i*.9+now*(i==1 and .9 or -.65)+(i==1 and 3 or -2.2)*q*q
   local e1=(across*math.cos(tilt)+direction*math.sin(tilt)*.55).Unit
   local e2=e1:Cross(toward).Unit
@@ -652,7 +689,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
    local ta,tb=(dir+sideways*kink).Unit,(dir-sideways*kink).Unit
    curve(bolt.path,head,tail,ta,tb,span*.3,k*snap*.2*fade)
    curve(bolt.halo,head,tail,ta,tb,span*.3,k*snap*.5*fade)
-   EnergyDisc.place(bolt.head,focus+head,k*snap*.42,WHITE,fade)
+   EnergyDisc.place(bolt.head,focus+head,k*snap*.95,WHITE,fade)
    kick=math.max(kick,smooth((phase-.78)/.14)*(1-smooth((phase-.94)/.06)))
   end
  end
@@ -677,7 +714,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
    curve(item.halo,head,tail,-va.Unit,-vb.Unit,span*.3,k*.55*visible)
    heads[#heads+1]=focus+head;heads[#heads+1]=focus+head:Lerp(tail,.35);heads[#heads+1]=focus+head:Lerp(tail,.7)
   else off(item.path);off(item.halo) end
-  EnergyDisc.place(item.head,focus+head,k*.36,WHITE,visible)
+  EnergyDisc.place(item.head,focus+head,k*.8,WHITE,visible)
  end
  -- Lens flares orbit on opposite sides and close in on the core.
  local fp=full and clamp((q-.36)/(start-.36)) or 0
@@ -750,7 +787,8 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale,chargeDuration)
     -- Tell the aftermath where everything was, so the energy visibly leaves.
     local k=h.scale
     local isFull=(h.duration or 0)>=B.FULL_CHARGE
-    local blast={focus=B.focus(from,to,k),scale=isFull and k or k*.55,color=r.color,full=isFull,cubes={},seed=(now*13)%97}
+    local blast={focus=B.focus(from,to,k),scale=isFull and k or k*.55,color=r.color,full=isFull,cubes={},seed=(now*13)%97,
+     voidOffset=h.voidOffset,voidGrow=h.voidGrow}
     if isFull then
      for i,cube in ipairs(h.debris) do
       if cube.Transparency<.5 then blast.cubes[#blast.cubes+1]={position=cube.Position,size=cube.Size.X} end
@@ -769,12 +807,9 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale,chargeDuration)
    local k=h.scale or chargeScale(r,scale)
    local focus=B.focus(from,to,k)
    local _,pops=B.glitchPlan(h.duration)
-   local remaining=1-releaseAge/B.GLITCH_TAIL
+   local remaining=1-smooth(releaseAge/B.GLITCH_TAIL)
    local snap=(h.duration or 1)>=B.FULL_CHARGE and 1 or math.clamp((h.duration or .4)/.4,.45,1)*.7
-   drawOrb(h,focus,B.ORB_RADIUS*k*snap*B.popSize(pops,1)*remaining,h.frame or pops*2)
-   local camera=workspace.CurrentCamera
-   local toward=camera and (camera.CFrame.Position-focus).Unit or Vector3.zAxis
-   EnergyDisc.place(h.void,focus-toward*3*k,k*snap*11*(1+.4*(1-remaining)),Color3.new(0,0,0),.9*remaining)
+   drawOrb(h,focus,B.ORB_RADIUS*k*snap*B.popSize(pops,1)*remaining,h.frame or pops*2,1,remaining)
   else releaseRich(r) end
  end
  if r.rich and r.rich.startup then

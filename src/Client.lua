@@ -1799,8 +1799,35 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  local focus=avatar and avatar.Position+Vector3.yAxis
  local cameraPosition=camera and camera.CFrame.Position
  local reveal=cameraPosition and focus and not inspectingFleet()
+ -- Visibility self-check. The owner has seen cubes go invisible now and then
+ -- and it could not be reproduced offline. Once a second, any cube that is
+ -- hidden, see-through, tiny or far from where the server has it writes one
+ -- line to the output saying why, so the cause can be read after a playtest.
+ local checkVisibility=now>=(presentation.visibilityCheckAt or 0)
+ if checkVisibility then presentation.visibilityCheckAt=now+1 end
  for _,d in pairs(drones) do
   renderDrone(d,dt,now)
+  if checkVisibility and d.cubeLook then
+   local body=d.view.PrimaryPart
+   local state=d.source:GetAttribute('State') or '?'
+   local reason
+   if not d.view.Parent then reason='render model is not in the scene'
+   elseif not body or not body.Parent then reason='render model has no hull'
+   elseif state=='Destroyed' or state=='Reprinting' then reason='drone is '..state..' (HP '..tostring(d.source:GetAttribute('HP'))..')'
+   else
+    local opacity=(1-body.Transparency)*(1-body.LocalTransparencyModifier)
+    local server=d.source:GetAttribute('Position')
+    if opacity<.35 then reason=string.format('hull opacity %.2f (Transparency %.2f, camera fade %.2f)',opacity,body.Transparency,body.LocalTransparencyModifier)
+    elseif body.Size.X<.6 then reason=string.format('hull is only %.2f studs wide',body.Size.X)
+    elseif typeof(server)=='Vector3' and (body.Position-server).Magnitude>45 then reason=string.format('drawn %.0f studs from its server position',(body.Position-server).Magnitude)
+    elseif body.Position.Y<-50 or body.Position.Magnitude>5000 then reason='drawn far outside the map'
+    end
+   end
+   if reason and now-(d.visibilityNotedAt or -100)>=8 then
+    d.visibilityNotedAt=now
+    warn(string.format('[DroneVisibility] drone %s in state %s: %s',tostring(d.source:GetAttribute('DroneId')),state,reason))
+   end
+  end
   for part in pairs(d.parts) do
    -- Cubes now fly over the avatar's head all the time; a full fade made them
    -- look invisible. They only thin slightly when they cross the view line.
