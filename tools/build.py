@@ -118,6 +118,8 @@ def module_bundle(names):
     code=code.replace("require('./"+embedded+"')",'(function()\n'+module+'\nend)()')
   if name=='SpecialDroneMotion':
    code=code.replace("require('./DroneStatus')",'(function()\n'+(ROOT/'src/DroneStatus.lua').read_text()+'\nend)()')
+  if name=='Presentation':
+   code=code.replace("require('./FunFX')",'(function()\n'+(ROOT/'src/FunFX.lua').read_text()+'\nend)()')
   if name=='SaleView':
    code=code.replace("require('./SaleLedger')",'(function()\n'+(ROOT/'src/SaleLedger.lua').read_text()+'\nend)()')
   if name=='PickupView':

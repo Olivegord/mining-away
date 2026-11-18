@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 18 — colorful cubes, confetti breaks and field motes
+
+Owner direction: more colorful, less flat, very simple, more particles. Cubes keep the cube silhouette but each takes a vivid palette color with a light top cap, a glowing belly, simple eyes, a cruise trail and mining sparkles; its laser uses the same color. Rock breaks add a field-colored confetti and twinkle burst on top of the existing two-piece split, chips and audio. Square fields get slow colored motes; a mild client color grade lifts saturation. All of it lives in `src/FunFX.lua`, is client-only, bounded and disabled by Reduced Motion. Do not restore the plain gray cube shells.
+
 ## November 17 — overhead cube laser assignment
 
 The original quarry's helper offsets can sit beyond a rock's footprint while still contributing damage. Cube laser miners reserve one overhead spot per rock and start cutting close to that spot in both routes. Native rays against the original union hit every sampled center station and missed every sampled helper offset. See [project state](PROJECT_STATE.md) for the verification limits.

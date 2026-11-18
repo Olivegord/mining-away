@@ -69,6 +69,7 @@ end
 function IM:FireClient(player,payload) table.insert(self.clientMessages,{player=player,payload=payload});self.OnClientEvent:Fire(payload) end
 function IM:SetTextureOffset(offset) self.TextureOffset=offset end
 function IM:Play() self.Playing=true end
+function IM:Emit(count) self.Emitted=(self.Emitted or 0)+count end
 function IM:TakeDamage(amount) self.Health=math.max(0,self.Health-amount) end
 function IM:ApplyImpulse(force) self.LastImpulse=force end
 function IM:IsA(c)

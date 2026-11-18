@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — make the game more fun, colorful and less flat
+
+The owner says the game is not much fun yet. Polish effects, fix bugs, and make it more colorful and less flat while keeping it very simple. Use particle effects. This supersedes the plain gray cube look for the flat-field fleet; cubes stay cubes. Routine saves only; no release requested.
+
 ## November 18 — counter sale shows the rocks, modifiers and a large total
 
 The owner calls the current sale terrible. Show the physical rocks, the effect of their modifiers and large text with the sale amount, using good UI practice and taste. One press at SELL ORE remains the action. Routine shared Edit and canonical saves apply; no player release requested.

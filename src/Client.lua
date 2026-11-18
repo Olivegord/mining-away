@@ -11,6 +11,15 @@ local command=RS:WaitForChild('MiningAway'):WaitForChild('Command')
 local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';localFX.Parent=workspace
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
+Presentation.Fun.colorPop()
+task.spawn(function()
+ -- The authored map can stream in after the controller starts.
+ for _=1,20 do
+  Presentation.Fun.fieldMotes(localFX,world)
+  if Presentation.Fun.motesReady then break end
+  task.wait(1)
+ end
+end)
 local rockDamage=RockDamage.new()
 -- Startup is silent. The established cut and contact cues remain spatial.
 soundscape.chargeFromRenderer=true
@@ -39,7 +48,9 @@ end,function(position,strength)
 end,function(from,to,level,now)
  if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
 end,cameraBeat,function(at) return impactFreeze:holdsNomad(at) end)
-rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism,owned)
+rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism,owned,mineral)
+ local pop=not prism and Presentation.Fun.mineralColor(mineral)
+ if pop then Presentation.Fun.confetti(localFX,position,pop,strength*(owned and 1 or .7)) end
  if prism then
   presentation:crystalKick(position,strength,now,true)
  else
@@ -964,6 +975,7 @@ local function registerDrone(source)
  end
  local typeColor=colors[source:GetAttribute('Role')] or colors[source:GetAttribute('Type')]
  emitter.Color=typeColor or emitter.Color
+ local cubeLook=nil
  -- The original 1-stud emitter is enclosed by its 2-stud body; a restrained tint stays visible.
  if not cube and referenceMiner then
   local ink=source:GetAttribute('BeamVariant')=='Inkbeam'
@@ -977,7 +989,9 @@ local function registerDrone(source)
   optic.Shape=Enum.PartType.Cylinder;optic.Size=Vector3.new(.20,ink and .98 or .82,ink and .98 or .82)
   optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
   optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
- elseif not cube and typeColor and not clone:GetAttribute('RoleGeometry') then
+ elseif cube then
+  cubeLook=Presentation.Fun.paintCube(clone,pivot,id)
+ elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
   local trim=localPart(clone,'LowerChassis',pivot.Position);trim.Size=Vector3.new(pivot.Size.X*1.015,.055,pivot.Size.Z*1.015);trim.Transparency=0;trim.Color=Color3.fromRGB(23,35,46);trim.Material=Enum.Material.Metal;trim.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.35,0)
@@ -994,6 +1008,7 @@ local function registerDrone(source)
  if not cube and role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,
   flightImpulseAt=source:GetAttribute('FlightImpulseAt') or 0,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
+ d.cubeLook=cubeLook
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  d.updateStatus=SpecialDroneMotion.status.draw
@@ -1474,6 +1489,9 @@ local function renderDrone(d,dt,now)
   end
  end
  d.view:PivotTo(visiblePose)
+ if d.cubeLook then
+  Presentation.Fun.stepCube(d.cubeLook,velocity.Magnitude,state=='Mine' or state=='Warmup',state=='Destroyed' or state=='Reprinting' or motionPaused,now)
+ end
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
@@ -1578,7 +1596,7 @@ local function renderDrone(d,dt,now)
   contact=active,
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
-  stoneColor=resource and resource.stoneColor,
+  stoneColor=resource and resource.stoneColor,cubeColor=d.cubeLook and d.cubeLook.color,
   cube=cube,style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=not cube and s:GetAttribute('BeamVariant') or nil,droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,

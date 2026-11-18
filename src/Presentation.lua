@@ -1,6 +1,7 @@
 -- Client-only animation and cosmetic debris. No remotes, damage or rewards.
 -- Feedback is bundled immediately before this module by tools/build.py.
 local P={};P.__index=P
+P.Fun=require('./FunFX')
 local F=Feedback
 local S=SentryMotion
 local ICE=Color3.fromRGB(126,241,221)
@@ -390,10 +391,10 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  end
  local style=sample.style or 'Cutter';local look=miningLooks[style] or miningLooks.Cutter
  local ink=sample.beamVariant=='Inkbeam' and sample.droneRole=='Striker'
- local tint=ink and InkbeamView.Gold or miningTypeColors[sample.droneType] or look.color
+ local tint=ink and InkbeamView.Gold or sample.cubeColor or miningTypeColors[sample.droneType] or look.color
  if beam.look~=look or beam.tint~=tint then
   beam.look=look;beam.tint=tint
-  beam.core.Color=miningTypeColors[sample.droneType] and tint:Lerp(WHITE,.4) or look.core
+  beam.core.Color=(sample.cubeColor or miningTypeColors[sample.droneType]) and tint:Lerp(WHITE,.4) or look.core
   beam.halo.Color=tint;beam.marker.Color=tint
  end
  beam.miningCue=beam.miningCue or {}

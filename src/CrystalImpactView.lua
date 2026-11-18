@@ -213,7 +213,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    if not ordinaryStone then audio:play('crystal_release_tink',point,{level=volume}) end
   end
-  if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
+  if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned,s:GetAttribute('Mineral')) end
   openHalves(r,frame,size,now,reduced)
   if not reduced then
    if not prism and not nomad and not ordinaryStone then releaseSparks(point,ground,r.baseColor,strength,now) end
