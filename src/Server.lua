@@ -2623,7 +2623,13 @@ local function travelSpeed(d)
   local variation=d.swarmTraits and 1+(d.swarmTraits.speed-1)*.35*(d.swarmCruise or 0) or 1
   baseSpeed=math.min(math.max(baseSpeed,.39*agility)*variation*(1+.24*agility),math.max(.5,baseSpeed))
  end
- return baseSpeed*roleScale*(d.role=='Medic' and .68 or (d.role=='Courier' and (d.loadSpeed or 1)*(1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
+ local speed=baseSpeed*roleScale*(d.role=='Medic' and .68 or (d.role=='Courier' and (d.loadSpeed or 1)*(1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
+ if scene.flatFields and d.state~='BreakerDive' then
+  -- Drones are slower than the player and differ a little from each other.
+  d.swarmTraits=d.swarmTraits or Feel.swarmTraits(d.id)
+  speed=math.min(speed,Feel.droneCruiseStep(d.swarmTraits,d.goal and (d.goal-d.pos).Magnitude or 0))
+ end
+ return speed
 end
 local function move(d,goal,dt)
  d.intentGoal=goal
@@ -2643,7 +2649,7 @@ local function move(d,goal,dt)
  -- Calm escort/holding pressure; strong predictive passing is for job travel.
  local escort=d.state=='Follow' or d.state=='HoldSelector' or d.state=='Waiting' or d.state=='StorageFull' and d.deployedCarrier
  local flock=scene.flatFields and (escort and 1 or .45) or nil
- local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight,flock)*Feel.SwarmForce*(escort and (flock and .66 or .22) or .18+.82*descentProgress)
+ local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight,flock)*Feel.SwarmForce*(escort and (flock and 1.1 or .22) or (flock and .45 or .18)+.82*descentProgress)
  if flock then desired=Vector3.new(desired.X,0,desired.Z) end
  d.flightSteering=weight==0 and Vector3.zero or Feel.smoothSwarm(d.flightSteering,desired,dt)
  d.goal=goal
@@ -2653,6 +2659,11 @@ local function move(d,goal,dt)
  local response=d.orePickupId and d.state=='Collect' and Workshop.COURIER_APPROACH_RESPONSE or flight and flight.response
   or 1
  if d.state=='Follow' then response+=.28*scene.followAgility(d) end
+ if scene.flatFields and not d.target then
+  -- Softer, floatier thrust while cruising; each drone reacts at its own pace.
+  d.swarmTraits=d.swarmTraits or Feel.swarmTraits(d.id)
+  response*=.45+.35*(d.swarmTraits.rate-.68)/.64
+ end
  d.flightResponse=response;d.flightWork=work;d.flightSpeed=speed
  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work,nil,response,d.flightMass,d.flightSteering)
  local yaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
@@ -2676,6 +2687,10 @@ function scene.followGoal(d,position,count,velocity,dt)
  if d.role=='Nomad' and not scene.flatFields then return Feel.followGoal(position,d.slot,count,now,d.owned.base.maxStep60,false,d.flightHeight) end
  local goal
  d.swarmTraits=d.swarmTraits or Feel.swarmTraits(d.id)
+ if scene.flatFields then
+  goal=Feel.boidFollow(position,velocity or Vector3.zero,d.swarmTraits,now)
+  return Vector3.new(goal.X,home.Y+scene.cubeCruiseHeight,goal.Z)
+ end
  local p=profiles[d.owner]
  local ring=p and p.followRing and p.followRing[d.id]
  if not ring then

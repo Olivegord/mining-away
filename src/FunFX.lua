@@ -69,13 +69,6 @@ function Fun.paintCube(view,body,id)
  attach(glow,body,CFrame.new(0,-s.Y*.5-.025,0))
  local light=Instance.new('PointLight');light.Name='FunLight';light.Color=color;light.Range=6;light.Brightness=.35
  light.Shadows=false;light.Parent=glow
- -- Two simple eyes on the front face read as a friendly little robot.
- for _,side in ipairs({-1,1}) do
-  local eye=bare(view,'FunEye',Vector3.new(.34,.52,.05),rgb(28,30,44))
-  attach(eye,body,CFrame.new(side*s.X*.2,s.Y*.08,-s.Z*.5-.02))
-  local shine=bare(view,'FunEyeShine',Vector3.new(.12,.14,.03),WHITE,Enum.Material.Neon)
-  attach(shine,body,CFrame.new(side*s.X*.2+.06,s.Y*.08+.12,-s.Z*.5-.045))
- end
  -- A ribbon trail in the cube's color while it cruises.
  local a0=Instance.new('Attachment');a0.Name='FunTrailTop';a0.Position=Vector3.new(0,s.Y*.32,s.Z*.5);a0.Parent=body
  local a1=Instance.new('Attachment');a1.Name='FunTrailBottom';a1.Position=Vector3.new(0,-s.Y*.32,s.Z*.5);a1.Parent=body

@@ -174,6 +174,34 @@ function F.swarmTraits(id)
   height=(math.floor(seed/131)%101)/50-1, speed=.87+(math.floor(seed/1091)%101)*.0026,
   rate=.68+(math.floor(seed/8191)%101)*.0064}
 end
+-- Flat-field fleets fly like a loose flock of machines, not pets on a ring.
+-- They cruise below avatar walking speed (16) and each drone keeps its own
+-- wander rhythm, preferred distance and drift direction.
+F.DroneCruise=12.5
+function F.droneCruiseStep(traits,gap)
+ -- Far behind, a drone hurries a little, but never outpaces a walking player.
+ local catchUp=math.clamp(((gap or 0)-18)/22,0,1)*3.5
+ return math.min(15.5,F.DroneCruise*(traits and traits.speed or 1)+catchUp)/60
+end
+function F.wander(traits,now)
+ local a=traits.phase;local r=traits.rate
+ local amp=2.2+1.6*(traits.lane+1)
+ local x=math.sin(now*.31*r+a)+.55*math.sin(now*.83*r+a*2.7)
+ local z=math.cos(now*.27*r+a*1.3)+.55*math.sin(now*.71*r+a*.6)
+ return Vector3.new(x,0,z)*(amp/1.55)
+end
+function F.boidFollow(center,velocity,traits,now)
+ local motion=Vector3.new(velocity.X,0,velocity.Z)
+ local speed=motion.Magnitude
+ local direction=speed>.5 and motion/speed or Vector3.zero
+ -- A slowly drifting bearing around the player: the cloud reshapes itself.
+ local bearing=traits.phase+now*.045*(traits.lane>=0 and 1 or -1)
+ local distance=6.5+3.2*(traits.height+1)
+ local home=Vector3.new(math.cos(bearing),0,math.sin(bearing))*distance
+ -- Trail behind a walking player instead of keeping pace beside them.
+ local trail=-direction*(4+math.min(speed,16)*.45)
+ return center+home*(speed>.5 and .6 or 1)+trail+F.wander(traits,now)
+end
 function F.ringRadius(count) return math.max(12,count*7.5/(2*math.pi)) end
 function F.descentGoal(origin,position,destination)
  local drop=origin.Y-destination.Y

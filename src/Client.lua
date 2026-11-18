@@ -1438,8 +1438,10 @@ local function renderDrone(d,dt,now)
    or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or state=='Docked' or docking
   if not precision and not heavyFlight and not motionPaused and not CrystalImpactView.reducedMotion() then
    local thrust=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(((d.velocity or Vector3.zero)-previousVelocity)/math.max(dt,1/144))
-   desiredBank=math.clamp(-thrust.X*.0032,-math.rad(5),math.rad(5))
-   desiredPitch=math.clamp(-thrust.Z*.0042,-math.rad(7),math.rad(7))
+   -- Cubes lean hard into their thrust, like small quadcopters.
+   local lean=cube and 3.2 or 1
+   desiredBank=math.clamp(-thrust.X*.0032*lean,-math.rad(cube and 16 or 5),math.rad(cube and 16 or 5))
+   desiredPitch=math.clamp(-thrust.Z*.0042*lean,-math.rad(cube and 13 or 7),math.rad(cube and 13 or 7))
   end
   d.flightPitch=(d.flightPitch or 0)+(desiredPitch-(d.flightPitch or 0))*(1-math.exp(-math.min(dt,.1)*9))
  end
@@ -1448,7 +1450,9 @@ local function renderDrone(d,dt,now)
  d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
  local grounded=docking or role=='Courier' and state=='Collect' or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
- local drift=state=='Thinking' and not motionPaused and not CrystalImpactView.reducedMotion() and math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*.08 or (mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
+ local seed=s:GetAttribute('PhaseSeed') or 0
+ local hover=cube and not motionPaused and not CrystalImpactView.reducedMotion() and (state=='Follow' or state=='Return' or state=='Idle' or state=='Travel' or state=='Waiting')
+ local drift=hover and (math.sin(now*(1.1+seed%7*.13)+seed)*.28+math.sin(now*2.9+seed*1.7)*.07) or state=='Thinking' and not motionPaused and not CrystalImpactView.reducedMotion() and math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*.08 or (mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
  -- Reading server time makes every observer see the same hop, and late joins
