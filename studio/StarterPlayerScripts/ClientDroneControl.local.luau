@@ -821,10 +821,8 @@ function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,stea
  return CFrame.new(center)*CFrame.Angles(0,yaw,0)*CFrame.Angles(pitch,0,roll),center.Y+halfHeight
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response,mass,steering)
- -- Retain the original capped, distance-eased destination rule, but approach
- -- its requested velocity with thrust. New jobs, reversals and speed upgrades
- -- cannot replace momentum in a single frame. Substeps keep braking consistent
- -- across server ticks and 30/60/144 Hz observers.
+ -- Drone Blower revolution steers toward a capped, distance-eased velocity.
+ -- Keep bounded thrust so a turn, neighbor force or shot can carry momentum.
  velocity=velocity or Vector3.zero
  if type(dt)~='number' or dt~=dt or dt<=0 then return position,velocity end
  local elapsed=math.min(dt,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
@@ -838,27 +836,15 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
   -- Blend the near-work response continuously. The old distance<=16 switch
   -- changed both speed and easing abruptly at an invisible boundary.
   local proximity=work and math.clamp((16-distance)/12,0,1) or 0
-  local cap=cruise
-  local ease=-60*math.log(1-.03)
-  -- A damped arrival controller brakes lateral momentum as well as forward
-  -- speed. Pure pursuit with a fixed acceleration repeatedly crossed the
-  -- station and reversed direction during warmup.
-  local omega=ease*(1+proximity*.35)*response/inertia
-  local requestedAcceleration=delta*(omega*omega)-velocity*(2*omega)
-  local requestedVelocity=velocity+requestedAcceleration*h
-  local speed=math.min(cap,math.sqrt(2*acceleration*distance))
-  local requested=requestedVelocity
-  if requested.Magnitude>speed then requested=requested.Unit*speed end
-  if correction then
-   requested+=correction*h
-   if requested.Magnitude>cap then requested=requested.Unit*cap end
-  end
-  -- Neighbor pressure is a lateral thruster force, not a moving station.
-  -- Apply it before the final cap so even evasive turns respect engine thrust.
-  if steering then
-   requested+=steering*(h/mass)
-   if requested.Magnitude>cap then requested=requested.Unit*cap end
-  end
+  local cap=cruise*(1+proximity*.45)
+  local ease=-60*math.log(1-(.03+.035*proximity))*response/inertia
+  local speed=math.min(cap,distance*ease,math.sqrt(2*acceleration*distance))
+  local requested=distance>1e-6 and delta/distance*speed or Vector3.zero
+  if correction then requested+=correction end
+  -- Convert neighboring thruster pressure to a steering velocity over a
+  -- short response window. Station approaches taper that pressure to zero.
+  if steering then requested+=steering*(.16/mass) end
+  if requested.Magnitude>cap then requested=requested.Unit*cap end
   local change=requested-velocity;local limit=acceleration*h
   local nextVelocity=change.Magnitude>limit and velocity+change.Unit*limit or requested
   position+=(velocity+nextVelocity)*(.5*h);velocity=nextVelocity
@@ -1012,7 +998,9 @@ function F.courierLoad(units)
  return 1.65+load*.56,1/(1+.26*load)
 end
 function F.gunImpulse(role,from,to,mass)
- local momentum=role=='Needler' and 1.75 or role=='Ballcaster' and 15 or 0
+ -- Downward fire kicks the hull up. The destination controller bleeds off
+ -- that velocity with thrust while the already-launched shot keeps its path.
+ local momentum=role=='Needler' and 2.8 or role=='Ballcaster' and 15 or 0
  local delta=from-to
  return delta.Magnitude>.001 and delta.Unit*(momentum/(mass or 1)) or Vector3.zero
 end
@@ -10513,8 +10501,8 @@ local function drawReferenceBeam(beam,visible,width,sample,now)
   beam.reference=layers;beam.referenceOrigins=origins
  end
  if not beam.reference then return end
- local t=math.clamp((now-(sample.since or now))/2,0,1)
- local inner=.3*(1-(1-t)^2)*width
+ local t=math.clamp((now-(sample.since or now))/.12,0,1)
+ local inner=.3*(1-.45*(1-t)^2)*width
  for i,b in ipairs(beam.reference) do
   local w=visible and (i%2==1 and inner or .5*width)*(origins and .64 or 1) or 0
   b.Width0=w;b.Width1=w;b.Enabled=w>.001
@@ -16310,7 +16298,7 @@ function Sale:makeOre(item)
  local proxy=source and source:Clone() or Instance.new('Part')
  for _,child in ipairs(proxy:GetChildren()) do child:Destroy() end
  for key in pairs(proxy:GetAttributes()) do proxy:SetAttribute(key,nil) end
- proxy:SetAttribute('Mineral',item.key);proxy:SetAttribute('StoneCargo',item.stone)
+ proxy:SetAttribute('Mineral',item.material or item.key);proxy:SetAttribute('StoneCargo',item.stone)
  proxy:SetAttribute('RockModifiers',item.mask or 0)
  local palette=net and net:FindFirstChild('CargoFieldColors')
  local fieldTint=palette and item.material and palette:GetAttribute(item.material) or Color3.fromRGB(table.unpack(item.color))
@@ -16368,60 +16356,76 @@ function Sale:receive(receipt)
  local now=os.clock()
  local amounts=table.clone(receipt.resources or {});amounts.Money=receipt.cash or 0
  if #batch>0 then self.refs.hud:beginSale(receipt,amounts) end
- local launch=now
+ local scoreAt=now+.48
  for i,item in ipairs(batch) do
   local base,final=Sale.values(item,receipt.cargo[item.key])
-  local duration=base==final and .98 or 1.58
   local part,gem=self:makeOre(item)
-  local side=root.CFrame.RightVector*math.sin(i*2.4)*(reduced and .25 or 1.8)
-  local bend=(origin+target)*.5+side+Vector3.yAxis*(reduced and .7 or 3+i%3*.5)
-  part.CFrame=CFrame.new(origin);part.Parent=nil
-  table.insert(self.rocks,{part=part,gem=gem,size=part.Size,start=launch,base=base,final=final,duration=duration,tint=Color3.fromRGB(table.unpack(item.color)):Lerp(Color3.new(1,1,1),.35),
-   origin=origin,bend=bend,target=target,index=i,stone=item.stone,reduced=reduced,
-   key=item.key,count=receipt.cargo[item.key],readout=self.readout,cash=(Shops.quartzValue(item.key) or (item.key=='Quartz' and 1 or 0))*receipt.cargo[item.key],
-   payout=i==#batch and amounts or nil,id=receipt.id,total=receipt.cash})
-  launch+=duration+.08
+  local extent=math.max(part.Size.X,part.Size.Y,part.Size.Z)
+  part.Size*=math.min(1,1.25/extent)
+  local slot=(i-1)%5
+  local row=math.floor((i-1)/5)%3
+  local finish=target+root.CFrame.RightVector*((slot-(math.min(#batch,5)-1)*.5)*1.08)
+   +root.CFrame.LookVector*((row-1)*.85)+Vector3.yAxis*part.Size.Y*.38
+  local launch=math.max(now+(i-1)*.085,scoreAt-1.45)
+  table.insert(self.rocks,{part=part,gem=gem,size=part.Size,start=launch,scoreAt=scoreAt,
+   base=base,final=final,modified=base~=final or (item.dustBonus or 0)>0,
+   tint=Color3.fromRGB(table.unpack(item.color)),origin=origin,target=finish,index=i,
+   stone=item.stone,reduced=reduced,readout=self.readout,
+   payout=i==#batch and amounts or nil,id=receipt.id})
+  part.Parent=nil
+  scoreAt+=((base~=final or (item.dustBonus or 0)>0) and 1.08 or .62)
  end
 end
 
 function Sale:update()
  local now=os.clock()
- if self.hideAt and now>=self.hideAt then self.board.Enabled=false;self.hideAt=nil end
  for i=#self.rocks,1,-1 do
-  local rock=self.rocks[i]
-  local t=(now-rock.start)/(rock.reduced and .32 or .56)
-  if t>=0 and rock.readout and rock.readout==self.readout then
-   local age=now-rock.start
-   local pulse=rock.base~=rock.final and math.clamp((age-.55)/.32,0,1) or 0
-   local strength=math.sin(pulse*math.pi)
-   self.readout.Text=tostring(age>=.87 and rock.final or rock.base)
-   self.readout.TextColor3=Color3.fromRGB(255,246,216):Lerp(rock.tint,strength)
-   self.board.Size=UDim2.fromScale(2.4*(1+.18*strength),.85*(1+.18*strength))
-   self.board.Enabled=true
-   if t>=1 then self.anchor.Position=rock.target+Vector3.yAxis*1.7 end
+  local r=self.rocks[i]
+  local age=now-r.start
+  if age<0 then continue end
+  local flight=math.clamp(age/.44,0,1)
+  local score=now-r.scoreAt
+  local hit=r.modified and .54 or .23
+  local depart=math.clamp((score-hit-.16)/.18,0,1)
+  local arc=4*flight*(1-flight)
+  local pos=r.origin:Lerp(r.target,flight)+Vector3.yAxis*(arc*(r.reduced and .4 or 2.3))
+  local rebound=math.clamp((age-.44)/.18,0,1)
+  local bounce=math.sin(rebound*math.pi)*(1-rebound)
+  local charge=r.modified and math.clamp((score-.22)/.32,0,1) or 0
+  local windup=charge<1 and charge*charge or 0
+  local flash=math.max(0,1-math.abs(score-hit)/.14)
+  local size=1-depart*.94
+  if not r.reduced then
+   pos+=Vector3.yAxis*(bounce*.52-depart*.48)
+   size*=1+windup*.14+flash*.13
   end
-  if t>=1 then
-   if not rock.landed then
-    rock.landed=true;rock.part:Destroy()
-    self.refs.audio:play(rock.stone and 'sale_stone' or 'sale_gem',rock.target)
-   end
-   if now-rock.start<rock.duration then continue end
-   if rock.readout and rock.readout==self.readout then self.board.Enabled=false end
-   table.remove(self.rocks,i)
-   if rock.payout then
-    for key,amount in pairs(rock.payout) do
-     if amount>0 then self.refs.hud:currencyHit(rock.id,key,amount,rock.reduced,true) end
+  r.part.CFrame=CFrame.new(pos)*CFrame.Angles(r.reduced and 0 or flight*2.7,r.index*1.7+flight*.8,windup*.14)
+  r.part.Size=r.size*size
+  r.part.Parent=self.refs.parent
+  if r.gem then RockFinish.Gems.update(r.part,1) end
+  if flight==1 and not r.landed then
+   r.landed=true;self.refs.audio:play(r.stone and 'sale_stone' or 'sale_gem',r.target,{level=.7})
+  end
+  if score>=0 and score<(r.modified and 1.08 or .62) and r.readout and r.readout==self.readout then
+   self.owner=r;self.board.Enabled=true
+   self.anchor.Position=r.target+Vector3.yAxis*(r.size.Y*.48+1.05+(r.reduced and 0 or flash*.16))
+   self.readout.Text=tostring(score<hit and r.base or r.final)
+   self.readout.TextColor3=Color3.fromRGB(255,247,215):Lerp(r.tint:Lerp(Color3.new(1,1,1),.35),math.max(windup,flash))
+   local scale=r.reduced and 1 or 1-.12*windup+.32*flash
+   self.board.Size=UDim2.fromScale(2.1*scale,.88*scale)
+  end
+  if score>=hit and not r.scored then
+   r.scored=true;self.refs.audio:play(r.modified and 'sale_credit' or 'sale_stone',r.target,{pitch=r.modified and 1.18 or .94})
+  end
+  if score>=(r.modified and 1.08 or .62) then
+   if self.owner==r then self.owner=nil;self.board.Enabled=false end
+   r.part:Destroy();table.remove(self.rocks,i)
+   if r.payout then
+    for key,amount in pairs(r.payout) do
+     if amount>0 then self.refs.hud:currencyHit(r.id,key,amount,r.reduced,true) end
     end
+    self.refs.audio:play('sale_finish',r.target)
    end
-   self.refs.audio:play(rock.payout and 'sale_finish' or 'sale_credit',rock.target,{pitch=.94+rock.index*.018})
-  elseif t>=0 then
-   local pos=rock.origin:Lerp(rock.bend,t):Lerp(rock.bend:Lerp(rock.target,t),t)
-   if rock.readout and rock.readout==self.readout then self.anchor.Position=pos+Vector3.yAxis*1.7 end
-   local spin=rock.reduced and 0 or t*3
-   rock.part.CFrame=CFrame.new(pos)*CFrame.Angles(spin,rock.index+spin,0)
-   rock.part.Size=rock.size*(1-.83*math.clamp((t-.72)/.28,0,1))
-   if rock.gem then RockFinish.Gems.update(rock.part,1) end
-   rock.part.Parent=self.refs.parent
   end
  end
 end

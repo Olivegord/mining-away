@@ -1,5 +1,9 @@
 # Shared project context
 
+## November 17 — counter appraisal
+
+Rocks leave the backpack in a staggered throw and land in distinct spots on the counter. One numeric price appears over the rock being appraised. Modified rocks wind up before the price changes and the rock contracts into the counter. Mixed cargo keeps its server-committed payouts. The native clip uses sample cargo in Studio. Canonical SHA-256 `525cad41947c28ad6246a63c1287e80c9a24becce17775efb87711e9f4fbca1d`. Shared destination is DRONEREVOLUTION, place 124078027733625, universe 10774898335. Edit save only.
+
 ## November 17 — numeric sale impacts
 
 The counter shows the stack's base value over the flying rock, pulses at impact, then replaces the number with its final cash value. Material-only modifiers credit the resource wallet. Canonical snapshot SHA-256 is `c2c883517077b6998eec007c1947e2a5913f0a15de95e12e3246a4ca23b87011`. Selling and persistence tests passed. The earlier video shows an older presentation. No release requested.

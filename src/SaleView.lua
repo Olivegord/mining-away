@@ -25,7 +25,7 @@ function Sale:makeOre(item)
  local proxy=source and source:Clone() or Instance.new('Part')
  for _,child in ipairs(proxy:GetChildren()) do child:Destroy() end
  for key in pairs(proxy:GetAttributes()) do proxy:SetAttribute(key,nil) end
- proxy:SetAttribute('Mineral',item.key);proxy:SetAttribute('StoneCargo',item.stone)
+ proxy:SetAttribute('Mineral',item.material or item.key);proxy:SetAttribute('StoneCargo',item.stone)
  proxy:SetAttribute('RockModifiers',item.mask or 0)
  local palette=net and net:FindFirstChild('CargoFieldColors')
  local fieldTint=palette and item.material and palette:GetAttribute(item.material) or Color3.fromRGB(table.unpack(item.color))
@@ -83,60 +83,76 @@ function Sale:receive(receipt)
  local now=os.clock()
  local amounts=table.clone(receipt.resources or {});amounts.Money=receipt.cash or 0
  if #batch>0 then self.refs.hud:beginSale(receipt,amounts) end
- local launch=now
+ local scoreAt=now+.48
  for i,item in ipairs(batch) do
   local base,final=Sale.values(item,receipt.cargo[item.key])
-  local duration=base==final and .98 or 1.58
   local part,gem=self:makeOre(item)
-  local side=root.CFrame.RightVector*math.sin(i*2.4)*(reduced and .25 or 1.8)
-  local bend=(origin+target)*.5+side+Vector3.yAxis*(reduced and .7 or 3+i%3*.5)
-  part.CFrame=CFrame.new(origin);part.Parent=nil
-  table.insert(self.rocks,{part=part,gem=gem,size=part.Size,start=launch,base=base,final=final,duration=duration,tint=Color3.fromRGB(table.unpack(item.color)):Lerp(Color3.new(1,1,1),.35),
-   origin=origin,bend=bend,target=target,index=i,stone=item.stone,reduced=reduced,
-   key=item.key,count=receipt.cargo[item.key],readout=self.readout,cash=(Shops.quartzValue(item.key) or (item.key=='Quartz' and 1 or 0))*receipt.cargo[item.key],
-   payout=i==#batch and amounts or nil,id=receipt.id,total=receipt.cash})
-  launch+=duration+.08
+  local extent=math.max(part.Size.X,part.Size.Y,part.Size.Z)
+  part.Size*=math.min(1,1.25/extent)
+  local slot=(i-1)%5
+  local row=math.floor((i-1)/5)%3
+  local finish=target+root.CFrame.RightVector*((slot-(math.min(#batch,5)-1)*.5)*1.08)
+   +root.CFrame.LookVector*((row-1)*.85)+Vector3.yAxis*part.Size.Y*.38
+  local launch=math.max(now+(i-1)*.085,scoreAt-1.45)
+  table.insert(self.rocks,{part=part,gem=gem,size=part.Size,start=launch,scoreAt=scoreAt,
+   base=base,final=final,modified=base~=final or (item.dustBonus or 0)>0,
+   tint=Color3.fromRGB(table.unpack(item.color)),origin=origin,target=finish,index=i,
+   stone=item.stone,reduced=reduced,readout=self.readout,
+   payout=i==#batch and amounts or nil,id=receipt.id})
+  part.Parent=nil
+  scoreAt+=((base~=final or (item.dustBonus or 0)>0) and 1.08 or .62)
  end
 end
 
 function Sale:update()
  local now=os.clock()
- if self.hideAt and now>=self.hideAt then self.board.Enabled=false;self.hideAt=nil end
  for i=#self.rocks,1,-1 do
-  local rock=self.rocks[i]
-  local t=(now-rock.start)/(rock.reduced and .32 or .56)
-  if t>=0 and rock.readout and rock.readout==self.readout then
-   local age=now-rock.start
-   local pulse=rock.base~=rock.final and math.clamp((age-.55)/.32,0,1) or 0
-   local strength=math.sin(pulse*math.pi)
-   self.readout.Text=tostring(age>=.87 and rock.final or rock.base)
-   self.readout.TextColor3=Color3.fromRGB(255,246,216):Lerp(rock.tint,strength)
-   self.board.Size=UDim2.fromScale(2.4*(1+.18*strength),.85*(1+.18*strength))
-   self.board.Enabled=true
-   if t>=1 then self.anchor.Position=rock.target+Vector3.yAxis*1.7 end
+  local r=self.rocks[i]
+  local age=now-r.start
+  if age<0 then continue end
+  local flight=math.clamp(age/.44,0,1)
+  local score=now-r.scoreAt
+  local hit=r.modified and .54 or .23
+  local depart=math.clamp((score-hit-.16)/.18,0,1)
+  local arc=4*flight*(1-flight)
+  local pos=r.origin:Lerp(r.target,flight)+Vector3.yAxis*(arc*(r.reduced and .4 or 2.3))
+  local rebound=math.clamp((age-.44)/.18,0,1)
+  local bounce=math.sin(rebound*math.pi)*(1-rebound)
+  local charge=r.modified and math.clamp((score-.22)/.32,0,1) or 0
+  local windup=charge<1 and charge*charge or 0
+  local flash=math.max(0,1-math.abs(score-hit)/.14)
+  local size=1-depart*.94
+  if not r.reduced then
+   pos+=Vector3.yAxis*(bounce*.52-depart*.48)
+   size*=1+windup*.14+flash*.13
   end
-  if t>=1 then
-   if not rock.landed then
-    rock.landed=true;rock.part:Destroy()
-    self.refs.audio:play(rock.stone and 'sale_stone' or 'sale_gem',rock.target)
-   end
-   if now-rock.start<rock.duration then continue end
-   if rock.readout and rock.readout==self.readout then self.board.Enabled=false end
-   table.remove(self.rocks,i)
-   if rock.payout then
-    for key,amount in pairs(rock.payout) do
-     if amount>0 then self.refs.hud:currencyHit(rock.id,key,amount,rock.reduced,true) end
+  r.part.CFrame=CFrame.new(pos)*CFrame.Angles(r.reduced and 0 or flight*2.7,r.index*1.7+flight*.8,windup*.14)
+  r.part.Size=r.size*size
+  r.part.Parent=self.refs.parent
+  if r.gem then RockFinish.Gems.update(r.part,1) end
+  if flight==1 and not r.landed then
+   r.landed=true;self.refs.audio:play(r.stone and 'sale_stone' or 'sale_gem',r.target,{level=.7})
+  end
+  if score>=0 and score<(r.modified and 1.08 or .62) and r.readout and r.readout==self.readout then
+   self.owner=r;self.board.Enabled=true
+   self.anchor.Position=r.target+Vector3.yAxis*(r.size.Y*.48+1.05+(r.reduced and 0 or flash*.16))
+   self.readout.Text=tostring(score<hit and r.base or r.final)
+   self.readout.TextColor3=Color3.fromRGB(255,247,215):Lerp(r.tint:Lerp(Color3.new(1,1,1),.35),math.max(windup,flash))
+   local scale=r.reduced and 1 or 1-.12*windup+.32*flash
+   self.board.Size=UDim2.fromScale(2.1*scale,.88*scale)
+  end
+  if score>=hit and not r.scored then
+   r.scored=true;self.refs.audio:play(r.modified and 'sale_credit' or 'sale_stone',r.target,{pitch=r.modified and 1.18 or .94})
+  end
+  if score>=(r.modified and 1.08 or .62) then
+   if self.owner==r then self.owner=nil;self.board.Enabled=false end
+   r.part:Destroy();table.remove(self.rocks,i)
+   if r.payout then
+    for key,amount in pairs(r.payout) do
+     if amount>0 then self.refs.hud:currencyHit(r.id,key,amount,r.reduced,true) end
     end
+    self.refs.audio:play('sale_finish',r.target)
    end
-   self.refs.audio:play(rock.payout and 'sale_finish' or 'sale_credit',rock.target,{pitch=.94+rock.index*.018})
-  elseif t>=0 then
-   local pos=rock.origin:Lerp(rock.bend,t):Lerp(rock.bend:Lerp(rock.target,t),t)
-   if rock.readout and rock.readout==self.readout then self.anchor.Position=pos+Vector3.yAxis*1.7 end
-   local spin=rock.reduced and 0 or t*3
-   rock.part.CFrame=CFrame.new(pos)*CFrame.Angles(spin,rock.index+spin,0)
-   rock.part.Size=rock.size*(1-.83*math.clamp((t-.72)/.28,0,1))
-   if rock.gem then RockFinish.Gems.update(rock.part,1) end
-   rock.part.Parent=self.refs.parent
   end
  end
 end
