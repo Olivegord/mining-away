@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 17 — overhead cube laser assignment
+
+The original quarry's helper offsets can sit beyond a rock's footprint while still contributing damage. Cube laser miners reserve one overhead spot per rock and start cutting close to that spot in both routes. Native rays against the original union hit every sampled center station and missed every sampled helper offset. See [project state](PROJECT_STATE.md) for the verification limits.
+
 ## November 17 — continuous contact through short mining interruptions
 
 A cube laser that briefly loses and regains the same contact merges back into one line at the current taper width. When the target actually changes, the old beam can finish its taper while the new target begins. A saved fracture contact yields to a newly active target. Cube render clones clear their inherited local visibility override, and the emitters level out during warmup before firing.

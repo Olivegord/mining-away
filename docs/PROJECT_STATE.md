@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 17 — cube laser assignment and contact repair
+
+The owner reported the current game was broken. Shared Studio was in Edit at the start of diagnosis. A native component reproduced a real mismatch in the original quarry. Across three fracture stages and five poses from the original union, a vertical ray from the center station hit 15 of 15 times, while rays from the four 4.5-stud helper offsets missed all 60 times. The current server nevertheless allowed cube helpers to cut there. Cube laser miners now take the overhead spot one per rock in both routes, and the original quarry uses the same 0.6-stud engagement gate as the square fields for cubes. The source changes are limited to assignment and arrival.
+
+Three native aim rays to the Amber square sent the whole-field command through the installed client component in Edit. The flat-field, field/pickup, geode and mining flight suites passed using API doubles. They cover rejecting a second cube on a focused quarry rock. The complete owner-reported symptom and in-Play rendering remain unverified. No Play session was started.
+
+Script Sync exported the server bundle. All three native roots reported Errored, so the checked source edits installed the server change in shared **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**. Team Create save **392** succeeded. All seven editor and native Sources match canonical **build/DRONE_GAME.rbxl**, SHA-256 **965ffe1370993c8db0634a79d991e139e290867661dc283361f0b9eb6ac58d2b**. Next shared Play loads the repair. No player publication. Last documented release remains **v363**. Reproduce from **ca1439d** with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit ca1439d`.
+
 ## November 17 — higher cube flight and irregular rock coverage
 
 The cubes use a shared 14-stud cruise plane above the depot floor. Hover stations over the square fields are at least 14 studs above their surfaces. The escort ring measures arrivals against the same altitude while the avatar jumps. The five 32-stud squares each seed twelve irregularly spaced rocks and respawn them at their own sites. The field layouts vary by rotation, reflection and small offsets. The original quarry remains available.

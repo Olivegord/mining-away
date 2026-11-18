@@ -1782,8 +1782,10 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
  return selected and {origin=origin,endpoint=endpoint,hits=hits,selected=selected,groundNormal=groundNormal} or nil
 end
 function scene.cutRange(d,r)
- if r.field.cfg.WholeField and d.role=='Striker' then return .6 end
- return r.field.cfg.ContinuousCrystals and d.role=='Striker' and 2.2 or 1
+ if d.role=='Striker' and r.field.cfg.ContinuousCrystals then
+  return scene.flatFields and .6 or 2.2
+ end
+ return 1
 end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
@@ -2247,7 +2249,10 @@ local function chooseResource(d: any,field: any,square: any?)
    local healthRank=helping and -r.hp or r.hp
    if square and (rank>bestRank or rank==bestRank
     and (healthRank>bestHealth or healthRank==bestHealth and used>bestUsed)) then continue end
-   local capacity=if field.cfg.WholeField then 1 elseif focused then math.max(10,#profiles[d.owner].drones) elseif square then 10 else r.limit
+   -- A cube laser has a vertical strike column. The old helper ring can
+   -- sit beyond the rock while the simulation still credits its damage.
+   local singleOverhead=field.cfg.WholeField or scene.flatFields and d.role=='Striker'
+   local capacity=if singleOverhead then 1 elseif focused then math.max(10,#profiles[d.owner].drones) elseif square then 10 else r.limit
    if used<capacity and sameRockType(d,r,helping) then
     if helping and not helpReady then hasHelp=true;continue end
     local neighbors=0

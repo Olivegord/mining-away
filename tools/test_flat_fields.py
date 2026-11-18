@@ -123,7 +123,18 @@ workspace.Raycast=function() return {Position=classic.center,Instance=classic.pa
 assert(selector:aimPreview({Origin=classic.center+Vector3.yAxis*10,Direction=-Vector3.yAxis}))
 assert(sent==1 and selector.draft and selector.draft.field==classic.id,'classic field lost its two-step command')
 assert(selector:confirm() and sent==2 and p.miningSquare.field==classic)
-print('PASS the classic route, irregular twelve-rock coverage and in-place respawn, one-click mining, and field-scoped battery UI')
+local target=classic.resources[1]
+target.readyAt=now
+local pin=p.miningSquare
+pin.center=target.position
+pin.directId=target.id
+local first,helper=p.drones[1],p.drones[2]
+release(first);release(helper)
+first.squareHelpAt=now;helper.squareHelpAt=now
+assert(chooseResource(first,classic,pin) and first.target==target)
+assert(not chooseResource(helper,classic,pin) and not helper.target,'cube helper claimed an off-axis cut')
+assert(scene.cutRange(first,target)==.6,'cube started cutting from an off-axis approach')
+print('PASS both routes, irregular rock coverage, one-click mining, field-scoped battery UI, and exclusive cube laser contacts')
 """
 source = "\n".join([
     (ROOT / "tests/mock-roblox.lua").read_text(),
