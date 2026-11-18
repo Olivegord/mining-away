@@ -1,5 +1,9 @@
 # Shared project context
 
+## November 17 — numeric sale impacts
+
+The counter shows the stack's base value over the flying rock, pulses at impact, then replaces the number with its final cash value. Material-only modifiers credit the resource wallet. Canonical snapshot SHA-256 is `c2c883517077b6998eec007c1947e2a5913f0a15de95e12e3246a4ca23b87011`. Selling and persistence tests passed. The earlier video shows an older presentation. No release requested.
+
 ## November 17 — world-space backpack selling
 
 Gameplay revision `b54ba15` sells a backpack in one counter interaction. A staggered sample of the committed cargo travels from the backpack to the counter while the player keeps control. In one Studio Play session the server sold six rocks for 11 money, 8 stone, 0.43 Amber chips and 0.21 Ruby shards, emptying the backpack. The [silent Studio clip](review/media/world-space-sale.mp4) is a frame-stepped replay of the production animation with sample mixed cargo. The direct transaction test and the illustrative replay used the same gameplay revision. Play ended after capture. Shared Edit save and canonical snapshot details appear below.
