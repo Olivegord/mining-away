@@ -1,5 +1,15 @@
 # Shared project context
 
+## November 18 — calm scenery applied and f803e13 installed in shared Edit
+
+Roblox Studio's own MCP server (`/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP`) was added to Claude Code at local scope for this project; this session drove it over stdio. `list_roblox_studios` reported exactly one Studio: **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**, in Edit.
+
+**Map.** `tools/studio_calm_scenery.lua` ran in Edit. The 20 `SeamOutcrops` unions moved halfway toward (52,50,54); for example, Amber Fault Oblique 1 went from (104,91,81) to (78,71,68). Seven floor Textures went from 8-stud to 16-stud tiles at 0.9 transparency: `Fields.Baseplate`, `SimpleFlatTestMap.HubPad` and the five square-field beds. Studio's values were read back and matched the offline result for all 27 objects. Team Create save **402**. The canonical file was mirrored with `python3 tools/refresh_calm_scenery.py --baseline-sha256 764812b6…9b20 --write`; only the Color3uint8, StudsPerTileU/V and Transparency properties of those 27 objects changed.
+
+**Sources.** Script Sync status in Edit: ServerScriptService `SyncedAsRoot`; ReplicatedStorage.Shared and StarterPlayer.StarterPlayerScripts still `Errored`. Shared Edit therefore still had the pre-f803e13 client and TacticalHUD. Both were installed with baseline-guarded `ScriptEditorService:UpdateSourceAsync` from a clean scratch checkout of **f803e13**. Another session had uncommitted edits in `src/EnergyDisc.lua`, `src/FunFX.lua` and `src/WorkEffects.lua`; those were deliberately not installed and not committed here. All seven managed Sources in Edit then matched f803e13 and the canonical file. Team Create save **403**. The next shared Play loads f803e13 plus the calm scenery.
+
+Canonical **build/DRONE_GAME.rbxl** SHA-256 **f82d3df56fa2343b82da27d722eaf1b9e2f65f4572aa4b2d4bc8afa513095980**. No Play was started and no player publication; the last documented release remains **v363**. **Open:** the two errored Script Sync roots still need Resume Sync, otherwise future client/Shared exports will not arrive on their own. In-Play appearance is unverified.
+
 ## November 18 — swarm-strike geodes, walk-in fields, break combos and a cleaner view
 
 Follows the owner's new direction (see OWNER_REQUIREMENTS, "game direction"). Supersedes the three-click geode opening from earlier today.
