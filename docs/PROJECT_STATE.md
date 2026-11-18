@@ -1,5 +1,11 @@
 # Shared project context
 
+## November 17 — lighter drone flight and faster quarry lasers
+
+Ported the distance-eased, speed-capped approach from the older Drone Blower revolution place (136098934779395, universe 10773006567). Server and observer motion use the same thrust-limited controller. Neighbor avoidance, cargo mass and gun recoil carry through the faster steering. A quarry Striker reaches its one-stud mining gate in about 1.18 seconds in a 16-stud straight-line controller check, down from 2.47 seconds. The standard post-arrival ignition is 0.10 seconds, down from 0.20. Charge and release send an immediate state update, and the laser core starts visibly at ignition and reaches full width in 0.12 seconds.
+
+The mining flight, observer, field pickup, gun recoil and beam suites passed with API doubles. Shared DRONEREVOLUTION was already open. The owner ended Play, and the next shared Studio Play loads this revision. All three Script Sync roots reported Errored, so the two bundles were installed with guarded Script Editor updates. All seven native and editor Sources matched the canonical `build/DRONE_GAME.rbxl` after Save to Roblox, place 124078027733625, universe 10774898335, Edit version 379. Canonical SHA-256 `49daf90ddf6cfd70be67f7d7dd6ee7d76f345b6b8985fad9a828d6fd27674e80`. Reproduce from the pre-flight Sources with `python3 tools/script_sync.py` and the allowlisted canonical refresh, then run `python3 tools/build.py` to verify the snapshot. No player release was issued. Native play feel and live multiplayer remain unchecked.
+
 ## November 17 — counter appraisal
 
 Rocks leave the backpack in a staggered throw and land in distinct spots on the counter. One numeric price appears over the rock being appraised. Modified rocks wind up before the price changes and the rock contracts into the counter. Mixed cargo keeps its server-committed payouts. The native clip uses sample cargo in Studio. Canonical SHA-256 `525cad41947c28ad6246a63c1287e80c9a24becce17775efb87711e9f4fbca1d`. Shared destination is DRONEREVOLUTION, place 124078027733625, universe 10774898335. Edit save only.

@@ -302,8 +302,8 @@ local function drawReferenceBeam(beam,visible,width,sample,now)
   beam.reference=layers;beam.referenceOrigins=origins
  end
  if not beam.reference then return end
- local t=math.clamp((now-(sample.since or now))/2,0,1)
- local inner=.3*(1-(1-t)^2)*width
+ local t=math.clamp((now-(sample.since or now))/.12,0,1)
+ local inner=.3*(1-.45*(1-t)^2)*width
  for i,b in ipairs(beam.reference) do
   local w=visible and (i%2==1 and inner or .5*width)*(origins and .64 or 1) or 0
   b.Width0=w;b.Width1=w;b.Enabled=w>.001

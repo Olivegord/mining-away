@@ -391,7 +391,8 @@ check('actual mining envelope surface contact target life and paused work remain
  assert(#b.flare:GetChildren()==1 and b.flareStar.Image=='rbxassetid://77624818077620',
   'active mining optic must render the four-point star as its only flare texture')
  assert(b.flareLight.Shadows,'mining flare glow must respect shadows')
- assert(outer.Enabled and not inner.Enabled and outer.Attachment0==b.origin and outer.Attachment1.Parent==b.endpoint)
+ assert(outer.Enabled and inner.Enabled and outer.Attachment0==b.origin and outer.Attachment1.Parent==b.endpoint)
+ near(inner.Width0,.165)
  near(outer.Width0,.5)
  assert(not b.vfx.body.Enabled,'charge rig drew a second beam on top of the original')
  assert(not b.envelope.active,'cosmetic bridge modified authoritative envelope')
@@ -402,8 +403,9 @@ check('actual mining envelope surface contact target life and paused work remain
  s.droneRole='Striker';p:beginFrame();p:renderMiningBeam(b,s,300.16)
  assert(not outer.Enabled,'prediction extended past its bounded receipt window')
  s.active=true;s.charging=false
+ p:beginFrame();p:renderMiningBeam(b,s,300.17)
+ near(inner.Width0,.3);near(outer.Width0,.5);near(b.endpoint.Position.Y,1)
  p:beginFrame();p:renderMiningBeam(b,s,301)
- near(inner.Width0,.225);near(outer.Width0,.5);near(b.endpoint.Position.Y,1)
  assert(p.beamRays<=12 and not b.vfx)
  s.active=false
  p:beginFrame();p:renderMiningBeam(b,s,301.01)

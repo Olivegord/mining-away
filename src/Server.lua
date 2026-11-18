@@ -2867,9 +2867,9 @@ local function committedStation(d,r,dt)
  return d.workStation
 end
 function scene.miningWarmup(d,r)
- -- Leave enough time for the emitter buildup to show across several snapshots.
- -- Ignition upgrades still shorten it, with a small floor for readability.
- if r and r.field.cfg.ContinuousCrystals and d.role=='Striker' then return math.max(.10,d.stats.warmup*.50) end
+ -- A quarry cutter starts on its first short ignition beat after arrival.
+ -- Ignition upgrades can still shorten the beat.
+ if r and r.field.cfg.ContinuousCrystals and d.role=='Striker' then return math.max(.05,d.stats.warmup*.25) end
  local definition=DroneCatalog.Types[d.role]
  if r and (d.role=='Ramiel' or d.role=='Nomad') then return .08 end
  if r and definition and definition.Projectile then
@@ -4955,7 +4955,16 @@ RunService.Heartbeat:Connect(function(dt: number)
   end
   scene.plotQueues={}
   scene.planMiningStations()
-  for _,d in pairs(drones) do droneStep(d,C.Tick) end
+  for _,d in pairs(drones) do
+   local warmAt,mining=d.warmAt,d.mining
+   droneStep(d,C.Tick)
+   -- Report the short charge and its release without waiting for the next
+   -- periodic pose update, which can be longer than an upgraded ignition.
+   if d.role=='Striker' and d.target and d.target.field.cfg.ContinuousCrystals
+    and (d.state=='Warmup' and not warmAt or d.state=='Mine' and not mining) then
+    snapshotDrone(d)
+   end
+  end
   scene.flushPlotQueues(C.Tick)
   if scene.fieldTools then scene.fieldTools:step(C.Tick) end
   for _,d in pairs(drones) do

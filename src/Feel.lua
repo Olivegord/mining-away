@@ -70,10 +70,8 @@ function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,stea
  return CFrame.new(center)*CFrame.Angles(0,yaw,0)*CFrame.Angles(pitch,0,roll),center.Y+halfHeight
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response,mass,steering)
- -- Retain the original capped, distance-eased destination rule, but approach
- -- its requested velocity with thrust. New jobs, reversals and speed upgrades
- -- cannot replace momentum in a single frame. Substeps keep braking consistent
- -- across server ticks and 30/60/144 Hz observers.
+ -- Drone Blower revolution steers toward a capped, distance-eased velocity.
+ -- Keep bounded thrust so a turn, neighbor force or shot can carry momentum.
  velocity=velocity or Vector3.zero
  if type(dt)~='number' or dt~=dt or dt<=0 then return position,velocity end
  local elapsed=math.min(dt,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
@@ -87,27 +85,15 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
   -- Blend the near-work response continuously. The old distance<=16 switch
   -- changed both speed and easing abruptly at an invisible boundary.
   local proximity=work and math.clamp((16-distance)/12,0,1) or 0
-  local cap=cruise
-  local ease=-60*math.log(1-.03)
-  -- A damped arrival controller brakes lateral momentum as well as forward
-  -- speed. Pure pursuit with a fixed acceleration repeatedly crossed the
-  -- station and reversed direction during warmup.
-  local omega=ease*(1+proximity*.35)*response/inertia
-  local requestedAcceleration=delta*(omega*omega)-velocity*(2*omega)
-  local requestedVelocity=velocity+requestedAcceleration*h
-  local speed=math.min(cap,math.sqrt(2*acceleration*distance))
-  local requested=requestedVelocity
-  if requested.Magnitude>speed then requested=requested.Unit*speed end
-  if correction then
-   requested+=correction*h
-   if requested.Magnitude>cap then requested=requested.Unit*cap end
-  end
-  -- Neighbor pressure is a lateral thruster force, not a moving station.
-  -- Apply it before the final cap so even evasive turns respect engine thrust.
-  if steering then
-   requested+=steering*(h/mass)
-   if requested.Magnitude>cap then requested=requested.Unit*cap end
-  end
+  local cap=cruise*(1+proximity*.45)
+  local ease=-60*math.log(1-(.03+.035*proximity))*response/inertia
+  local speed=math.min(cap,distance*ease,math.sqrt(2*acceleration*distance))
+  local requested=distance>1e-6 and delta/distance*speed or Vector3.zero
+  if correction then requested+=correction end
+  -- Convert neighboring thruster pressure to a steering velocity over a
+  -- short response window. Station approaches taper that pressure to zero.
+  if steering then requested+=steering*(.16/mass) end
+  if requested.Magnitude>cap then requested=requested.Unit*cap end
   local change=requested-velocity;local limit=acceleration*h
   local nextVelocity=change.Magnitude>limit and velocity+change.Unit*limit or requested
   position+=(velocity+nextVelocity)*(.5*h);velocity=nextVelocity
@@ -261,7 +247,9 @@ function F.courierLoad(units)
  return 1.65+load*.56,1/(1+.26*load)
 end
 function F.gunImpulse(role,from,to,mass)
- local momentum=role=='Needler' and 1.75 or role=='Ballcaster' and 15 or 0
+ -- Downward fire kicks the hull up. The destination controller bleeds off
+ -- that velocity with thrust while the already-launched shot keeps its path.
+ local momentum=role=='Needler' and 2.8 or role=='Ballcaster' and 15 or 0
  local delta=from-to
  return delta.Magnitude>.001 and delta.Unit*(momentum/(mass or 1)) or Vector3.zero
 end
