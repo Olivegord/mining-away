@@ -31,22 +31,39 @@ local function input(kind,id) command.OnServerEvent:Fire(pl,kind,id) end
 local function refreshTokens() realTime+=3;now=realTime end
 local money=profile.run.wallet.Quartz
 pl.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.new(0,0,80)))
-local count=#messages
-input('Sell')
-assert(#messages==count and Pro.cargoUnits(data(p))==2)
+input('QuoteSale','too-far')
+assert(messages[#messages].payload.kind=='rejected' and Pro.cargoUnits(data(p))==2)
 refreshTokens();pl.Character:PivotTo(CFrame.new(scene.packStation.Position))
+input('QuoteSale','first')
+local first=messages[#messages].payload
+assert(first.kind=='quote' and first.request=='first' and first.cash==a.cash+b.cash)
+assert(Pro.cargoUnits(data(p))==2 and data(p).run.wallet.Quartz==money,'quote mutated the profile')
+input('Sell','forged')
+assert(messages[#messages].payload.kind=='rejected' and Pro.cargoUnits(data(p))==2)
 profile.run.cargo[stone.material]=2
-input('Sell')
+input('Sell',first.id)
+assert(messages[#messages].payload.kind=='rejected' and Pro.cargoUnits(data(p))==3,'stale quote sold a changed bag')
+refreshTokens()
+input('QuoteSale','second')
+local second=messages[#messages].payload
+assert(second.kind=='quote' and second.units==3)
+pl.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.new(0,0,80)))
+input('Sell',second.id)
+assert(messages[#messages].payload.kind=='rejected' and Pro.cargoUnits(data(p))==3,'left the counter before confirming')
+pl.Character:PivotTo(CFrame.new(scene.packStation.Position))
+input('Sell',second.id)
 local event=messages[#messages]
-assert(event.player==pl and event.payload.counter and event.payload.full and event.payload.resources.Ruby==2*a.dust+b.dust)
-assert(event.payload.cash==2*a.cash+b.cash and Pro.cargoUnits(data(p))==0)
+assert(event.player==pl and event.payload.id==second.id and event.payload.counter and event.payload.full)
+assert(event.payload.resources.Ruby==second.resources.Ruby and second.resources.Ruby==2*a.dust+b.dust)
+assert(event.payload.cash==second.cash and second.cash==2*a.cash+b.cash and Pro.cargoUnits(data(p))==0)
 local replicated=Http:JSONDecode(pl:GetAttribute('MA_Profile'))
 local credit=replicated.recentSales[1]
 assert(credit.id==event.payload.id and credit.revision==replicated.revision and credit.cash==event.payload.cash)
 assert(replicated.run.wallet.Quartz==money+credit.cash)
-local before=#messages
-input('ReturnCargo');input('Sell')
-assert(#messages==before,'duplicate or empty sale emitted a reward')
+input('Sell',second.id)
+assert(messages[#messages].payload.kind=='rejected' and data(p).run.wallet.Quartz==money+credit.cash)
+input('QuoteSale','empty')
+assert(messages[#messages].payload.kind=='rejected')
 Workshop.CRYSTAL_CHANCE=beforeChance
 players.PlayerRemoving:Fire(pl)
-print('PASS production selling: full stone arc, rare crystal cue, one drop per cut, range check, one-step sale, exact committed rewards and duplicate protection')
+print('PASS production selling: quotes are read-only, changed bags and out-of-range confirmations fail, mixed committed payouts match the quote, and replay cannot double-pay')

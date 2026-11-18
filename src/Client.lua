@@ -227,7 +227,9 @@ local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),pa
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
 local fleetView
 local function inspectingFleet() return fleetView and fleetView:isOpen() end
-local function menusVisible() return modal.Visible or inspectingFleet() or (logisticsView and logisticsView:isOpen()) end
+local function menusVisible()
+ return modal.Visible or inspectingFleet() or (logisticsView and logisticsView:isOpen()) or (pickupView.sales and pickupView.sales:isOpen())
+end
 local selectorView=SelectorView.new({world=world,player=player,parent=localFX,command=command,profile=function() return profile end,
  reducedMotion=CrystalImpactView.reducedMotion,
  notify=function(message) notice.Text=message;noticeUntil=os.clock()+2 end,
@@ -1757,7 +1759,7 @@ local evade=button(safeRoot,UDim2.new(1,-136,1,-108),UDim2.fromOffset(118,38),'E
 local testLoadout=button(safeRoot,UDim2.new(1,-252,0,80),UDim2.fromOffset(236,44),'Random loadout · 2–5 [T]',function() command:FireServer('TestLoadout') end,Color3.fromRGB(139,83,224))
 testLoadout.Name='RandomLoadoutTester';testLoadout.Visible=false
 local function cargoAction()
- command:FireServer('Sell')
+ if pickupView.sales then pickupView.sales:open() end
 end
 local unload=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(116,40),'Sell [U]',cargoAction,palette.paper)
 unload.Name='ReturnCargo';unload.Visible=false
@@ -1778,8 +1780,10 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
   return hr and counter and Mining.onDepotApproach(hr.Position,pin,counter,
    world:GetAttribute('DepotFloorFrame'),world:GetAttribute('DepotFloorSize'))
  end})
-pickupView.sales=SaleView.new({hud=tacticalHUD,player=player,world=world,parent=localFX,presentation=presentation,
- audio=soundscape,reducedMotion=CrystalImpactView.reducedMotion,hidden=menusVisible,
+pickupView.sales=SaleView.new({hud=tacticalHUD,player=player,world=world,gui=safeRoot,
+ audio=soundscape,reducedMotion=CrystalImpactView.reducedMotion,requestId=tx,
+ send=function(action,id) command:FireServer(action,id) end,
+ notify=function(message) notice.Text=message;noticeUntil=os.clock()+3 end,
  onCommitted=function(receipt) soundscape:observeSale(receipt) end})
 connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt)
  pickupView.sales:receive(receipt)
@@ -1810,7 +1814,7 @@ local function stationAction(station)
  elseif kind=='Printer' then return function() logisticsView:toggle() end,'Drone yard','Manage your permanent fleet and transport','Browse'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
-  return cargoAction,'Sell ore','Unload your backpack here','Sell'
+  return cargoAction,'Sell ore','Check your backpack payout','Appraise'
  end
  return nil
 end
@@ -1953,6 +1957,12 @@ connect(UIS.InputBegan,function(input,processed)
   if key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB then closeFleetInspection(true)
   elseif key==Enum.KeyCode.Left then fleetView:cycle(-1)
   elseif key==Enum.KeyCode.Right then fleetView:cycle(1) end
+  return
+ end
+ if pickupView.sales:isOpen() then
+  local key=input.KeyCode
+  if key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB then pickupView.sales:close()
+  elseif key==Enum.KeyCode.E or key==Enum.KeyCode.ButtonX then pickupView.sales:confirm() end
   return
  end
  if toolView and toolView:input(input,processed) then return end

@@ -15,9 +15,10 @@ with tempfile.TemporaryDirectory(prefix='selling-') as directory:
    ';(function()\n'+(ROOT/'tests'/f'{fixture}.integration.lua').read_text()+'\nend)()'])
   path=Path(directory)/(fixture+'.lua');path.write_text(source)
   subprocess.run([str(luau/'luau'),str(path)],check=True)
- sale=(ROOT/'src/SaleView.lua').read_text()
+ ledger=(ROOT/'src/SaleLedger.lua').read_text()
+ sale=(ROOT/'src/SaleView.lua').read_text().replace("require('./SaleLedger')",'(function()\n'+ledger+'\nend)()')
  source='\n'.join(((ROOT/'tests/mock-roblox.lua').read_text(),module_bundle(('Shops',)),
   'local SaleView=(function()\n'+sale+'\nend)()',
   (ROOT/'tests/sale-ledger.integration.lua').read_text()))
- path=Path(directory)/'world-sale.lua';path.write_text(source)
+ path=Path(directory)/'counter-sale.lua';path.write_text(source)
  subprocess.run([str(luau/'luau'),str(path)],check=True)

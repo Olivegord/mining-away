@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 17 — rework selling and restore rock splits
+
+Replace the counter appraisal sequence completely. Restore the old two-piece rock split at the opening beat. This supersedes the earlier removal of the two-piece release for ordinary stone and sealed geodes. Routine shared Edit and canonical saves apply.
+
 ## November 16 — full drop arcs, smaller aimed prompts and honest drone status
 
 The owner rejects the shallow/immediate stone drop, current stone-opening treatment, smooth geode appearance, large proximity-selected E prompt and misleading spinners. Every drop needs an arc. Replace the hinged stone/geode look, make the smaller prompt follow the intended aimed object, use spinners only while drones actually think and pause/float, and show batteries whenever drones are inside the accepted plot. Diagnose repeated down/up/down travel instead of treating it as intentional animation. The owner ended their Play session to permit the shared Edit install. Routine saves only; no publication.

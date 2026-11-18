@@ -164,8 +164,9 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
   end
  end
  local function openHalves(r,frame,size,now,reduced)
-  local cut=r.source:GetAttribute('Kind')=='Geode' and 'Geode' or r.source:GetAttribute('CrystalCut')
-  local template=cut and findFracture and findFracture(cut)
+  local spherical=r.source:GetAttribute('Kind')=='Geode' and not r.source:GetAttribute('SealedDrop')
+  local cut=spherical and 'Geode' or r.source:GetAttribute('CrystalCut')
+  local template=findFracture and (findFracture(cut or 'Original') or findFracture('Original'))
   if not template then return end
   local left,right=template:FindFirstChild('Left'),template:FindFirstChild('Right')
   if not left or not right then return end
@@ -213,7 +214,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    if not ordinaryStone then audio:play('crystal_release_tink',point,{level=volume}) end
   end
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
-  if not ordinaryStone and not s:GetAttribute('SealedDrop') then openHalves(r,frame,size,now,reduced) end
+  openHalves(r,frame,size,now,reduced)
   if not reduced then
    if not prism and not nomad and not ordinaryStone then releaseSparks(point,ground,r.baseColor,strength,now) end
    if RoleVisuals and not nomad then

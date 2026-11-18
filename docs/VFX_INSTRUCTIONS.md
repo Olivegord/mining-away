@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 17 — restore the two-piece rock release
+
+Ordinary field rocks and sealed geodes open with the original two solid halves swinging outward from the bottom seam. Use the last rendered size and pose of the rock and the matching fracture cut. The sealed geode keeps its irregular exterior, anticipation and player-controlled opening. Drop trajectories, dust, chips and reward timing still use the existing gameplay paths.
+
 ## November 16 — restore every drop arc; reject hinges and oversized prompts
 
 All field stone and gem cargo uses the full existing launch arc. Sealed geodes use the original irregular rock cut and a visible 0.75-second launch, with restrained warm motes/light, no spherical hinged shell or giant halo. Opening trembles briefly and shatters into the existing reward effects; ordinary stone shatters directly. Contents stay hidden until the server accepts opening after landing. The field E prompt is 132×34 px, aim-selected, with the existing white object highlight and selection burst. Thinking means holding position with a tiny float; only that state gets a spinner. Batteries stay visible throughout the accepted plot. This supersedes the shallow stone hops, hinged shell treatment and broad busy-state spinner rules below. Final live visual/motion acceptance remains unverified.

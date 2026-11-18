@@ -1,5 +1,15 @@
 # Shared project context
 
+## November 17 — backpack trade-in and original rock splits
+
+The selling counter and U show a server-priced backpack before spending the cargo. Stacks show their own cash and material payouts, a selectable model of the actual cut, and each payout modifier's contribution. The footer shows the whole payout. E, controller X or the confirm button commits the quoted bag; closing the preview keeps it. The quote expires after 30 seconds, and the server rejects a confirmation if the bag changes, the run changes or the player leaves the counter. Confirmed sales credit the wallet immediately and show a compact receipt. Courier and Auto Sell settlement still use their existing paths.
+
+Ordinary field rocks and player-opened sealed geodes use the original matching fracture halves, swinging outward from the foot of the last rendered cut. The irregular sealed shell, mining layers, release particles and cargo arcs still use the existing systems.
+
+Shared DRONEREVOLUTION was already open and stayed in Edit, place **124078027733625**, universe **10774898335**. Script Sync exported the controllers and all three native roots reported Errored. A guarded exact-baseline Script Editor install used **e268c44**, preserving the concurrently integrated quarry ignition work. Studio reported a successful Team Create save **385**. All seven editor and native Sources matched the canonical **build/DRONE_GAME.rbxl** after saving, SHA-256 **f2ef7ba32e1ef96e384e626589d1ba25e3b80176830f5d8f694960d22613f9d8**. The Source refresh preserved all unrelated and backup Sources and every non-Source chunk. Next shared Studio Play loads this revision. No player release; last verified published release remains **v363**.
+
+Selling, persistence, geology and mining flight checks passed with API doubles. The native Edit component verified a real ore viewport, priced modifier text, exact receipt credit, two opening halves on ordinary and sealed rocks, and fragment cleanup. No Play or device simulation started. Full in-play layout, input, audio, multiplayer and perceived pacing remain unverified. Reproduce from e268c44 with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit e268c44`, then verify with `python3 tools/build.py`.
+
 ## November 17 — quarry lasers fire on approach
 
 Strikers begin charging within 2.2 studs of their assigned hover station when the rock is ready and in line of sight. The base ignition still takes 0.10 seconds, and the drone keeps moving toward the station while it cuts. The server uses the same range for startup and damage validation. A production logic check measured the first cut outside the previous one-stud gate and verified that the drone settled while cutting.

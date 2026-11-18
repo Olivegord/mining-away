@@ -611,25 +611,36 @@ function P.finishDelivery(p,droneId,prices,tx,expectedRun)
  local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(manifest.cargo),credits=amount,quartz=quartz,cargo=clone(manifest.cargo),resources=resources}
  P.record(p,'FinishDelivery',tx,result);return true,result
 end
-function P.sell(p,prices,tx,expectedRun)
+local function salePayout(p,prices,run)
+ local units=P.cargoUnits(p);if units==0 then return nil,'Backpack is empty' end
+ local amount=0
+ for material,n in pairs(p.run.cargo) do
+  local value=Shops.oreValue(prices,material);if not finite(value) or value<0 then return nil,'Unknown material value' end
+  amount+=n*value
+ end
+ amount=math.floor(amount)
+ if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return nil,'Sale limit exceeded' end
+ local deposited,quartz,resources=Shops.deposit(run,p.run.cargo);if not deposited then return nil,quartz end
+ return {credits=amount,earnings=amount,units=units,cargo=clone(p.run.cargo),quartz=quartz,resources=resources,runId=p.run.id}
+end
+function P.quoteSale(p,prices)
+ return salePayout(p,prices,{wallet=clone(p.run.wallet),resources=clone(p.run.resources)})
+end
+function P.sell(p,prices,tx,expectedRun,expectedCargo)
  local replay=P.receipt(p,'Sell',tx);if replay then
   if replay.runId~=expectedRun then return false,'Transaction ID already used' end
   return true,replay
  end
  if expectedRun~=p.run.id then return false,'Stale run' end
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid transaction ID' end
- local units=P.cargoUnits(p);if units==0 then return false,'Backpack is empty' end
- local manifest=clone(p.run.cargo)
- local amount=0
- for material,n in pairs(p.run.cargo) do
-  local value=Shops.oreValue(prices,material);if not finite(value) or value<0 then return false,'Unknown material value' end
-  amount+=n*value
+ if expectedCargo then
+  for key,n in pairs(p.run.cargo) do if expectedCargo[key]~=n then return false,'Backpack changed. Get a new price.' end end
+  for key,n in pairs(expectedCargo) do if p.run.cargo[key]~=n then return false,'Backpack changed. Get a new price.' end end
  end
- amount=math.floor(amount)
- if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
- local deposited,quartz,resources=Shops.deposit(p.run,p.run.cargo);if not deposited then return false,quartz end
- p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=quartz
- local result={credits=amount,earnings=amount,units=units,cargo=manifest,quartz=quartz,resources=resources,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
+ local result,reason=salePayout(p,prices,p.run)
+ if not result then return false,reason end
+ p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings+=result.credits;p.run.quartzEarnings+=result.quartz
+ P.record(p,'Sell',tx,result);return true,result
 end
 function P.milestone(p)
  return {earnings=Workshop.prestigeGoal(p.prestiges),field='Quartz',wins=0}
