@@ -41,7 +41,7 @@ check('arrival remains bounded and converges across frame rates',function()
   local pos,velocity=Vector3.new(-30,5,-8),Vector3.new(10,0,3);local goal=Vector3.zero;local arrived=false
   for n=1,10*fps do
    local old=velocity;pos,velocity=Feel.inertialApproach(pos,goal,velocity,.35,1/fps,true)
-   assert((velocity-old).Magnitude<=.35*60*1.6/fps+1e-7)
+   assert((velocity-old).Magnitude<=.35*60*1.6*2.4/fps+1e-7)
    if pos.Magnitude<.5 then arrived=true end
    if arrived then assert(pos.Magnitude<.51,'arrival crossed and reversed out of the station') end
   end

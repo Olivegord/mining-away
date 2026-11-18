@@ -78,7 +78,9 @@ local miner=p.drones[1]
 assert(miner.role=='Striker' and scene.followHeight(miner)+4.5<scene.followHeight(d),'small miners should escort below the carriers')
 local previousState=miner.state
 miner.state='Follow';local followSpeed=travelSpeed(miner)
-miner.state='Travel';assert(followSpeed>travelSpeed(miner)*1.2,'small miners should accelerate their escort pace')
+miner.state='Travel'
+assert(followSpeed>=math.min(.5,travelSpeed(miner)*1.2)-1e-8 and followSpeed<=.5+1e-8,
+ 'small miners should accelerate their escort pace up to the reference cap')
 miner.state=previousState
 
 do

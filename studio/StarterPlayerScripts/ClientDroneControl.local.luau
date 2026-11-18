@@ -821,8 +821,8 @@ function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,stea
  return CFrame.new(center)*CFrame.Angles(0,yaw,0)*CFrame.Angles(pitch,0,roll),center.Y+halfHeight
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response,mass,steering)
- -- Drone Blower revolution steers toward a capped, distance-eased velocity.
- -- Keep bounded thrust so a turn, neighbor force or shot can carry momentum.
+ -- Use the reference's fixed cruise cap and distance-eased approach.
+ -- Reserve stronger counterthrust for braking, so the hull can still recoil.
  velocity=velocity or Vector3.zero
  if type(dt)~='number' or dt~=dt or dt<=0 then return position,velocity end
  local elapsed=math.min(dt,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
@@ -831,23 +831,33 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
  mass=math.clamp(mass or 1,.65,4)
  local inertia=math.sqrt(mass)
  local acceleration=math.max(10,cruise*1.6)*math.sqrt(response)/mass
+ local braking=acceleration*2.4
  for _=1,steps do
   local delta=goal-position;local distance=delta.Magnitude
-  -- Blend the near-work response continuously. The old distance<=16 switch
-  -- changed both speed and easing abruptly at an invisible boundary.
+  local direction=distance>1e-6 and delta/distance or Vector3.zero
   local proximity=work and math.clamp((16-distance)/12,0,1) or 0
-  local cap=cruise*(1+proximity*.45)
   local ease=-60*math.log(1-(.03+.035*proximity))*response/inertia
-  local speed=math.min(cap,distance*ease,math.sqrt(2*acceleration*distance))
-  local requested=distance>1e-6 and delta/distance*speed or Vector3.zero
+  local speed=math.min(cruise,distance*ease,math.sqrt(2*acceleration*distance))
+  local requested=direction*speed
   if correction then requested+=correction end
   -- Convert neighboring thruster pressure to a steering velocity over a
   -- short response window. Station approaches taper that pressure to zero.
   if steering then requested+=steering*(.16/mass) end
-  if requested.Magnitude>cap then requested=requested.Unit*cap end
-  local change=requested-velocity;local limit=acceleration*h
+  if requested.Magnitude>cruise then requested=requested.Unit*cruise end
+  local change=requested-velocity
+  local slowing=velocity:Dot(direction)>speed
+   or (distance>4 and velocity.Magnitude>cruise*.45 and velocity:Dot(change)<0)
+  local limit=(slowing and braking or acceleration)*h
   local nextVelocity=change.Magnitude>limit and velocity+change.Unit*limit or requested
-  position+=(velocity+nextVelocity)*(.5*h);velocity=nextVelocity
+  local step=(velocity+nextVelocity)*(.5*h)
+  local forward=step:Dot(direction)
+  if distance>1e-6 and forward>=distance then
+   -- A station can move or a new order can put it inside our stopping
+   -- distance. End forward travel on its plane and keep lateral momentum.
+   step-=direction*(forward-distance)
+   nextVelocity-=direction*math.max(0,nextVelocity:Dot(direction))
+  end
+  position+=step;velocity=nextVelocity
  end
  return position,velocity
 end

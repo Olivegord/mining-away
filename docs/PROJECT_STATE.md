@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 17 — lower drone cruise speed and stop at the station
+
+The older Drone Blower revolution controller uses distance-eased travel with a fixed cap. The current controller follows that approach, removes the quarry cruise and close-range speed boosts, and limits normal unupgraded escort flight to 30 studs per second. Stronger counterthrust handles deceleration and reversals. When a new station lands inside the stopping distance, forward travel ends at the station plane. Early laser contact, recoil, and speed upgrades remain in use.
+
+With native Studio vectors, the fast retarget check passed the station by 11.39 studs before the change and zero after it. A separate long quarry approach with the fastest base Striker dropped from 42 to 30 studs per second. Automated mining, steering, recoil, pickup, geode and beam checks passed. No new Studio Play session was started.
+
+Shared DRONEREVOLUTION was already open in Edit at place 124078027733625, universe 10774898335. Script Sync exported the controllers. The three roots reported Errored, so guarded Script Editor updates installed the matching Sources before Save to Roblox. All seven installed Sources match canonical `build/DRONE_GAME.rbxl`, SHA-256 `b340e40aa31d37cc173e05f9a985f903298f304da7059536cf3da1a104f41d00`. The next shared Studio Play loads the new braking and cruise speeds. No player release was issued. Reproduce from `509d6f6` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 509d6f6`, then verify with `python3 tools/build.py`.
+
 ## November 17 — one-press selling
 
 Supersedes the two-step backpack appraisal. E at SELL ORE sells the full backpack in one server transaction. Up to four representative ore stacks land together with a single counter impact after 0.32 seconds, when the wallet feedback and brief receipt show the exact totals and modifier bonus. The sample clears within half a second and the receipt clears after 3.8 seconds. The receipt takes no input and the player can leave immediately. Reduced Motion bypasses the rock animation and credits on the first update. The original two-piece rock opening remains active for ordinary rocks and sealed geodes.

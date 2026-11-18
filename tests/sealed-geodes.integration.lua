@@ -92,7 +92,7 @@ for expected,roll in ipairs({50,65,80,93}) do
  field.cfg.ContinuousCrystals=false
  local previousSpeed=travelSpeed(miner)
  field.cfg.ContinuousCrystals=true
- assert(speed>=previousSpeed*1.39 and scene.miningWarmup(miner,staged)<=.25)
+ assert(speed==previousSpeed and scene.miningWarmup(miner,staged)<=.25)
  for layer=1,expected do
   local size=staged.part.Size
   assert(hitResource(miner,staged,19))
@@ -104,4 +104,4 @@ for expected,roll in ipairs({50,65,80,93}) do
  assert(hitResource(miner,staged,19) and not staged.paid)
  assert(hitResource(miner,staged,1) and staged.paid,'final break requires exactly one more layer')
 end
-print('PASS four standardized sizes, exact 1–4 shrinks, equally weighted final break, deeper-field scaling and quicker quarry drones')
+print('PASS four standardized sizes, exact 1–4 shrinks, equally weighted final break, deeper-field scaling and base quarry cruise speed')

@@ -2573,17 +2573,13 @@ local function travelSpeed(d)
   local boost=p and (returning or not fieldCharge) and Workshop.chargeSpeed(data(p)) or 1
   return d.stats.maxStep60*1.5*boost*roleScale
  end
- local variation=d.state=='Follow' and d.swarmTraits and 1+(d.swarmTraits.speed-1)*.35*(d.swarmCruise or 0) or 1
  local baseSpeed=d.stats.maxStep60
- if d.state=='Travel' and d.target and d.target.field.cfg.ContinuousCrystals then
-  baseSpeed=math.max(baseSpeed,.26)*1.40
- end
  if d.state=='Follow' then
   local agility=scene.followAgility(d)
-  baseSpeed=math.max(baseSpeed,.39*agility)
-  variation*=1+.24*agility
+  local variation=d.swarmTraits and 1+(d.swarmTraits.speed-1)*.35*(d.swarmCruise or 0) or 1
+  baseSpeed=math.min(math.max(baseSpeed,.39*agility)*variation*(1+.24*agility),math.max(.5,baseSpeed))
  end
- return baseSpeed*roleScale*variation*(d.role=='Medic' and .68 or (d.role=='Courier' and (d.loadSpeed or 1)*(1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
+ return baseSpeed*roleScale*(d.role=='Medic' and .68 or (d.role=='Courier' and (d.loadSpeed or 1)*(1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
  d.intentGoal=goal

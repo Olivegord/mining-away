@@ -85,23 +85,40 @@ check('destroyed neighbors exert no pressure',function()
  local a,b=record('a',0,0),record('b',0,0);b.hp=0
  close(Feel.swarmOffset(a.pos,a.id,Feel.swarmGrid({a,b})),Vector3.zero)
 end)
-check('flight thrust bounds acceleration from rest and through a reversal',function()
+check('flight accelerates smoothly and brakes faster through a reversal',function()
  local pos,velocity=Vector3.zero,Vector3.zero;local dt=1/60;local acceleration=.35*60*1.6
  for n=1,180 do
   local goal=Vector3.new(n<=60 and 80 or -80,0,0);local previous=velocity
   pos,velocity=Feel.inertialApproach(pos,goal,velocity,.35,dt,false)
-  assert((velocity-previous).Magnitude<=acceleration*dt+1e-8,'instant change in velocity')
+  assert((velocity-previous).Magnitude<=acceleration*2.4*dt+1e-8,'instant change in velocity')
   assert(velocity.Magnitude<=21+1e-8,'cruise cap exceeded')
   if n==1 then assert(velocity.Magnitude<1 and pos.X<.01,'launch should build thrust') end
-  if n==61 then assert(velocity.X>0,'reversal must first brake the previous direction') end
+  if n==61 then assert(velocity.X>0 and previous.X-velocity.X>acceleration*dt,'reversal must brake promptly before changing direction') end
  end
  assert(velocity.X<0,'reversal never completes')
 end)
 check('decreasing cruise speed brakes without discarding momentum',function()
  local pos,velocity=Vector3.zero,Vector3.new(21,0,0)
  local nextPos,nextVelocity=Feel.inertialApproach(pos,Vector3.new(100,0,0),velocity,.1,1/60,false)
- assert(nextVelocity.X>20 and nextVelocity.X<21,'a speed downgrade snapped to its new cap')
+ assert(nextVelocity.X>19 and nextVelocity.X<21,'a speed downgrade snapped to its new cap')
  assert(nextPos.X>.3,'retained momentum must remain visible')
+end)
+check('short work hops respect the cruise cap and retargeting does not cross the new station',function()
+ for _,fps in ipairs({30,60,144}) do
+  local dt=1/fps
+  local pos,velocity=Vector3.zero,Vector3.zero
+  for _=1,fps*2 do
+   pos,velocity=Feel.inertialApproach(pos,Vector3.xAxis*12,velocity,.2,dt,true,nil,1.85,1.4)
+   assert(velocity.Magnitude<=12+1e-8 and pos.X<=12+1e-8)
+  end
+  local goal=Vector3.xAxis*2
+  pos,velocity=Vector3.zero,Vector3.xAxis*30
+  for _=1,fps do
+   pos,velocity=Feel.inertialApproach(pos,goal,velocity,.35,dt,true,nil,1,1.4)
+   assert(pos.X<=2+1e-8,'crossed the new station and had to turn back')
+  end
+  close(pos,goal,.01)
+ end
 end)
 check('flight settles over the target at 30 60 and 144 Hz',function()
  local result={}
@@ -124,7 +141,7 @@ end)
 check('replication correction shares the same thrust limit',function()
  local pos,velocity=Vector3.zero,Vector3.new(8,0,0)
  local _,nextVelocity=Feel.inertialApproach(pos,Vector3.new(30,0,0),velocity,.35,1/60,false,Vector3.new(-100,0,0))
- assert((nextVelocity-velocity).Magnitude<=.35*60*1.6/60+1e-8)
+ assert((nextVelocity-velocity).Magnitude<=.35*60*1.6*2.4/60+1e-8)
 end)
 check('fast head-on flight passes with room for two starter hulls',function()
  local crew={record('a',-24,0,50,0),record('b',24,0,-50,0)}
