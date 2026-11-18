@@ -701,7 +701,7 @@ function W.initialize(): any
     local cfg={Name=tier.name,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
      Hardness=tier.hardness,Cracks=tier.cracks,Color=tier.color or original.Color,ReferenceCrystals=true,ContinuousCrystals=true,RockModifiers=true,Count=64,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
     cfg.WholeField=whole
-    if whole then cfg.Count=9 end
+    if whole then cfg.Count=ResourcePlacement.SQUARE_ROCK_COUNT end
     local id=offset+i
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})

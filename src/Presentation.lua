@@ -154,6 +154,18 @@ function P:finishBeamTail(segment,now)
  WorkEffects.drawCylinder(segment.core,segment.from,segment.to,segment.inner,.14)
  WorkEffects.drawCylinder(segment.halo,segment.from,segment.to,segment.outer,.82)
  table.insert(self.beamTails,segment)
+ return segment
+end
+local function tailWidth(tail,now)
+ return (1-math.clamp((now-tail.at)/.2,0,1))^2
+end
+function P:syncMiningTarget(beam,sample,now)
+ if beam.cachedAlive==sample.alive and beam.cachedLife==sample.life and beam.cacheKey==sample.key then return end
+ self:finishBeamTail(beam.lastDraw,now);beam.lastDraw=nil
+ self:finishBeamTail(beam.lastBranch,now);beam.lastBranch=nil
+ beam.missingTail=nil;beam.recoverAt=nil
+ beam.surface={};beam.secondarySurface={};beam.branchHold=nil;beam.endY=nil;beam.visibility=0
+ beam.cachedAlive=sample.alive;beam.cachedLife=sample.life;beam.cacheKey=sample.key
 end
 function P:destroyMiningBeam(beam)
  if not beam then return end
@@ -347,11 +359,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local final;sample,final=finalContact(sample,now)
  beam.vertical=sample.isMining==true
  beam.followCrystal=followsCrystal(sample)
- if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
-  self:finishBeamTail(beam.lastDraw,now);beam.lastDraw=nil
-  self:finishBeamTail(beam.lastBranch,now);beam.lastBranch=nil
-  beam.surface={};beam.secondarySurface={};beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
- end
+ self:syncMiningTarget(beam,sample,now)
  local dt=beam.renderAt and math.clamp(now-beam.renderAt,0,.1) or 1/60;beam.renderAt=now
  local part=sample.part
  local point,normal
@@ -391,9 +399,24 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.miningCue=beam.miningCue or {}
  local pulse,newPulse=F.miningCue(beam.miningCue,sample,now)
  if style=='Cutter' then pulse=0;newPulse=false end
+ if sample.cube and valid and width>.001 and beam.missingTail then
+  local tail=beam.missingTail
+  beam.recoverWidth=math.max(.05,tailWidth(tail,now));beam.recoverAt=now
+  tail.retired=true
+  if tail.core.Parent then tail.core.Transparency=1;tail.halo.Transparency=1 end
+  beam.missingTail=nil
+ end
+ if beam.recoverAt then
+  local remaining=1-math.clamp((now-beam.recoverAt)/.085,0,1)
+  width*=1-(1-beam.recoverWidth)*remaining^2
+  if remaining==0 then beam.recoverAt=nil end
+ end
  local visible=valid and width>.001
  if not visible and beam.lastDraw then
-  if not valid then self:finishBeamTail(beam.lastDraw,now) end
+  if not valid then
+   local tail=self:finishBeamTail(beam.lastDraw,now)
+   if sample.cube and part and part.Parent then beam.missingTail=tail end
+  end
   beam.lastDraw=nil
  end
  beam.visibility=visible and 1 or 0
@@ -490,7 +513,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  end
- if not reference or ink or sample.cube then self.work:mining(beam,sample,point,normal,width,pulse,now) end
+ if not reference or ink or sample.cube then self.work:mining(beam,sample,point,normal,visible and width or 0,pulse,now) end
  if glow and sample.resource and sample.resource.cutFeedback then
   sample.resource.cutFeedback:cut(sample.resource,now,beat*math.min(1,width+.25))
   if not ink and beam.contactAccentAt~=sample.since then
@@ -548,9 +571,7 @@ function P:queueMiningBeam(beam,sample,now)
  local final;sample,final=finalContact(sample,now)
  beam.vertical=sample.isMining==true
  beam.followCrystal=followsCrystal(sample)
- if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
-  beam.surface={};beam.secondarySurface={};beam.branchHold=nil;beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
- end
+ self:syncMiningTarget(beam,sample,now)
  if final then
   -- This saved hit already has a hard .3s lifetime. It may use the still-visible
   -- fracture mesh at HP zero, but must never enter the ordinary 1.2s proc hold.
@@ -1318,7 +1339,7 @@ function P:update(_dt,now)
  self.work:update(now)
  for i=#self.beamTails,1,-1 do
   local segment=self.beamTails[i]
-  local width=(1-math.clamp((now-segment.at)/.2,0,1))^2
+  local width=segment.retired and 0 or tailWidth(segment,now)
   if width==0 then
    segment.core:Destroy();segment.halo:Destroy();table.remove(self.beamTails,i)
   else

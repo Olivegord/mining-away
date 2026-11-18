@@ -10406,6 +10406,18 @@ function P:finishBeamTail(segment,now)
  WorkEffects.drawCylinder(segment.core,segment.from,segment.to,segment.inner,.14)
  WorkEffects.drawCylinder(segment.halo,segment.from,segment.to,segment.outer,.82)
  table.insert(self.beamTails,segment)
+ return segment
+end
+local function tailWidth(tail,now)
+ return (1-math.clamp((now-tail.at)/.2,0,1))^2
+end
+function P:syncMiningTarget(beam,sample,now)
+ if beam.cachedAlive==sample.alive and beam.cachedLife==sample.life and beam.cacheKey==sample.key then return end
+ self:finishBeamTail(beam.lastDraw,now);beam.lastDraw=nil
+ self:finishBeamTail(beam.lastBranch,now);beam.lastBranch=nil
+ beam.missingTail=nil;beam.recoverAt=nil
+ beam.surface={};beam.secondarySurface={};beam.branchHold=nil;beam.endY=nil;beam.visibility=0
+ beam.cachedAlive=sample.alive;beam.cachedLife=sample.life;beam.cacheKey=sample.key
 end
 function P:destroyMiningBeam(beam)
  if not beam then return end
@@ -10599,11 +10611,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local final;sample,final=finalContact(sample,now)
  beam.vertical=sample.isMining==true
  beam.followCrystal=followsCrystal(sample)
- if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
-  self:finishBeamTail(beam.lastDraw,now);beam.lastDraw=nil
-  self:finishBeamTail(beam.lastBranch,now);beam.lastBranch=nil
-  beam.surface={};beam.secondarySurface={};beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
- end
+ self:syncMiningTarget(beam,sample,now)
  local dt=beam.renderAt and math.clamp(now-beam.renderAt,0,.1) or 1/60;beam.renderAt=now
  local part=sample.part
  local point,normal
@@ -10643,9 +10651,24 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.miningCue=beam.miningCue or {}
  local pulse,newPulse=F.miningCue(beam.miningCue,sample,now)
  if style=='Cutter' then pulse=0;newPulse=false end
+ if sample.cube and valid and width>.001 and beam.missingTail then
+  local tail=beam.missingTail
+  beam.recoverWidth=math.max(.05,tailWidth(tail,now));beam.recoverAt=now
+  tail.retired=true
+  if tail.core.Parent then tail.core.Transparency=1;tail.halo.Transparency=1 end
+  beam.missingTail=nil
+ end
+ if beam.recoverAt then
+  local remaining=1-math.clamp((now-beam.recoverAt)/.085,0,1)
+  width*=1-(1-beam.recoverWidth)*remaining^2
+  if remaining==0 then beam.recoverAt=nil end
+ end
  local visible=valid and width>.001
  if not visible and beam.lastDraw then
-  if not valid then self:finishBeamTail(beam.lastDraw,now) end
+  if not valid then
+   local tail=self:finishBeamTail(beam.lastDraw,now)
+   if sample.cube and part and part.Parent then beam.missingTail=tail end
+  end
   beam.lastDraw=nil
  end
  beam.visibility=visible and 1 or 0
@@ -10742,7 +10765,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  end
- if not reference or ink or sample.cube then self.work:mining(beam,sample,point,normal,width,pulse,now) end
+ if not reference or ink or sample.cube then self.work:mining(beam,sample,point,normal,visible and width or 0,pulse,now) end
  if glow and sample.resource and sample.resource.cutFeedback then
   sample.resource.cutFeedback:cut(sample.resource,now,beat*math.min(1,width+.25))
   if not ink and beam.contactAccentAt~=sample.since then
@@ -10800,9 +10823,7 @@ function P:queueMiningBeam(beam,sample,now)
  local final;sample,final=finalContact(sample,now)
  beam.vertical=sample.isMining==true
  beam.followCrystal=followsCrystal(sample)
- if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
-  beam.surface={};beam.secondarySurface={};beam.branchHold=nil;beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
- end
+ self:syncMiningTarget(beam,sample,now)
  if final then
   -- This saved hit already has a hard .3s lifetime. It may use the still-visible
   -- fracture mesh at HP zero, but must never enter the ordinary 1.2s proc hold.
@@ -11570,7 +11591,7 @@ function P:update(_dt,now)
  self.work:update(now)
  for i=#self.beamTails,1,-1 do
   local segment=self.beamTails[i]
-  local width=(1-math.clamp((now-segment.at)/.2,0,1))^2
+  local width=segment.retired and 0 or tailWidth(segment,now)
   if width==0 then
    segment.core:Destroy();segment.halo:Destroy();table.remove(self.beamTails,i)
   else
@@ -18535,7 +18556,10 @@ local function registerDrone(source)
  local emitter=clone:FindFirstChild('Emmiter',true) or clone:FindFirstChild('MiningEmitter',true) or clone:FindFirstChild('Emitter',true)
  if not emitter or not emitter:IsA('BasePart') then clone:Destroy();pendingDroneSources[source]=true;return false end
  for _,part in ipairs(clone:GetDescendants()) do
-  if part:IsA('BasePart') and role~='Ramiel' then part.Reflectance=0 end
+  if part:IsA('BasePart') then
+   part.LocalTransparencyModifier=0
+   if role~='Ramiel' then part.Reflectance=0 end
+  end
  end
  local typeColor=colors[source:GetAttribute('Role')] or colors[source:GetAttribute('Type')]
  emitter.Color=typeColor or emitter.Color
@@ -18834,6 +18858,7 @@ local function renderDrone(d,dt,now)
  local previousVelocity=d.velocity or Vector3.zero
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
  local role=s:GetAttribute('Role')
+ local cube=s:GetAttribute('CubeDrone')==true
  local isRamiel=role=='Ramiel'
  local isNomad=role=='Nomad'
  local heavyFlight=(isRamiel or isNomad) and DroneConfig.Prominent[role]
@@ -18965,7 +18990,7 @@ local function renderDrone(d,dt,now)
  local desiredPitch=0
  if mass then
   desiredBank=0
-  local precision=(DroneConfig.DownwardGunDepth[role]~=nil and (state=='Warmup' or state=='SpecialMine')) or state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
+  local precision=(cube and state=='Warmup') or (DroneConfig.DownwardGunDepth[role]~=nil and (state=='Warmup' or state=='SpecialMine')) or state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
    or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or state=='Docked' or docking
   if not precision and not heavyFlight and not motionPaused and not CrystalImpactView.reducedMotion() then
    local thrust=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(((d.velocity or Vector3.zero)-previousVelocity)/math.max(dt,1/144))
@@ -19141,7 +19166,7 @@ local function renderDrone(d,dt,now)
   and now>=finalAt and now<math.min(finalUntil,finalAt+.75) then
   local primaryId=s:GetAttribute('MineBreakPrimaryId')
   local finalPart,finalSource,finalResource=resolveRenderedTarget('resource',primaryId,true)
-  if finalPart then
+  if finalPart and (not cube or not active or id==primaryId) then
    part,source,resource=finalPart,finalSource,finalResource;id=primaryId;kind='resource';active=true;charging=false
    procId=s:GetAttribute('MineBreakSecondaryId')
    extra,extraSource=resolveRenderedTarget('resource',procId,true)
@@ -19153,7 +19178,7 @@ local function renderDrone(d,dt,now)
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
   stoneColor=resource and resource.stoneColor,
-  cube=s:GetAttribute('CubeDrone')==true,style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=not s:GetAttribute('CubeDrone') and s:GetAttribute('BeamVariant') or nil,droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
+  cube=cube,style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=not cube and s:GetAttribute('BeamVariant') or nil,droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,

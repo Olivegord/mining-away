@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 17 — continuous contact through short mining interruptions
+
+A cube laser that briefly loses and regains the same contact merges back into one line at the current taper width. When the target actually changes, the old beam can finish its taper while the new target begins. A saved fracture contact yields to a newly active target. Cube render clones clear their inherited local visibility override, and the emitters level out during warmup before firing.
+
 ## November 17 — vertical cube miner lasers and field-scoped battery display
 
 Cube miner lasers use the emitter's X and Z for the visible contact, including each Double Beam ray. The laser taper and particle tails still finish after the cut. In the square fields, hide the over-drone battery and the player's battery HUD row while retaining real charge behavior. Keep the battery indicators in the original quarry.

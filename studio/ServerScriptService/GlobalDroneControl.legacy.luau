@@ -2636,6 +2636,28 @@ end)()
 local ResourcePlacement = (function()
 -- Bounded resource placement in the field's horizontal local space.
 local P={MAX_ATTEMPTS=18,RETRY_SECONDS=2,EDGE_MARGIN=.75,GAP=.65}
+-- Asymmetric coverage of a 32-stud square. Rotations, mirroring and small
+-- per-field offsets keep the silhouettes varied while covering the corners.
+local squareSites={
+ {-12,-9.3},{-2.4,-12},{9.3,-12.2},{12.05,-2.6},
+ {12.18,12.15},{.9,8.9},{-9.3,12.15},{-12.2,4.1},
+ {-5.4,6.4},{5.2,3.4},{3.1,-5},{-6.4,-1.8},
+}
+P.SQUARE_ROCK_COUNT=#squareSites
+function P.squareRockSites(width,depth,tier)
+ local random=Random.new(7103+tier*409)
+ local rotation=(tier-1)%4
+ local mirror=math.floor((tier-1)/4)%2==1
+ local sites={}
+ for i,site in ipairs(squareSites) do
+  local x=site[1]+random:NextNumber(-.25,.25)
+  local z=site[2]+random:NextNumber(-.25,.25)
+  if mirror then x=-x end
+  for _=1,rotation do x,z=-z,x end
+  sites[i]={x=x*width/32,z=z*depth/32}
+ end
+ return sites
+end
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
 function P.radius(x,y,z,kind,upright)
  if not finite(x) or not finite(y) or not finite(z) or x<=0 or y<=0 or z<=0 then return nil end
@@ -8761,7 +8783,7 @@ function W.initialize(): any
     local cfg={Name=tier.name,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
      Hardness=tier.hardness,Cracks=tier.cracks,Color=tier.color or original.Color,ReferenceCrystals=true,ContinuousCrystals=true,RockModifiers=true,Count=64,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
     cfg.WholeField=whole
-    if whole then cfg.Count=9 end
+    if whole then cfg.Count=ResourcePlacement.SQUARE_ROCK_COUNT end
     local id=offset+i
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})
@@ -9790,6 +9812,7 @@ local swarmGrid: any=nil
 local patches: {any}={}
 scene.patchById=scene.flatFields and {} or patches
 scene.squareFields={}
+scene.cubeCruiseHeight=14
 local resources: {[string]: any}={}
 local logistics: any=nil
 local consumableService: any=nil
@@ -10130,7 +10153,7 @@ local function spawnDrone(p,owned,slot,origin)
  origin=origin or (hr and hr.Position) or (scene.spawnPosition or home)+Vector3.new(0,4,0)
  local followHeight=roleName=='Nomad' and flightHeight or scene.followHeight({role=roleName})
  local pos=Feel.followGoal(origin,slot,#scene.runtimeFleet(p),now,owned.base.maxStep60,roleName=='Ramiel',followHeight)
- if scene.flatFields then pos=Vector3.new(pos.X,home.Y+7.3,pos.Z) end
+ if scene.flatFields then pos=Vector3.new(pos.X,home.Y+scene.cubeCruiseHeight,pos.Z) end
  local model,body,emitter
  if scene.flatFields then
   model,body,emitter=World.cubeDrone(droneFolder,pos)
@@ -10357,7 +10380,7 @@ function scene.resourceStation(r,slot,quarry)
  local station=Feel.mineGoal(r.position,slot,r.limit>1,r.fullSize,r.referenceCrystal,quarry or r.landmarkTop~=nil)
  if r.field.cfg.WholeField then
   local floor=r.field.part.Position.Y+r.field.part.Size.Y*.5
-  return Vector3.new(station.X,math.max(floor+7.3,r.position.Y+r.fullSize.Y*.7+2.6),station.Z)
+  return Vector3.new(station.X,math.max(floor+scene.cubeCruiseHeight,r.position.Y+r.fullSize.Y*.7+4.5),station.Z)
  end
  if r.landmarkTop and station.Y<r.landmarkTop+4.5 then
   return Vector3.new(station.X,r.landmarkTop+4.5,station.Z)
@@ -10487,19 +10510,19 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
   else ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,reference)
  local patch=field.part
  local preferred,bounds=landmark,nil
- local gridSlot
+ local siteIndex
  if field.cfg.WholeField then
   local used={}
   for _,r in ipairs(field.resources) do
-   if r.gridSlot and (not r.paid or now<(r.splitAt or 0)) then used[r.gridSlot]=true end
+   if r.siteIndex and (not r.paid or now<(r.splitAt or 0)) then used[r.siteIndex]=true end
   end
-  local wanted=plan and plan.gridSlot or vacancy and vacancy.gridSlot
-  if wanted and not used[wanted] then gridSlot=wanted end
-  if not gridSlot then
-   for slot=1,9 do if not used[slot] then gridSlot=slot;break end end
+  local wanted=plan and plan.siteIndex or vacancy and vacancy.siteIndex
+  if wanted and not used[wanted] then siteIndex=wanted end
+  if not siteIndex then
+   for slot=1,#field.rockSites do if not used[slot] then siteIndex=slot;break end end
   end
-  if not gridSlot then return false end
-  preferred={x=((gridSlot-1)%3-1)*patch.Size.X/3,z=(math.floor((gridSlot-1)/3)-1)*patch.Size.Z/3}
+  if not siteIndex then return false end
+  preferred=field.rockSites[siteIndex]
  end
  if plan and not preferred then
   local p=patch.CFrame:PointToObjectSpace(plan.spot)
@@ -10551,7 +10574,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
    end
    return true
  end
- local selected=gridSlot and preferred or nil
+ local selected=siteIndex and preferred or nil
  if layout and vacancy and vacancy.position and not preferred then
   local p=patch.CFrame:PointToObjectSpace(vacancy.position)
   selected=ResourcePlacement.sample(patch.Size.X,patch.Size.Z,radius,occupied,draw,clear,
@@ -10563,13 +10586,13 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOn
   if massive and not plan then return spawnResource(field,kind,prepareOnly,nil,nearPin,true,vacancy) end
   return false
  end
- if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral,massive=massive,gridSlot=gridSlot} end
+ if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral,massive=massive,siteIndex=siteIndex} end
  local work=mineral.work*(boulder and Mining.BOULDER_WORK or 1)
  local ore=(mineral.ore or field.cfg.Ore)*(boulder and Mining.BOULDER_WORK or 1)
  local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or mineral.stages or field.cfg.Cracks or 3,nil,
   massive and Mining.ROCK_MODIFIERS.Massive or nil,mineral)
  if continuous then resource.placementRadius=radius end
- resource.gridSlot=gridSlot
+ resource.siteIndex=siteIndex
  if landmark then
   field.landmarkReserves[landmark]=selected
   resource.landmark=landmark;resource.landmarkMineral=mineral
@@ -10651,7 +10674,10 @@ local function seedField(field)
   resources[r.id]=nil;r.part:Destroy()
  end
  field.resources={};field.respawnQueue={};field.respawnClock=now
- if field.cfg.ContinuousCrystals and not field.cfg.WholeField then
+ if field.cfg.WholeField then
+  local bed=field.part
+  field.rockSites=ResourcePlacement.squareRockSites(bed.Size.X,bed.Size.Z,bed:GetAttribute('CrystalZone') or 1)
+ elseif field.cfg.ContinuousCrystals then
   local patch=field.part
   field.crystalLayout=ResourcePlacement.crystalLayout(patch.Size.X,patch.Size.Z,patch:GetAttribute('CrystalZone') or 1)
   field.landmarkReserves={}
@@ -11753,7 +11779,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     local respawnClock=r.field.cfg.ReferenceCrystals and now or r.field.respawnClock
     -- The legacy field clock can run faster with more drones. Keep the
     -- minimum delay on the server clock for both natural and planted rocks.
-    local vacancy={at=respawnClock+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn,gridSlot=r.gridSlot}
+    local vacancy={at=respawnClock+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn,siteIndex=r.siteIndex}
     if r.field.cfg.ContinuousCrystals then vacancy.position=r.position end
     vacancy.landmark=r.landmark;vacancy.landmarkMineral=r.landmarkMineral
     if r.field.cfg.SelectionOnly and d.squareJob and d.squareJob==p.miningSquare then
@@ -12403,7 +12429,7 @@ function scene.followAgility(d)
  return math.clamp((2.8-span)/.65,0,1)
 end
 function scene.followHeight(d)
- if scene.flatFields then return 4.3 end
+ if scene.flatFields then return scene.cubeCruiseHeight end
  local agility=scene.followAgility(d)
  if scene.runStart then
   return Feel.quarryFollowHeight(d.role,0,0)-7*agility
@@ -12423,7 +12449,7 @@ function scene.followGoal(d,position,count,velocity,dt)
  end
  goal,d.swarmCruise=Feel.swarmFollow(position,velocity or Vector3.zero,d.slot,count,now,
   scene.followHeight(d),d.swarmTraits,d.swarmCruise,dt or C.Tick,ring)
- if scene.flatFields then return Vector3.new(goal.X,home.Y+7.3,goal.Z) end
+ if scene.flatFields then return Vector3.new(goal.X,home.Y+scene.cubeCruiseHeight,goal.Z) end
  return goal
 end
 function scene.movePlotQueue(queue,dt)
@@ -12443,7 +12469,7 @@ function scene.waitAtPlot(d,p,field,square,dt)
   end
   local hr=characterRoot(p)
   local edge,axis,length=Feel.plotQueueEdge(frame,halfX,halfZ,hr and hr.Position or home)
-  layout={edge=edge,axis=axis,length=length,height=square and (scene.flatFields and 7 or scene.runStart and 19.6 or Feel.ReferenceFollowHeight) or 10}
+  layout={edge=edge,axis=axis,length=length,height=square and (scene.flatFields and scene.cubeCruiseHeight or scene.runStart and 19.6 or Feel.ReferenceFollowHeight) or 10}
   if square then square.waitEdge=layout else p.plotWaitEdges[field.id]=layout end
  end
  if not scene.plotQueues then
@@ -14746,7 +14772,9 @@ RunService.Heartbeat:Connect(function(dt: number)
   swarmGrid=Feel.swarmGrid(drones)
   for _,p in pairs(profiles) do
    local hr=characterRoot(p)
-   p.followRing=hr and Feel.ringGoals(p.drones,hr.Position,p.followRing,scene.followHeight) or nil
+   local origin=hr and hr.Position
+   if origin and scene.flatFields then origin=Vector3.new(origin.X,home.Y,origin.Z) end
+   p.followRing=origin and Feel.ringGoals(p.drones,origin,p.followRing,scene.followHeight) or nil
   end
   scene.plotQueues={}
   scene.planMiningStations()

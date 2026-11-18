@@ -1,5 +1,27 @@
 -- Bounded resource placement in the field's horizontal local space.
 local P={MAX_ATTEMPTS=18,RETRY_SECONDS=2,EDGE_MARGIN=.75,GAP=.65}
+-- Asymmetric coverage of a 32-stud square. Rotations, mirroring and small
+-- per-field offsets keep the silhouettes varied while covering the corners.
+local squareSites={
+ {-12,-9.3},{-2.4,-12},{9.3,-12.2},{12.05,-2.6},
+ {12.18,12.15},{.9,8.9},{-9.3,12.15},{-12.2,4.1},
+ {-5.4,6.4},{5.2,3.4},{3.1,-5},{-6.4,-1.8},
+}
+P.SQUARE_ROCK_COUNT=#squareSites
+function P.squareRockSites(width,depth,tier)
+ local random=Random.new(7103+tier*409)
+ local rotation=(tier-1)%4
+ local mirror=math.floor((tier-1)/4)%2==1
+ local sites={}
+ for i,site in ipairs(squareSites) do
+  local x=site[1]+random:NextNumber(-.25,.25)
+  local z=site[2]+random:NextNumber(-.25,.25)
+  if mirror then x=-x end
+  for _=1,rotation do x,z=-z,x end
+  sites[i]={x=x*width/32,z=z*depth/32}
+ end
+ return sites
+end
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
 function P.radius(x,y,z,kind,upright)
  if not finite(x) or not finite(y) or not finite(z) or x<=0 or y<=0 or z<=0 then return nil end

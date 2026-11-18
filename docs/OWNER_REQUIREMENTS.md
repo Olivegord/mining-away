@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 17 — raise drones and fill the squares organically
+
+Raise the cube drone flight. Fill the small test squares evenly without rows or large empty patches. Repair visible glitches while keeping both mining areas and the square-field controls. Routine shared Edit and canonical saves apply.
+
 ## November 17 — keep both mining areas
 
 Restore the original Crystal Run on its side of spawn and keep the flat test fields on the opposite side. Make the square fields smaller and fill them evenly with rocks. Mine with straight-down beams and hide battery UI in the square fields. This supersedes the instruction to remove the original mining fields. Routine shared Edit and canonical saves apply.

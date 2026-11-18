@@ -1,5 +1,15 @@
 # Shared project context
 
+## November 17 — higher cube flight and irregular rock coverage
+
+The cubes use a shared 14-stud cruise plane above the depot floor. Hover stations over the square fields are at least 14 studs above their surfaces. The escort ring measures arrivals against the same altitude while the avatar jumps. The five 32-stud squares each seed twelve irregularly spaced rocks and respawn them at their own sites. The field layouts vary by rotation, reflection and small offsets. The original quarry remains available.
+
+The cube renderer resets copied local visibility and levels the hull during warmup. A briefly missed vertical contact finishes its taper, and reacquisition resumes from that width without drawing a second overlapping line. A new active mining target takes precedence over the prior saved fracture contact.
+
+Shared **DRONEREVOLUTION** was already open in Edit at place **124078027733625**, universe **10774898335**. Native Edit sampled all five square layouts using their authored positions and Roblox Random: all 60 sites raycast onto their own beds, minimum center separation was **6.38 studs**, and the furthest sample on the half-stud grid was **8.42 studs** from a site. The automated flat-field, beam, geode, field/pickup and flight/observer checks passed using API doubles, including beam reacquisition. No native Play was started. Full visual and multiplayer verification remains pending.
+
+Script Sync exported both controllers and the three native roots reported Errored. Guarded editor updates installed the matching Sources. Team Create save **391** succeeded and all seven native and editor Sources matched canonical **build/DRONE_GAME.rbxl**, SHA-256 **b8e8e34043469b47e5ac3a7359b1fddfe836bcc94aa0f171ec1ab505eb7001e8** afterward. The next shared Studio Play loads this revision. No player publication. Last documented release remains **v363**. Reproduce from **c3ac1a9** with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit c3ac1a9`.
+
 ## November 17 — original quarry and smaller square fields
 
 The original Crystal Run beds, their seam outcrops and their supporting baseplate are back on the positive-Z side of spawn. The old beds keep their original 216×64-stud footprints and two-step plot controls. The five 32×32-stud test fields stay on the negative-Z side, with a minimum clear gap of 39.8 studs. They keep one-click assignment and grow nine rocks at evenly spaced sites. Respawns reuse the same site when it is free. The old voxel terrain stays archived. The depot has one active charging station.

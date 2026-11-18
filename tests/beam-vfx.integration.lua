@@ -426,18 +426,30 @@ check('actual mining envelope surface contact target life and paused work remain
  assert(b.endpoint.Position.Y<b.origin.WorldPosition.Y)
  assert(outer.Enabled and b.work and b.work.impact.Enabled,'cube miner lacked active contact effects')
  local workTail=b.work
+ blocked=true
+ realTime=302.69;p:beginFrame();p:renderMiningBeam(b,s,realTime)
+ local interrupted=assert(b.missingTail)
+ assert(not outer.Enabled and not workTail.impact.Enabled)
+ blocked=false
+ realTime=302.78;p:beginFrame();p:renderMiningBeam(b,s,realTime)
+ assert(outer.Enabled and outer.Width0<.5 and interrupted.retired and interrupted.core.Transparency==1,
+  'reacquisition flashed a new beam on top of the old one')
+ p:update(0,realTime)
+ assert(not interrupted.core.Parent)
+ realTime=302.9;p:beginFrame();p:renderMiningBeam(b,s,realTime)
+ near(outer.Width0,.5)
  target:Destroy()
- realTime=302.61;p:beginFrame();p:renderMiningBeam(b,s,realTime)
+ realTime=302.91;p:beginFrame();p:renderMiningBeam(b,s,realTime)
  local tail=p.beamTails[#p.beamTails]
  assert(tail and tail.core.Parent and not workTail.impact.Enabled,'lost contact cut the beam or kept emitting')
  local fullWidth=tail.core.Size.Y
- p:update(0,302.71)
+ p:update(0,303.01)
  assert(tail.core.Parent and tail.core.Size.Y<fullWidth,'the detached beam did not shrink')
- p:update(0,302.82)
+ p:update(0,303.12)
  assert(not tail.core.Parent,'the detached beam outlived its fade')
  p:destroyMiningBeam(b)
  assert(workTail.anchor.Parent and not workTail.impact.Enabled,'drone removal erased the lingering particles')
- p:update(0,304.7)
+ p:update(0,305)
  assert(b.holder.Parent==nil,'the retired particle holder did not clean up')
  p:destroy();view:Destroy()
 end)

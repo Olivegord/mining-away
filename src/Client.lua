@@ -957,7 +957,10 @@ local function registerDrone(source)
  local emitter=clone:FindFirstChild('Emmiter',true) or clone:FindFirstChild('MiningEmitter',true) or clone:FindFirstChild('Emitter',true)
  if not emitter or not emitter:IsA('BasePart') then clone:Destroy();pendingDroneSources[source]=true;return false end
  for _,part in ipairs(clone:GetDescendants()) do
-  if part:IsA('BasePart') and role~='Ramiel' then part.Reflectance=0 end
+  if part:IsA('BasePart') then
+   part.LocalTransparencyModifier=0
+   if role~='Ramiel' then part.Reflectance=0 end
+  end
  end
  local typeColor=colors[source:GetAttribute('Role')] or colors[source:GetAttribute('Type')]
  emitter.Color=typeColor or emitter.Color
@@ -1256,6 +1259,7 @@ local function renderDrone(d,dt,now)
  local previousVelocity=d.velocity or Vector3.zero
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
  local role=s:GetAttribute('Role')
+ local cube=s:GetAttribute('CubeDrone')==true
  local isRamiel=role=='Ramiel'
  local isNomad=role=='Nomad'
  local heavyFlight=(isRamiel or isNomad) and DroneConfig.Prominent[role]
@@ -1387,7 +1391,7 @@ local function renderDrone(d,dt,now)
  local desiredPitch=0
  if mass then
   desiredBank=0
-  local precision=(DroneConfig.DownwardGunDepth[role]~=nil and (state=='Warmup' or state=='SpecialMine')) or state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
+  local precision=(cube and state=='Warmup') or (DroneConfig.DownwardGunDepth[role]~=nil and (state=='Warmup' or state=='SpecialMine')) or state=='Mine' or state=='Charging' or state=='Intake' or state=='Press' or state=='Unload'
    or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or state=='Docked' or docking
   if not precision and not heavyFlight and not motionPaused and not CrystalImpactView.reducedMotion() then
    local thrust=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(((d.velocity or Vector3.zero)-previousVelocity)/math.max(dt,1/144))
@@ -1563,7 +1567,7 @@ local function renderDrone(d,dt,now)
   and now>=finalAt and now<math.min(finalUntil,finalAt+.75) then
   local primaryId=s:GetAttribute('MineBreakPrimaryId')
   local finalPart,finalSource,finalResource=resolveRenderedTarget('resource',primaryId,true)
-  if finalPart then
+  if finalPart and (not cube or not active or id==primaryId) then
    part,source,resource=finalPart,finalSource,finalResource;id=primaryId;kind='resource';active=true;charging=false
    procId=s:GetAttribute('MineBreakSecondaryId')
    extra,extraSource=resolveRenderedTarget('resource',procId,true)
@@ -1575,7 +1579,7 @@ local function renderDrone(d,dt,now)
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
   stoneColor=resource and resource.stoneColor,
-  cube=s:GetAttribute('CubeDrone')==true,style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=not s:GetAttribute('CubeDrone') and s:GetAttribute('BeamVariant') or nil,droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
+  cube=cube,style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=not cube and s:GetAttribute('BeamVariant') or nil,droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,
