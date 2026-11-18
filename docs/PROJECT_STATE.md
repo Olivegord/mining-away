@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 17 — one-press selling
+
+Supersedes the two-step backpack appraisal. E at SELL ORE sells the full backpack in one server transaction. Up to four representative ore stacks land together with a single counter impact after 0.32 seconds, when the wallet feedback and brief receipt show the exact totals and modifier bonus. The sample clears within half a second and the receipt clears after 3.8 seconds. The receipt takes no input and the player can leave immediately. Reduced Motion bypasses the rock animation and credits on the first update. The original two-piece rock opening remains active for ordinary rocks and sealed geodes.
+
+Shared DRONEREVOLUTION was already open in Edit at place **124078027733625**, universe **10774898335**. Script Sync exported both controllers but the three roots reported Errored. A guarded Script Editor update installed the Sources against **f0c9e69**. Studio reported a successful Team Create save **386**, and all seven editor and native Sources matched the refreshed canonical **build/DRONE_GAME.rbxl** afterward. SHA-256 **b68b340574a237e4837627af4a00631f0d40a68d2b9b34570ffdad71ad40a19b**. All unrelated Sources and non-Source chunks were preserved. Next shared Play loads this revision. No player release; last verified live publication remains **v363**.
+
+Selling, persistence and geode checks passed with API doubles. An Edit component check verified the real E prompt, ore movement and cleanup, payout and bonus text fit at 390 pixels, one credit event, and a passive, self-dismissing receipt. Native Play feel, audio and multiplayer remain unchecked. Studio was left in Edit. Reproduce from f0c9e69 with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit f0c9e69`, then verify with `python3 tools/build.py`.
+
 ## November 17 — backpack trade-in and original rock splits
 
 The selling counter and U show a server-priced backpack before spending the cargo. Stacks show their own cash and material payouts, a selectable model of the actual cut, and each payout modifier's contribution. The footer shows the whole payout. E, controller X or the confirm button commits the quoted bag; closing the preview keeps it. The quote expires after 30 seconds, and the server rejects a confirmation if the bag changes, the run changes or the player leaves the counter. Confirmed sales credit the wallet immediately and show a compact receipt. Courier and Auto Sell settlement still use their existing paths.

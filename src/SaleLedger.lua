@@ -1,4 +1,4 @@
--- Counter readout for a server-priced manifest. Material amounts are in hundredths.
+-- Format a committed manifest using the same per-rock economics as the server.
 local Ledger={}
 
 function Ledger.money(n)
@@ -9,56 +9,35 @@ local function material(n)
  return (string.format('%.2f',n/100):gsub('0+$',''):gsub('%.$',''))
 end
 
-function Ledger.payout(cash,resources,wallet)
- local values={}
- if cash>0 then values[#values+1]=Ledger.money(cash) end
- for _,key in ipairs(Workshop.RESOURCE_ORDER) do
-  local amount=resources[key] or 0
-  if amount>0 then values[#values+1]=material(amount)..' '..Workshop.RESOURCE_NAMES[key] end
- end
- for _,key in ipairs(Shops.ORDER) do
-  if wallet and wallet[key] then values[#values+1]=wallet[key]..' '..key end
- end
- return table.concat(values,'  ·  ')
-end
-
-function Ledger.items(cargo)
- local items,wallet={},{}
- for key,count in pairs(cargo) do
-  if count<=0 then continue end
+function Ledger.read(receipt)
+ local items,materials={},{}
+ local units,cashBonus=0,0
+ local dustBoost={}
+ for key,count in pairs(receipt.cargo) do
+  units+=count
   local item=Workshop.saleItem(key)
-  if not item then
-   wallet[key]=count
-   item={key=key,name=key,color=Shops.COLORS[key],rank=100,cash=0,resource=key,legacy=true}
+  if item then
+   item.count=count
+   items[#items+1]=item
+   cashBonus+=item.cashBonus*count
+   dustBoost[item.resource]=(dustBoost[item.resource] or 0)+item.dustBonus*count
+  else
+   materials[#materials+1]=count..' '..key
   end
-  item.count=count
-  item.total=item.cash*count
-  local resources={}
-  if not item.legacy then
-   resources[item.resource]=item.dust*count
-   resources.Stone=(resources.Stone or 0)+item.stoneUnits*count
-  end
-  item.payout=Ledger.payout(0,resources,item.legacy and {[key]=count})
-  items[#items+1]=item
  end
  table.sort(items,function(a,b)
-  if a.rank~=b.rank then return a.rank<b.rank end
-  if a.total~=b.total then return a.total>b.total end
+  if a.cash~=b.cash then return a.cash>b.cash end
+  if a.dust~=b.dust then return a.dust>b.dust end
   return a.key<b.key
  end)
- return items,wallet
-end
-
-function Ledger.detail(item)
- if item.legacy then return item.payout end
- local lines={Ledger.money(item.cash)..' each'}
- if item.cashBonus>0 then
-  lines[#lines+1]=item.cashMods..' +'..Ledger.money(item.cashBonus)..' each'
+ table.sort(materials)
+ local bonuses={}
+ if cashBonus>0 then bonuses[#bonuses+1]=Ledger.money(cashBonus) end
+ for _,key in ipairs(Workshop.RESOURCE_ORDER) do
+  local n=(receipt.resources or {})[key] or 0
+  if n>0 then materials[#materials+1]=material(n)..' '..Workshop.RESOURCE_NAMES[key] end
+  if (dustBoost[key] or 0)>0 then bonuses[#bonuses+1]=material(dustBoost[key])..' '..Workshop.RESOURCE_NAMES[key] end
  end
- if item.dustBonus>0 then
-  lines[#lines+1]=item.dustMods..' +'..material(item.dustBonus)..' '..Workshop.RESOURCE_NAMES[item.resource]..' each'
- end
- return table.concat(lines,'\n')
+ return {items=items,units=units,materials=table.concat(materials,'  ·  '),bonuses=table.concat(bonuses,'  ·  ')}
 end
-
 return Ledger

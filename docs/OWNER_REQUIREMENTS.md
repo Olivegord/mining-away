@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 17 — reject the backpack appraisal screen
+
+The owner rejected the previous trade-in redesign. The replacement returns to one action at SELL ORE and uses one physical counter payoff with a brief, non-interactive receipt. The prior request to restore two-piece rock openings still applies. No player release requested.
+
 ## November 17 — rework selling and restore rock splits
 
 Replace the counter appraisal sequence completely. Restore the old two-piece rock split at the opening beat. This supersedes the earlier removal of the two-piece release for ordinary stone and sealed geodes. Routine shared Edit and canonical saves apply.

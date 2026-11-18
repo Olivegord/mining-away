@@ -3882,7 +3882,7 @@ function scene.saleMilestoneNotice(p,saleQuartz)
 end
 function scene.sendSaleReceipt(p,id,result,full,target)
  local receipt={id=id,runId=result.runId,revision=data(p).revision,at=now,
-  cargo=result.cargo,resources=result.resources,cash=result.quartz,full=full,
+  cargo=result.cargo,resources=result.resources,cash=result.quartz,full=full,units=result.units,
   milestone=full and scene.saleMilestoneNotice(p,result.quartz) or nil}
  if target then receipt.counter={target.X,target.Y,target.Z} end
  -- The profile also carries recent receipts so a balance snapshot arriving
@@ -3967,46 +3967,33 @@ local function serviceDeliveries(p: any)
   end
  end
 end
-function scene.saleReply(p,kind,request,message)
- RS.MiningAway.Sale:FireClient(p.player,{kind=kind,request=request,message=message})
-end
-function scene.quoteBackpack(p,request)
- if type(request)~='string' or #request>80 then return end
- p.saleQuote=nil
- if activeAssault(p) then scene.saleReply(p,'rejected',request,'Recall your fighting drones before selling.');return end
- local root=characterRoot(p)
- local station,radius,nearest
- for _,entry in ipairs({{scene.converter or scene.packStation,18},{scene.packStation,20},{shopStations.Quartz,20}}) do
-  local part=entry[1]
-  if not part then continue end
-  local distance=(part.Position-root.Position).Magnitude
-  if distance<entry[2] and (not nearest or distance<nearest) then station,radius,nearest=part,entry[2],distance end
+local function sellBackpack(p: any,automatic: boolean?)
+ if activeAssault(p) then
+  if not automatic then notice(p,'Recall your fighting drones before selling.') end
+  return
  end
- if not station then scene.saleReply(p,'rejected',request,'Visit SELL ORE or the Workshop to get a price.');return end
- local result,reason=Pro.quoteSale(data(p),prices)
- if not result then scene.saleReply(p,'rejected',request,reason);return end
- local id=Http:GenerateGUID(false)
- p.saleQuote={id=id,runId=result.runId,expires=now+30,cargo=result.cargo,station=station,radius=radius}
- RS.MiningAway.Sale:FireClient(p.player,{kind='quote',request=request,id=id,runId=result.runId,
-  cargo=result.cargo,units=result.units,cash=result.quartz,resources=result.resources,expires=now+30,
-  station={station.Position.X,station.Position.Y,station.Position.Z},radius=radius})
-end
-local function sellBackpack(p: any,automatic: boolean?,id: any)
- local quote
+ local target
  if not automatic then
-  if type(id)~='string' or #id>80 then return end
-  quote=p.saleQuote
-  if not quote or quote.id~=id or now>=quote.expires or quote.runId~=data(p).run.id then
-   scene.saleReply(p,'rejected',id,'Price expired. Get a new price.');return
+  local origin=characterRoot(p).Position
+  local nearest=math.huge
+  for _,entry in ipairs({{scene.converter or scene.packStation,18},{scene.packStation,20},{shopStations.Quartz,20}}) do
+   local station,radius=entry[1],entry[2]
+   if not station then continue end
+   local distance=(station.Position-origin).Magnitude
+   if distance<radius and distance<nearest then
+    nearest=distance
+    target=station.Position+Vector3.yAxis*(station.Size.Y*.5+.3)
+   end
   end
-  if activeAssault(p) or not atStation(p,quote.station,quote.radius) then
-   scene.saleReply(p,'rejected',id,'Return to the counter to sell.');return
-  end
- elseif activeAssault(p) or Pro.cargoUnits(data(p))==0 then return end
- local target=quote and quote.station.Position+Vector3.yAxis*(quote.station.Size.Y*.5+.3)
- local tx,runId=id or Http:GenerateGUID(false),data(p).run.id
- local started=transact(p,'sell:'..tx,function(copy)
-  local ok,result=Pro.sell(copy,prices,tx,runId,quote and quote.cargo)
+  if not target then notice(p,'Sell your backpack at the Workshop or SELL ORE.');return end
+ end
+ if Pro.cargoUnits(data(p))==0 then
+  if not automatic then notice(p,'Your backpack is empty.') end
+  return
+ end
+ local tx,runId=Http:GenerateGUID(false),data(p).run.id
+ transact(p,'sell:'..tx,function(copy)
+  local ok,result=Pro.sell(copy,prices,tx,runId)
   if ok then return result end;return nil,result
  end,function(result)
   p.nextEmptierPlan=nil
@@ -4018,15 +4005,11 @@ local function sellBackpack(p: any,automatic: boolean?,id: any)
     if n and n>0 then table.insert(amounts,tostring(n)..' '..key) end
    end
    notice(p,scene.saleMilestoneNotice(p,result.quartz) or 'Auto Sell · +'..table.concat(amounts,', '))
+  else
+   notice(p,'')
   end
   p.publishDirty=true
- end,quote and function(status,reason)
-  if status~='accepted' then scene.saleReply(p,status,tx,reason) end
- end or nil)
- if quote then
-  if started then p.saleQuote=nil
-  else scene.saleReply(p,'rejected',tx,'Another transaction is in progress. Get a new price.') end
- end
+ end)
 end
 local function validPayload(payload)
  return type(payload)=='table' and type(payload.txId)=='string' and #payload.txId>=1 and #payload.txId<=100 and type(payload.runId)=='string' and #payload.runId<=100
@@ -4762,7 +4745,8 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if sent[r.id] then reply('accepted',used>0 and 'Helper sent' or 'Miner sent',r,sent[r.id]);return end
   reply('queued','Queued · next available worker',r)
  elseif action=='ReturnCargo' then
-  scene.quoteBackpack(p,payload)
+  if payload~=nil and (type(payload)~='string' or #payload>160) then return end
+  sellBackpack(p,false)
  elseif action=='Patch' then
   local fieldId=type(payload)=='table' and payload.fieldId or payload
   if type(payload)=='table' and not validCommandId(payload.requestId) then return end
@@ -4820,10 +4804,8 @@ local function commandPlayer(pl: any,action: any,payload: any)
    end
    commandReply(pl,payload,'accepted','Fighting guards',field)
   end
- elseif action=='QuoteSale' then
-  scene.quoteBackpack(p,payload)
  elseif action=='Sell' then
-  sellBackpack(p,false,payload)
+  sellBackpack(p,false)
  elseif action=='BuyPack' or action=='ChooseCard' or action=='Prestige' then
   if not economyAction(p,pl,action,payload) then return end
  end

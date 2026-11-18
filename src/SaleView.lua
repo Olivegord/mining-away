@@ -1,30 +1,17 @@
--- Backpack trade-in. Preview is a quote and only committed receipts credit the HUD.
+-- Manual sales get one counter impact and a short, non-interactive receipt.
 local Ledger=require('./SaleLedger')
 local Sale={};Sale.__index=Sale
-local INK=Color3.fromRGB(21,29,28)
-local PANEL=Color3.fromRGB(36,48,44)
-local TEXT=Color3.fromRGB(246,247,237)
-local MUTED=Color3.fromRGB(186,204,197)
 local CASH=Color3.fromRGB(160,244,182)
+local PAPER=Color3.fromRGB(251,248,234)
 
-local function rounded(parent,radius)
- local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,radius);corner.Parent=parent
-end
-
-local function text(parent,contents,size,color,strong)
- local label=Instance.new('TextLabel');label.BackgroundTransparency=1;label.Text=contents
- label.Font=strong and Enum.Font.GothamBold or Enum.Font.Gotham
- label.TextSize=size;label.TextColor3=color;label.TextXAlignment=Enum.TextXAlignment.Left
- label.Parent=parent
- return label
-end
-
-local function button(parent,contents,action)
- local control=Instance.new('TextButton');control.Text=contents;control.Font=Enum.Font.GothamBold
- control.TextSize=16;control.BackgroundColor3=PANEL;control.TextColor3=TEXT
- control.AutoButtonColor=true;control.Parent=parent;rounded(control,8)
- control.Activated:Connect(action)
- return control
+local function label(parent,contents,size,color)
+ local text=Instance.new('TextLabel')
+ text.BackgroundTransparency=1;text.Text=contents;text.TextScaled=true
+ text.TextColor3=color;text.Font=Enum.Font.GothamBold;text.TextWrapped=true
+ text.TextStrokeColor3=Color3.fromRGB(18,24,19);text.TextStrokeTransparency=.34
+ text.Parent=parent
+ local limits=Instance.new('UITextSizeConstraint');limits.MinTextSize=10;limits.MaxTextSize=size;limits.Parent=text
+ return text
 end
 
 function Sale.new(refs)
@@ -32,10 +19,7 @@ function Sale.new(refs)
 end
 
 function Sale:receiveProfile(profile)
- if self.runId~=profile.run.id then
-  if self.runId then self:close() end
-  self.runId=profile.run.id
- end
+ if self.runId~=profile.run.id then self:clear();self.runId=profile.run.id end
  for _,receipt in ipairs(profile.recentSales or {}) do self:receive(receipt) end
 end
 
@@ -72,178 +56,129 @@ function Sale:makeOre(item)
 end
 
 
-function Sale:isOpen()
- return self.panel~=nil
-end
 
-function Sale:close()
- if self.panel then self.panel:Destroy() end
- self.panel=nil;self.quote=nil;self.request=nil;self.pending=nil
- self.phase=nil;self.highlight=nil;self.previewOre=nil
-end
-
-function Sale:open()
- if self.pending or self.request then return end
- self:close()
- self.request=self.refs.requestId();self.deadline=os.clock()+6
- self.refs.send('QuoteSale',self.request)
-end
-
-function Sale:confirm()
- if self.phase=='sold' then self:close();return end
- if self.phase=='retry' then self:open();return end
- if self.phase~='quote' or self.pending then return end
- self.pending=self.quote.id;self.deadline=os.clock()+20
- self.confirmButton.Text='Selling…';self.confirmButton.AutoButtonColor=false
- self.refs.send('Sell',self.pending)
-end
-
-function Sale:details(item,row)
- if self.previewOre then self.previewOre:Destroy() end
- if self.highlight then self.highlight.BackgroundColor3=INK end
- self.highlight=row;row.BackgroundColor3=PANEL
- self.itemName.Text=item.name
- self.itemDetail.Text=Ledger.detail(item)
- if item.legacy then self.previewOre=nil;return end
- local ore,gem=self:makeOre(item)
- local extent=math.max(ore.Size.X,ore.Size.Y,ore.Size.Z)
- ore.Size*=2.8/extent
- ore.CFrame=CFrame.Angles(.25,.62,-.16)
- if gem then RockFinish.Gems.update(ore,1) end
- ore.Parent=self.viewport
- self.previewOre=ore
-end
-
-function Sale:show(quote,message)
- if self.panel then self.panel:Destroy() end
- self.highlight=nil;self.previewOre=nil
- self.quote=quote;self.phase=quote and 'quote' or 'retry'
- local layer=Instance.new('Frame');layer.Name='SellOre';layer.Size=UDim2.fromScale(1,1)
- layer.BackgroundColor3=Color3.fromRGB(7,13,12);layer.BackgroundTransparency=.44
- layer.Active=true;layer.ZIndex=35;layer.Parent=self.refs.gui
- self.panel=layer
- local tray=Instance.new('Frame');tray.Name='TradeIn';tray.AnchorPoint=Vector2.new(.5,.5)
- tray.Position=UDim2.fromScale(.5,.5);tray.Size=UDim2.new(1,-24,1,-32)
- tray.BackgroundColor3=INK;tray.BorderSizePixel=0;tray.Parent=layer;rounded(tray,16)
- local limit=Instance.new('UISizeConstraint');limit.MaxSize=Vector2.new(600,488);limit.Parent=tray
- self.heading=text(tray,quote and ('Sell ore   ·   '..quote.units..' pieces') or 'Sell ore',22,TEXT,true)
- self.heading.Position=UDim2.fromOffset(16,8);self.heading.Size=UDim2.new(1,-70,0,38)
- local close=button(tray,'×',function() self:close() end)
- close.Position=UDim2.new(1,-50,0,10);close.Size=UDim2.fromOffset(36,34)
- self.status=text(tray,message or 'Backpack payout',14,MUTED,false)
- self.status.Position=UDim2.new(0,16,1,-125);self.status.Size=UDim2.new(1,-32,0,30);self.status.TextWrapped=true
- self.confirmButton=button(tray,quote and 'Sell backpack  [E]' or 'Get price  [E]',function() self:confirm() end)
- self.confirmButton.Position=UDim2.new(0,16,1,-52);self.confirmButton.Size=UDim2.new(1,-32,0,40)
- self.confirmButton.BackgroundColor3=CASH;self.confirmButton.TextColor3=INK
- if not quote then return end
- local items,wallet=Ledger.items(quote.cargo)
- local list=Instance.new('ScrollingFrame');list.Name='OreStacks';list.BackgroundTransparency=1;list.BorderSizePixel=0
- list.Position=UDim2.fromOffset(12,54);list.Size=UDim2.new(.57,-16,1,-182)
- list.ScrollBarThickness=4;list.AutomaticCanvasSize=Enum.AutomaticSize.Y;list.CanvasSize=UDim2.fromOffset(0,0)
- list.ScrollingDirection=Enum.ScrollingDirection.Y;list.Parent=tray
- local stack=Instance.new('UIListLayout');stack.SortOrder=Enum.SortOrder.LayoutOrder;stack.Padding=UDim.new(0,3);stack.Parent=list
- local viewport=Instance.new('ViewportFrame');viewport.Name='OrePreview';viewport.BackgroundColor3=PANEL
- viewport.Position=UDim2.new(.57,4,0,54);viewport.Size=UDim2.new(.43,-16,1,-252)
- viewport.Ambient=Color3.fromRGB(182,188,181);viewport.LightColor=TEXT
- viewport.LightDirection=Vector3.new(-1,-1,-1);viewport.Parent=tray;rounded(viewport,10)
- local camera=Instance.new('Camera');camera.CFrame=CFrame.lookAt(Vector3.new(0,.65,6.6),Vector3.zero)
- camera.FieldOfView=44;camera.Parent=viewport;viewport.CurrentCamera=camera;self.viewport=viewport
- local function fitPreview()
-  local size=viewport.AbsoluteSize
-  local zoom=math.max(1,size.Y/math.max(1,size.X))
-  camera.CFrame=CFrame.lookAt(Vector3.new(0,.65,6.6)*zoom,Vector3.zero)
- end
- viewport:GetPropertyChangedSignal('AbsoluteSize'):Connect(fitPreview);fitPreview()
- self.itemName=text(tray,'',15,TEXT,true);self.itemName.TextTruncate=Enum.TextTruncate.AtEnd
- self.itemName.Position=UDim2.new(.57,7,1,-196);self.itemName.Size=UDim2.new(.43,-20,0,22)
- self.itemDetail=text(tray,'',12,MUTED,false);self.itemDetail.TextWrapped=true
- self.itemDetail.TextYAlignment=Enum.TextYAlignment.Top;self.itemDetail.TextScaled=true
- local detailBounds=Instance.new('UITextSizeConstraint');detailBounds.MinTextSize=9;detailBounds.MaxTextSize=13;detailBounds.Parent=self.itemDetail
- self.itemDetail.Position=UDim2.new(.57,7,1,-172);self.itemDetail.Size=UDim2.new(.43,-20,0,46)
- local function fitTray()
-  local compact=tray.AbsoluteSize.Y<350
-  local bottom=compact and 171 or 204
-  viewport.Size=UDim2.new(.43,-16,0,math.max(0,tray.AbsoluteSize.Y-bottom-57))
-  self.itemName.Position=UDim2.new(.57,7,1,-bottom)
-  self.itemDetail.Position=UDim2.new(.57,7,1,22-bottom)
-  self.itemDetail.Size=UDim2.new(.43,-20,0,bottom-141)
- end
- tray:GetPropertyChangedSignal('AbsoluteSize'):Connect(fitTray);fitTray()
- for i,item in ipairs(items) do
-  local row
-  row=button(list,'',function() self:details(item,row) end)
-  row.LayoutOrder=i;row.Size=UDim2.new(1,-6,0,51);row.BackgroundColor3=INK
-  local name=text(row,item.name..' ×'..item.count,14,Color3.fromRGB(table.unpack(item.color)):Lerp(TEXT,.32),true)
-  name.Position=UDim2.fromOffset(8,3);name.Size=UDim2.new(1,item.legacy and -16 or -78,0,23)
-  name.TextTruncate=Enum.TextTruncate.AtEnd
-  if not item.legacy then
-   local value=text(row,Ledger.money(item.total),15,CASH,true)
-   value.TextXAlignment=Enum.TextXAlignment.Right;value.Position=UDim2.new(1,-76,0,3);value.Size=UDim2.fromOffset(68,23)
-   value.TextScaled=true
-   local bounds=Instance.new('UITextSizeConstraint');bounds.MinTextSize=9;bounds.MaxTextSize=15;bounds.Parent=value
+function Sale:show(batch)
+ local sale,read=batch.receipt,batch.read
+ local card=Instance.new('Frame');card.Name='OreSaleReceipt'
+ card.AnchorPoint=Vector2.new(.5,1);card.Position=UDim2.new(.5,0,.89,0)
+ card.Size=UDim2.new(1,-28,0,100);card.BackgroundTransparency=1;card.Parent=self.refs.gui
+ local limit=Instance.new('UISizeConstraint');limit.MaxSize=Vector2.new(520,100);limit.Parent=card
+ local payout=(sale.cash or 0)>0 and '+'..Ledger.money(sale.cash) or 'Sold '..read.units..' ore'
+ local money=label(card,payout,36,CASH);money.Size=UDim2.new(1,0,0,42)
+ local materials=label(card,read.materials,17,PAPER);materials.Position=UDim2.fromOffset(0,42)
+ materials.Size=UDim2.new(1,0,0,28)
+ local detail=sale.milestone
+ if not detail and read.bonuses~='' then detail='Modifier bonus  +'..read.bonuses end
+ if not detail then
+  local best=read.items[1]
+  if best and #read.items<=2 then
+   detail=best.name..'  '..Ledger.money(best.cash)..' each'
+  else
+   detail=read.units..(read.units==1 and ' piece sold' or ' pieces sold')
   end
-  local payout=text(row,item.payout,12,MUTED,false)
-  payout.Position=UDim2.fromOffset(8,25);payout.Size=UDim2.new(1,-16,0,21);payout.TextTruncate=Enum.TextTruncate.AtEnd
-  if i==1 then self:details(item,row) end
  end
- self.total=text(tray,Ledger.payout(quote.cash,quote.resources,wallet),16,CASH,true)
- self.total.Position=UDim2.new(0,16,1,-96);self.total.Size=UDim2.new(1,-32,0,40)
- self.total.TextWrapped=true;self.total.TextScaled=true
- local bounds=Instance.new('UITextSizeConstraint');bounds.MinTextSize=10;bounds.MaxTextSize=18;bounds.Parent=self.total
+ local note=label(card,detail,14,PAPER);note.Position=UDim2.fromOffset(0,71);note.Size=UDim2.new(1,0,0,24)
+ batch.gui=card;batch.labels={money,materials,note}
 end
 
-function Sale:receive(message)
- if self.runId and message.runId and self.runId~=message.runId then return end
- if message.kind=='quote' then
-  if message.request~=self.request then return end
-  self.request=nil;self:show(message);return
+function Sale:stage(batch,root)
+ local target=Vector3.new(table.unpack(batch.receipt.counter))
+ local toward=root.Position-target;toward=Vector3.new(toward.X,0,toward.Z)
+ local forward=toward.Magnitude>.001 and toward.Unit or Vector3.zAxis
+ local right=forward:Cross(Vector3.yAxis)
+ local count=math.min(4,#batch.read.items)
+ batch.target=target;batch.rocks={}
+ for i=1,count do
+  local item=batch.read.items[i]
+  local ore,gem=self:makeOre(item)
+  local extent=math.max(ore.Size.X,ore.Size.Y,ore.Size.Z)
+  ore.Size*=math.min(1.1,1.18/extent)
+  local lane=(i-(count+1)*.5)
+  local offset=right*(lane*.92)+forward*(i%2==0 and .14 or -.15)
+  local pose=CFrame.Angles(.17*((i%3)-1),i*1.7,-lane*.16)
+  local position=target+offset+Vector3.yAxis*ore.Size.Y*.55
+  ore.CFrame=CFrame.new(position+Vector3.yAxis*.72)*pose
+  ore.Parent=self.refs.parent
+  if gem then RockFinish.Gems.update(ore,1) end
+  batch.rocks[i]={ore=ore,gem=gem,size=ore.Size,position=position,pose=pose,offset=offset}
  end
- if message.kind then
-  if message.request~=self.request and message.request~=self.pending then return end
-  if message.kind=='uncertain' then
-   if self.status then self.status.Text=message.message end
-   return
-  end
-  local wasPending=self.pending~=nil
-  self.request=nil;self.pending=nil
-  if wasPending then self:show(nil,message.message) else self.refs.notify(message.message) end
-  return
+end
+
+function Sale:credit(batch)
+ if batch.credited then return end
+ batch.credited=true
+ for key,amount in pairs(batch.amounts) do
+  if amount>0 then self.refs.hud:currencyHit(batch.receipt.id,key,amount,batch.reduced,true) end
  end
- if self.seen[message.id] then return end
- self.seen[message.id]=true;table.insert(self.order,message.id)
+end
+
+function Sale:clear()
+ local batch=self.batch
+ if not batch then return end
+ self:credit(batch)
+ if batch.gui then batch.gui:Destroy() end
+ for _,rock in ipairs(batch.rocks or {}) do rock.ore:Destroy() end
+ self.batch=nil
+end
+
+function Sale:receive(receipt)
+ if self.seen[receipt.id] or (self.runId and receipt.runId~=self.runId) then return end
+ self.seen[receipt.id]=true;table.insert(self.order,receipt.id)
  if #self.order>128 then self.seen[table.remove(self.order,1)]=nil end
- self.refs.onCommitted(message)
- if not message.full then return end
- local reduced=self.refs.reducedMotion()
- local amounts=table.clone(message.resources or {});amounts.Money=message.cash or 0
- self.refs.hud:beginSale(message,amounts)
- for key,amount in pairs(amounts) do
-  if amount>0 then self.refs.hud:currencyHit(message.id,key,amount,reduced,true) end
- end
- if self.pending~=message.id then return end
- self.pending=nil;self.phase='sold'
- self.heading.Text='Sold   ·   '..self.quote.units..' pieces'
- self.status.Text=message.milestone or 'Added to your wallet'
- if not reduced then
-  self.total.TextColor3=TEXT
-  game:GetService('TweenService'):Create(self.total,TweenInfo.new(.42,Enum.EasingStyle.Quad),{TextColor3=CASH}):Play()
- end
- self.confirmButton.Text='Done  [E]';self.confirmButton.AutoButtonColor=true
- if message.counter then self.refs.audio:play('sale_finish',Vector3.new(table.unpack(message.counter))) end
+ self.refs.onCommitted(receipt)
+ if not receipt.full then return end
+ self:clear()
+ local amounts=table.clone(receipt.resources or {});amounts.Money=receipt.cash or 0
+ local batch={receipt=receipt,read=Ledger.read(receipt),amounts=amounts,start=os.clock(),
+  reduced=self.refs.reducedMotion()}
+ self.batch=batch
+ self.refs.hud:beginSale(receipt,amounts)
+ local root=self.refs.player.Character and self.refs.player.Character:FindFirstChild('HumanoidRootPart')
+ if root and receipt.counter and not batch.reduced and not self.refs.hidden() then self:stage(batch,root) end
+ if not batch.rocks or #batch.rocks==0 then batch.reduced=true end
 end
 
-function Sale:update()
- if self.quote then
-  local root=self.refs.player.Character and self.refs.player.Character:FindFirstChild('HumanoidRootPart')
-  if not root or (root.Position-Vector3.new(table.unpack(self.quote.station))).Magnitude>=self.quote.radius then self:close();return end
-  if self.phase=='quote' and not self.pending and workspace:GetServerTimeNow()>=self.quote.expires then
-   self:show(nil,'Price expired. Get a new price.')
+function Sale:update(now)
+ local batch=self.batch
+ if not batch then return end
+ local age=(now or os.clock())-batch.start
+ if age>=3.8 then self:clear();return end
+ local impact=batch.reduced and 0 or .32
+ if age>=impact and not batch.credited then
+  self:credit(batch)
+  if not self.refs.hidden() then self:show(batch) end
+  if batch.receipt.counter then
+   local point=batch.target or Vector3.new(table.unpack(batch.receipt.counter))
+   self.refs.audio:play('sale_finish',point,{level=.9})
+   local best=batch.read.items[1]
+   if batch.target and best then
+    local tint=Color3.fromRGB(table.unpack(best.color))
+    self.refs.audio:play(best.stone and 'sale_stone' or 'sale_gem',point,{level=.48})
+    RoleVisuals.ImpactParticles(point,tint,.40,'CrystalBreak')
+   end
   end
  end
- if (self.request or self.pending) and os.clock()>=self.deadline then
-  self.request=nil;self.pending=nil;self:show(nil,'Still waiting for the counter. Get a new price.')
+ for _,rock in ipairs(batch.rocks or {}) do
+  local fall=math.clamp(age/.32,0,1)
+  local collect=math.clamp((age-.32)/.18,0,1)
+  local offset=Vector3.yAxis*(.72*(1-fall*fall)-collect*.38)-rock.offset*collect^2
+  rock.ore.CFrame=CFrame.new(rock.position+offset)*rock.pose
+  rock.ore.Size=rock.size*math.max(.01,1-collect^2)
+  rock.ore.Transparency=math.max(rock.ore.Transparency,collect)
+  if rock.gem then RockFinish.Gems.update(rock.ore,1-collect) end
+ end
+ if age>=.50 and batch.rocks then
+  for _,rock in ipairs(batch.rocks) do rock.ore:Destroy() end
+  batch.rocks=nil
+ end
+ if batch.gui then
+  batch.gui.Visible=not self.refs.hidden()
+  local fade=math.clamp((age-3.2)/.6,0,1)
+  for _,text in ipairs(batch.labels) do
+   text.TextTransparency=fade;text.TextStrokeTransparency=.34+.66*fade
+  end
  end
 end
 
-function Sale:destroy() self:close() end
+function Sale:destroy() self:clear() end
 return Sale
