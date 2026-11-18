@@ -2,59 +2,71 @@
 -- Shape and opacity read without relying on bloom or additive saturation.
 local Disc={texture='rbxasset://textures/ui/VR/circleWhite.png'}
 
--- November 18 owner pass: flat white discs read as big circles that hid the
--- smoke and sparks. Shrinking "light" particles become small sparks stretched
--- along their own velocity; expanding ones become soft smoke. The callers keep
--- their colors, counts and motion.
+-- November 18 owner pass: the round discs stay (the owner likes them) but
+-- they were overpowering. They are now smaller and more see-through so the
+-- separate smoke and spark layers below read alongside them.
 Disc.smokeTexture='rbxasset://textures/particles/smoke_main.dds'
-Disc.SPARK_SCALE=.24 -- spark width relative to the old disc diameter
-Disc.SPARK_MAX=.16
-Disc.SMOKE_SCALE=.85
-Disc.SMOKE_MAX=1.7
+Disc.SCALE=.55 -- disc diameter relative to the original sizes
+Disc.MAX=1.25 -- studs
+Disc.FADE=.14 -- extra transparency
 function Disc.configure(emitter,diameter,transparency,startScale,endScale,sizeVariation)
+ diameter=math.min(Disc.MAX,diameter*Disc.SCALE)
+ transparency=math.min(.95,transparency+Disc.FADE)
  emitter.Texture=Disc.texture
+ emitter.Orientation=Enum.ParticleOrientation.FacingCamera
+ emitter.Squash=NumberSequence.new(0)
  emitter.FlipbookLayout=Enum.ParticleFlipbookLayout.None
+ emitter.LightEmission=.36
  emitter.LightInfluence=0
+ emitter.Brightness=1.05
  emitter.WindAffectsDrag=false
  emitter.LockedToPart=false
+ -- Dust spreads as it dissipates; solid light particles shrink from birth.
  local expanding=(endScale or 0)>1
  if expanding then
-  -- Soft smoke: real smoke texture, slow turn, quieter opacity.
-  emitter.Texture=Disc.smokeTexture
-  emitter.Orientation=Enum.ParticleOrientation.FacingCamera
-  emitter.Squash=NumberSequence.new(0)
-  emitter.LightEmission=.12;emitter.Brightness=1
-  emitter.Rotation=NumberRange.new(-180,180);emitter.RotSpeed=NumberRange.new(-30,30)
-  diameter=math.min(Disc.SMOKE_MAX,diameter*Disc.SMOKE_SCALE)
   local start=diameter*(startScale or .52)
   emitter.Size=NumberSequence.new({
    NumberSequenceKeypoint.new(0,start,start*(sizeVariation or 0)),
    NumberSequenceKeypoint.new(.18,diameter,diameter*(sizeVariation or .13)),
    NumberSequenceKeypoint.new(1,diameter*endScale),
   })
-  local t=math.max(transparency,.55)
-  emitter.Transparency=NumberSequence.new({
-   NumberSequenceKeypoint.new(0,1),
-   NumberSequenceKeypoint.new(.15,t),
-   NumberSequenceKeypoint.new(.6,math.min(.97,t+.12)),
-   NumberSequenceKeypoint.new(1,1),
-  })
  else
-  -- Little sparks: thin hot streaks that point where they fly and shrink out.
-  emitter.Orientation=Enum.ParticleOrientation.VelocityParallel
-  emitter.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,2.2),NumberSequenceKeypoint.new(1,.6)})
-  emitter.LightEmission=.85;emitter.Brightness=2.2
-  diameter=math.min(Disc.SPARK_MAX,diameter*Disc.SPARK_SCALE)
   emitter.Size=NumberSequence.new({
    NumberSequenceKeypoint.new(0,diameter,diameter*(sizeVariation or .13)),
    NumberSequenceKeypoint.new(1,0),
   })
-  emitter.Transparency=NumberSequence.new({
-   NumberSequenceKeypoint.new(0,0),
-   NumberSequenceKeypoint.new(.7,math.min(.6,transparency)),
-   NumberSequenceKeypoint.new(1,1),
-  })
  end
+ emitter.Transparency=NumberSequence.new({
+  NumberSequenceKeypoint.new(0,math.min(.97,transparency+.20)),
+  NumberSequenceKeypoint.new(.12,transparency),
+  NumberSequenceKeypoint.new(.78,math.min(.97,transparency+.11)),
+  NumberSequenceKeypoint.new(1,1),
+ })
+end
+-- Little hot sparks: thin streaks that point where they fly and shrink out.
+function Disc.sparks(emitter,width)
+ emitter.Texture=Disc.texture
+ emitter.Orientation=Enum.ParticleOrientation.VelocityParallel
+ emitter.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,2.2),NumberSequenceKeypoint.new(1,.6)})
+ emitter.FlipbookLayout=Enum.ParticleFlipbookLayout.None
+ emitter.LightEmission=.85;emitter.LightInfluence=0;emitter.Brightness=2.2
+ emitter.WindAffectsDrag=false;emitter.LockedToPart=false
+ emitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,width,width*.3),NumberSequenceKeypoint.new(1,0)})
+ emitter.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.7,.3),NumberSequenceKeypoint.new(1,1)})
+end
+-- Soft drifting smoke that swells and fades.
+function Disc.smoke(emitter,diameter,transparency)
+ emitter.Texture=Disc.smokeTexture
+ emitter.Orientation=Enum.ParticleOrientation.FacingCamera
+ emitter.Squash=NumberSequence.new(0)
+ emitter.FlipbookLayout=Enum.ParticleFlipbookLayout.None
+ emitter.LightEmission=.1;emitter.LightInfluence=.6;emitter.Brightness=1
+ emitter.WindAffectsDrag=false;emitter.LockedToPart=false
+ emitter.Rotation=NumberRange.new(-180,180);emitter.RotSpeed=NumberRange.new(-30,30)
+ emitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter*.45,diameter*.1),
+  NumberSequenceKeypoint.new(.25,diameter,diameter*.15),NumberSequenceKeypoint.new(1,diameter*1.8)})
+ emitter.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.15,transparency),
+  NumberSequenceKeypoint.new(.6,math.min(.97,transparency+.15)),NumberSequenceKeypoint.new(1,1)})
 end
 
 -- An attachment sprite lets a handful of motes follow the existing
@@ -90,8 +102,6 @@ function Disc.accent(parent,name,color,diameter,mode,face,spread)
   p.Orientation=Enum.ParticleOrientation.VelocityParallel
   p.Squash=NumberSequence.new(fast and -.58 or -.34)
  else
-  p.Orientation=Enum.ParticleOrientation.FacingCamera;p.Squash=NumberSequence.new(0)
-  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,math.min(.22,diameter*.35)),NumberSequenceKeypoint.new(1,0)})
   p.Rotation=NumberRange.new(-35,35);p.RotSpeed=NumberRange.new(-46,46)
  end
  p.Color=ColorSequence.new(color);p.Brightness=ink and 1 or 1.25

@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 18 — VFX second pass: quieter circles and a video-faithful startup (NOT installed)
+
+The owner called 6228027 a regression: particles oversimplified, an unwanted screen flash, and a charge unlike the reference. This pass restores the round disc particles at 55% size and lower opacity with separate smoke and spark layers, removes the screen flash, and rebuilds the charge from a 15 fps read of the video (lifted cubes, crescent slashes, incoming white bolts, glitter ribbons, orbiting lens flares, rings, a black orb with wedge spikes, then four posterized pops). See [VFX instructions](VFX_INSTRUCTIONS.md) for the stage table and tunables. Client-only.
+
+Tests: beam VFX (29), fun FX, flat fields, rock damage, pickups, geodes, mining flight, field pickup flow and selling pass with API doubles; gadgets and energy effects stop at their baseline assertions. No Studio visual check was possible from this session.
+
+**Not installed.** Another session owns native saves and installed f563d99 (which contains the rejected first pass) in shared **DRONEREVOLUTION** Edit, place **124078027733625**, universe **10774898335**, save 405. This session has no Studio control tool. `tools/script_sync.py` refused to export because `studio/StarterPlayerScripts/ClientDroneControl.local.luau` on disk (the other session's f563d99 export) does not match `build/script-sync-state.json`; this session did not override the guard. Canonical **build/DRONE_GAME.rbxl** is unchanged (SHA-256 **1e5ea8fb3434a9085e75c2e59f9cd0995267bb4083273bb200addbd29cecddc9**, f563d99) so it still matches Edit. **The next Play still shows the rejected first pass** until the client Source from this commit is installed and the canonical file refreshed with `python3 tools/build.py --previous-commit 5baab48`. No Play started, no publication.
+
 ## November 18 — flock-style cube fleet, no eyes (installed in shared Edit)
 
 The owner disliked the eyes on the drones and their pet-like following. They asked for drones that move like boids, avoid each other, feel physics-based, fly slower than the player and show more personality.

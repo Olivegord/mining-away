@@ -117,7 +117,11 @@ check('visible charge paths are continuous across former reset boundaries',funct
   for i,path in ipairs(h.paths) do before[i]={a=path.a.Position,b=path.b.Position,on=path.beam.Enabled} end
   BeamVFX.draw(r,from,to,60+q+.00001,0,q+.00001,nil)
   for i,path in ipairs(h.paths) do
-   if before[i].on and path.beam.Enabled then
+   -- Slashes, bolts, spikes and glitch wisps are deliberate few-frame flicks
+   -- that jump to a new layout; ribbons, rings and flares must stay continuous.
+   local name=path.beam.Name
+   local flick=name:find('Slash') or name:find('IncomingBolt') or name:find('WedgeSpike') or name:find('GlitchWisp')
+   if before[i].on and path.beam.Enabled and not flick then
     assert((path.a.Position-before[i].a).Magnitude<.01,'visible path head teleported')
     assert((path.b.Position-before[i].b).Magnitude<.01,'visible path tail teleported')
    end
@@ -208,31 +212,34 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
 end)
-check('neon glitch orb: hard two-tone cuts, collapse into ignition, bounded size',function()
+check('neon glitch: the orb pops to full size, shrinks and pops again in exact palette colors',function()
  local r=BeamVFX.new(root,'Cutter',color)
- near(BeamVFX.lensEnvelope(-.01),0);near(BeamVFX.lensEnvelope(1),0)
- assert(BeamVFX.lensEnvelope(.12)>.99 and BeamVFX.lensEnvelope(.9)<BeamVFX.lensEnvelope(.4),'orb must swell then collapse')
+ assert(BeamVFX.glitchState(.5)==nil and BeamVFX.glitchState(BeamVFX.GLITCH_STARTS[1])==1)
+ near(BeamVFX.popSize(1,0),1);assert(BeamVFX.popSize(1,1)<.25,'a pop must shrink hard')
+ assert(BeamVFX.popSize(2,0)>BeamVFX.popSize(1,.9),'the next pop must jump back up')
+ assert(BeamVFX.popSize(4,0)<BeamVFX.popSize(1,0),'later pops must be smaller')
  local allowed={}
  for _,p in ipairs(BeamVFX.GLITCH_PAIRS) do allowed[p[1]]=true end
- for _,duration in ipairs({.8,1.6,3.2}) do
-  local lead=BeamVFX.glitchLead(duration)
-  local seen={}
-  for _,remaining in ipairs({lead+.2,lead*.95,lead*.7,lead*.5,lead*.3,lead*.1,.001}) do
-   local q=1-remaining/duration
+ for _,duration in ipairs({.8,3.2}) do
+  BeamVFX.draw(r,from,to,100,0,.6,nil,1,duration)
+  local glass=r.rich.glass
+  assert(glass.Transparency==1,'orb appeared before the glitch')
+  assert(r.rich.core.Transparency<1 and r.rich.debris[1].Transparency<1,'core and lifted cubes missing during the charge')
+  local seen,count,previous={},0,nil
+  for step=0,40 do
+   local q=BeamVFX.GLITCH_STARTS[1]+step*(.999-BeamVFX.GLITCH_STARTS[1])/40
    BeamVFX.draw(r,from,to,100+q,0,q,nil,1,duration)
-   local g=BeamVFX.flashProgress(q,duration)
-   local lens=BeamVFX.lensEnvelope(g)
-   local glass=r.rich.glass
-   assert((lens==0)==(glass.Transparency==1),'orb visibility must follow its envelope')
-   assert(glass.Size.X<=1.35,'glitch orb too large')
-   if lens>0 then
-    assert(allowed[glass.Color],'orb color must be an exact palette entry (no blending)')
-    seen[glass.Color]=true
-    assert(not r.rich.comets[1].path.beam.Enabled and not r.rich.flare.beam.Enabled,'inflow cluttered the glitch')
-   end
+   assert(glass.Transparency==0 and allowed[glass.Color],'orb color must be an exact palette entry (no blending)')
+   assert(glass.Size.X<=1.8 and glass.Size.X>.05,'glitch orb size out of bounds')
+   if previous and glass.Size.X>previous*1.5 then count+=1 end
+   previous=glass.Size.X
+   if not seen[glass.Color] then seen[glass.Color]=true end
+   assert(not r.rich.comets[1].path.beam.Enabled and not r.rich.flare.beam.Enabled,'inflow cluttered the glitch')
+   assert(r.rich.wisps[1].beam.Enabled,'blue wisps missing around the orb')
   end
-  local n=0;for _ in pairs(seen) do n+=1 end
-  if duration>=1.6 then assert(n>=2,'glitch never cut between colors') end
+  local colors=0;for _ in pairs(seen) do colors+=1 end
+  assert(count==#BeamVFX.GLITCH_STARTS-1,'expected a jump back up at every later pop, saw '..count)
+  assert(colors>=3,'glitch never cut between colors')
  end
  local aftermath=assert(r.aftermath)
  BeamVFX.draw(r,from,to,101,1,nil,.04,1)

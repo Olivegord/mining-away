@@ -1,17 +1,25 @@
 # VFX instructions — owner feedback and implementation
 
-## November 18 — calmer particles and a reworked startup with the neon glitch
+## November 18 — quieter circles, and a startup rebuilt from the video frame by frame
 
-Owner direction: effects were too busy; large circular particles covered everything and hid the smoke and little sparks. Rework the drone startup to follow the reference video, especially the rainbow neon glitch right before the beam. This supersedes the "restored single flash, Glass/Highlight lens, 0.288 s" baseline and the four focus vanes described below.
+Owner feedback on the first pass (6228027): a regression. The particles were simplified far too much, the screen flash was unwanted, and the charge was "NOTHING like the video". The owner **likes the circle particles**; they were only overpowering. Do not replace the discs with streaks or smoke again, and do not add full-screen flashes.
 
-- **No more big discs.** `EnergyDisc.configure` no longer draws flat white circles. Shrinking "light" particles become small sparks (≤0.16 studs wide) stretched along their velocity (`VelocityParallel`, squash 2.2→0.6, bright). Expanding ones become soft smoke (`smoke_main.dds`, ≤1.7 studs, quieter). Callers keep their colors, counts and motion. Accent motes/glints are capped at 0.22 studs.
-- **Mining contact.** Hot sparks on every surface (fall under gravity, rate 9 / 5 crowded) plus a separate rising smoke layer tinted by the stone. The static glow disc at the emitter is off; the contact glow balls are about half their old size. Cube belly sparkles are smaller and half the rate; confetti twinkles are half size.
-- **Charge (inspired by the video).** A tiny dark core with a bright rim; eight thin bright streams pulled in by `PullMotion` with white heads that leave glitter specks; the organic dark curls stay; stone chips rise from below the drone and hover, tumbling; a horizontal anamorphic lens streak lengthens through the charge. Sparse sparks and wisps of smoke. The four focus vanes are gone.
-- **Neon glitch.** For the last 0.55 s before ignition (30% of shorter charges) a posterized orb replaces the other layers: one flat neon color with blotches of a second color and black poking through, plus an offset complementary ball behind it for an RGB-split edge. Every 45 ms the frame hard-cuts to a new pair (yellow/red, green/blue, blue/black, magenta/cyan, ...) and the blotches jump. It swells in about 70 ms, collapses steadily, and overlaps the beam by 60 ms. Reduced Flashing slows the cuts and makes it translucent.
-- **Impact frame.** At ignition, a client-local `ColorCorrectionEffect` snaps the view to a blue posterized frame (50 ms) and a pale one (40 ms). Only for drones within 55 studs and in front of the camera, at most once per 2.2 s, scaled by distance, skipped for Reduced Motion/Effects/Flashing. Tunables: `BeamVFX.IMPACT_RANGE`, `IMPACT_COOLDOWN`, `GLITCH_LEAD`, `GLITCH_CUT`, `GLITCH_PAIRS`.
-- The charge rig root is now an invisible Part so stream attachments resolve relative to the emitter.
+**Particles.** `EnergyDisc.configure` draws the same round discs as before at 55% size (cap 1.25 studs) and 0.14 more transparent (`Disc.SCALE`, `Disc.MAX`, `Disc.FADE`). Smoke and little sparks are *additional* layers: `EnergyDisc.smoke` and `EnergyDisc.sparks`. The mining contact has round discs (rate 4, 2 when crowded), fine hot streaks and stone-tinted rising smoke. The contact glow balls stay smaller.
 
-Specialist startup styles (Stars, Ignition, Coil), beam bodies, aftermath ring, smoke push and colored fragments are unchanged. Verification: the beam suite (29 checks, updated for the glitch) and fun, flat-field, rock-damage, pickup, geode, flight, field-pickup and selling suites pass with API doubles. Nothing here has been seen in Studio yet; motion, readability, busy-field behavior and the impact frame need an owner look.
+**What the video does** (read at 15 frames per second; sheets can be regenerated from the owner's file). Use this list, not quarter-second stills:
+
+| Video time | What happens |
+| --- | --- |
+| 0.2–1.0 s | Tiny dark core with a violet aura. Dark cubes lift off the floor in a wide ring and tumble. Short crescent slashes flick around the core for a few frames each. Fat white bolts shoot *into* the core from far away; these keep coming for the whole charge. |
+| 1.1–1.8 s | Long cyan ribbons with dotted glitter arc through the air and spiral into the core. |
+| 2.1–2.9 s | A blue and a violet horizontal lens flare orbit on opposite sides and close in. Thin rings circle the core. |
+| 3.0–3.5 s | The core swells into a black orb with a bright rim, throws white wedge spikes, and shrinks. |
+| 3.5–4.4 s | The neon glitch is a series of **pops**: the orb jumps to full size in one frame as a flat two-color posterized ball (yellow/red, pink/black, green/black, blue/green), shrinks over about three frames, then pops again in new colors, each pop a little smaller. Wedge spikes flash at each low point and blue wisps swirl around it. |
+| 4.47–4.53 s | Two full-screen threshold frames. **Not implemented: the owner rejected screen flashes.** |
+
+**Implementation** (`BeamVFX` rich charge, all driven by normalized charge time `q`, so shorter charges compress): cubes from `q` 0.02, slashes 0.03–0.76, bolts 0.10–0.985, ribbons 0.20–0.56, flares 0.42–0.76, rings from 0.48, black-orb swell 0.64–0.78, four pops starting at `B.GLITCH_STARTS` = 0.78, 0.835, 0.89, 0.94 with sizes `B.GLITCH_AMPS`. Each pop shows two flat frames from `B.GLITCH_PAIRS`; colors never blend. The last pop keeps collapsing for 60 ms over the beam. `B.ChargeScale` (2.2) sets the overall size for ordinary drones: the orb peaks at about 1.8 studs across, cubes hover within about 5 studs and bolts start about 6.5 studs out. Reduced Flashing shows one translucent frame per pop. The earlier slow curls, focus vanes, Glass lens and single slow-shrinking ball are gone.
+
+Verification: beam suite (29 checks, rewritten for the pops), fun, flat-field, rock-damage, pickup, geode, flight, field-pickup and selling suites pass with API doubles, and a numeric dump of the rig at 13 charge times matches the table above. **None of this has been seen in Studio.** Scale, brightness and busyness with several drones charging at once need the owner's eyes.
 
 ## November 18 — colorful cubes, confetti breaks and field motes
 
@@ -440,8 +448,8 @@ November 7: The home demo and working specialists should carry their startup int
 
 | File | Responsibility |
 | --- | --- |
-| [BeamVFX.lua](../src/BeamVFX.lua) | Thin beam vocabulary, charge (core, streams, glitter, lifted chips, lens streak, curls), neon glitch orb, impact frame, charge rig pooling and cue lifecycle. |
-| [EnergyDisc.lua](../src/EnergyDisc.lua) | Shared particle look: small velocity-stretched sparks and soft smoke (no flat discs). |
+| [BeamVFX.lua](../src/BeamVFX.lua) | Thin beam vocabulary, charge (core, lifted cubes, slashes, incoming bolts, glitter ribbons, orbiting flares, rings, wedge spikes), popping neon glitch orb, charge rig pooling and cue lifecycle. |
+| [EnergyDisc.lua](../src/EnergyDisc.lua) | Shared particle look: round discs (toned down), plus separate spark and smoke helpers. |
 | [PullMotion.lua](../src/PullMotion.lua) | Cached inward attraction and gravity-free electrical discharge trajectories. |
 | [PlaneBurst.lua](../src/PlaneBurst.lua) | Fixed circular plane, fast expansion, braking and continuing fade. |
 | [LaunchAftermath.lua](../src/LaunchAftermath.lua) | Existing smoke pressure response, saturated cuboid cone and independent pooled tail lifetimes. |
