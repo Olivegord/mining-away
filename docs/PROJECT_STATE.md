@@ -1,5 +1,11 @@
 # Shared project context
 
+## November 18 — VFX fourth pass: release burst, expressive charge, 1.9 s first ignition, calmer cube flight
+
+Owner feedback on 7aeb7df: pretty good, but too linear, effects vanished at ignition, slightly too much for small drones, and drones bucked in flight. See [VFX instructions](VFX_INSTRUCTIONS.md). The ignition burst lives in `LaunchAftermath`; the first ignition is now 1.9 s with the opening trimmed rather than sped up; cube lean is filtered and capped; the flock's goal no longer jumps when the player starts or stops walking (`Feel.boidFollow`).
+
+Checked in Studio Edit renders (charge and release stills). Beam VFX (29), flat fields, mining flight, field pickup flow, geodes, fun FX, rock damage, pickups and selling pass with API doubles. **Not checked in Play:** motion and timing of the burst, whether the bucking is fully gone, several drones igniting together. Install details are in `docs/studio-installed.json`. No publication.
+
 ## November 18 — VFX third pass: charge verified in Edit renders, long first ignition, drone fade capped
 
 The owner found the second pass bad, choppy and without anticipation, and reported some drones looking invisible. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Changes: a 2.6 s first ignition for laser miners in the square fields after six seconds without a beam (server; later rocks keep the short warmup, so steady mining pace is unchanged, but each fresh field visit starts 2.6 s later); the charge redrawn with a dark void backdrop, core glow, larger eased layers and a focus below the cube; a compact re-ignite for short charges; cube hulls fade far less when they cross the camera line. New `tools/studio_vfx_preview.py` renders the charge in Studio Edit and saves screenshots; [the sheet](review/media/charge-preview.png) is from this revision.

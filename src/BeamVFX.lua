@@ -217,10 +217,11 @@ local SOFT_GLOW='rbxasset://textures/ui/AvatarExperience/glowLight.png'
 -- tighten; the core swells black and throws spikes; then the neon glitch
 -- pops (flat two-color orb, blotches, RGB-split edge, blue wisps, spikes).
 B.FULL_CHARGE=1.4 -- seconds; shorter charges use the compact re-ignite
+B.DESIGN_CHARGE=2.6 -- seconds the full sequence was authored for; a shorter long charge trims its opening instead of playing faster
 B.GLITCH_TIME=.74 -- seconds of glitch at the end of a long charge
 B.POP_TIME=.18 -- seconds per pop
 B.GLITCH_TAIL=.07 -- seconds the last collapsing pop overlaps the beam
-B.ORB_RADIUS=1.25 -- studs, first pop at scale 1
+B.ORB_RADIUS=1.05 -- studs, first pop at scale 1 (it overshoots by a fifth as it lands)
 -- Two flat frames per pop: {base, blotch}. Never blended.
 B.GLITCH_PAIRS={
  {Color3.fromRGB(255,255,0),Color3.fromRGB(255,0,0)},
@@ -415,7 +416,9 @@ end
 -- Orb size inside one pop: a very fast swell, then a quick shrink. Later pops are smaller.
 function B.popSize(k,u)
  u=clamp(u)
- return (1-.13*(k-1))*smooth(u/.1)*(1-.82*clamp((u-.1)/.9)^.75)
+ -- Lands with a brief overshoot, like something snapping into place.
+ local overshoot=1+.2*math.exp(-((u-.1)/.06)^2)
+ return (1-.13*(k-1))*smooth(u/.1)*(1-.82*clamp((u-.1)/.9)^.75)*overshoot
 end
 local function hideOrb(h)
  h.glass.Transparency=1;h.split.Transparency=1
@@ -488,6 +491,12 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  local k=chargeScale(r,scale)
  local duration=math.max(.01,chargeDuration or .8)
  local full=duration>=B.FULL_CHARGE
+ local intro=smooth(q*duration/.22)
+ if full then
+  -- Align the authored sequence to ignition: a shorter charge starts partway
+  -- in rather than running everything faster.
+  q=clamp(1-(1-q)*duration/B.DESIGN_CHARGE);duration=B.DESIGN_CHARGE
+ end
  -- A quick re-ignite stays compact so a busy field does not strobe.
  local snap=full and 1 or math.clamp(duration/.4,.45,1)*.7
  local t=q*duration
@@ -515,21 +524,23 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  local start=B.glitchPlan(duration)
  local calm=1-smooth((q-start+.03)/.03)
  local build=smooth(q/(full and .55 or .3)) -- overall gathering strength
+ -- A heartbeat that quickens as the charge builds, and a last-instant inhale.
+ local beat=full and math.sin(math.pi*((q*q*11)%1))^6*calm or 0
+ local implode=full and smooth((q-.95)/.045) or 0
+ local kick=0
  -- Void: the dark the neon reads against. It swells with the charge.
- local voidSize=k*snap*(4+9*build)*(1+.04*math.sin(now*5))
- if pop then voidSize=k*snap*(11+2.5*B.popSize(pop,u)) end
- EnergyDisc.place(h.void,focus-toward*3*k,voidSize,BLACK,.9*smooth(q/.12))
+ local voidSize=k*snap*(3.5+7.5*build)*(1+.04*math.sin(now*5)-.06*beat)
+ if pop then voidSize=k*snap*(9.5+2.5*B.popSize(pop,u))*(1-.35*implode) end
+ EnergyDisc.place(h.void,focus-toward*3*k,voidSize,BLACK,.9*intro)
  -- Core: small and dark with a bright rim; it swells black before the glitch.
  local swell=full and math.sin(math.pi*clamp((q-.58)/(start-.58))) or 0
- local coreRadius=k*snap*(.16+.16*build+.62*swell)
- local alive=smooth(q/.06)*calm
+ local coreRadius=k*snap*(.16+.16*build+.62*swell)*(1+.3*beat)
+ local alive=intro*calm
  h.core.CFrame=CFrame.new(focus);h.core.Size=Vector3.one*coreRadius*2
  h.core.Color=swell>.2 and BLACK or DARK
  h.core.Transparency=1-alive
  h.rim.CFrame=CFrame.new(focus-toward*coreRadius*.2);h.rim.Size=Vector3.one*coreRadius*(2.5+.2*math.sin(now*9))
  h.rim.Transparency=1-alive*(.45-.3*swell)
- EnergyDisc.place(h.aura,focus-toward*.4*k,k*snap*(1.6+2.4*build+1.5*swell)*(1+.06*math.sin(now*11)),
-  r.color:Lerp(VIOLET,.35),(.35+.3*build)*smooth(q/.08)*calm)
  h.particleSource.WorldPosition=focus+toward*k*.4
  -- Glitch orb.
  local orbRadius=0
@@ -539,7 +550,10 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
   if player and player:GetAttribute('ReducedFlashing')==true then frame=(pop-1)*2+1 end
   if not full then frame=frame+math.floor(now*.9)%4*2 end -- re-ignites vary their colors
   h.frame=frame
-  orbRadius=drawOrb(h,focus,B.ORB_RADIUS*k*snap*B.popSize(pop,u),frame)
+  -- A small per-frame shake sells the "glitch".
+  local tick=math.floor(now*28)
+  local shake=(right*(hash(tick)-.5)+Vector3.yAxis*(hash(tick+9)-.5))*k*snap*.1
+  orbRadius=drawOrb(h,focus+shake,B.ORB_RADIUS*k*snap*B.popSize(pop,u),frame)
  else hideOrb(h) end
  h.orbRadius=orbRadius
  -- Wedge spikes ease out as the black core peaks and at the low point of each pop.
@@ -566,8 +580,8 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  -- Thin rings tighten around the core and hug the orb through the glitch.
  local ringAlpha=smooth((q-(full and .42 or .1))/.12)
  for i,ring in ipairs(h.rings) do
-  local radius=(pop and orbRadius*1.12+k*snap*(.12+.16*i) or coreRadius+k*snap*(.5+.5*i)*(1.6-.6*build))
-  local tilt=.5+i*.9+now*(i==1 and .9 or -.65)
+  local radius=(pop and orbRadius*1.12+k*snap*(.12+.16*i) or coreRadius+k*snap*(.5+.5*i)*(1.6-.6*build)*(1+.12*beat))
+  local tilt=.5+i*.9+now*(i==1 and .9 or -.65)+(i==1 and 3 or -2.2)*q*q
   local e1=(across*math.cos(tilt)+direction*math.sin(tilt)*.55).Unit
   local e2=e1:Cross(toward).Unit
   local widthNow=k*.045*ringAlpha
@@ -580,14 +594,17 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
   if not full then cube.Transparency=1 else
    local begin=.02+.035*i
    local lift=smooth((q-begin)/.4)
-   local angle=i*2.399963+now*(.35+.05*(i%3))
+   -- The swirl quickens with the charge; the ring breathes in, eases back and
+   -- is finally sucked toward the core just before release.
+   local angle=i*2.399963+now*(.35+.05*(i%3))+2.4*q^2.5
    local radial=across*math.cos(angle)+upright*math.sin(angle)
-   local ring=k*(2.3+2*hash(i+2))*(1-.45*gather)
+   local ring=k*(2.3+2*hash(i+2))*(1-.45*gather+.1*math.sin(gather*math.pi*3)*(1-gather)-.08*beat)*(1-.5*implode)
    local below=k*(7+2*hash(i+9))*(1-lift)+k*(2.6*hash(i+4)-1.1)
    local bob=k*.2*math.sin(now*1.9+i)
    cube.Size=Vector3.one*k*(.3+.32*hash(i+6))
-   cube.CFrame=CFrame.new(focus+direction*(below+bob)+radial*ring)*CFrame.Angles(now*(.7+i*.13),now*(1.1-i*.09),i)
-   cube.Transparency=1-smooth((q-begin)/.1)
+   local tremble=(across*math.sin(now*37+i*5)+upright*math.cos(now*31+i*3))*k*.05*gather
+   cube.CFrame=CFrame.new(focus+direction*(below+bob)*(1-.5*implode)+radial*ring+tremble)*CFrame.Angles(now*(.7+i*.13)+q*q*6,now*(1.1-i*.09),i)
+   cube.Transparency=1-smooth((q-begin)/.1)*intro
   end
  end
  -- Crescent slashes sweep past the core; width eases in and out.
@@ -636,8 +653,12 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
    curve(bolt.path,head,tail,ta,tb,span*.3,k*snap*.2*fade)
    curve(bolt.halo,head,tail,ta,tb,span*.3,k*snap*.5*fade)
    EnergyDisc.place(bolt.head,focus+head,k*snap*.42,WHITE,fade)
+   kick=math.max(kick,smooth((phase-.78)/.14)*(1-smooth((phase-.94)/.06)))
   end
  end
+ -- The core's glow flares each time a bolt lands and on every heartbeat.
+ EnergyDisc.place(h.aura,focus-toward*.4*k,k*snap*(1.6+2.4*build+1.5*swell)*(1+.06*math.sin(now*11)+.25*beat+.5*kick),
+  r.color:Lerp(VIOLET,.35):Lerp(WHITE,.5*kick),math.min(1,(.35+.3*build+.3*kick))*intro*calm)
  -- Glittering ribbons spiral in through the air.
  local heads={}
  for i,item in ipairs(h.comets) do
@@ -725,6 +746,18 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale,chargeDuration)
   local h=r.rich
   if h and not h.launched then
    h.launched=true
+   if not h.startup and h.scale then
+    -- Tell the aftermath where everything was, so the energy visibly leaves.
+    local k=h.scale
+    local isFull=(h.duration or 0)>=B.FULL_CHARGE
+    local blast={focus=B.focus(from,to,k),scale=isFull and k or k*.55,color=r.color,full=isFull,cubes={},seed=(now*13)%97}
+    if isFull then
+     for i,cube in ipairs(h.debris) do
+      if cube.Transparency<.5 then blast.cubes[#blast.cubes+1]={position=cube.Position,size=cube.Size.X} end
+     end
+    end
+    r.blast=blast
+   end
    if B.onChargeEnd then B.onChargeEnd(r) end
    if releaseAge and releaseAge>=0 and releaseAge<=.16 and B.onCue then B.onCue('launch',from,now,1) end
   end

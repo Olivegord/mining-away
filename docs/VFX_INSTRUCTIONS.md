@@ -1,5 +1,16 @@
 # VFX instructions — owner feedback and implementation
 
+## November 18 — fourth pass: expressive motion, a release burst, a shorter charge, no bucking
+
+Owner on the third pass: "pretty good", but some effects were too linear, everything just disappeared when the beam started, the whole thing was a little too much for tiny drones, and the drones bucked constantly in flight.
+
+- **Where the energy goes.** At ignition the reference throws the lifted cubes outward with a flash, lightning, shock arcs and lingering smoke. `LaunchAftermath.drawBlast` now does this on its own clock: the cubes continue from where the charge left them (hard launch, heavy braking, spin, shrink out by 0.85 s), a soft flash blooms and tints to the beam color, two lightning forks re-strike for 0.3 s, three shock arcs run out across the firing plane for 0.5 s, the dark void blows open, and nine smoke puffs linger. A quick re-ignite gets a small flash and puff only. Up to eight tails run at once (`A.LIMIT`).
+- **Less linear.** The core and its glow beat like a heart that quickens (`q²`), and flare each time a bolt lands. Cubes swirl faster as the charge builds, tremble, breathe in and out, and are sucked toward the core in the last 5% before being thrown. Rings speed up. Each glitch pop lands with a 20% overshoot and the orb shakes slightly per frame.
+- **Shorter, not faster.** The first ignition is 1.9 s (`scene.FIRST_CHARGE`). The sequence is authored for 2.6 s (`B.DESIGN_CHARGE`) and aligned to ignition, so a shorter charge trims the opening (the lone core and first bolts) and every remaining element moves at its authored speed. The orb is 1.05 studs in radius and the void about 15% smaller.
+- **Bucking.** Cube lean was 3.2× the raw acceleration between snapshots, up to 16°/13°. It is now low-pass filtered with a dead zone and capped at 6° bank and 5° pitch; the hover bob is one slow wave of 0.12 studs. Server side, the flock's home radius and trail offset used to jump when the player crossed 0.5 studs/s; both now blend in.
+
+`tools/studio_vfx_preview.py --release 0.02,0.07,0.15,0.4` renders the burst. [Preview sheet](review/media/charge-preview.png) is from this revision.
+
 ## November 18 — third pass: the charge finally checked in Studio
 
 Owner feedback on the second pass: "really bad, and choppy", "no anticipation and cool effects like the original video", and "some drones are like invisible". **Read this entry first; it supersedes the sizes and timings in the entry below (the video stage table there is still right).**

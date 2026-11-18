@@ -30,18 +30,21 @@ local from=base+Vector3.new(0,12,0)
 local cube=Instance.new('Part');cube.Anchored=true;cube.Size=Vector3.one*1.9;cube.Color=Color3.fromRGB(66,196,255);cube.Position=from+Vector3.new(0,.95,0);cube.Parent=root
 local rock=Instance.new('Part');rock.Anchored=true;rock.Size=Vector3.new(3,2.4,3);rock.Color=Color3.fromRGB(120,110,105);rock.Position=base+Vector3.new(0,1.2,0);rock.Parent=root
 local cam=workspace.CurrentCamera
-shared.VFXPreview={camCF=cam.CFrame,B=BeamVFX,root=root,from=from,to=base+Vector3.new(0,2.4,0),rig=BeamVFX.new(root,'Cutter',Color3.fromRGB(66,196,255))}
+LaunchAftermath.isHeld=function() return true end -- stills are stepped by hand
+shared.VFXPreview={camCF=cam.CFrame,A=LaunchAftermath,B=BeamVFX,root=root,from=from,to=base+Vector3.new(0,2.4,0),rig=BeamVFX.new(root,'Cutter',Color3.fromRGB(66,196,255))}
 cam.CFrame=CFrame.lookAt(from+Vector3.new(9,5,13),from+Vector3.new(0,-2,0))
 return 'ready'
 '''
 DRAW = "local P=shared.VFXPreview;P.B.draw(P.rig,P.from,P.to,%f,0,%f,nil,1,%f) return 'ok'"
-CLEAN = "local P=shared.VFXPreview;if P then workspace.CurrentCamera.CFrame=P.camCF;P.B.destroy(P.rig);P.root:Destroy();shared.VFXPreview=nil end return 'clean'"
+RELEASE = "local P=shared.VFXPreview;P.B.draw(P.rig,P.from,P.to,%f,1,nil,%f,1) P.A.step(%f) return 'ok'"
+CLEAN = "local P=shared.VFXPreview;if P then workspace.CurrentCamera.CFrame=P.camCF;P.A.clear();P.A.isHeld=nil;P.B.destroy(P.rig);P.root:Destroy();shared.VFXPreview=nil end return 'clean'"
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('out', type=pathlib.Path)
     parser.add_argument('--duration', type=float, default=2.6)
     parser.add_argument('--at', default='0.12,0.25,0.38,0.5,0.6,0.68,0.74,0.8,0.86,0.92,0.98')
+    parser.add_argument('--release', default='', help='seconds after ignition to capture, e.g. 0.02,0.1,0.25,0.5')
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     studio = apply.Studio()
@@ -50,9 +53,18 @@ if __name__ == '__main__':
             raise apply.Stop('Studio is not in Edit; the preview does not run during Play.')
         studio.luau(module_bundle(('BeamVFX',)) + SETUP)
         try:
-            for q in (float(x) for x in args.at.split(',')):
-                studio.luau(DRAW % (q * args.duration, q, args.duration))
-                name = f'charge-{args.duration:g}s-{int(q * 1000):03d}'
+            shots = [('charge', float(x)) for x in args.at.split(',') if x]
+            if args.release:
+                shots.append(('charge', .999))
+                shots += [('release', float(x)) for x in args.release.split(',')]
+            for kind, value in shots:
+                if kind == 'charge':
+                    studio.luau(DRAW % (value * args.duration, value, args.duration))
+                    name = f'charge-{args.duration:g}s-{int(value * 1000):03d}'
+                else:
+                    moment = args.duration + value
+                    studio.luau(RELEASE % (moment, value, moment))
+                    name = f'release-{int(value * 1000):04d}ms'
                 result = studio.request('tools/call', {'name': 'screen_capture', 'arguments': {
                     'studio_id': studio.studio_id, 'capture_id': name}})
                 for part in result.get('content', []):

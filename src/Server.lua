@@ -2931,7 +2931,7 @@ end
 -- A laser miner's first ignition after a rest is the long, showy charge the
 -- owner asked for; hopping to the next rock re-ignites quickly so mining pace
 -- is unchanged once the crew is working. Flat fields only.
-scene.FIRST_CHARGE=2.6
+scene.FIRST_CHARGE=1.9
 scene.FIRST_CHARGE_REST=6
 function scene.miningWarmup(d,r)
  if r and scene.flatFields and not d.mining

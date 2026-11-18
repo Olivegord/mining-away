@@ -193,14 +193,17 @@ end
 function F.boidFollow(center,velocity,traits,now)
  local motion=Vector3.new(velocity.X,0,velocity.Z)
  local speed=motion.Magnitude
- local direction=speed>.5 and motion/speed or Vector3.zero
+ local direction=speed>.05 and motion/speed or Vector3.zero
  -- A slowly drifting bearing around the player: the cloud reshapes itself.
  local bearing=traits.phase+now*.045*(traits.lane>=0 and 1 or -1)
  local distance=6.5+3.2*(traits.height+1)
  local home=Vector3.new(math.cos(bearing),0,math.sin(bearing))*distance
  -- Trail behind a walking player instead of keeping pace beside them.
- local trail=-direction*(4+math.min(speed,16)*.45)
- return center+home*(speed>.5 and .6 or 1)+trail+F.wander(traits,now)
+ -- The offset grows in over the first few studs/s instead of appearing at once.
+ local trail=-direction*(4+math.min(speed,16)*.45)*math.clamp(speed/4,0,1)
+ -- Tighten the formation gradually with walking speed. A hard switch at
+ -- 0.5 studs/s yanked every drone's goal each time the player started or stopped.
+ return center+home*(1-.4*math.clamp((speed-.5)/8,0,1))+trail+F.wander(traits,now)
 end
 function F.ringRadius(count) return math.max(12,count*7.5/(2*math.pi)) end
 function F.descentGoal(origin,position,destination)

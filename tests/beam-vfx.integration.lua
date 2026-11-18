@@ -179,7 +179,7 @@ check('glitch orb follows the drone and overlaps ignition for only 70 millisecon
  BeamVFX.draw(r,from,to,60,0,.3,nil)
  local h=assert(r.rich);assert(h.glass.Transparency==1, 'lens appeared during early inflow')
  BeamVFX.draw(r,moving,to,60.1,0,.965,nil)
- near((h.glass.CFrame.Position-BeamVFX.focus(moving,to,1)).Magnitude,0)
+ assert((h.glass.CFrame.Position-BeamVFX.focus(moving,to,1)).Magnitude<.12,'orb left its focus (a small glitch shake is allowed)')
  assert(h.glass.Material==Enum.Material.Neon and not h.glass.CanQuery and h.glass.Transparency>=0 and h.glass.Transparency<1)
  local expanded=h.glass.Size.X
  BeamVFX.draw(r,moving,to,60.15,0,.985,nil);assert(h.glass.Size.X<expanded)
@@ -331,10 +331,10 @@ end)
 check('aftermath budget stops emission and drains canceled or reduced-effects tails',function()
  LaunchAftermath.clear()
  local owners={}
- for i=1,8 do owners[i]={};LaunchAftermath.charge(owners[i],from,-Vector3.yAxis,120,.7,1) end
- local active=LaunchAftermath.counts();assert(active==4)
+ for i=1,12 do owners[i]={};LaunchAftermath.charge(owners[i],from,-Vector3.yAxis,120,.7,1) end
+ local active=LaunchAftermath.counts();assert(active==8)
  for _,owner in ipairs(owners) do LaunchAftermath.fire(owner,from,-Vector3.yAxis,120,.8) end
- active=LaunchAftermath.counts();assert(active==4,'canceling erased emitted particles')
+ active=LaunchAftermath.counts();assert(active==8,'canceling erased emitted particles')
  for _,owner in ipairs(owners) do assert(not owner.aftermath,'late observer replayed the launch') end
  LaunchAftermath.step(121.81);assert(LaunchAftermath.counts()==0)
  LaunchAftermath.charge(owners[1],from,-Vector3.yAxis,122,.7,1)
