@@ -32,7 +32,7 @@ D.DEPTH_HARD=.03 -- extra hardness per stud of depth
 D.UP=.5 -- a face whose normal points up more than this holds a cell resting on this one
 D.MAX_BLAST=12
 D.MIN_PIECE=4 -- cubic studs: smaller leftovers crumble with the cut
-D.CRUMBLE=.3 -- a cell crumbles away once less than this share of it remains
+D.CRUMBLE=.45 -- a cell crumbles away once less than this share of it remains
 D.TINT=.16 -- per-rock tone swing so neighboring rocks read apart in bright sun
 D.PAUSE=1.1 -- seconds between the split and the gem-or-nothing reveal
 D.TILE=11 -- intact outer surface renders as one slab per tile
@@ -47,7 +47,8 @@ D.APEX_RADIUS=10
 D.CROWD_RADIUS=8
 D.RECENT_TIME=20
 D.TESSELLATIONS={'voronoi','strata','bricks'}
-D.DEFAULT_TESSELLATION='voronoi'
+D.DEFAULT_TESSELLATION='strata' -- flat layers: terraced pits with flat floors read and walk best
+D.LAYERED={strata=true,bricks=true}
 -- Cutter shapes at cutSize 1 (cut-size upgrades scale them).
 D.CUTTERS={
  cell={name='Crack-out'},
@@ -462,11 +463,19 @@ function D.build(seed: number,tessellation: string?)
  local kind=tessellation and TESS[tessellation] and tessellation or D.DEFAULT_TESSELLATION
  local raw=TESS[kind](R,W,H)
  local cube={seed=seed,tessellation=kind,width=W,height=H,cells={},pieces={},cellPieces={},removed={},touched={},
-  frontier={},removedCount=0,removedVolume=0,totalVolume=W*W*H,nextPiece=0,opCount=0}
+  frontier={},removedCount=0,removedVolume=0,totalVolume=W*W*H,nextPiece=0,opCount=0,levels={}}
  for i,faces in ipairs(raw) do
   local volume,cen,lo,hi=measure(faces)
   cube.cells[i]={id=i,faces=faces,volume=volume,cx=cen[1],cy=cen[2],cz=cen[3],lo=lo,hi=hi,minY=lo[2],maxY=hi[2],
    neighbors={},up={},ore=0,hp=0}
+ end
+ do
+  local seen={}
+  for _,c in ipairs(cube.cells) do
+   local y=math.floor(c.minY*1000+.5)/1000
+   if not seen[y] then seen[y]=true;table.insert(cube.levels,c.minY) end
+  end
+  table.sort(cube.levels)
  end
  local pending=false
  for _,c in ipairs(cube.cells) do for _,f in ipairs(c.faces) do if f.label==PENDING then pending=true end end end
@@ -744,6 +753,26 @@ end
 function D.planCut(cube: any,kind: string,cellId: number,cutSize: number?,yaw: number?,taken: any?,random: (() -> number)?): any
  local cut=math.clamp(cutSize or 1,.5,3)
  local p,n=D.contact(cube,cellId)
+ if D.LAYERED[cube.tessellation] and kind~='cell' then
+  -- Layered rock: every shape has straight walls and a flat floor exactly on
+  -- a layer line, so pits stay clean terraces you can read and walk.
+  local cell=cube.cells[cellId]
+  local y1=cell.maxY+.5
+  local y0=cell.minY+.02
+  local x,z=p[1],p[3]
+  if kind=='box' then
+   local s=D.CUTTERS.box.size
+   return {kind='b',x=round(x),y=round((y0+y1)*.5),z=round(z),yaw=round(yaw or 0),sx=round(s[1]*cut),sy=round(y1-y0),sz=round(s[3]*cut)}
+  end
+  local r=kind=='sphere' and D.CUTTERS.sphere.radius*cut or D.CUTTERS.core.radius*cut
+  if kind=='core' then
+   -- A core bore goes one layer deeper: down to the next layer line below.
+   local below=0
+   for _,level in ipairs(cube.levels) do if level<cell.minY-.01 and level>below then below=level end end
+   y0=below+.02
+  end
+  return {kind='y',x=round(x),y=round((y0+y1)*.5),z=round(z),r=round(r),h=round(y1-y0)}
+ end
  if kind=='sphere' then
   local r=D.CUTTERS.sphere.radius*cut
   return {kind='s',x=round(p[1]-n[1]*r*.35),y=round(p[2]-n[2]*r*.35),z=round(p[3]-n[3]*r*.35),r=round(r)}
@@ -996,6 +1025,13 @@ end
 -- faces use the gradient at their own height so the intact block stays seamless.
 function D.faceColor(cube: any,cellId: number,face: any): {number}
  if face.label<0 and face.label>-7 then return D.gradient(face.center[2],cube.height) end
+ -- Floors and freshly cut walls: one even color per depth, so terraces read
+ -- as flat ground and a cut shape reads as one clean hole.
+ if face.normal and (face.normal[2]>.9 or face.label==CUT) then
+  local c=D.gradient(face.center[2],cube.height)
+  local light=face.label==CUT and .94 or 1.04
+  return {math.clamp(c[1]*light,0,255),math.clamp(c[2]*light,0,255),math.clamp(c[3]*light,0,255)}
+ end
  local cell=cube.cells[cellId]
  local c=D.gradient(cell.cy,cube.height)
  local light=1+D.TINT*(hash(cellId,7,13,cube.seed)*2-1)

@@ -71,7 +71,7 @@ for _,kind in ipairs(D.TESSELLATIONS) do
 end
 -- Exact shapes: a box fully inside fresh rock removes exactly its volume;
 -- a round blast removes about a ball; previews match.
-local cube=D.build(7)
+local cube=D.build(7,'voronoi')
 local box={kind='b',x=44,y=40,z=44,yaw=.7,sx=8,sy=3.2,sz=3.4}
 check(math.abs(D.preview(cube,box)-8*3.2*3.4)<.05,'box preview is its volume')
 local r=D.apply(cube,box)
@@ -84,7 +84,7 @@ local ball=4/3*math.pi*64
 check(sr.volume>=pv-.05 and sr.volume<=pv+18*D.MIN_PIECE and sr.volume>ball*.95 and sr.volume<ball*1.45,'round blast removes about a ball: '..sr.volume)
 local core={kind='y',x=60,y=30,z=60,r=2.8,h=5}
 local cr=D.apply(cube,core)
-check(cr.volume>math.pi*2.8^2*5*.95 and cr.volume<math.pi*2.8^2*5*1.1,'core bore removes about a cylinder: '..cr.volume)
+check(cr.volume>math.pi*2.8^2*5*.95,'core bore removes at least its cylinder (leftovers crumble with it): '..cr.volume)
 -- Halves keep the removed volume.
 local A,B=D.splitChunks(r.removed,r.center,D.splitPlane(box,r.center))
 local hv=0
