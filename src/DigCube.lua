@@ -37,8 +37,8 @@ D.TINT=.16 -- per-rock tone swing so neighboring rocks read apart in bright sun
 D.PAUSE=1.1 -- seconds between the split and the gem-or-nothing reveal
 D.TILE=11 -- intact outer surface renders as one slab per tile
 D.BAND=44/12 -- outer wall tile height
-D.GEM_CHANCE_ORE=.55
-D.GEM_CHANCE_STONE=.05
+D.GEM_CHANCE_ORE=.6
+D.GEM_CHANCE_STONE=.16
 D.DEPTH_PULL=1.16 -- per stud of depth
 D.FOCUS_FALLOFF=12
 D.SLOPE=1.4 -- crater walls about 55 degrees
@@ -1110,15 +1110,20 @@ D.SEAM_OVERLAP=.01 -- studs a face grows past edges it shares with a neighbor's 
 -- meets the cube's flat outer surface, its edge is pulled in by the wedge
 -- thickness so its rim stays hidden under that surface (no colored lines
 -- along pit rims); elsewhere it grows a hair so neighbors leave no gaps.
-function D.pieceWedges(faces: {any},index: number,thick: number?): {any}
+local function covering(g: any): boolean
+ return (g.label<-1 and g.label>-7) or (g.normal~=nil and g.normal[2]>.7)
+end
+-- shown: optional {[faceIndex]=true} of faces drawn too (default: all).
+function D.pieceWedges(faces: {any},index: number,thick: number?,shown: {[number]:boolean}?): {any}
  local t=thick or .12
  local face=faces[index]
  local function k(v: {number}) return string.format('%.2f,%.2f,%.2f',v[1],v[2],v[3]) end
+ -- Edges this face shares with a drawn covering face (the flat outer
+ -- surface, or a floor) are pulled in, so its rim hides under that surface.
  local outer={}
- local here=face.label<-1 and face.label>-7
- if not here then
+ if not covering(face) then
   for fi,g in ipairs(faces) do
-   if fi~=index and g.label<-1 and g.label>-7 then
+   if fi~=index and covering(g) and (shown==nil or shown[fi]) then
     for _,v in ipairs(g.verts) do outer[k(v)]=true end
    end
   end

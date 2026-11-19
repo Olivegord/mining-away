@@ -131,10 +131,12 @@ function V:refreshPiece(pid: number)
  self.sig[pid]=sig
  if #shown==0 then return end
  local model=Instance.new('Model');model.Name='Piece'..pid
+ local shownSet={}
+ for _,fi in ipairs(shown) do shownSet[fi]=true end
  for _,fi in ipairs(shown) do
   local face=piece.faces[fi]
   local color=rgb(DigCube.faceColor(self.cube,piece.cell,face))
-  for _,w in ipairs(DigCube.pieceWedges(piece.faces,fi)) do
+  for _,w in ipairs(DigCube.pieceWedges(piece.faces,fi,nil,shownSet)) do
    local part=self:wedge(w,model)
    self:dress(part,color,piece.cell)
    self.base[part]=part.CFrame;self.tone[part]=color
