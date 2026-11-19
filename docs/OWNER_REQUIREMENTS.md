@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 19 — readable, navigable digging that stays fun
+
+The owner: make everything **more readable and navigable**; too many edges and facets make it **really hard to see what is happening**. Then make sure it is **still fun**. Also requested: **give the player a drone with different attacks** (done: the first starter drone rotates through every cut).
+
 ## November 18 — the rock must support any kind of cut
 
 Make the Dig Cube ready for **all sorts of manipulation**: drones that take out **circular chunks**, others that take out **straight rectangles**, "on and on"; support **Voronoi and other tessellations**. Also: **too much flash when opening rocks**, and the **weird edges** on the rocks have to go.
