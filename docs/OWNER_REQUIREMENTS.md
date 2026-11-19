@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — not candyland: fewer colors, bigger world, a buff you can see, keep the mineral stands
+
+After playing the Toy World build the owner said the game seems tiny and reads like candyland with too many colors, the ability "buff" (Overdrive, a hidden damage multiplier) sucks, and the glowing mineral display stands must not be removed. Keep the map simple and abstract but with a restrained palette and a sense of scale; abilities must be visible actions. Routine saves only; no release requested.
+
 ## November 18 — make the simple loop fun; Toy World map
 
 After a game-loop discussion the owner set this goal: make the loop work, look good and function well, keep it simple, and make it fun. Remake the map colorful and simple with no extraneous assets, preferring abstract shapes done artistically; shops can be rectangles, obelisks and other simple shapes; use particles to explain things. Routine saves only; no release requested.
