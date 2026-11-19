@@ -88,6 +88,14 @@ local broken=0
 for r in pairs(hpBefore) do if r.paid or r.hp<=0 then broken+=1 end end
 assert(broken==4,'a barrage on the easy field breaks four rocks, got '..broken)
 assert(crew(pl)[1].charge<=2,'ability breaks must not refill the button, charge='..crew(pl)[1].charge)
+-- Square fields regrow fast: every broken rock is scheduled to return within 8 s.
+assert(#field.respawnQueue>=1,'broken rocks should be queued to regrow')
+for _,vacancy in ipairs(field.respawnQueue) do
+ assert(vacancy.regrowAt<=now+C.SquareRockRespawn+.01 and vacancy.at<=field.respawnClock+C.SquareRockRespawn+.01,'square field rock regrows too slowly')
+end
+local first=field.respawnQueue[1]
+tick(60*10)
+assert(table.find(field.respawnQueue,first)==nil,'a queued rock did not come back within 10 s')
 -- On the hardest field the same shot only chips a rock: rarity gating holds.
 local hard=patches[5].resources[1]
 assert(CrewAbilities.shotDamage(30,hard.hp)<hard.maxHP*.05,'barrage must not one-shot the hardest field')

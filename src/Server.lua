@@ -2014,7 +2014,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     local respawnClock=r.field.cfg.ReferenceCrystals and now or r.field.respawnClock
     -- The legacy field clock can run faster with more drones. Keep the
     -- minimum delay on the server clock for both natural and planted rocks.
-    local vacancy={at=respawnClock+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn,siteIndex=r.siteIndex}
+    -- Square fields regrow fast so the crew is never left with an empty field.
+    local wait=r.field.cfg.WholeField and C.SquareRockRespawn or C.MinimumRockRespawn
+    local vacancy={at=respawnClock+wait+(r.field.cfg.WholeField and 0 or r.field.cfg.Respawn),regrowAt=now+wait,siteIndex=r.siteIndex}
     if r.field.cfg.ContinuousCrystals then vacancy.position=r.position end
     vacancy.landmark=r.landmark;vacancy.landmarkMineral=r.landmarkMineral
     if r.field.cfg.SelectionOnly and d.squareJob and d.squareJob==p.miningSquare then

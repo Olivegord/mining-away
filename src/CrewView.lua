@@ -73,18 +73,16 @@ function View:button(i)
  ring.ClipsDescendants=false;ring.Parent=holder;corner(ring)
  local scale=Instance.new('UIScale');scale.Parent=ring
  local stroke=Instance.new('UIStroke');stroke.Thickness=3;stroke.Color=WHITE;stroke.Transparency=.4;stroke.Parent=ring
- -- Liquid fill rises from the bottom inside a clipped circle.
- local bowl=Instance.new('Frame');bowl.Name='Bowl';bowl.BackgroundTransparency=1;bowl.Size=UDim2.fromScale(1,1)
- bowl.ClipsDescendants=true;bowl.Parent=ring;corner(bowl)
- local fill=Instance.new('Frame');fill.Name='Fill';fill.BorderSizePixel=0;fill.AnchorPoint=Vector2.new(0,1)
- fill.Position=UDim2.fromScale(0,1);fill.Size=UDim2.fromScale(1,0);fill.BackgroundTransparency=.1;fill.Parent=bowl
- local wave=Instance.new('UIGradient');wave.Rotation=90
- wave.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,.35)});wave.Parent=fill
+ -- The fill is a full circle; a gradient hides everything above the level,
+ -- so it stays round (Roblox does not clip children to rounded corners).
+ local fill=Instance.new('Frame');fill.Name='Fill';fill.BorderSizePixel=0;fill.Size=UDim2.fromScale(1,1)
+ fill.BackgroundTransparency=0;fill.Parent=ring;corner(fill)
+ local wave=Instance.new('UIGradient');wave.Rotation=-90;wave.Parent=fill
  local name=label(ring,'',17);name.AnchorPoint=Vector2.new(.5,.5);name.Position=UDim2.fromScale(.5,.5);name.Size=UDim2.fromScale(.86,.4)
  name.TextWrapped=true;name.ZIndex=3
  local key=label(holder,'',15,Color3.fromRGB(230,232,255));key.Size=UDim2.new(1,0,0,20);key.Position=UDim2.new(0,0,1,-20)
  ring.Activated:Connect(function() self:fire(i) end)
- b={holder=holder,ring=ring,scale=scale,stroke=stroke,fill=fill,name=name,key=key,readyAt=nil,shown=0}
+ b={holder=holder,ring=ring,scale=scale,stroke=stroke,fill=fill,wave=wave,name=name,key=key,readyAt=nil,shown=0}
  self.buttons[i]=b
  return b
 end
@@ -248,10 +246,16 @@ function View:update(now)
     local ratio=math.clamp((entry.charge or 0)/math.max(1,entry.need or 1),0,1)
     local active=false
     b.shown+=(ratio-b.shown)*.2
-    b.fill.Size=UDim2.fromScale(1,b.shown);b.fill.BackgroundColor3=color
+    b.fill.BackgroundColor3=color
+    -- Rotation -90 runs bottom (0) to top (1): opaque up to the level.
+    local level=math.clamp(b.shown,0,1)
+    if level<=.001 then b.wave.Transparency=NumberSequence.new(1)
+    elseif level>=.999 then b.wave.Transparency=NumberSequence.new(.05)
+    else b.wave.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(level,.05),
+     NumberSequenceKeypoint.new(math.min(.999,level+.001),1),NumberSequenceKeypoint.new(1,1)}) end
     b.name.Text=entry.name or ''
     local ready=ratio>=1 and not active
-    if ready and not b.readyAt then b.readyAt=now;self.refs.audio:play('gem_ready',nil,{level=.6}) end
+    if ready and not b.readyAt then b.readyAt=now;self.refs.audio:play('sale_credit',nil,{level=.7,pitch=1.5}) end
     if not ready then b.readyAt=nil end
     local bounce=ready and (.06*math.sin((now-b.readyAt)*7)+.12*pulse(now-b.readyAt,.35)) or 0
     local deny=b.denyAt and -.08*pulse(now-b.denyAt,.25) or 0
