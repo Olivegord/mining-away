@@ -1,6 +1,8 @@
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=6,CARGO_REACH=9,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
+-- Run-and-collect: a short grab radius and a short ground life make the
+-- player run through the drops their crew scatters (gems and lucky drops linger).
+local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=12,GEM_LIFETIME=20,CARGO_MAX_AGE=180,GRAVITY=70,
  GEM_GRAVITY=178,GEM_CONTACT_HOLD=.24,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 -- Ore begins just after the authoritative split. Client interpolation is separate.
 O.REWARD_DELAY=.025
@@ -27,7 +29,8 @@ end
 -- A clear rise, apex and fall before the item can be collected.
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
- local speed=block and 5.3 or 7.3+(serial%3)*.35
+ -- Wide enough that the drops form a trail around the rock, not a pile at its foot.
+ local speed=block and 5.3 or 10.5+(serial%3)*.5
  return math.cos(angle)*speed,block and 16 or 55+(serial%4)*.8,math.sin(angle)*speed
 end
 -- The server and observer sample the same flight and exact point of contact.

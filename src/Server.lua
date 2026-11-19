@@ -1026,6 +1026,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
   launchAt=splitAt+OreDrops.REWARD_DELAY
  end
  drop.launchAt=launchAt
+ if drop.raw and (drop.rareGem or drop.lucky) then drop.returnUntil=math.max(drop.returnUntil or 0,launchAt+OreDrops.GEM_LIFETIME) end
  if drop.oreArc and not drop.compacted then
   if not drop.stone then template=scene.crystalCuts and scene.crystalCuts.Gem or template end
   local arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
@@ -1058,7 +1059,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
  chip:SetAttribute('Owner',drop.owner);chip:SetAttribute('RunId',drop.runId);chip:SetAttribute('Units',drop.units);chip:SetAttribute('Mineral',drop.material)
  if drop.modifiers and drop.modifiers~=0 then chip:SetAttribute('RockModifiers',drop.modifiers) end
- chip:SetAttribute('SpawnAt',launchAt);chip:SetAttribute('ExpiresAt',(drop.modifiers or 0)==0 and launchAt+OreDrops.LIFETIME or nil);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
+ chip:SetAttribute('SpawnAt',launchAt);chip:SetAttribute('ExpiresAt',(drop.modifiers or 0)==0 and OreDrops.deadline(launchAt,drop.returnUntil) or nil);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
  chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',velocity);chip:SetAttribute('SnapshotAt',launchAt)
  if drop.oreArc then
   chip:SetAttribute('OreLaunchOrigin',position)

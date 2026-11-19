@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — stop watching paint dry: run and collect
+
+The owner says players just click and watch. Breaking a rock is super satisfying and the gem chance looks cool, but unlike Bee Swarm Simulator, where you run around and collect things, here you watch. From the proposed plan (crew mines around the player, run through the loot, tokens, shared field events) the owner chose **part 2, run through the loot**, first. Routine saves only; no release requested.
+
 ## November 18 — not candyland: fewer colors, bigger world, a buff you can see, keep the mineral stands
 
 After playing the Toy World build the owner said the game seems tiny and reads like candyland with too many colors, the ability "buff" (Overdrive, a hidden damage multiplier) sucks, and the glowing mineral display stands must not be removed. Keep the map simple and abstract but with a restrained palette and a sense of scale; abilities must be visible actions. Routine saves only; no release requested.
