@@ -3497,10 +3497,134 @@ function scene.digReset()
  holder:SetAttribute('Origin',dig.origin);holder:SetAttribute('Width',DigCube.WIDTH);holder:SetAttribute('Height',dig.cube.height)
  holder:SetAttribute('Tessellation',tessellation)
  holder:SetAttribute('Seed',seedValue);holder:SetAttribute('Generation',dig.generation)
+ scene.digBuildRock()
+ scene.digCarveLoop()
  for _,p in pairs(profiles) do
   local hr=characterRoot(p)
   if hr and scene.digInside(hr.Position,0) then hr.CFrame=CFrame.new(hr.Position.X,dig.origin.Y+dig.cube.height+4,hr.Position.Z) end
  end
+end
+-- The rock players see and walk on is real solid geometry on the server:
+-- one block per layer per 11-stud tile, colored by depth. Every cut subtracts
+-- its exact shape (a true ball, cylinder, block, or the rock cell itself) with
+-- Roblox CSG, in order, and the smooth result replicates to every player.
+function scene.digBuildRock()
+ local dig=scene.dig;local cube=dig.cube
+ if dig.rock then dig.rock:Destroy() end
+ local rock=Instance.new('Model');rock.Name='Rock'
+ dig.blocks={};dig.csg={}
+ local levels={}
+ if DigCube.LAYERED[cube.tessellation] then levels=table.clone(cube.levels)
+ else for i=0,9 do table.insert(levels,cube.height*i/10) end end
+ table.insert(levels,cube.height)
+ local T=DigCube.TILE;local n=math.ceil(cube.width/T)
+ for i=1,#levels-1 do
+  local y0,y1=levels[i],levels[i+1]
+  if y1-y0>.05 then
+   local c=DigCube.gradient((y0+y1)*.5,cube.height)
+   for gx=0,n-1 do
+    for gz=0,n-1 do
+     local x0,x1=gx*T,math.min(cube.width,(gx+1)*T)
+     local z0,z1=gz*T,math.min(cube.width,(gz+1)*T)
+     local part=Instance.new('Part');part.Name='RockBlock'
+     part.Anchored=true;part.CanTouch=false;part.CastShadow=true
+     part.Material=Enum.Material.SmoothPlastic;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+     part.Color=Color3.fromRGB(c[1],c[2],c[3])
+     part.Size=Vector3.new(x1-x0,y1-y0,z1-z0)
+     part.CFrame=CFrame.new(dig.origin+Vector3.new((x0+x1)*.5,(y0+y1)*.5,(z0+z1)*.5))
+     part.Parent=rock
+     table.insert(dig.blocks,{part=part,lo=Vector3.new(x0,y0,z0),hi=Vector3.new(x1,y1,z1)})
+    end
+   end
+  end
+ end
+ rock.Parent=dig.holder;dig.rock=rock
+end
+-- Exact cutter shapes for one op (cube-local bounds lo/hi included).
+function scene.digNegatives(op,cells)
+ local dig=scene.dig;local cube=dig.cube;local o=dig.origin
+ local list={}
+ local lo,hi=Vector3.new(math.huge,math.huge,math.huge),Vector3.new(-math.huge,-math.huge,-math.huge)
+ local function part(shape)
+  local p=Instance.new('Part');p.Anchored=true;p.CanCollide=false
+  if shape then p.Shape=shape end
+  table.insert(list,p);return p
+ end
+ local function grow(a,b)
+  lo=Vector3.new(math.min(lo.X,a.X),math.min(lo.Y,a.Y),math.min(lo.Z,a.Z))
+  hi=Vector3.new(math.max(hi.X,b.X),math.max(hi.Y,b.Y),math.max(hi.Z,b.Z))
+ end
+ if op.kind=='s' then
+  local b=part(Enum.PartType.Ball);b.Size=Vector3.one*op.r*2;b.CFrame=CFrame.new(o+Vector3.new(op.x,op.y,op.z))
+  grow(Vector3.new(op.x-op.r,op.y-op.r,op.z-op.r),Vector3.new(op.x+op.r,op.y+op.r,op.z+op.r))
+ elseif op.kind=='y' then
+  local b=part(Enum.PartType.Cylinder);b.Size=Vector3.new(op.h,op.r*2,op.r*2)
+  b.CFrame=CFrame.new(o+Vector3.new(op.x,op.y,op.z))*CFrame.Angles(0,0,math.pi*.5)
+  grow(Vector3.new(op.x-op.r,op.y-op.h*.5,op.z-op.r),Vector3.new(op.x+op.r,op.y+op.h*.5,op.z+op.r))
+ elseif op.kind=='b' then
+  local b=part();b.Size=Vector3.new(op.sx,op.sy,op.sz)
+  b.CFrame=CFrame.fromMatrix(o+Vector3.new(op.x,op.y,op.z),Vector3.new(math.cos(op.yaw),0,math.sin(op.yaw)),Vector3.yAxis)
+  local e=math.sqrt(op.sx^2+op.sz^2)*.5
+  grow(Vector3.new(op.x-e,op.y-op.sy*.5,op.z-e),Vector3.new(op.x+e,op.y+op.sy*.5,op.z+e))
+ end
+ for _,id in ipairs(cells) do
+  local cell=cube.cells[id]
+  local wedges=DigCube.cellWedges(cube,id)
+  if wedges then
+   for _,w in ipairs(wedges) do
+    local p=Instance.new('WedgePart');p.Anchored=true;p.CanCollide=false
+    p.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+    p.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+    table.insert(list,p)
+   end
+  else
+   local b=part(Enum.PartType.Ball);b.Size=Vector3.one*2*(cell.volume*3/(4*math.pi))^(1/3)
+   b.CFrame=CFrame.new(o+Vector3.new(cell.cx,cell.cy,cell.cz))
+  end
+  grow(Vector3.new(cell.lo[1],cell.lo[2],cell.lo[3]),Vector3.new(cell.hi[1],cell.hi[2],cell.hi[3]))
+ end
+ return list,lo,hi
+end
+-- Subtract queued cuts from the rock blocks they reach, one at a time, in order.
+function scene.digCarve(job)
+ local dig=scene.dig
+ if job.generation~=dig.generation then return end
+ local negatives,lo,hi=scene.digNegatives(job.op,job.cells)
+ if #negatives==0 then return end
+ for i=#dig.blocks,1,-1 do
+  local block=dig.blocks[i]
+  if block.hi.X>lo.X and block.lo.X<hi.X and block.hi.Y>lo.Y and block.lo.Y<hi.Y and block.hi.Z>lo.Z and block.lo.Z<hi.Z then
+   local ok,result=pcall(function()
+    return block.part:SubtractAsync(negatives,Enum.CollisionFidelity.PreciseConvexDecomposition,Enum.RenderFidelity.Precise)
+   end)
+   if job.generation~=dig.generation then break end
+   if ok and result then
+    result.Anchored=true;result.CanTouch=false;result.UsePartColor=true;result.Color=block.part.Color
+    result.Material=block.part.Material;result.Name='RockBlock'
+    result.Parent=dig.rock
+    block.part:Destroy();block.part=result
+   elseif not ok and string.find(tostring(result),'empty') then
+    block.part:Destroy();table.remove(dig.blocks,i)
+   end
+  end
+ end
+ for _,p in ipairs(negatives) do p:Destroy() end
+end
+-- Drain the carve queue in order; the worker starts when a cut is queued
+-- and exits when the queue is empty.
+function scene.digCarveLoop()
+ local dig=scene.dig
+ if dig.carving or #dig.csg==0 then return end
+ dig.carving=true
+ task.spawn(function()
+  while #dig.csg>0 do
+   local job=table.remove(dig.csg,1)
+   local ok,err=pcall(scene.digCarve,job)
+   if not ok and not dig.carveWarned then dig.carveWarned=true;(warn or print)('[DigCube] carve failed: '..tostring(err)) end
+  end
+  dig.carving=false
+ end)
 end
 function scene.digInside(position,margin)
  local dig=scene.dig;if not dig.cube then return false end
@@ -3600,8 +3724,16 @@ function scene.digBreak(job,d,p)
  local dig=scene.dig;local cube=dig.cube
  scene.digDrop(d);d.digPickAt=0;d.digProgress=0
  local op=job.op
+ local wasRemoved={}
+ for id in pairs(cube.removed) do wasRemoved[id]=true end
  local result=DigCube.apply(cube,op)
  if result.volume<=0 then return end
+ -- Carve the exact shape, plus every cell this cut finished off (crumbled
+ -- leftovers go whole, so no thin slivers are left behind).
+ local cells={}
+ for _,id in ipairs(result.cells) do if cube.removed[id] and not wasRemoved[id] then table.insert(cells,id) end end
+ table.insert(dig.csg,{generation=dig.generation,op=op,cells=cells})
+ scene.digCarveLoop()
  for _,id in ipairs(result.cells) do dig.recent[id]=now end
  -- The gamble: the cut splits, holds for DigCube.PAUSE, then shows a gem or nothing.
  local tier=DigCube.gemRoll(cube,result,function() return dig.random:NextNumber() end)

@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 19 — perfect shapes, no jagged leftovers
+
+Still too jagged: **spheres should cut out a perfect sphere**, and most cuts left **a bunch of extraneous little edges**. The owner suggested using the **negate feature of parts** (done with runtime CSG, `SubtractAsync`).
+
 ## November 19 — readable, navigable digging that stays fun
 
 The owner: make everything **more readable and navigable**; too many edges and facets make it **really hard to see what is happening**. Then make sure it is **still fun**. Also requested: **give the player a drone with different attacks** (done: the first starter drone rotates through every cut).

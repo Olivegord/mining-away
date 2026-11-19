@@ -1110,6 +1110,35 @@ local function triangle(a: {number},b: {number},c: {number},outward: {number},th
 end
 -- Wedges for one face (cube-local coordinates). Thin, so a face never pokes
 -- out past a neighboring face that meets it at a sharp angle.
+-- Solid wedges filling a cell, for subtracting it from the rendered rock
+-- (layered cells are vertical prisms: top outline extruded through the layer,
+-- grown a hair so neighboring cut-outs leave no paper-thin walls). Other cells
+-- return nil; callers fall back to a ball of the same volume.
+function D.cellWedges(cube: any,id: number): {any}?
+ local cell=cube.cells[id]
+ local top
+ for _,f in ipairs(cell.faces) do if f.normal[2]>.999 then top=f;break end end
+ if not top then return nil end
+ local h=cell.maxY-cell.minY
+ for _,f in ipairs(cell.faces) do
+  if math.abs(f.normal[2])<.999 and math.abs(f.normal[2])>1e-3 then return nil end
+ end
+ local mid=(cell.minY+cell.maxY)*.5
+ local src={}
+ for _,v in ipairs(top.verts) do table.insert(src,{v[1],mid,v[3]}) end
+ local c={0,0,0}
+ for _,v in ipairs(src) do c[1]+=v[1];c[3]+=v[3] end
+ c[1]/=#src;c[3]/=#src
+ local poly={}
+ for i,v in ipairs(src) do
+  local dx,dz=v[1]-c[1],v[3]-c[3];local len=math.sqrt(dx*dx+dz*dz)
+  poly[i]=len>1e-6 and {v[1]+dx/len*.04,mid,v[3]+dz/len*.04} or v
+ end
+ local out={}
+ for i=2,#poly-1 do triangle(poly[1],poly[i],poly[i+1],{0,0,0},h+.06,out) end
+ return out
+end
+
 -- Convex polygon minus convex polygon (same plane), as convex parts.
 local function subtract(poly: {{number}},cut: {{number}},normal: {number}): {{{number}}}
  local c={0,0,0}
