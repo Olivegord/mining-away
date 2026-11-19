@@ -59,25 +59,39 @@ pl.Character:PivotTo(CFrame.new(p0+Vector3.new(0,3,0)))
 tick(30)
 assert(p.miningSquare and p.miningSquare.field==field,'walking onto the field did not put the crew to work')
 local view=crew(pl)
-assert(#view==1 and view[1].role=='Striker' and view[1].kind=='Overdrive' and view[1].charge==0 and view[1].need==6,'starter crew needs one Overdrive button')
+assert(#view==1 and view[1].role=='Striker' and view[1].kind=='Barrage' and view[1].charge==0 and view[1].need==6,'starter crew needs one Laser Barrage button')
 -- Not charged yet: nothing happens.
 scene.crewAbility(p,{role='Striker',runId=data(p).run.id})
-for _,d in ipairs(p.drones) do assert(not d.model:GetAttribute('OverdriveUntil')) end
--- Owned breaks fill the button.
+assert(not p.crewHits or #p.crewHits==0)
+-- Let the field finish growing in, then fill the button with owned breaks.
+local open0=0
+for _=1,40 do tick(30);open0=0;for _,r in ipairs(field.resources) do if scene.crewRockOpen(p,r,p.miningSquare) then open0+=1 end end;if open0>=4 then break end end
+assert(open0>=4,'expected open rocks, got '..open0)
 for _=1,6 do scene.crewBreak(pl.UserId) end
 tick(8)
 view=crew(pl)
-assert(view[1].charge==6,'six breaks should fill Overdrive')
-scene.crewAbility(p,{role='Striker',runId=data(p).run.id})
-for _,d in ipairs(p.drones) do
- assert(d.model:GetAttribute('OverdriveUntil')==now+6,'Overdrive did not mark its drones')
- assert(CrewAbilities.multiplier(p.crew,d.role,now)==3)
-end
-assert(CrewAbilities.multiplier(p.crew,'Striker',now+6.1)==1,'Overdrive must end')
-tick(8)
-assert(crew(pl)[1].charge==0 and crew(pl)[1].activeUntil,'button should drain and show it is active')
+assert(view[1].charge==6,'six breaks should fill the barrage')
 local fx=RS.MiningAway.CrewFX.clientMessages
-assert(#fx==1 and fx[1].all and fx[1].payload.kind=='Overdrive','every player should see Overdrive')
+scene.crewAbility(p,{role='Striker',runId=data(p).run.id})
+assert(#fx==1 and fx[1].all and fx[1].payload.kind=='Barrage','every player should see the barrage: fx='..#fx..' kind='..tostring(fx[1] and fx[1].payload.kind)..' notice='..tostring(pl:GetAttribute('MA_Notice')))
+local shots=fx[1].payload.shots
+assert(#shots==4,'each of the four lasers fires one shot')
+local seen={}
+for i,shot in ipairs(shots) do
+ assert(not seen[shot.position],'two drones shot the same rock');seen[shot.position]=true
+ if i>1 then assert(shot.at>shots[i-1].at,'shots must fire one after another') end
+end
+local hpBefore={}
+for _,hit in ipairs(p.crewHits) do hpBefore[hit.rock]=hit.rock.hp end
+tick(120)
+local broken=0
+for r in pairs(hpBefore) do if r.paid or r.hp<=0 then broken+=1 end end
+assert(broken==4,'a barrage on the easy field breaks four rocks, got '..broken)
+assert(crew(pl)[1].charge<=2,'ability breaks must not refill the button, charge='..crew(pl)[1].charge)
+-- On the hardest field the same shot only chips a rock: rarity gating holds.
+local hard=patches[5].resources[1]
+assert(CrewAbilities.shotDamage(30,hard.hp)<hard.maxHP*.05,'barrage must not one-shot the hardest field')
+assert(CrewAbilities.shotDamage(30,110)==110,'barrage one-shots an easy rock')
 -- A second player whose crew owns one rock.
 local other=player(9001)
 players.PlayerAdded:Fire(other)
@@ -101,10 +115,10 @@ claimed.slots[q.drones[1].id]=1
 local before={}
 for _,r in ipairs(field.resources) do before[r]=r.hp end
 scene.crewAbility(p,{role='Charger',runId=data(p).run.id})
-assert(p.crewShock and #p.crewShock.targets>=1,'shockwave did not pick targets')
-for _,r in ipairs(p.crewShock.targets) do assert(r~=claimed,'shockwave targeted another crew\\'s rock') end
+assert(#p.crewHits>=1,'shockwave did not pick targets: '..tostring(pl:GetAttribute('MA_Notice')))
+for _,hit in ipairs(p.crewHits) do assert(hit.rock~=claimed,'shockwave targeted another crew\\'s rock') end
 tick(40)
-assert(not p.crewShock,'shockwave never landed')
+assert(#p.crewHits==0,'shockwave never landed')
 local hurt=0
 for r,hp in pairs(before) do
  if r.hp<hp or r.paid then hurt+=1 end
@@ -126,7 +140,7 @@ local sales=RS.MiningAway.Sale.clientMessages
 local last=sales[#sales]
 assert(last and last.payload.auto==true and last.payload.full==false,'expected an automatic cash-out receipt')
 assert(Pro.cargoUnits(data(p))==0,'bag should be empty after cash-out')
-print('PASS square-field loop: one field form, crew buttons charge from breaks, Overdrive/Shockwave respect ownership, full bag cashes out on the field (API doubles; feel and real multiplayer NOT verified)')
+print('PASS square-field loop: one field form, crew buttons charge from breaks, Barrage breaks four easy rocks but only chips hard ones, Shockwave respects ownership, full bag cashes out on the field (API doubles; feel and real multiplayer NOT verified)')
 """
 source = "\n".join([
     (ROOT / "tests/mock-roblox.lua").read_text(),

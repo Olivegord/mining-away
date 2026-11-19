@@ -1840,7 +1840,6 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
  if contactKind=='Consumable' or contactKind=='FieldTool' then r.consumableWorked=true end
- if not abilityOrigin then amount*=CrewAbilities.multiplier(p.crew,d.role,now) end
  local baseAmount=amount
  local discoverySpeed=discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
@@ -1998,7 +1997,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    for _,child in ipairs(revealed) do child.consumableWorked=r.consumableWorked end
   else
    award(recipient,r,specialistCut)
-   scene.crewBreak(recipient.owner)
+   -- Breaks made by an ability do not refill the buttons.
+   if contactKind~='FieldTool' or not (fractureContext and (fractureContext.toolKind=='Barrage' or fractureContext.toolKind=='Shockwave')) then scene.crewBreak(recipient.owner) end
    if r.field.cfg.ContinuousCrystals and math.random()<Workshop.CRYSTAL_CHANCE then
     scene.leaveGeode(recipient,r,specialistCut)
    end
@@ -4643,39 +4643,64 @@ function scene.crewAbility(p,payload)
   end
   if not center then notice(p,'No rocks here to blast.');return end
  end
+ if entry.kind=='Barrage' then
+  local any=false
+  for _,r in ipairs(square.field.resources) do if scene.crewRockOpen(p,r,square) then any=true;break end end
+  if not any then notice(p,'No rocks here to blast.');return end
+ end
  local ok,_,kind=CrewAbilities.trigger(p.crew,role,scene.crewRoles(p),now)
  if not ok then notice(p,tostring(_));return end
  local color=Color3.fromRGB(table.unpack(entry.color))
- if entry.kind=='Overdrive' then
-  for _,d in ipairs(p.drones) do
-   if CrewAbilities.role(d.role)==role and d.model then
-    d.model:SetAttribute('OverdriveUntil',now+kind.duration);d.model:SetAttribute('OverdriveColor',color)
-   end
+ local owner=p.player.UserId
+ local open={}
+ for _,r in ipairs(square.field.resources) do if scene.crewRockOpen(p,r,square) then table.insert(open,r) end end
+ local power=0
+ local shooters={}
+ for _,d in ipairs(p.drones) do
+  if CrewAbilities.role(d.role)==role and d.hp>0 then
+   power+=d.stats.miningDPS or 0
+   table.insert(shooters,{id=d.id,position=d.pos,power=d.stats.miningDPS or 0})
   end
-  scene.crewFX:FireAllClients({kind='Overdrive',role=role,name=entry.name,owner=p.player.UserId,color=color,duration=kind.duration,at=now})
+ end
+ p.crewHits=p.crewHits or {}
+ if entry.kind=='Barrage' then
+  -- Every drone of this type fires one big shot at its own rock, in turn.
+  local shots={}
+  for i,pair in ipairs(CrewAbilities.barragePairs(open,shooters)) do
+   local at=now+kind.lead+(i-1)*kind.stagger
+   local shotPower=pair.shooter.power
+   table.insert(p.crewHits,{at=at,rock=pair.rock,kind='Barrage',damage=function(r) return CrewAbilities.shotDamage(shotPower,r.hp) end})
+   table.insert(shots,{drone=pair.shooter.id,position=pair.rock.position,at=at})
+  end
+  scene.crewFX:FireAllClients({kind='Barrage',role=role,name=entry.name,owner=owner,color=color,shots=shots,at=now})
  else
-  local field,owner=square.field,p.player.UserId
-  local open={}
-  for _,r in ipairs(field.resources) do if scene.crewRockOpen(p,r,square) then table.insert(open,r) end end
   local targets=CrewAbilities.shockTargets(open,center,kind.radius)
-  scene.crewFX:FireAllClients({kind='Shockwave',role=role,name=entry.name,owner=owner,color=color,position=center,radius=kind.radius,at=now,impact=.42})
-  -- The ring sweeps in on every client first; the rocks burst on impact.
-  p.crewShock={at=now+.42,targets=targets,center=center,fraction=kind.fraction}
+  scene.crewFX:FireAllClients({kind='Shockwave',role=role,name=entry.name,owner=owner,color=color,position=center,radius=kind.radius,at=now,impact=kind.impact})
+  for _,r in ipairs(targets) do
+   table.insert(p.crewHits,{at=now+kind.impact,rock=r,kind='Shockwave',damage=function(rock) return CrewAbilities.shockDamage(power,rock.hp,rock.maxHP) end})
+  end
  end
  p.lastCrewJSON=nil
  commandReply(p.player,payload,'accepted')
 end
 function scene.crewStep(p)
- local shock=p.crewShock
- if not shock or now<shock.at then return end
- p.crewShock=nil
- if not healthy(p) then return end
+ local hits=p.crewHits
+ if not hits or #hits==0 then return end
  local owner=p.player.UserId
- local actor={id=tostring(owner)..':crew-ability',owner=owner,hp=1,life=1,role='Striker',pos=shock.center,
-  owned={type='Blue'},stats={yieldMultiplier=1,geodeMultiplier=1,miningDPS=0}}
- for _,r in ipairs(shock.targets) do
-  if scene.crewRockOpen(p,r,nil) then
-   hitResource(actor,r,math.min(r.hp,r.maxHP*shock.fraction),false,nil,r.position+Vector3.yAxis*7,'FieldTool',{consumable=true,toolKind='Shockwave',point=r.position})
+ local index=1
+ while index<=#hits do
+  local hit=hits[index]
+  if now<hit.at then index+=1;continue end
+  table.remove(hits,index)
+  local r=hit.rock
+  if healthy(p) and scene.crewRockOpen(p,r,nil) then
+   local amount=hit.damage(r)
+   if amount>0 then
+    local origin=r.position+Vector3.yAxis*7
+    local actor={id=tostring(owner)..':crew-ability',owner=owner,hp=1,life=1,role='Striker',pos=origin,
+     owned={type='Blue'},stats={yieldMultiplier=1,geodeMultiplier=1,miningDPS=0}}
+    hitResource(actor,r,amount,false,nil,origin,'FieldTool',{consumable=true,toolKind=hit.kind,point=r.position})
+   end
   end
  end
 end

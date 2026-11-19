@@ -43,7 +43,7 @@ function View.inField(world,position)
 end
 
 function View.new(refs)
- local self=setmetatable({refs=refs,buttons={},list={},effects={},shocks={},banners={},glows={}},View)
+ local self=setmetatable({refs=refs,buttons={},list={},effects={},shocks={},banners={},beams={}},View)
  local dock=Instance.new('Frame');dock.Name='CrewAbilities';dock.BackgroundTransparency=1
  dock.AnchorPoint=Vector2.new(1,1);dock.Size=UDim2.fromOffset(3*(SIZE+12),SIZE+30)
  dock.Parent=refs.gui
@@ -115,15 +115,64 @@ function View:onFX(record)
  if type(record)~='table' then return end
  local mine=record.owner==self.refs.player.UserId
  local color=typeof(record.color)=='Color3' and record.color or WHITE
- if record.kind=='Overdrive' then
-  if mine then
-   self:banner(string.upper(tostring(record.name or 'Overdrive'))..'!',color)
-   self.refs.audio:play('ignite',nil,{level=1})
-   self.refs.audio:play('charge',nil,{level=.7,pitch=1.3})
+ if mine then self:banner(string.upper(tostring(record.name or 'Ability'))..'!',color) end
+ if record.kind=='Barrage' and type(record.shots)=='table' then
+  if mine then self.refs.audio:play('charge',nil,{level=.8,pitch=1.4}) end
+  for _,shot in ipairs(record.shots) do
+   if type(shot)=='table' and typeof(shot.position)=='Vector3' and type(shot.at)=='number' then
+    table.insert(self.beams,{drone=tostring(shot.drone),position=shot.position,at=shot.at,color=color,mine=mine,start=workspace:GetServerTimeNow()})
+   end
   end
  elseif record.kind=='Shockwave' and typeof(record.position)=='Vector3' then
-  if mine then self:banner(string.upper(tostring(record.name or 'Shockwave'))..'!',color) end
   self:shockwave(record.position,color,tonumber(record.radius) or 12,tonumber(record.impact) or .42,mine)
+ end
+end
+
+local function beamPart(folder,name,color)
+ local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false
+ p.CastShadow=false;p.Material=Enum.Material.Neon;p.Color=color;p.Shape=Enum.PartType.Cylinder;p.Parent=folder
+ return p
+end
+local function stretch(part,from,to,width)
+ local d=(to-from).Magnitude
+ part.Size=Vector3.new(math.max(.05,d),width,width)
+ part.CFrame=CFrame.lookAt((from+to)/2,to)*CFrame.Angles(0,math.pi/2,0)
+end
+-- Barrage: each drone glows while it charges, then fires one thick beam.
+function View:stepBeams(serverNow)
+ for i=#self.beams,1,-1 do
+  local b=self.beams[i]
+  local view=self.refs.localFX:FindFirstChild('View_'..b.drone)
+  local hull=view and (view.PrimaryPart or view:FindFirstChildWhichIsA('BasePart',true))
+  local from=hull and hull.Position or b.position+Vector3.new(0,18,0)
+  local left=b.at-serverNow
+  if left>0 then
+   -- Charging: a bright orb grows under the drone and a thin aim line appears.
+   b.orb=b.orb or beamPart(self.refs.localFX,'CrewCharge',WHITE:Lerp(b.color,.4))
+   b.orb.Shape=Enum.PartType.Ball
+   local t=1-math.clamp(left/.7,0,1)
+   local d=.4+t*1.6
+   b.orb.Size=Vector3.new(d,d,d);b.orb.CFrame=CFrame.new(from-Vector3.yAxis*1.4);b.orb.Transparency=.3-.25*t
+   b.aim=b.aim or beamPart(self.refs.localFX,'CrewAim',b.color)
+   stretch(b.aim,from,b.position,.08+t*.12);b.aim.Transparency=.7-.4*t
+  else
+   if not b.fired then
+    b.fired=true
+    if b.orb then b.orb:Destroy();b.orb=nil end
+    if b.aim then b.aim:Destroy();b.aim=nil end
+    b.beam=beamPart(self.refs.localFX,'CrewBeam',WHITE:Lerp(b.color,.25))
+    b.glow=beamPart(self.refs.localFX,'CrewBeamGlow',b.color);b.glow.Transparency=.55
+    RoleVisuals.ImpactParticles(b.position+Vector3.yAxis*1.2,b.color,1.6,'CrystalBreak')
+    self.refs.audio:play('prism_fire',b.position,{level=b.mine and .9 or .5})
+    if self.refs.presentation then self.refs.presentation:cameraBeat('Split',b.position,os.clock(),b.mine and 1 or .4) end
+   end
+   local age=-left
+   local t=math.clamp(age/.32,0,1)
+   stretch(b.beam,from,b.position,1.1*(1-t)+.05)
+   stretch(b.glow,from,b.position,2.6*(1-t)+.1)
+   b.beam.Transparency=t;b.glow.Transparency=.55+.45*t
+   if t>=1 then b.beam:Destroy();b.glow:Destroy();table.remove(self.beams,i) end
+  end
  end
 end
 
@@ -173,43 +222,6 @@ function View:stepShocks(now)
  end
 end
 
--- Overdrive glow on the visible copy of each boosted drone.
-function View:stepGlows(serverNow)
- local folder=self.refs.world:FindFirstChild('Drones')
- local live={}
- if folder then
-  for _,source in ipairs(folder:GetChildren()) do
-   local untilAt=source:GetAttribute('OverdriveUntil')
-   if type(untilAt)=='number' and untilAt>serverNow then
-    local id=tostring(source:GetAttribute('DroneId'))
-    local view=self.refs.localFX:FindFirstChild('View_'..id)
-    local hull=view and (view.PrimaryPart or view:FindFirstChildWhichIsA('BasePart',true))
-    if hull then
-     live[source]=true
-     local glow=self.glows[source]
-     if not glow or glow.hull~=hull then
-      if glow then glow.attachment:Destroy() end
-      local color=source:GetAttribute('OverdriveColor');if typeof(color)~='Color3' then color=WHITE end
-      local attachment=Instance.new('Attachment');attachment.Name='CrewOverdrive';attachment.Parent=hull
-      local light=Instance.new('PointLight');light.Color=color;light.Range=9;light.Brightness=2.4;light.Parent=attachment
-      local sparks=Instance.new('ParticleEmitter');sparks.Color=ColorSequence.new(WHITE,color);sparks.LightEmission=.9
-      sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(1,0)})
-      sparks.Lifetime=NumberRange.new(.25,.5);sparks.Speed=NumberRange.new(2,5);sparks.SpreadAngle=Vector2.new(180,180)
-      sparks.Rate=self.refs.reduced() and 0 or 28;sparks.Drag=3;sparks.Parent=attachment
-      glow={attachment=attachment,light=light,hull=hull}
-      self.glows[source]=glow
-     end
-     local left=untilAt-serverNow
-     glow.light.Brightness=1.6+math.sin(os.clock()*18)*.8*math.clamp(left,0,1)
-    end
-   end
-  end
- end
- for source,glow in pairs(self.glows) do
-  if not live[source] then glow.attachment:Destroy();self.glows[source]=nil end
- end
-end
-
 function View:update(now)
  now=now or os.clock()
  local serverNow=workspace:GetServerTimeNow()
@@ -234,8 +246,7 @@ function View:update(now)
    if entry then
     local color=Color3.fromRGB(table.unpack(entry.color or {255,255,255}))
     local ratio=math.clamp((entry.charge or 0)/math.max(1,entry.need or 1),0,1)
-    local active=entry.activeUntil and entry.activeUntil>serverNow
-    if active then ratio=math.clamp((entry.activeUntil-serverNow)/Crew.KINDS.Overdrive.duration,0,1) end
+    local active=false
     b.shown+=(ratio-b.shown)*.2
     b.fill.Size=UDim2.fromScale(1,b.shown);b.fill.BackgroundColor3=color
     b.name.Text=entry.name or ''
@@ -265,7 +276,7 @@ function View:update(now)
   if age>1.5 then banner.gui:Destroy();table.remove(self.banners,i) end
  end
  self:stepShocks(now)
- self:stepGlows(serverNow)
+ self:stepBeams(serverNow)
 end
 
 function View:blocks(point)

@@ -44,7 +44,7 @@ local crew=CrewView.new({gui=gui,player=pl,world=world,localFX=localFX,
  profile=function() return {run={id='run-1'}} end})
 local http=game:GetService('HttpService')
 local function setCrew(charge,activeUntil)
- pl:SetAttribute('MA_Crew',http:JSONEncode({{role='Striker',kind='Overdrive',name='Overdrive',color={90,230,255},charge=charge,need=6,activeUntil=activeUntil}}))
+ pl:SetAttribute('MA_Crew',http:JSONEncode({{role='Striker',kind='Barrage',name='Laser Barrage',color={90,230,255},charge=charge,need=6}}))
 end
 -- Off the field: no buttons.
 pl.Character:PivotTo(CFrame.new(Vector3.new(0,4,0)))
@@ -55,7 +55,7 @@ assert(crew.dock.Visible==false,'buttons must hide off the field')
 pl.Character:PivotTo(CFrame.new(Vector3.new(0,7,-82)))
 crew:update(realTime)
 assert(crew.dock.Visible and crew.buttons[1] and crew.buttons[1].holder.Visible,'one button on the field')
-assert(crew.buttons[1].name.Text=='Overdrive')
+assert(crew.buttons[1].name.Text=='Laser Barrage')
 crew:fire(1)
 assert(#sent==0,'a partly charged button must not fire')
 -- Charged: tap and key both fire.
@@ -68,20 +68,26 @@ uis.InputBegan:Fire({KeyCode=Enum.KeyCode.Q},false)
 assert(#sent==2,'Q fires the first button')
 uis.InputBegan:Fire({KeyCode=Enum.KeyCode.Q},true)
 assert(#sent==2,'typing in a text box must not fire')
--- Overdrive glow follows the server attribute on the visible drone copy.
-source:SetAttribute('OverdriveUntil',realTime+3);source:SetAttribute('OverdriveColor',Color3.new(0,1,1))
-crew:update(realTime)
-assert(hull:FindFirstChild('CrewOverdrive'),'boosted drone should glow')
-realTime+=4;crew:update(realTime)
-assert(not hull:FindFirstChild('CrewOverdrive'),'glow must end with Overdrive')
--- Shockwave: ring sweeps in, bursts once with a camera beat, then cleans up.
+-- Barrage: the drone charges an orb, then fires one beam at its rock.
 local bursts=0
 RoleVisuals.ImpactParticles=function() bursts+=1 end
+fx.OnClientEvent:Fire({kind='Barrage',name='Laser Barrage',owner=7,color=Color3.new(0,1,1),
+ shots={{drone='7:drone:1',position=Vector3.new(0,5,-82),at=realTime+.5}}})
+assert(#crew.banners==1,'the player who fired sees a banner')
+realTime+=.2;crew:update(realTime)
+assert(localFX:FindFirstChild('CrewCharge') and localFX:FindFirstChild('CrewAim'),'drone should charge before firing')
+realTime+=.4;crew:update(realTime)
+assert(localFX:FindFirstChild('CrewBeam') and not localFX:FindFirstChild('CrewCharge') and bursts==1 and beats==1,'beam fires once with a burst and camera beat')
+realTime+=.5;crew:update(realTime)
+assert(not localFX:FindFirstChild('CrewBeam') and #crew.beams==0,'beam must clean up')
+realTime+=2;crew:update(realTime)
+-- Shockwave: ring sweeps in, bursts once with a camera beat, then cleans up.
+ bursts=0
 fx.OnClientEvent:Fire({kind='Shockwave',name='Mega Ball',owner=7,position=Vector3.new(0,5,-82),color=Color3.new(1,0,1),radius=12,impact=.42})
 assert(localFX:FindFirstChild('CrewShockwave'),'shockwave ring missing')
 assert(#crew.banners==1,'the player who fired sees a banner')
 realTime+=.5;crew:update(realTime)
-assert(bursts==1 and beats==1,'shockwave should burst once with a camera beat')
+assert(bursts==1 and beats==2,'shockwave should burst once with a camera beat')
 realTime+=1;crew:update(realTime)
 assert(not localFX:FindFirstChild('CrewShockwave') and #crew.shocks==0,'shockwave must clean up')
 realTime+=2;crew:update(realTime)
@@ -89,4 +95,4 @@ assert(#crew.banners==0,'banner must clear')
 -- Someone else's shockwave: visible, but no banner for this player.
 fx.OnClientEvent:Fire({kind='Shockwave',name='Mega Ball',owner=99,position=Vector3.new(0,5,-82),color=Color3.new(1,0,1),radius=12,impact=.42})
 assert(#crew.banners==0 and #crew.shocks==1)
-print('PASS CrewView buttons, charge, tap/key firing, Overdrive glow and Shockwave cleanup (API doubles; not engine QA)')
+print('PASS CrewView buttons, charge, tap/key firing, Barrage charge/beam and Shockwave cleanup (API doubles; not engine QA)')
