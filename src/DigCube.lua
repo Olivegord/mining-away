@@ -22,6 +22,8 @@ D.HP_SCALE=.07 -- per cubic stud
 D.DEPTH_HARD=.03 -- extra hardness per stud of depth
 D.UP=.5 -- a face whose normal points up more than this holds a cell resting on this one
 D.MAX_BLAST=12
+D.RELAX=0 -- Lloyd relaxation steps (measured: barely changes slivers, doubles build time)
+D.TINT=.09 -- per-rock tone swing on pit faces so neighboring rocks read apart
 D.PAUSE=1.1 -- seconds between the split and the gem-or-nothing reveal
 D.TILE=11 -- intact outer surface renders as one slab per tile
 D.BAND=44/12 -- outer wall tile height
@@ -43,7 +45,7 @@ D.ORES={
  {material='Diamond',name='Diamond',color={236,226,246}},
 }
 -- Rock color by height: warm sand at the top to dark slate at the bottom.
-D.GRADIENT={{238,216,172},{224,192,144},{204,164,118},{176,136,102},{144,114,96},{110,92,90},{80,72,82},{54,52,64}}
+D.GRADIENT={{242,222,180},{234,198,140},{218,162,104},{190,126,86},{152,100,84},{114,86,92},{80,76,98},{54,56,74}}
 local ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 -- Boundary labels: -1 bottom, -2 top, -3 west (x=0), -4 east (x=W), -5 south (z=0), -6 north (z=W). 0 = a split cut.
 local BOTTOM,TOP=-1,-2
@@ -239,6 +241,8 @@ function D.build(seed: number)
  end
  local pts,grid,bucket=poisson(R,W,H,radius,rmax)
  local cube={seed=seed,width=W,height=H,cells={},removedCount=0}
+ local function cells()
+ cube.cells={}
  for i,p in ipairs(pts) do
   local near={}
   local ix,iy,iz=math.floor(p.x/bucket),math.floor(p.y/bucket),math.floor(p.z/bucket)
@@ -266,6 +270,20 @@ function D.build(seed: number)
   for _,f in ipairs(kept) do for _,v in ipairs(f.verts) do r=math.max(r,math.sqrt((v[1]-cen[1])^2+(v[3]-cen[3])^2)) end end
   cube.cells[i]={id=i,site=site,faces=kept,volume=volume,cx=cen[1],cy=cen[2],cz=cen[3],minY=minY,maxY=maxY,radius=r,
    neighbors={},up={},ore=0,hp=0}
+ end
+ end
+ cells()
+ -- One Lloyd step: move each site to its cell's center and rebuild. Cells
+ -- come out rounder and more even, with far fewer thin sliver faces.
+ for _=1,D.RELAX do
+  grid={}
+  for i,c in ipairs(cube.cells) do
+   local p=pts[i];p.x,p.y,p.z=c.cx,c.cy,c.cz
+   local k=key3(math.floor(p.x/bucket),math.floor(p.y/bucket),math.floor(p.z/bucket))
+   local list=grid[k];if not list then list={};grid[k]=list end
+   table.insert(list,i)
+  end
+  cells()
  end
  -- Neighbors across shared faces (kept only when both sides agree).
  local has={}
@@ -530,6 +548,18 @@ function D.cracks(cube: any,id: number)
   end
  end
  return {edges=edges,reach=far,seams=seams,contact=contact}
+end
+
+-- One flat color per rock: the depth gradient at the rock's center with a
+-- small per-rock tone, so every face of a rock matches and neighboring rocks
+-- read apart. Outer-surface faces use the gradient at their own height so the
+-- intact top and walls stay seamless.
+function D.faceColor(cube: any,cellId: number,face: any): {number}
+ if face.label<0 then return D.gradient(face.center[2],cube.height) end
+ local cell=cube.cells[cellId]
+ local c=D.gradient(cell.cy,cube.height)
+ local light=1+D.TINT*(hash(cellId,7,13,cube.seed)*2-1)
+ return {math.clamp(c[1]*light,0,255),math.clamp(c[2]*light,0,255),math.clamp(c[3]*light,0,255)}
 end
 
 -- Intact stretches of the top and the four walls render as one slab per tile.

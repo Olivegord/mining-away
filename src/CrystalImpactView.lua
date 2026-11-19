@@ -75,6 +75,8 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    }
   end
  end
+ -- The same streak-and-ember sparks for other breakable rock (the Dig Cube).
+ function self:fireworks(point,ground,color,strength,now,count) releaseSparks(point,ground,color,strength,now,count) end
  function self:seamBurst(r,now,strength)
   local point=r.restPose.Position+Vector3.yAxis*r.view.Size.Y*.22
   local ground=r.source:GetAttribute('GroundY') or point.Y-3

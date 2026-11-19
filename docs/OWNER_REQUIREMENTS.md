@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — dig cube readability and reused effects
+
+The owner found the 3D facets confusing and everything hard to see; after flat per-rock colors they approved ("oh yess"). For the mining outline, **reuse the pulsing outline from the field rocks**, and **reuse many particle effects from the old loop**.
+
 ## November 18 — dig cube: back to one cell per cut, 3D cells, gradient
 
 After the seamless/chunk version: the owner preferred **one cell per cut with bigger cells**; asked to **rework the edge cracks**, make the **break debris look better** (the split was hard to see), give the rock a **top-to-bottom color gradient** so depth reads, and **try 3D Voronoi cells** (not 2D prisms) for more freedom, such as bigger explosions.
