@@ -72,14 +72,14 @@ def append(data, directory, name, parent, root, allowed):
     return append_model(data, model, native.one(parent), chunks, chunk, u32, string, packstr), len(export.instances)
 
 
-def patch_lighting(data, plan):
-    """Replace five Lighting properties after checking their old values."""
+def patch_lighting(data, plan, props=LIGHTING):
+    """Replace the listed Lighting properties after checking their old values."""
     native = Native(data)
     (cid,) = [c for c, (cls, ids) in native.classes.items() if cls == "Lighting"]
     assert len(native.classes[cid][1]) == 1
-    assert plan["before"].keys() == plan["after"].keys() == LIGHTING.keys(), plan
+    assert plan["before"].keys() == plan["after"].keys() == props.keys(), plan
     replacements = {}
-    for name, dtype in LIGHTING.items():
+    for name, dtype in props.items():
         raw = native.prop(cid, name, dtype)
         before, after = plan["before"][name], plan["after"][name]
         if dtype == 0x01:
@@ -98,7 +98,7 @@ def patch_lighting(data, plan):
         if kind == b"PROP" and u32(decoded) == cid:
             raw = replacements.get(string(decoded, 4)[0], raw)
         out.append(raw)
-    return b"".join(out), {(cid, name) for name in LIGHTING}
+    return b"".join(out), {(cid, name) for name in props}
 
 
 def merge(data, directory):
