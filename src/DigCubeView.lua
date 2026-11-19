@@ -1,35 +1,42 @@
 --!strict
--- Client view of the Dig Cube. Every client builds the same cube from the
--- replicated seed (DigCube.build). The block looks seamless: intact stretches
--- render as one block per tile, and only tiles that are cut or targeted break
--- into their small cells. While a drone cuts a chunk, a crack runs around the
--- chunk's outline and then across its split line; it only trembles at the very
--- end. On break the chunk splits into two halves that hold open with a glow
--- (the gamble), then either a gem bursts out or the halves crumble.
+-- Client view of the Dig Cube (3D Voronoi cells). Every client builds the same
+-- cube from the replicated seed. Rock color runs on a gradient from sand at the
+-- top to slate at the bottom so pit depth reads at a glance. The block looks
+-- seamless: the intact top and walls render as one slab per tile, and only
+-- faces that touch air are drawn once a tile breaks.
+-- While a drone cuts a cell, cracks spread out along the cell's edges from the
+-- beam's contact point, the cell darkens with damage, and near the end the
+-- split line glows across it; only the last moments tremble. On break the cell
+-- splits into two clear halves that jump apart with chips and dust, hold open
+-- with a glow (the gamble), then either a gem bursts out or the halves crumble.
 local DigCube=require('./DigCube')
 local UIS=game:GetService('UserInputService')
 local Players=game:GetService('Players')
 local V={}
 V.__index=V
 local BEAM_CORE=Color3.fromRGB(255,250,235)
-local HOT=Color3.fromRGB(255,196,128)
-local CRACK=Color3.fromRGB(34,26,22)
+local HOT=Color3.fromRGB(255,170,90)
+local CRACK=Color3.fromRGB(28,22,20)
 local GLOW=Color3.fromRGB(255,240,205)
-local SHAKE_FROM=.82 -- the chunk only trembles in its last moments
-local POP=.16 -- split opening time
+local FRESH=Color3.fromRGB(255,246,226)
+local SHAKE_FROM=.82 -- the cell only trembles in its last moments
+local POP=.2
+local GRAVITY=70
 local TIER_NAMES={'AMBER!','RUBY!','QUARTZ!','VIOLET!','DIAMOND!'}
 
 local function rgb(t: {number}) return Color3.fromRGB(t[1],t[2],t[3]) end
-local function fxPart(parent: Instance,name: string,color: Color3): Part
- local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false
+local function vec(t: {number}) return Vector3.new(t[1],t[2],t[3]) end
+local function fxPart(parent: Instance,name: string,color: Color3,class: string?): BasePart
+ local p=Instance.new((class or 'Part') :: any) :: BasePart
+ p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false
  p.CastShadow=false;p.Material=Enum.Material.SmoothPlastic;p.Color=color;p.TopSurface=Enum.SurfaceType.Smooth
  p.BottomSurface=Enum.SurfaceType.Smooth;p.Parent=parent
  return p
 end
 
 function V.new(ctx: any)
- local self=setmetatable({ctx=ctx,parts={},base={},tileParts={},broken={},beams={},cracks={},splits={},banners={},
-  shaking={},cube=nil,origin=Vector3.zero,generation=-1,removedString='',breaksString='',serial=0,
+ local self=setmetatable({ctx=ctx,models={},sig={},base={},tileParts={},broken={},beams={},cracks={},splits={},debris={},
+  banners={},damage={},cube=nil,origin=Vector3.zero,generation=-1,removedString='',breaksString='',serial=0,
   random=Random.new(),connections={},tapAt=0},V)
  local folder=Instance.new('Folder');folder.Name='DigCubeView';folder.Parent=workspace
  self.folder=folder
@@ -57,90 +64,97 @@ function V:reduced(): boolean
 end
 
 function V:clear()
- for _,model in pairs(self.parts) do model:Destroy() end
+ for _,model in pairs(self.models) do model:Destroy() end
  for _,part in pairs(self.tileParts) do part:Destroy() end
  for id in pairs(self.cracks) do self:dropCrack(id) end
- self.parts={};self.base={};self.tileParts={};self.broken={};self.shaking={}
+ self.models={};self.sig={};self.base={};self.tileParts={};self.broken={};self.damage={}
  if self.pad then self.pad:Destroy();self.pad=nil end
 end
 
-function V:layerColor(layer: number): Color3
- return rgb(DigCube.STRATA[math.min(layer,#DigCube.STRATA)])
+function V:colorAt(y: number): Color3
+ return rgb(DigCube.gradient(y,self.cube.height))
 end
 
-function V:dress(part: BasePart,layer: number,cellId: number)
+function V:dress(part: BasePart,color: Color3,cellId: number)
  part.Anchored=true;part.CanTouch=false;part.CanQuery=true;part.CanCollide=true
  part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
- part.Color=self:layerColor(layer)
- part.Material=Enum.Material.SmoothPlastic
- part.Reflectance=0
- part.CastShadow=true
+ part.Color=color;part.Material=Enum.Material.SmoothPlastic;part.Reflectance=0;part.CastShadow=true
  part:SetAttribute('DigCell',cellId)
 end
 
-function V:wedgePart(w: any,parent: Instance): WedgePart
+function V:wedge(w: any,parent: Instance,offset: Vector3?): WedgePart
  local part=Instance.new('WedgePart')
  part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
- part.CFrame=CFrame.fromMatrix(self.origin+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),
-  Vector3.new(w.right[1],w.right[2],w.right[3]),Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+ part.CFrame=CFrame.fromMatrix((offset or self.origin)+vec(w.pos),vec(w.right),vec(w.up),vec(w.back))
  part.Parent=parent
  return part
 end
 
-function V:showCell(id: number)
- if self.parts[id] then return end
- local cell=self.cube.cells[id]
- local model=Instance.new('Model');model.Name='Cell'..id
- for _,w in ipairs(DigCube.wedges(cell)) do
-  local part=self:wedgePart(w,model)
-  self:dress(part,cell.layer,id)
-  self.base[part]=part.CFrame
+-- Faces of a cell that touch air and are not covered by an intact tile.
+function V:openFaces(id: number): {number}
+ local cube=self.cube
+ local out={}
+ if cube.removed[id] then return out end
+ local perFace=self.faceTiles[id]
+ for fi,f in ipairs(cube.cells[id].faces) do
+  if f.label>0 then
+   if cube.removed[f.label] then table.insert(out,fi) end
+  elseif f.label<-1 then
+   for _,key in ipairs(perFace[fi] or {}) do if self.broken[key] then table.insert(out,fi);break end end
+  end
  end
- model.Parent=self.folder
- self.parts[id]=model
+ return out
 end
 
-function V:hideCell(id: number)
- local model=self.parts[id]
- if model then
-  for _,part in ipairs(model:GetChildren()) do self.base[part]=nil end
-  self.parts[id]=nil;model:Destroy()
+function V:refresh(id: number)
+ local faces=self:openFaces(id)
+ local sig=table.concat(faces,',')
+ if sig==(self.sig[id] or '') then return end
+ local old=self.models[id]
+ if old then for _,p in ipairs(old:GetChildren()) do self.base[p]=nil end;old:Destroy();self.models[id]=nil end
+ self.sig[id]=sig
+ if #faces==0 then return end
+ local model=Instance.new('Model');model.Name='Cell'..id
+ local cell=self.cube.cells[id]
+ for _,fi in ipairs(faces) do
+  for _,w in ipairs(DigCube.faceWedges(cell.faces[fi],.5)) do
+   local part=self:wedge(w,model)
+   self:dress(part,self:colorAt(w.y),id)
+   self.base[part]=part.CFrame
+  end
  end
+ model.Parent=self.folder
+ self.models[id]=model
 end
 
 function V:showTile(tile: any)
  if self.tileParts[tile.key] or self.broken[tile.key] then return end
- local part=Instance.new('Part');part.Name='Tile'
- part.Size=Vector3.new(tile.x1-tile.x0,tile.y1-tile.y0,tile.z1-tile.z0)
- part.CFrame=CFrame.new(self.origin+Vector3.new((tile.x0+tile.x1)*.5,(tile.y0+tile.y1)*.5,(tile.z0+tile.z1)*.5))
- self:dress(part,tile.layer,0)
+ local W,H=self.cube.width,self.cube.height
+ local du,dv=tile.u1-tile.u0,tile.v1-tile.v0
+ local um,vm=(tile.u0+tile.u1)*.5,(tile.v0+tile.v1)*.5
+ local size,center
+ if tile.side==-2 then size,center=Vector3.new(du,.6,dv),Vector3.new(um,H-.3,vm)
+ elseif tile.side==-3 then size,center=Vector3.new(.6,dv,du),Vector3.new(.3,vm,um)
+ elseif tile.side==-4 then size,center=Vector3.new(.6,dv,du),Vector3.new(W-.3,vm,um)
+ elseif tile.side==-5 then size,center=Vector3.new(du,dv,.6),Vector3.new(um,vm,.3)
+ else size,center=Vector3.new(du,dv,.6),Vector3.new(um,vm,W-.3) end
+ local part=Instance.new('Part');part.Name='Tile';part.Size=size
+ part.CFrame=CFrame.new(self.origin+center)
+ self:dress(part,self:colorAt(center.Y),0)
  part.Parent=self.folder
  self.tileParts[tile.key]=part
 end
 
--- A cell renders on its own when air touches it and no intact tile stands in for it.
-function V:needed(id: number): boolean
- local cube=self.cube
- if cube.removed[id] then return false end
- local cell=cube.cells[id]
- local brokenOver=false
- for _,key in ipairs(self.cellTiles[id]) do if self.broken[key] then brokenOver=true;break end end
- if brokenOver and (cell.layer==1 or cell.boundary) then return true end
- return cell.layer>1 and DigCube.visible(cube,id)
-end
-
-function V:refresh(id: number)
- if self:needed(id) then self:showCell(id) else self:hideCell(id) end
-end
-
--- Break every tile over these cells into its cells; adds the cells to refresh.
+-- Break every tile over these cells; adds the cells to refresh.
 function V:breakTiles(ids: {number},touched: {[number]:boolean})
  for _,id in ipairs(ids) do
-  for _,key in ipairs(self.cellTiles[id]) do
-   if not self.broken[key] then
-    self.broken[key]=true
-    local part=self.tileParts[key];if part then part:Destroy();self.tileParts[key]=nil end
-    for _,other in ipairs(self.tiles[key].cells) do touched[other]=true end
+  for _,list in pairs(self.faceTiles[id] or {}) do
+   for _,key in ipairs(list) do
+    if not self.broken[key] then
+     self.broken[key]=true
+     local part=self.tileParts[key];if part then part:Destroy();self.tileParts[key]=nil end
+     for _,ref in ipairs(self.tiles[key].faces) do touched[ref[1]]=true end
+    end
    end
   end
  end
@@ -184,7 +198,7 @@ function V:sync()
   self:clear()
   self.generation=generation;self.origin=origin
   self.cube=DigCube.build(seed)
-  self.tiles,self.cellTiles=DigCube.tiles(self.cube)
+  self.tiles,self.faceTiles=DigCube.tiles(self.cube)
   for _,tile in pairs(self.tiles) do self:showTile(tile) end
   self.removedString='';self.breaksString=''
   -- Breaks from before this client saw the cube are not replayed.
@@ -195,9 +209,8 @@ function V:sync()
  end
  local cube=self.cube
  local now=os.clock()
- local touched={}
  local fresh={}
- -- Breaks first, so a chunk splits open in the same frame its cells disappear.
+ -- Breaks first, so a cell splits open in the same frame it disappears.
  local breaks=holder:GetAttribute('Breaks')
  if type(breaks)=='string' and breaks~=self.breaksString then
   self.breaksString=breaks
@@ -205,12 +218,10 @@ function V:sync()
    if b.serial>self.serial then
     self.serial=b.serial
     local valid=#b.ids>0
-    for _,id in ipairs(b.ids) do if not cube.cells[id] then valid=false end end
+    for _,id in ipairs(b.ids) do if not cube.cells[id] or cube.removed[id] then valid=false end end
     if valid then
      self:split(b.ids,b.tier,now)
-     for _,id in ipairs(b.ids) do
-      if not cube.removed[id] then cube.removed[id]=true;cube.removedCount+=1;table.insert(fresh,id) end
-     end
+     for _,id in ipairs(b.ids) do cube.removed[id]=true;cube.removedCount+=1;table.insert(fresh,id) end
     end
    end
   end
@@ -223,81 +234,139 @@ function V:sync()
   end
  end
  if #fresh==0 then return end
+ local touched={}
  self:breakTiles(fresh,touched)
  for _,id in ipairs(fresh) do
   touched[id]=true
-  for _,other in ipairs(DigCube.affected(cube,id)) do touched[other]=true end
+  for _,other in ipairs(cube.cells[id].neighbors) do touched[other]=true end
  end
  for id in pairs(touched) do self:refresh(id) end
 end
 
--- Two halves along the chunk's split line, held open while the gem rolls.
+-- A closed piece (list of faces) as wedges in a model, with each part's
+-- offset from `frame` so the whole piece can move as one.
+function V:piece(faces: {any},frame: CFrame,cutColor: Color3?)
+ local model=Instance.new('Model');model.Name='DigPiece'
+ local list={}
+ for _,f in ipairs(faces) do
+  for _,w in ipairs(DigCube.faceWedges(f,.35)) do
+   local part=self:wedge(w,model)
+   part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false
+   part.Material=Enum.Material.SmoothPlastic;part.CastShadow=true
+   part.Color=f.label==0 and cutColor or self:colorAt(w.y)
+   table.insert(list,{part=part,rel=frame:ToObjectSpace(part.CFrame)})
+  end
+ end
+ model.Parent=self.fx
+ return model,list
+end
+
+-- Small rock chips that fly, tumble, land, bounce once and fade.
+function V:chips(at: Vector3,color: Color3,count: number,speed: number,floor: number,now: number)
+ if self:reduced() then return end
+ for i=1,count do
+  if #self.debris>=90 then break end
+  local s=self.random:NextNumber(.35,.8)
+  local chip=fxPart(self.fx,'DigChip',color:Lerp(Color3.new(1,1,1),self.random:NextNumber(0,.15)),'WedgePart')
+  chip.Size=Vector3.new(s*.7,s,s*1.2);chip.CastShadow=true
+  local a=i*2.399963+self.random:NextNumber(0,.6)
+  local v=Vector3.new(math.cos(a),0,math.sin(a))*speed*self.random:NextNumber(.5,1)+Vector3.yAxis*self.random:NextNumber(12,20)
+  local axis=Vector3.new(self.random:NextNumber(-1,1),self.random:NextNumber(-1,1),self.random:NextNumber(-1,1))
+  table.insert(self.debris,{part=chip,at=now,from=at,v=v,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
+   spin=self.random:NextNumber(6,12),floor=floor+s*.5,life=self.random:NextNumber(1,1.4),size=chip.Size})
+ end
+end
+
+function V:stepDebris(now: number)
+ for i=#self.debris,1,-1 do
+  local d=self.debris[i];local t=now-d.at
+  if t>=d.life then d.part:Destroy();table.remove(self.debris,i)
+  else
+   local pos=d.from+d.v*t-Vector3.yAxis*(GRAVITY*.5*t*t)
+   if pos.Y<=d.floor then
+    if not d.landed then
+     d.landed=t;d.landAt=Vector3.new(pos.X,d.floor,pos.Z);d.bounce=math.min(8,math.abs(d.v.Y-GRAVITY*t)*.25)
+    end
+    local age=t-d.landed
+    pos=d.landAt+Vector3.new(d.v.X*.08*age,math.max(0,d.bounce*age-GRAVITY*.5*age*age),d.v.Z*.08*age)
+   end
+   local spin=d.spin*(d.landed or t)
+   local fade=math.clamp((t/d.life-.6)/.4,0,1)
+   d.part.Size=d.size*(1-.6*fade)
+   d.part.CFrame=CFrame.new(pos)*CFrame.fromAxisAngle(d.axis,spin)
+   d.part.Transparency=fade
+  end
+ end
+end
+
+-- The break: the cell splits into two halves that jump apart, hold open while
+-- the gem rolls, then burst (gem) or crumble (nothing). Cells blasted out with
+-- it by a bigger cut fly off whole.
 function V:split(ids: {number},tier: number,now: number)
  local cube=self.cube
- local sp=DigCube.split(cube,ids)
- local color=self:layerColor(sp.layer)
- local thick=sp.y1-sp.y0
- local n=Vector3.new(sp.nx,0,sp.nz)
- local hinge=CFrame.fromMatrix(self.origin+Vector3.new(sp.cx,sp.y0,sp.cz),n,Vector3.yAxis)
- local entry={at=now,tier=tier,hinge=hinge,halves={},thick=thick,color=color,
-  center=self.origin+Vector3.new(sp.cx,(sp.y0+sp.y1)*.5,sp.cz),top=self.origin+Vector3.new(sp.cx,sp.y1,sp.cz),revealed=false}
- for index,polys in ipairs({sp.a,sp.b}) do
-  local model=Instance.new('Model');model.Name='DigHalf'
-  local list={}
-  for _,poly in ipairs(polys) do
-   for _,w in ipairs(DigCube.polyWedges(poly,sp.y0,sp.y1)) do
-    local part=self:wedgePart(w,model)
-    part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false
-    part.Material=Enum.Material.SmoothPlastic;part.Color=color;part.CastShadow=true
-    table.insert(list,{part=part,rel=hinge:ToObjectSpace(part.CFrame)})
-   end
-  end
-  model.Parent=self.fx
+ local id=ids[1]
+ local cell=cube.cells[id]
+ local sp=DigCube.split(cube,id)
+ local center=self.origin+vec(sp.center)
+ local n=vec(sp.normal)
+ local up=(Vector3.yAxis-n*n.Y)
+ up=up.Magnitude>.05 and up.Unit or Vector3.zAxis
+ local frame=CFrame.fromMatrix(center,n,up)
+ local color=self:colorAt(cell.cy)
+ local cut=color:Lerp(FRESH,.45)
+ local entry={at=now,tier=tier,frame=frame,halves={},pieces={},color=color,center=center,
+  floor=self.origin.Y+cell.minY,size=cell.volume^(1/3),revealed=false}
+ for index,faces in ipairs({sp.a,sp.b}) do
+  local model,list=self:piece(faces,frame,cut)
   entry.halves[index]={model=model,parts=list,side=index==1 and -1 or 1}
  end
- -- The seam: a glowing plate along the split line, inside the opening.
- local span=0
- local t=Vector3.new(-sp.nz,0,sp.nx)
- for _,c in ipairs(sp.chords) do
-  for _,v in ipairs({{c.ax,c.az},{c.bx,c.bz}}) do span=math.max(span,math.abs((v[1]-sp.cx)*t.X+(v[2]-sp.cz)*t.Z)) end
+ for i=2,math.min(#ids,7) do
+  local other=cube.cells[ids[i]]
+  local at=self.origin+Vector3.new(other.cx,other.cy,other.cz)
+  local model,list=self:piece(other.faces,CFrame.new(at))
+  local out=(at-center);out=out.Magnitude>.1 and out.Unit or Vector3.yAxis
+  table.insert(entry.pieces,{model=model,parts=list,from=CFrame.new(at),v=out*self.random:NextNumber(10,16)+Vector3.yAxis*self.random:NextNumber(14,22),
+   axis=Vector3.new(self.random:NextNumber(-1,1),1,self.random:NextNumber(-1,1)).Unit,spin=self.random:NextNumber(3,6)})
  end
+ -- The seam: a glowing plate in the opening between the halves.
  local seam=fxPart(self.fx,'DigSeam',GLOW)
- seam.Material=Enum.Material.Neon;seam.Size=Vector3.new(.12,thick*.85,math.max(1,span*2*.9))
- seam.CFrame=hinge*CFrame.new(0,thick*.5,0);seam.Transparency=1
- local light=Instance.new('PointLight');light.Color=GLOW;light.Range=math.clamp(span*2.5,8,18);light.Brightness=0;light.Shadows=false
+ seam.Material=Enum.Material.Neon;seam.Size=Vector3.new(.15,entry.size*.8,entry.size*.8)
+ seam.CFrame=frame;seam.Transparency=1
+ local light=Instance.new('PointLight');light.Color=GLOW;light.Range=math.clamp(entry.size*2.6,10,20);light.Brightness=0;light.Shadows=false
  light.Parent=seam
  entry.seam=seam;entry.light=light
  table.insert(self.splits,entry)
  local ctx=self.ctx
- local size=math.sqrt((DigCube.chunkArea(cube,ids)))
- if ctx.audio then ctx.audio:play('crystal_split',entry.center,{rockSize=size}) end
+ if ctx.audio then ctx.audio:play('crystal_split',center,{rockSize=entry.size}) end
+ self:chips(center+Vector3.yAxis*entry.size*.3,color,10+math.min(10,(#ids-1)*3),8,entry.floor,now)
  if not self:reduced() then
   if ctx.presentation and ctx.presentation.work then
-   ctx.presentation.work:burst(entry.top,Vector3.yAxis,color,math.clamp(math.floor(size*2.4),10,26),workspace:GetServerTimeNow())
+   ctx.presentation.work:burst(center,Vector3.yAxis,color,math.clamp(math.floor(entry.size*3),14,30),workspace:GetServerTimeNow())
   end
-  if ctx.beat then ctx.beat('Split',entry.center,workspace:GetServerTimeNow(),math.clamp(size/8,.5,1.2)) end
+  if ctx.beat then ctx.beat(#ids>1 and 'HeavySplit' or 'Split',center,workspace:GetServerTimeNow(),math.clamp(entry.size/8+(#ids-1)*.1,.6,1.4)) end
  end
 end
 
-function V:reveal(entry: any)
- entry.revealed=true
+function V:reveal(e: any,now: number)
+ e.revealed=true
  local ctx=self.ctx
- if entry.tier>0 then
-  local ore=DigCube.ORES[entry.tier]
-  local color=rgb(ore.color)
-  entry.seam.Color=color:Lerp(Color3.new(1,1,1),.25);entry.light.Color=color
-  if ctx.audio then ctx.audio:play('gem_reveal',entry.top,{pitch=1+entry.tier*.08,level=1}) end
+ if e.tier>0 then
+  local color=rgb(DigCube.ORES[e.tier].color)
+  e.seam.Color=color:Lerp(Color3.new(1,1,1),.25);e.light.Color=color
+  if ctx.audio then ctx.audio:play('gem_reveal',e.center,{pitch=1+e.tier*.08,level=1}) end
+  self:chips(e.center,color,12+e.tier*2,12,e.floor,now)
   if not self:reduced() then
    if ctx.presentation and ctx.presentation.work then
-    ctx.presentation.work:burst(entry.top,Vector3.yAxis,color,22+entry.tier*4,workspace:GetServerTimeNow())
+    ctx.presentation.work:burst(e.center,Vector3.yAxis,color,24+e.tier*4,workspace:GetServerTimeNow())
    end
-   if ctx.beat then ctx.beat(entry.tier>=3 and 'HeavySplit' or 'Split',entry.center,workspace:GetServerTimeNow(),math.min(1.4,.7+entry.tier*.15)) end
+   if ctx.beat then ctx.beat(e.tier>=3 and 'HeavySplit' or 'Split',e.center,workspace:GetServerTimeNow(),math.min(1.4,.7+e.tier*.15)) end
   end
-  self:banner(entry.top,TIER_NAMES[entry.tier] or 'GEM!',color)
+  self:banner(e.center+Vector3.yAxis*e.size*.5,TIER_NAMES[e.tier] or 'GEM!',color)
  else
-  if ctx.audio then ctx.audio:play('crystal_fall_tink',entry.center,{pitch=.8,level=.7}) end
+  if ctx.audio then ctx.audio:play('crystal_fall_tink',e.center,{pitch=.8,level=.7}) end
+  self:chips(e.center,e.color,8,5,e.floor,now)
   if not self:reduced() and ctx.presentation and ctx.presentation.work then
-   ctx.presentation.work:burst(entry.top,Vector3.yAxis,entry.color,8,workspace:GetServerTimeNow())
+   ctx.presentation.work:burst(e.center,Vector3.yAxis,e.color,10,workspace:GetServerTimeNow())
   end
  end
 end
@@ -319,41 +388,53 @@ function V:stepSplits(now: number)
  for i=#self.splits,1,-1 do
   local e=self.splits[i]
   local age=now-e.at
-  if age>=pause and not e.revealed then self:reveal(e) end
-  if age>=pause+.7 then
+  if age>=pause and not e.revealed then self:reveal(e,now) end
+  if age>=pause+.75 then
    for _,h in ipairs(e.halves) do h.model:Destroy() end
+   for _,p in ipairs(e.pieces) do p.model:Destroy() end
    e.seam:Destroy()
    table.remove(self.splits,i)
   else
-   local fade,tremble=0,0
+   -- Pop: the halves jump apart and up so the split is easy to see.
    local pop=reduced and 1 or 1-(1-math.clamp(age/POP,0,1))^3
-   local open,gap,lift=.11*pop,.22*pop,math.min(.35,e.thick*.08)*pop
+   local over=reduced and 0 or math.sin(math.clamp(age/POP,0,1)*math.pi)*.25
+   local gap=(.9+over)*pop;local lift=(.9+over)*pop;local open=.24*pop
+   local fade,tremble,shrink=0,0,1
    if age<pause then
-    -- The hold: still, with the glow in the crack building toward the reveal.
     local hold=math.clamp((age-POP)/(pause-POP),0,1)
-    tremble=reduced and 0 or .025*hold
-    e.seam.Transparency=1-(.25+.6*hold)
-    e.light.Brightness=.4+2.6*hold
+    tremble=reduced and 0 or .04*hold
+    e.seam.Transparency=1-(.3+.6*hold)
+    e.light.Brightness=.5+2.5*hold
+    lift+=reduced and 0 or .25*math.sin(hold*math.pi*.5)
    else
-    local q=math.clamp((age-pause)/.6,0,1)
+    local q=math.clamp((age-pause)/.65,0,1)
     if e.tier>0 then
      local fly=1-(1-q)^2
-     open+=.8*fly;gap+=1.8*fly;lift+=.6*fly
+     gap+=3.5*fly;lift+=2.2*fly-4*q*q;open+=1.1*fly
      e.seam.Transparency=q;e.light.Brightness=4*(1-q)
     else
-     lift-=e.thick*.7*q*q
+     lift-=e.size*.9*q*q;gap+=.4*q;open+=.25*q
+     shrink=1-.35*q
      e.seam.Transparency=.6+.4*q;e.light.Brightness=1.5*(1-q)
     end
-    fade=math.clamp((q-.35)/.65,0,1)
+    fade=math.clamp((q-.4)/.6,0,1)
    end
    for _,h in ipairs(e.halves) do
     local jx=tremble>0 and math.sin(now*57+h.side)*tremble or 0
     local jz=tremble>0 and math.cos(now*49+h.side)*tremble or 0
-    local frame=e.hinge*CFrame.new(h.side*gap+jx,lift,jz)*CFrame.Angles(0,0,-h.side*open)
+    local f=e.frame*CFrame.new(h.side*gap+jx,lift,jz)*CFrame.Angles(0,0,-h.side*open)
     for _,item in ipairs(h.parts) do
-     item.part.CFrame=frame*item.rel
-     item.part.Transparency=fade
+     local rel=item.rel
+     if shrink<1 then rel=CFrame.new(rel.Position*shrink)*rel.Rotation end
+     item.part.CFrame=f*rel;item.part.Transparency=fade
     end
+   end
+   for _,p in ipairs(e.pieces) do
+    local t=age
+    local pos=p.v*t-Vector3.yAxis*(GRAVITY*.5*t*t)
+    local f=p.from*CFrame.new(pos)*CFrame.fromAxisAngle(p.axis,p.spin*t)
+    local pf=math.clamp((t-.45)/.5,0,1)
+    for _,item in ipairs(p.parts) do item.part.CFrame=f*item.rel;item.part.Transparency=pf end
    end
   end
  end
@@ -369,26 +450,18 @@ function V:stepSplits(now: number)
  end
 end
 
--- Crack overlay for one drone's chunk: thin lines along the outline that run
--- around it as the cut progresses, then the split line across it.
+-- Crack overlay for one drone's cell: cracks spread from the beam's contact
+-- point along the cell's edges, then the split line glows across it.
 function V:buildCrack(droneId: string,key: string)
  local cube=self.cube
  local ids=DigCube.parseKey(key)
  if #ids==0 then return nil end
  for _,id in ipairs(ids) do if not cube.cells[id] or cube.removed[id] then return nil end end
- local edges,cx,cz=DigCube.outline(cube,ids)
- for _,e in ipairs(edges) do
-  local a1=math.atan2(e.az-cz,e.ax-cx);local a2=math.atan2(e.bz-cz,e.bx-cx)
-  local d=(a2-a1+math.pi)%(2*math.pi)-math.pi
-  if d<0 then e.ax,e.az,e.bx,e.bz=e.bx,e.bz,e.ax,e.az end
- end
- local total=0
- for _,e in ipairs(edges) do e.start=total;total+=e.len end
- local sp=DigCube.split(cube,ids)
- local crack={key=key,ids=ids,edges=edges,total=total,chords=sp.chords,y=cube.cells[ids[1]].y1,parts={},seams={},progress=0,seen=0}
  local touched={}
  self:breakTiles(ids,touched)
  for id in pairs(touched) do self:refresh(id) end
+ local data=DigCube.cracks(cube,ids[1])
+ local crack={key=key,ids=ids,edges=data.edges,reach=math.max(.5,data.reach),seams=data.seams,parts={},seamParts={},progress=0,seen=0,dustAt=0}
  self.cracks[droneId]=crack
  return crack
 end
@@ -397,50 +470,60 @@ function V:dropCrack(droneId: string)
  local crack=self.cracks[droneId]
  if not crack then return end
  for _,p in pairs(crack.parts) do p:Destroy() end
- for _,p in pairs(crack.seams) do p:Destroy() end
+ for _,p in pairs(crack.seamParts) do p:Destroy() end
+ for _,id in ipairs(crack.ids) do self.damage[id]=nil end
  self.cracks[droneId]=nil
 end
 
-function V:line(list: {[number]:Part},index: number,ax: number,az: number,bx: number,bz: number,y: number,width: number,color: Color3,neon: boolean)
+function V:line(list: {[number]:BasePart},index: number,a: Vector3,b: Vector3,normal: Vector3,width: number,color: Color3,neon: boolean)
  local part=list[index]
- local length=math.sqrt((bx-ax)^2+(bz-az)^2)
+ local length=(b-a).Magnitude
  if length<.03 then if part then part.Transparency=1 end;return end
  if not part then part=fxPart(self.fx,'DigCrack',color);list[index]=part end
- local a=self.origin+Vector3.new(ax,y,az);local b=self.origin+Vector3.new(bx,y,bz)
- part.Size=Vector3.new(width,.06,length+width*.6)
- part.CFrame=CFrame.lookAt((a+b)*.5,b)
+ local lift=normal*.06
+ part.Size=Vector3.new(width,.08,length+width*.5)
+ part.CFrame=CFrame.lookAt((a+b)*.5+lift,b+lift,normal)
  part.Color=color;part.Material=neon and Enum.Material.Neon or Enum.Material.SmoothPlastic;part.Transparency=0
 end
 
-function V:drawCrack(crack: any)
+function V:drawCrack(crack: any,now: number)
  local p=crack.progress
- local heat=math.clamp((p-SHAKE_FROM+.06)/(1-SHAKE_FROM+.06),0,1)
+ local heat=math.clamp((p-.74)/.26,0,1)
  local color=CRACK:Lerp(HOT,heat)
- local width=.11+.09*p
- local y=crack.y+.03
- -- The outline runs around the chunk over most of the cut.
- local reach=math.clamp((p-.03)/.67,0,1)*crack.total
+ local width=.14+.12*p
+ local front=math.clamp((p-.02)/.68,0,1)*crack.reach
+ local o=self.origin
+ local tipAt
  for i,e in ipairs(crack.edges) do
-  local r=math.clamp((reach-e.start)/e.len,0,1)
+  local r=math.clamp((front-e.start)/e.len,0,1)
   if r<=0 then
    if crack.parts[i] then crack.parts[i].Transparency=1 end
   else
-   self:line(crack.parts,i,e.ax,e.az,e.ax+(e.bx-e.ax)*r,e.az+(e.bz-e.az)*r,y,width,color,heat>0)
+   local a=o+vec(e.a);local b=o+vec(e.b)
+   local tip=a:Lerp(b,r)
+   self:line(crack.parts,i,a,tip,vec(e.normal),width,color,heat>0)
+   if r<1 then tipAt=tip end
   end
  end
- -- Then the split line opens across it from the middle outward.
+ -- Dust puffs where the cracks are still running.
+ if tipAt and now>=crack.dustAt and not self:reduced() and self.ctx.presentation and self.ctx.presentation.work then
+  crack.dustAt=now+.16
+  self.ctx.presentation.work:burst(tipAt,Vector3.yAxis,self:colorAt(tipAt.Y-o.Y):Lerp(Color3.new(1,1,1),.3),3,workspace:GetServerTimeNow())
+ end
+ -- Then the split line opens across it from the middle outward, glowing.
  local g=math.clamp((p-.68)/.24,0,1)
- for i,c in ipairs(crack.chords) do
+ for i,s in ipairs(crack.seams) do
   if g<=0 then
-   if crack.seams[i] then crack.seams[i].Transparency=1 end
+   if crack.seamParts[i] then crack.seamParts[i].Transparency=1 end
   else
-   local mx,mz=(c.ax+c.bx)*.5,(c.az+c.bz)*.5
-   self:line(crack.seams,i,mx+(c.ax-mx)*g,mz+(c.az-mz)*g,mx+(c.bx-mx)*g,mz+(c.bz-mz)*g,y+.005,width*1.1,CRACK:Lerp(GLOW,.25+.75*heat),heat>0)
+   local a=o+vec(s.a);local b=o+vec(s.b);local m=(a+b)*.5
+   self:line(crack.seamParts,i,m:Lerp(a,g),m:Lerp(b,g),vec(s.normal),width*1.2,CRACK:Lerp(GLOW,.35+.65*heat),true)
   end
  end
+ for _,id in ipairs(crack.ids) do self.damage[id]=p end
 end
 
--- One beam per digging drone, from its rendered emitter to its chunk.
+-- One beam per digging drone, from its rendered emitter to its cell.
 function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  local id=source:GetAttribute('DroneId')
  if type(id)~='string' or not self.cube then return end
@@ -450,12 +533,7 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  if crack and crack.key~=key then self:dropCrack(id);crack=nil end
  if not crack and key~='' then crack=self:buildCrack(id,key) end
  local progress=source:GetAttribute('DigProgress') or 0
- if crack then
-  crack.progress=math.max(crack.progress,progress);crack.seen=now
-  if crack.progress>=SHAKE_FROM then
-   for _,cell in ipairs(crack.ids) do self.shaking[cell]=crack.progress end
-  end
- end
+ if crack then crack.progress=math.max(crack.progress,progress);crack.seen=now end
  local active=crack~=nil and source:GetAttribute('DigMining')==true and source:GetAttribute('WorkPaused')~=true
  local beam=self.beams[id]
  if not active then
@@ -464,16 +542,16 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  end
  if not beam then
   local function rod(name: string,c: Color3)
-   local p=fxPart(self.fx,name,c);p.Shape=Enum.PartType.Cylinder;p.Material=Enum.Material.Neon
+   local p=fxPart(self.fx,name,c);(p :: Part).Shape=Enum.PartType.Cylinder;p.Material=Enum.Material.Neon
    return p
   end
-  beam={core=rod('DigBeamCore',BEAM_CORE),glow=rod('DigBeamGlow',color or HOT),spot=rod('DigBeamSpot',color or HOT)}
-  beam.spot.Shape=Enum.PartType.Ball
+  beam={core=rod('DigBeamCore',BEAM_CORE),glow=rod('DigBeamGlow',color or HOT),spot=rod('DigBeamSpot',color or HOT)};
+  (beam.spot :: Part).Shape=Enum.PartType.Ball
   self.beams[id]=beam
  end
  local point=source:GetAttribute('DigPoint')
  if typeof(point)~='Vector3' then return end
- local to=point+Vector3.new(0,.15,0)
+ local to=point
  local length=(to-from).Magnitude
  if length<.1 then return end
  local mid=(from+to)*.5
@@ -493,42 +571,42 @@ end
 
 function V:stepCracks(now: number)
  for id,crack in pairs(self.cracks) do
-  if now-crack.seen>.3 then self:dropCrack(id) else self:drawCrack(crack) end
+  if now-crack.seen>.3 then self:dropCrack(id) else self:drawCrack(crack,now) end
  end
 end
 
--- Only the last moments of a cut tremble, and the chunk heats up as it goes.
-function V:stepShake(now: number)
+-- The cell darkens as damage builds; only its last moments tremble and heat up.
+function V:stepDamage(now: number)
  local reduced=self:reduced()
- for id,model in pairs(self.parts) do
-  local progress=self.shaking[id]
-  local was=model:GetAttribute('Shaking')
-  if progress then
-   local cell=self.cube.cells[id]
-   local base=self:layerColor(cell.layer)
-   local q=math.clamp((progress-SHAKE_FROM)/(1-SHAKE_FROM),0,1)
-   local amp=reduced and 0 or .03+.11*q
+ for id,model in pairs(self.models) do
+  local p=self.damage[id]
+  local was=model:GetAttribute('Damaged')
+  if p then
+   local q=math.clamp((p-SHAKE_FROM)/(1-SHAKE_FROM),0,1)
+   local amp=(reduced or q<=0) and 0 or .03+.12*q
    local offset=Vector3.new(math.sin(now*61+id)*amp,0,math.cos(now*53+id*2)*amp)
    for _,part in ipairs(model:GetChildren()) do
     local cf=self.base[part]
-    if cf and part:IsA('BasePart') then part.CFrame=cf+offset;part.Color=base:Lerp(HOT,.3*q) end
+    if cf and part:IsA('BasePart') then
+     part.CFrame=cf+offset
+     local base=self:colorAt(cf.Position.Y-self.origin.Y)
+     part.Color=base:Lerp(CRACK,.22*math.min(1,p/.8)):Lerp(HOT,.35*q)
+    end
    end
-   model:SetAttribute('Shaking',true)
+   model:SetAttribute('Damaged',true)
   elseif was then
-   local cell=self.cube.cells[id];local base=self:layerColor(cell.layer)
    for _,part in ipairs(model:GetChildren()) do
     local cf=self.base[part]
-    if cf and part:IsA('BasePart') then part.CFrame=cf;part.Color=base end
+    if cf and part:IsA('BasePart') then part.CFrame=cf;part.Color=self:colorAt(cf.Position.Y-self.origin.Y) end
    end
-   model:SetAttribute('Shaking',nil)
+   model:SetAttribute('Damaged',nil)
   end
  end
- self.shaking={}
 end
 
 function V:stepPad(now: number)
  local pad=self.pad;if not pad or not self.cube then return end
- local character=Players.LocalPlayer.Character
+ local character=Players.LocalPlayer and Players.LocalPlayer.Character
  local root=character and character:FindFirstChild('HumanoidRootPart')
  pad.Transparency=.15+.12*math.sin(now*4)
  if not root or not root:IsA('BasePart') or now<(self.launchedAt or 0)+1.2 then return end
@@ -571,8 +649,9 @@ end
 function V:update()
  local now=os.clock()
  self:stepCracks(now)
- self:stepShake(now)
+ self:stepDamage(now)
  self:stepSplits(now)
+ self:stepDebris(now)
  self:stepPad(now)
 end
 

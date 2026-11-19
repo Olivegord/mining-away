@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — dig cube: back to one cell per cut, 3D cells, gradient
+
+After the seamless/chunk version: the owner preferred **one cell per cut with bigger cells**; asked to **rework the edge cracks**, make the **break debris look better** (the split was hard to see), give the rock a **top-to-bottom color gradient** so depth reads, and **try 3D Voronoi cells** (not 2D prisms) for more freedom, such as bigger explosions.
+
 ## November 18 — the dig cube's mining look
 
 The owner loved the Dig Cube ("a stroke of genius", "excellent gameplay") and directed the look: **no wiggling until the very end of a rock's life; no visible cracks from the start**; cracks should **form along the Voronoi edges as a drone mines**, so you can see the damage about to happen. **Drone upgrades include bigger cells**, computed in real time; starting cuts a tad smaller than the prototype. Instead of pieces flying everywhere, **still cut it into halves** so the particles show, then a **large pause and something more significant than a regular rock** (the gamble).

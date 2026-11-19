@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Dig Cube geometry and digging rules, run on the real module with the Luau CLI.
+"""Dig Cube 3D Voronoi geometry and digging rules, run on the real module with the Luau CLI.
 
-Checks: every layer tiles the full square (cell areas sum to the face area),
-neighbors are symmetric, layers use different cut sizes, ore appears and gets
-rarer-but-richer with depth, a simulated crew never cuts under a remaining
-cell, digs craters (not one-cell drill shafts, not layer by layer), wedges and
-panels are well formed, and the replicated removed-set string round-trips.
-Not engine QA: looks, feel and performance need Studio.
+Checks: cell volumes fill the box exactly, shared faces are symmetric, a
+simulated crew never cuts a cell with another resting on it (nothing floats),
+digs craters (deep, not layer by layer, not a one-cell shaft), blasts grow with
+cut size, a split gives two closed halves with the cell's volume, crack lines
+exist, tiles cover the outer surface, gems are rare, encoding round-trips and
+generation is deterministic. Not engine QA: looks, feel and performance need Studio.
 """
 from pathlib import Path
 import subprocess
@@ -24,144 +24,114 @@ local function check(ok,msg) if not ok then error('FAIL '..msg,2) end end
 local t0=os.clock()
 local cube=D.build(12345)
 local buildTime=os.clock()-t0
-local W=D.WIDTH
-check(#cube.layers==D.LAYERS,'layer count')
-local sizes={}
-for L,layer in ipairs(cube.layers) do
- local area=0
- for _,id in ipairs(layer.cells) do area+=cube.cells[id].area end
- check(math.abs(area-W*W)<W*W*.002,'layer '..L..' tiles the face: '..area)
- check(#layer.cells>=40 and #layer.cells<=600,'layer '..L..' cell count '..#layer.cells)
- sizes[#sizes+1]=layer.size
-end
-local smallest,largest=math.huge,0
-for _,s in ipairs(sizes) do smallest=math.min(smallest,s);largest=math.max(largest,s) end
-check(largest/smallest>1.1,'layers use different cell sizes')
--- Chunks: cut size grows them, halves cover the chunk, outline and split line exist.
-local function polyArea(poly)
- local a=0
- for k=1,#poly do local p,q=poly[k],poly[k%#poly+1];a+=p[1]*q[2]-q[1]*p[2] end
- return math.abs(a)*.5
-end
-local chunkRnd=D.rng(7)
-local avg={}
-for _,cut in ipairs({1,2}) do
- local total=0
- for i=1,30 do
-  local seed=cube.layers[1].cells[i*5]
-  local ids=D.chunk(cube,seed,cut,nil,chunkRnd)
-  check(ids[1]~=nil and table.find(ids,seed)~=nil,'chunk holds its seed')
-  for _,id in ipairs(ids) do check(cube.cells[id].layer==1,'chunk stays in one layer') end
-  local area=D.chunkArea(cube,ids)
-  local sp=D.split(cube,ids)
-  local halves=0
-  for _,poly in ipairs(sp.a) do halves+=polyArea(poly) end
-  for _,poly in ipairs(sp.b) do halves+=polyArea(poly) end
-  check(math.abs(halves-area)<area*.01,'halves cover the chunk')
-  check(#sp.a>0 and #sp.b>0 and #sp.chords>0,'chunk splits in two along a line')
-  check(#D.outline(cube,ids)>=3,'chunk outline')
-  check(D.key(D.parseKey(D.key(ids)))==D.key(ids),'chunk key round trip')
-  total+=area
- end
- avg[cut]=total/30
-end
-check(avg[2]>avg[1]*2.5,'cut size 2 breaks much bigger chunks: '..avg[1]..' vs '..avg[2])
-check(D.chunkHp(cube,{1,2},2)<D.chunkHp(cube,{1,2},1),'bigger cutters cut faster per area')
--- Gem roll: some chunks hold a gem, most do not.
-local gems=0
-local gemRnd=D.rng(3)
-for i=1,400 do
- local ids=D.chunk(cube,cube.layers[1].cells[(i%#cube.layers[1].cells)+1],1,nil,gemRnd)
- if D.gemRoll(cube,ids,gemRnd)>0 then gems+=1 end
-end
-check(gems>10 and gems<200,'gem chance per chunk '..gems..'/400')
--- Tiles: every top cell sits under some top tile; outer walls are covered.
-local tiles,cellTiles=D.tiles(cube)
-for _,id in ipairs(cube.layers[1].cells) do check(#cellTiles[id]>0,'top cell under a tile') end
-for _,cell in ipairs(cube.cells) do if cell.boundary then check(#cellTiles[cell.id]>0,'wall cell under a tile') end end
+local W,H=D.WIDTH,D.HEIGHT
+local vol=0
 for _,cell in ipairs(cube.cells) do
- for _,n in ipairs(cell.neighbors) do
-  check(table.find(cube.cells[n].neighbors,cell.id)~=nil,'neighbor symmetry '..cell.id..'-'..n)
-  check(cube.cells[n].layer==cell.layer,'neighbor same layer')
- end
- check(#cell.poly>=3,'polygon')
+ vol+=cell.volume
+ check(#cell.faces>=4,'closed cell '..cell.id)
+ for _,n in ipairs(cell.neighbors) do check(table.find(cube.cells[n].neighbors,cell.id)~=nil,'neighbor symmetry') end
 end
--- Every cell below the top has something above it; every cell below overlaps.
-for _,cell in ipairs(cube.cells) do
- if cell.layer>1 then check(#D.above(cube,cell.id)>0,'cell '..cell.id..' has cells above') end
-end
--- Ore: present, and deeper ore is a higher tier on average.
-local shallow,deep,sc,dc,ores=0,0,0,0,0
-for _,cell in ipairs(cube.cells) do
- if cell.ore>0 then
-  ores+=1
-  if cell.layer<=3 then shallow+=cell.ore;sc+=1 elseif cell.layer>=8 then deep+=cell.ore;dc+=1 end
- end
-end
-check(ores>0.05*#cube.cells and ores<0.45*#cube.cells,'ore share '..ores..'/'..#cube.cells)
-check(sc>0 and dc>0 and deep/dc>shallow/sc+1,'deeper ore is richer')
--- Wedges and panels.
-local wedgeCount=0
-for _,id in ipairs(cube.layers[1].cells) do
- local ws=D.wedges(cube.cells[id])
- check(#ws>=2,'cell has wedges')
- for _,w in ipairs(ws) do
-  check(w.size[1]>3 and w.size[2]>0 and w.size[3]>0,'wedge size')
-  check(math.abs(w.right[2])>.999,'wedges extrude vertically')
- end
- wedgeCount+=#ws
-end
-local panels=0
-for _,cell in ipairs(cube.cells) do if cell.boundary then panels+=#D.panels(cell) end end
-check(panels>0,'boundary panels')
--- Simulated crew: four drones, focus on a point, 300 cuts.
-local rnd=D.rng(99)
-local recent={}
-local claims={}
-local focusX,focusZ=W*.3,W*.4
-local maxLayer=1
-for step=1,200 do
+check(math.abs(vol-W*W*H)<W*W*H*.001,'cells fill the box: '..vol)
+check(#cube.cells>=250 and #cube.cells<=1200,'cell count '..#cube.cells)
+local ores=0;for _,c in ipairs(cube.cells) do if c.ore>0 then ores+=1 end end
+check(ores>0.04*#cube.cells and ores<0.45*#cube.cells,'ore share '..ores)
+-- Simulated crew: focus on a point, 150 cuts, then move the focus.
+local rnd=D.rng(99);local recent={};local claims={}
+local deepest=0
+local topAtDepth=nil
+for step=1,150 do
  local taken,points={},{}
  for _,id in ipairs(claims) do taken[id]=true;table.insert(points,{cube.cells[id].cx,cube.cells[id].cz}) end
- local id=D.pick(cube,{focusX=focusX,focusZ=focusZ,taken=taken,takenPoints=points,recent=recent,now=step,random=rnd})
+ local fx,fz=step<=110 and W*.3 or W*.72,step<=110 and W*.4 or W*.7
+ local id=D.pick(cube,{focusX=fx,focusZ=fz,taken=taken,takenPoints=points,recent=recent,now=step,random=rnd})
  check(id~=nil,'a cell is available at step '..step)
- -- Its core is open: every cell above its middle is already gone.
- for _,a in ipairs(D.shoulders(cube,id)) do check(cube.removed[a],'core open above') end
+ for _,u in ipairs(cube.cells[id].up) do check(cube.removed[u],'nothing rests on a cut cell') end
  table.insert(claims,id);if #claims>4 then table.remove(claims,1) end
  D.remove(cube,id);recent[id]=step
- maxLayer=math.max(maxLayer,cube.cells[id].layer)
- if step==180 then focusX,focusZ=W*.75,W*.7 end
+ deepest=math.max(deepest,H-cube.cells[id].minY)
+ if deepest>=H*.45 and not topAtDepth then
+  topAtDepth=0
+  for _,cell in ipairs(cube.cells) do if cell.maxY>H-.01 and cube.removed[cell.id] then topAtDepth+=1 end end
+ end
 end
-local perLayer={}
-local areaLayer={}
-for id in pairs(cube.removed) do local L=cube.cells[id].layer;perLayer[L]=(perLayer[L] or 0)+1;areaLayer[L]=(areaLayer[L] or 0)+cube.cells[id].area end
--- Not layer by layer: the top layer is far from cleared while deeper layers are cut.
-check(maxLayer>=4,'crew digs down (deepest layer '..maxLayer..')')
-check((areaLayer[1] or 0)<W*W*.7,'top layer not cleared first')
--- Not a drill: each layer opened is wider than the next one (crater walls slope).
-for L=2,maxLayer do check((areaLayer[L] or 0)<=(areaLayer[L-1] or 0)+1,'crater narrows with depth at layer '..L) end
-check((perLayer[2] or 0)>=3,'pit wider than one cell')
--- Visibility: every removed cell's affected neighbors are now visible or removed.
-for id in pairs(cube.removed) do
- for _,other in ipairs(D.affected(cube,id)) do check(cube.removed[other] or D.visible(cube,other),'exposed cell visible') end
+check(deepest>=H*.45,'crew digs down: '..deepest)
+local topCells,topCut=0,0
+for _,cell in ipairs(cube.cells) do
+ if cell.maxY>H-.01 then topCells+=1;if cube.removed[cell.id] then topCut+=1 end end
 end
--- Encode/decode.
-local s=D.encode(cube)
-local set=D.decode(cube,s)
+check(topAtDepth and topAtDepth<topCells*.45,'reaches half depth before clearing the top: '..tostring(topAtDepth)..'/'..topCells)
+-- Not a drill: removed volume spreads wider near the top than at depth.
+local band={0,0,0,0}
+for id in pairs(cube.removed) do local c=cube.cells[id];local b=math.clamp(math.floor((H-c.cy)/H*4)+1,1,4);band[b]+=c.volume end
+check(band[1]>=band[3],'crater narrows with depth')
+-- Blasts.
+local r2=D.rng(5)
+local one,big=0,0
+for i=1,20 do
+ local seed=next(cube.frontier)
+ local id
+ for k in pairs(cube.frontier) do if D.diggable(cube,k) then id=k;break end end
+ check(#D.chunk(cube,id,1,nil,r2)==1,'cut size 1 is one cell')
+ local blast=D.chunk(cube,id,2,nil,r2)
+ local inBlast={};for _,m in ipairs(blast) do inBlast[m]=true end
+ for _,m in ipairs(blast) do for _,u in ipairs(cube.cells[m].up) do check(cube.removed[u] or inBlast[u],'a blast leaves nothing floating') end end
+ big+=#blast
+end
+check(big/20>=3,'cut size 2 blasts several cells: '..(big/20))
+-- Split halves keep the volume.
+for id=1,40 do
+ local sp=D.split(cube,id)
+ local function hv(faces)
+  local v=0
+  local ref={0,0,0};local n=0
+  for _,f in ipairs(faces) do for _,p in ipairs(f.verts) do ref[1]+=p[1];ref[2]+=p[2];ref[3]+=p[3];n+=1 end end
+  ref={ref[1]/n,ref[2]/n,ref[3]/n}
+  for _,f in ipairs(faces) do
+   for i=2,#f.verts-1 do
+    local a,b,c=f.verts[1],f.verts[i],f.verts[i+1]
+    local ax,ay,az=a[1]-ref[1],a[2]-ref[2],a[3]-ref[3]
+    local bx,by,bz=b[1]-ref[1],b[2]-ref[2],b[3]-ref[3]
+    local cx,cy,cz=c[1]-ref[1],c[2]-ref[2],c[3]-ref[3]
+    v+=math.abs(ax*(by*cz-bz*cy)-ay*(bx*cz-bz*cx)+az*(bx*cy-by*cx))/6
+   end
+  end
+  return v
+ end
+ local total=hv(sp.a)+hv(sp.b)
+ check(math.abs(total-cube.cells[id].volume)<cube.cells[id].volume*.01,'halves keep the volume of cell '..id)
+ local cut=0;for _,f in ipairs(sp.a) do if f.label==0 then cut+=1 end end
+ check(cut==1,'half has one cut face')
+end
+-- Cracks and wedges.
+local open
+for id in pairs(cube.frontier) do if not cube.removed[id] then open=id;break end end
+local cr=D.cracks(cube,open)
+check(#cr.edges>=3 and cr.reach>0,'crack edges')
+local wedges=0
+for _,f in ipairs(cube.cells[open].faces) do
+ for _,w in ipairs(D.faceWedges(f)) do check(w.size[2]>0 and w.size[3]>0,'wedge size');wedges+=1 end
+end
+check(wedges>0,'cell wedges')
+-- Tiles cover every outer face of every cell except the bottom.
+local tiles,faceTiles=D.tiles(cube)
+for _,cell in ipairs(cube.cells) do
+ for fi,f in ipairs(cell.faces) do if f.label<-1 then check(#faceTiles[cell.id][fi]>0,'outer face under a tile') end end
+end
+-- Gems: some cuts hold one, most do not.
+local gems=0;local g=D.rng(8)
+for i=1,400 do if D.gemRoll(cube,{(i%#cube.cells)+1},g)>0 then gems+=1 end end
+check(gems>15 and gems<180,'gem chance per cut '..gems..'/400')
+-- Encode/decode and determinism.
+local set=D.decode(cube,D.encode(cube))
 local n=0;for id in pairs(set) do n+=1;check(cube.removed[id],'decoded id removed') end
 check(n==cube.removedCount,'round trip count')
--- Deterministic.
 local again=D.build(12345)
 check(#again.cells==#cube.cells and again.cells[77].cx==cube.cells[77].cx,'deterministic')
-local counts={}
-for L=1,#cube.layers do counts[#counts+1]=string.format('%d%%',math.floor(100*(areaLayer[L] or 0)/(W*W))) end
-print(string.format('PASS chunks: %.0f sq studs at cut 1, %.0f at cut 2; %d/400 chunks hold a gem',avg[1],avg[2],gems))
-print(string.format('PASS dig cube: %d layers, %d cells (top %d cells, %d wedges), %d boundary panels, %d ore cells; build %.2fs',
- #cube.layers,#cube.cells,#cube.layers[1].cells,wedgeCount,panels,ores,buildTime))
-print('PASS crater digging, share of each layer cut, top to bottom: '..table.concat(counts,' ')..' (core always open above, narrows with depth)')
+print(string.format('PASS dig cube 3D: %d cells (avg %.0f cubic studs), volume exact, %d ore cells; build %.2fs',#cube.cells,vol/#cube.cells,ores,buildTime))
+print(string.format('PASS digging: 150 cuts reach %.0f of %d studs deep, %d/%d top cells cut on reaching half depth, nothing ever floats; blast at cut 2 = %.1f cells; %d/400 cuts hold a gem',deepest,H,topAtDepth,topCells,big/20,gems))
 """
 with tempfile.TemporaryDirectory() as folder:
-    path = Path(folder) / "dig_cube_test.luau"
+    path = Path(folder) / "dig_cube3d_test.luau"
     path.write_text(test)
     result = subprocess.run([str(luau), str(path)], capture_output=True, text=True)
     print(result.stdout, end="")

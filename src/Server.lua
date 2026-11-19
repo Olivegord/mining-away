@@ -3536,10 +3536,12 @@ function scene.digPick(d,p)
  if not seed then return nil end
  local cut=d.stats.cutSize or 1
  local ids=DigCube.chunk(cube,seed,cut,taken,random)
- local _,cx,cz=DigCube.chunkArea(cube,ids)
+ local cell=cube.cells[seed]
  local hp=DigCube.chunkHp(cube,ids,cut)
  for _,id in ipairs(ids) do dig.claimed[id]=d.id end
- return {ids=ids,key=DigCube.key(ids),cx=cx,cz=cz,hp=hp,maxHp=hp,layer=cube.cells[seed].layer}
+ local point=DigCube.contact(cube,seed)
+ return {ids=ids,key=DigCube.key(ids),cx=cell.cx,cy=cell.cy,cz=cell.cz,hp=hp,maxHp=hp,
+  contact=dig.origin+Vector3.new(point[1],point[2],point[3])}
 end
 function scene.digDrone(d,p,dt)
  local dig=scene.dig;local cube=dig.cube
@@ -3559,8 +3561,7 @@ function scene.digDrone(d,p,dt)
   d.state='Follow';d.mining=false
   move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt);return
  end
- local first=cube.cells[chunk.ids[1]]
- local top=dig.origin+Vector3.new(chunk.cx,first.y1,chunk.cz)
+ local top=chunk.contact
  local angle=(d.slot or 1)*2.4
  local goal=top+Vector3.new(math.cos(angle)*1.1,6.5,math.sin(angle)*1.1)
  d.digPoint=top
@@ -3588,25 +3589,25 @@ function scene.digBreak(chunk,d,p)
  dig.serial+=1
  table.insert(dig.breaks,string.format('%d:%d:%s',dig.serial,tier,chunk.key))
  if #dig.breaks>10 then table.remove(dig.breaks,1) end
- if tier>0 then table.insert(dig.pending,{at=now+DigCube.PAUSE,p=p,owner=d.owner,ids=chunk.ids,tier=tier,cx=chunk.cx,cz=chunk.cz}) end
+ if tier>0 then table.insert(dig.pending,{at=now+DigCube.PAUSE,p=p,owner=d.owner,ids=chunk.ids,tier=tier}) end
 end
-function scene.digGem(p,owner,ids,tier,cx,cz)
+function scene.digGem(p,owner,ids,tier)
  if not healthy(p) then return end
  local ore=DigCube.ORES[tier]
  local material=Workshop.CRYSTAL_BY_MATERIAL[ore.material]
  if not material then return end
  local dig=scene.dig;local cube=dig.cube;local profile=data(p)
  local volume=0
- for _,id in ipairs(ids) do local c=cube.cells[id];volume+=c.area*(c.y1-c.y0) end
- local size=math.clamp(volume/220,.6,3)
+ for _,id in ipairs(ids) do volume+=cube.cells[id].volume end
+ local size=math.clamp(volume/450,.6,3)
  local value=math.clamp(math.floor(8*material.value*size+.5),1,1000000)
  local cargo=Workshop.saleCargo(ore.material,value,false,100,0,0,'Original')
  local first=cube.cells[ids[1]]
- local position=dig.origin+Vector3.new(cx,first.y0+.8,cz)
+ local position=dig.origin+Vector3.new(first.cx,first.cy,first.cz)
  local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
  scene.spawnOrePickup(dig.template,{owner=owner,runId=profile.run.id,nodeId='dig:'..ids[1],
   material=cargo,tierMaterial=ore.material,value=Workshop.saleItem(cargo).cash,
-  stone=false,rareGem=true,units=1,raw=true,oreArc=true,floor=dig.origin.Y+first.y0+.22,reachBonus=0,modifiers=0},
+  stone=false,rareGem=true,units=1,raw=true,oreArc=true,floor=dig.origin.Y+first.minY+.22,reachBonus=0,modifiers=0},
   position,Vector3.new(vx*.3,vy*.75,vz*.3),Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]))
  p.dirty=true;p.publishDirty=true
 end
@@ -3625,7 +3626,7 @@ function scene.digStep()
   local gem=dig.pending[i]
   if now>=gem.at then
    table.remove(dig.pending,i)
-   if profiles[gem.owner]==gem.p then scene.digGem(gem.p,gem.owner,gem.ids,gem.tier,gem.cx,gem.cz) end
+   if profiles[gem.owner]==gem.p then scene.digGem(gem.p,gem.owner,gem.ids,gem.tier) end
   end
  end
  if dig.resetAt then
