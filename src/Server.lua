@@ -3472,15 +3472,16 @@ do
  holder.Name='DigCube';holder.Parent=root
  local template=Instance.new('Part');template.Name='DigGem';template.Size=Vector3.new(1,1,1)
  scene.dig={origin=origin,holder=holder,template=template,generation=0,claims={},recent={},hp={},random=Random.new(),
-  dirty=false,publishAt=0,resetAt=nil,checkAt=0}
+  dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},breaks={},pending={},serial=0}
 end
 function scene.digReset()
  local dig=scene.dig
  dig.generation+=1
  local seedValue=dig.random:NextInteger(1,2000000000)
- dig.cube=DigCube.build(seedValue);dig.hp={};dig.recent={};dig.claims={};dig.resetAt=nil;dig.dirty=false
- for _,d in pairs(drones) do d.digCell=nil;d.digWarm=nil end
+ dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.breaks={};dig.resetAt=nil;dig.dirty=false
+ for _,d in pairs(drones) do d.digChunk=nil;d.digCell=nil;d.digWarm=nil end
  local holder=dig.holder
+ holder:SetAttribute('Breaks','')
  holder:SetAttribute('Origin',dig.origin);holder:SetAttribute('Width',DigCube.WIDTH);holder:SetAttribute('Height',dig.cube.height)
  holder:SetAttribute('Removed','');holder:SetAttribute('Seed',seedValue);holder:SetAttribute('Generation',dig.generation)
  for _,p in pairs(profiles) do
@@ -3502,47 +3503,64 @@ function scene.digActive(p)
 end
 function scene.digRelease(p)
  for _,d in ipairs(p.drones) do
-  scene.dig.claims[d.id]=nil;d.digCell=nil;d.digWarm=nil;d.digProgress=nil
+  scene.digDrop(d)
   if d.state=='Mine' or d.state=='Warmup' or d.state=='Travel' then d.state='Follow';d.mining=false end
  end
 end
+-- Forget a drone's chunk claim.
+function scene.digDrop(d)
+ local dig=scene.dig;local chunk=d.digChunk
+ if chunk then for _,id in ipairs(chunk.ids) do if dig.claimed[id]==d.id then dig.claimed[id]=nil end end end
+ d.digChunk=nil;d.digCell=nil;d.digWarm=nil;d.digProgress=nil
+end
+-- Pick a seed cell, then grow the chunk to this drone's cut size right now:
+-- cut-size upgrades change the very next chunk the drone takes.
 function scene.digPick(d,p)
  local dig=scene.dig;local cube=dig.cube
  local taken,points={},{}
- for droneId,id in pairs(dig.claims) do
+ for id,droneId in pairs(dig.claimed) do
   local worker=drones[droneId]
-  if droneId~=d.id and worker and worker.hp>0 and worker.digCell==id then
-   taken[id]=true;local c=cube.cells[id];table.insert(points,{c.cx,c.cz})
-  else if not worker or worker.digCell~=id then dig.claims[droneId]=nil end end
+  if worker and worker.hp>0 and worker.digChunk then
+   taken[id]=true
+   if worker.digChunk.ids[1]==id then table.insert(points,{worker.digChunk.cx,worker.digChunk.cz}) end
+  else dig.claimed[id]=nil end
  end
  local hr=characterRoot(p)
  local point=p.digFocus and now<(p.digFocusUntil or 0) and p.digFocus or hr and hr.Position
- local opts={taken=taken,takenPoints=points,recent=dig.recent,now=now,random=function() return dig.random:NextNumber() end}
+ local random=function() return dig.random:NextNumber() end
+ local opts={taken=taken,takenPoints=points,recent=dig.recent,now=now,random=random}
  if point then
   opts.focusX=math.clamp(point.X-dig.origin.X,0,DigCube.WIDTH);opts.focusZ=math.clamp(point.Z-dig.origin.Z,0,DigCube.WIDTH)
  end
- return DigCube.pick(cube,opts)
+ local seed=DigCube.pick(cube,opts)
+ if not seed then return nil end
+ local cut=d.stats.cutSize or 1
+ local ids=DigCube.chunk(cube,seed,cut,taken,random)
+ local _,cx,cz=DigCube.chunkArea(cube,ids)
+ local hp=DigCube.chunkHp(cube,ids,cut)
+ for _,id in ipairs(ids) do dig.claimed[id]=d.id end
+ return {ids=ids,key=DigCube.key(ids),cx=cx,cz=cz,hp=hp,maxHp=hp,layer=cube.cells[seed].layer}
 end
 function scene.digDrone(d,p,dt)
  local dig=scene.dig;local cube=dig.cube
  local hr=characterRoot(p)
  if not DroneRoles.isWorker(d.role) or d.hp<=0 then
-  dig.claims[d.id]=nil;d.digCell=nil;d.state='Follow';d.mining=false
+  scene.digDrop(d);d.state='Follow';d.mining=false
   move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt);return
  end
- local id=d.digCell
- if id and (cube.removed[id] or dig.claims[d.id]~=id) then id=nil;d.digCell=nil end
- if not id and now>=(d.digPickAt or 0) then
+ local chunk=d.digChunk
+ if chunk and (cube.removed[chunk.ids[1]] or dig.claimed[chunk.ids[1]]~=d.id) then scene.digDrop(d);chunk=nil end
+ if not chunk and now>=(d.digPickAt or 0) then
   d.digPickAt=now+.2;d.digWarm=nil;d.digProgress=0
-  id=scene.digPick(d,p)
-  d.digCell=id;dig.claims[d.id]=id
+  chunk=scene.digPick(d,p)
+  d.digChunk=chunk;d.digCell=chunk and chunk.ids[1] or nil
  end
- if not id then
+ if not chunk then
   d.state='Follow';d.mining=false
   move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt);return
  end
- local cell=cube.cells[id]
- local top=dig.origin+Vector3.new(cell.cx,cell.y1-(cell.layer==1 and cell.sink or cell.sink*.3),cell.cz)
+ local first=cube.cells[chunk.ids[1]]
+ local top=dig.origin+Vector3.new(chunk.cx,first.y1,chunk.cz)
  local angle=(d.slot or 1)*2.4
  local goal=top+Vector3.new(math.cos(angle)*1.1,6.5,math.sin(angle)*1.1)
  d.digPoint=top
@@ -3552,40 +3570,43 @@ function scene.digDrone(d,p,dt)
  if now-d.digWarm<.35 then d.state='Warmup';d.mining=false;return end
  if not d.mining then d.beamSince=now end
  d.state='Mine';d.mining=true;d.lastBeamAt=now
- local hp=(dig.hp[id] or cell.hp)-d.stats.miningDPS*dt
- dig.hp[id]=hp
- d.digProgress=math.clamp(1-hp/cell.hp,0,1)
- if hp<=0 then scene.digBreak(id,d,p) end
+ chunk.hp-=d.stats.miningDPS*dt
+ d.digProgress=math.clamp(1-chunk.hp/chunk.maxHp,0,1)
+ if chunk.hp<=0 then scene.digBreak(chunk,d,p) end
 end
-function scene.digBreak(id,d,p)
+function scene.digBreak(chunk,d,p)
  local dig=scene.dig;local cube=dig.cube
- if not DigCube.remove(cube,id) then return end
- dig.recent[id]=now;dig.dirty=true
- for droneId,claim in pairs(dig.claims) do
-  if claim==id then
-   dig.claims[droneId]=nil
-   local worker=drones[droneId]
-   if worker then worker.digCell=nil;worker.digWarm=nil;worker.digProgress=0;worker.digPickAt=0 end
-  end
+ for _,id in ipairs(chunk.ids) do
+  if DigCube.remove(cube,id) then dig.recent[id]=now end
+  dig.claimed[id]=nil
  end
+ dig.dirty=true
+ d.digChunk=nil;d.digCell=nil;d.digWarm=nil;d.digProgress=0;d.digPickAt=0
  scene.crewBreak(d.owner)
- local cell=cube.cells[id]
- if cell.ore>0 then scene.digGem(p,d,cell) end
+ -- The gamble: the chunk splits, holds for DigCube.PAUSE, then shows a gem or nothing.
+ local tier=DigCube.gemRoll(cube,chunk.ids,function() return dig.random:NextNumber() end)
+ dig.serial+=1
+ table.insert(dig.breaks,string.format('%d:%d:%s',dig.serial,tier,chunk.key))
+ if #dig.breaks>10 then table.remove(dig.breaks,1) end
+ if tier>0 then table.insert(dig.pending,{at=now+DigCube.PAUSE,p=p,owner=d.owner,ids=chunk.ids,tier=tier,cx=chunk.cx,cz=chunk.cz}) end
 end
-function scene.digGem(p,d,cell)
+function scene.digGem(p,owner,ids,tier,cx,cz)
  if not healthy(p) then return end
- local ore=DigCube.ORES[cell.ore]
- local tier=Workshop.CRYSTAL_BY_MATERIAL[ore.material]
- if not tier then return end
- local dig=scene.dig;local profile=data(p)
- local size=math.clamp(cell.area*(cell.y1-cell.y0)/220,.6,2.2)
- local value=math.clamp(math.floor(8*tier.value*size+.5),1,1000000)
+ local ore=DigCube.ORES[tier]
+ local material=Workshop.CRYSTAL_BY_MATERIAL[ore.material]
+ if not material then return end
+ local dig=scene.dig;local cube=dig.cube;local profile=data(p)
+ local volume=0
+ for _,id in ipairs(ids) do local c=cube.cells[id];volume+=c.area*(c.y1-c.y0) end
+ local size=math.clamp(volume/220,.6,3)
+ local value=math.clamp(math.floor(8*material.value*size+.5),1,1000000)
  local cargo=Workshop.saleCargo(ore.material,value,false,100,0,0,'Original')
- local position=dig.origin+Vector3.new(cell.cx,cell.y0+.8,cell.cz)
+ local first=cube.cells[ids[1]]
+ local position=dig.origin+Vector3.new(cx,first.y0+.8,cz)
  local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
- scene.spawnOrePickup(dig.template,{owner=d.owner,runId=profile.run.id,nodeId='dig:'..cell.id,
+ scene.spawnOrePickup(dig.template,{owner=owner,runId=profile.run.id,nodeId='dig:'..ids[1],
   material=cargo,tierMaterial=ore.material,value=Workshop.saleItem(cargo).cash,
-  stone=false,rareGem=true,units=1,raw=true,oreArc=true,floor=dig.origin.Y+cell.y0+.22,reachBonus=0,modifiers=0},
+  stone=false,rareGem=true,units=1,raw=true,oreArc=true,floor=dig.origin.Y+first.y0+.22,reachBonus=0,modifiers=0},
   position,Vector3.new(vx*.3,vy*.75,vz*.3),Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]))
  p.dirty=true;p.publishDirty=true
 end
@@ -3596,7 +3617,16 @@ function scene.digStep()
  if not dig.cube then scene.digReset();return end
  if dig.dirty and now>=dig.publishAt then
   dig.dirty=false;dig.publishAt=now+.1
+  -- Breaks first: clients split the chunk before it vanishes from the removed set.
+  dig.holder:SetAttribute('Breaks',table.concat(dig.breaks,';'))
   dig.holder:SetAttribute('Removed',DigCube.encode(dig.cube))
+ end
+ for i=#dig.pending,1,-1 do
+  local gem=dig.pending[i]
+  if now>=gem.at then
+   table.remove(dig.pending,i)
+   if profiles[gem.owner]==gem.p then scene.digGem(gem.p,gem.owner,gem.ids,gem.tier,gem.cx,gem.cz) end
+  end
  end
  if dig.resetAt then
   if now>=dig.resetAt then scene.digReset() end
@@ -3903,7 +3933,7 @@ local function snapshotDrone(d)
   PressFinish=d.pressJob and d.pressJob.finishAt or 0,
   BatteryPowered=scene.chargingStation~=nil and d.stats.batteryCapacity>0,
   HideBattery=scene.insideSquareField(d.pos) or profiles[d.owner].digging==true,
-  DigCell=d.digCell or 0,DigPoint=d.digPoint or d.pos,DigProgress=d.digProgress or 0,
+  DigCell=d.digCell or 0,DigChunk=d.digChunk and d.digChunk.key or '',DigPoint=d.digPoint or d.pos,DigProgress=d.digProgress or 0,
   DigMining=d.digCell~=nil and d.mining==true and not profiles[d.owner].busy,
   InMiningPlot=profiles[d.owner].miningSquare~=nil and Mining.selectorContains(profiles[d.owner].miningSquare.center,profiles[d.owner].miningSquare.half,d.pos),
   BatteryWorking=(d.role=='Compactor' and d.state=='Press') or scene.committedWork(d) or combatId~='',
@@ -5023,7 +5053,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local point=type(payload)=='table' and payload.point
   if typeof(point)=='Vector3' and scene.digInside(point,2) then
    p.digFocus=point;p.digFocusUntil=now+15
-   for _,d in ipairs(p.drones) do scene.dig.claims[d.id]=nil;d.digCell=nil;d.digWarm=nil;d.digPickAt=0 end
+   for _,d in ipairs(p.drones) do scene.digDrop(d);d.digPickAt=0 end
   end
  elseif action=='OpenResource' then
   scene.openResource(p,payload)

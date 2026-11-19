@@ -5,16 +5,20 @@
 -- Pure and deterministic from a seed: the server and every client build the
 -- same cube, and only the set of removed cells is replicated.
 --
--- Digging (server): a cell can be cut only when the cells above it within a
--- slope radius are gone, so pits open as stepped craters instead of drill
--- shafts. Drones pick among those cells at random, weighted toward depth,
--- toward the player, away from each other and toward recent cuts. That mix
--- gives several organic pits that deepen and merge, never layer-by-layer.
+-- The cells are small and seamless (no visible cracks). A drone cuts a chunk:
+-- a seed cell plus the nearest open neighbors up to its cut size, so drone
+-- upgrades (stats.cutSize) break bigger chunks, computed when the cut starts.
+-- Ore is hidden inside: every chunk rolls for a gem when it splits open.
+--
+-- Digging (server): a cell can be cut only when the cells above its core are
+-- gone, so pits open as stepped craters instead of drill shafts. Drones pick
+-- seeds at random, weighted toward depth, toward the player, away from each
+-- other and toward recent cuts: organic pits that deepen and merge.
 local D={}
 D.WIDTH=88
 D.LAYERS=10
-D.GAP=.14 -- visible crack between cells
-D.CORE=.55 -- share of a cell (about its centroid) that must be open above before it can be cut
+D.GAP=0 -- seamless: no crack lines until a drone cuts
+D.CORE=.7 -- share of a cell (about its centroid) that must be open above before it can be cut
 D.DEPTH_PULL=2.4 -- per-layer preference for going deeper
 D.FOCUS_FALLOFF=15 -- studs; drones favor cells near the player or a tapped spot
 D.RUN=3.6 -- studs the crater widens per layer (about 45 degree walls)
@@ -23,8 +27,13 @@ D.APEX_RADIUS=9 -- studs around the focus that set the current floor
 D.CROWD_RADIUS=7
 D.RECENT_TIME=20
 D.CENTER={140,4,20} -- bottom center in world space (on the flat plane east of the hub)
-D.HP_SCALE=.14
-D.ORE_HP=2.2
+D.HP_SCALE=.2
+D.BASE_CUT_AREA=48 -- square studs of top face in a chunk at cutSize 1 (about 8 studs across)
+D.MAX_CHUNK=40
+D.PAUSE=1.1 -- seconds between the split and the gem-or-nothing reveal
+D.TILE=11 -- intact stretches render as one block per tile
+D.GEM_CHANCE_ORE=.5 -- per hidden ore cell in a chunk
+D.GEM_CHANCE_STONE=.03 -- per plain cell: a lucky find anywhere
 -- Ore tiers follow the existing crystal tiers (Workshop.CRYSTAL_TIERS).
 D.ORES={
  {material='Amber',name='Amber',color={255,153,20}},
@@ -213,8 +222,8 @@ function D.build(seed: number)
   local y1=top;local y0=top-thick[L];top=y0
   -- Each layer gets its own cut size: big slabs, medium blocks or small chips,
   -- with a regional swing so one layer mixes large and small cells.
-  local size=L==1 and R(7.2,9) or R(4.8,9.6)
-  local swing=R(.18,.42)
+  local size=L==1 and R(3.1,3.5) or R(2.9,4)
+  local swing=R(.12,.3)
   local rmin,rmax=size*(1-swing),size*(1+swing)
   local function radius(x: number,z: number)
    local n=D.noise3(x/24,L*3.1,z/24,sizeSeed)
@@ -234,7 +243,7 @@ function D.build(seed: number)
      minX=math.min(minX,v[1]);maxX=math.max(maxX,v[1]);minZ=math.min(minZ,v[2]);maxZ=math.max(maxZ,v[2])
     end
     local cell={id=0,layer=L,seedIndex=i,poly=c.poly,labels=c.labels,area=area,cx=cx,cz=cz,radius=radiusMax,
-     minX=minX,maxX=maxX,minZ=minZ,maxZ=maxZ,y0=y0,y1=y1,neighbors={},boundary=false,ore=0,hp=0,shade=R(-.05,.05),sink=R(0,.22)}
+     minX=minX,maxX=maxX,minZ=minZ,maxZ=maxZ,y0=y0,y1=y1,neighbors={},across={},boundary=false,ore=0,hp=0,shade=0,sink=0}
     table.insert(cube.cells,cell);cell.id=#cube.cells
     table.insert(layer.cells,cell.id)
    end
@@ -244,7 +253,8 @@ function D.build(seed: number)
   for _,id in ipairs(layer.cells) do bySeed[cube.cells[id].seedIndex]=id end
   for _,id in ipairs(layer.cells) do
    local cell=cube.cells[id]
-   for _,lab in ipairs(cell.labels) do
+   for k,lab in ipairs(cell.labels) do
+    cell.across[k]=lab>0 and bySeed[lab] or 0
     if lab<0 then cell.boundary=true
     elseif bySeed[lab] then table.insert(cell.neighbors,bySeed[lab]) end
    end
@@ -262,7 +272,7 @@ function D.build(seed: number)
     cell.ore=math.clamp(math.floor(1+t*4.2+R(-.7,.7)),1,#D.ORES)
    end
    local hardness=1+.15*(L-1)
-   cell.hp=math.max(12,cell.area*(y1-y0)*D.HP_SCALE*hardness*(cell.ore>0 and D.ORE_HP or 1))
+   cell.hp=math.max(2,cell.area*(y1-y0)*D.HP_SCALE*hardness)
   end
  end
  cube.removed={} :: {[number]:boolean}
@@ -408,7 +418,6 @@ function D.pick(cube: any,opts: any): number?
     if not fresh then for _,other in ipairs(D.above(cube,id)) do local t=opts.recent[other];if t and opts.now-t<D.RECENT_TIME then fresh=true;break end end end
     if fresh then w*=2 end
    end
-   if cell.ore>0 then w*=1.3 end
    w*=.4+random()
    total+=w;table.insert(choices,id);table.insert(weights,w)
   end
@@ -417,6 +426,169 @@ function D.pick(cube: any,opts: any): number?
  local roll=random()*total
  for i,id in ipairs(choices) do roll-=weights[i];if roll<=0 then return id end end
  return choices[#choices]
+end
+
+-- A chunk: the seed plus the closest cuttable same-layer neighbors until the
+-- top face reaches the drone's cut area. cutSize scales the chunk's width.
+function D.chunk(cube: any,seed: number,cutSize: number?,taken: {[number]:any}?,random: (() -> number)?): {number}
+ local cut=math.max(.5,cutSize or 1)
+ local roll=random and random() or .5
+ local target=D.BASE_CUT_AREA*cut*cut*(.75+.5*roll)
+ local s=cube.cells[seed]
+ local ids={seed};local inside={[seed]=true};local area=s.area
+ local open={}
+ local function offer(id: number)
+  for _,n in ipairs(cube.cells[id].neighbors) do
+   if not inside[n] and not open[n] and not cube.removed[n] and not (taken and taken[n]) and D.diggable(cube,n) then open[n]=true end
+  end
+ end
+ offer(seed)
+ while #ids<D.MAX_CHUNK do
+  local best,bestD=nil,math.huge
+  for id in pairs(open) do
+   local c=cube.cells[id];local d=(c.cx-s.cx)^2+(c.cz-s.cz)^2
+   if d<bestD then best,bestD=id,d end
+  end
+  if not best then break end
+  local c=cube.cells[best]
+  -- Stop when adding this cell overshoots the target by more than it helps.
+  if area+c.area*.5>target then break end
+  open[best]=nil;inside[best]=true;table.insert(ids,best);area+=c.area
+  offer(best)
+ end
+ table.sort(ids)
+ return ids
+end
+function D.chunkHp(cube: any,ids: {number},cutSize: number?): number
+ local hp=0
+ for _,id in ipairs(ids) do hp+=cube.cells[id].hp end
+ -- Bigger cuts take longer but move more rock per second than small ones.
+ return hp/math.sqrt(math.max(.5,cutSize or 1))
+end
+function D.chunkArea(cube: any,ids: {number}): (number,number,number)
+ local area,cx,cz=0,0,0
+ for _,id in ipairs(ids) do local c=cube.cells[id];area+=c.area;cx+=c.cx*c.area;cz+=c.cz*c.area end
+ if area<=0 then return 0,0,0 end
+ return area,cx/area,cz/area
+end
+-- Gem roll for a chunk. Returns the ore tier (0 = nothing inside).
+function D.gemRoll(cube: any,ids: {number},random: () -> number): number
+ local miss=1;local tier=0;local deepest=1
+ for _,id in ipairs(ids) do
+  local c=cube.cells[id]
+  deepest=math.max(deepest,c.layer)
+  if c.ore>0 then miss*=1-D.GEM_CHANCE_ORE;tier=math.max(tier,c.ore) else miss*=1-D.GEM_CHANCE_STONE end
+ end
+ if random()>=1-miss then return 0 end
+ if tier>0 then return tier end
+ local t=(deepest-1)/math.max(1,D.LAYERS-1)
+ return math.clamp(math.floor(1+t*4.2+(random()*1.4-.7)),1,#D.ORES)
+end
+function D.key(ids: {number}): string
+ local out=table.create(#ids)
+ for i,id in ipairs(ids) do out[i]=tostring(id) end
+ return table.concat(out,'.')
+end
+function D.parseKey(s: string): {number}
+ local ids={}
+ for part in string.gmatch(s,'%d+') do table.insert(ids,tonumber(part) :: number) end
+ return ids
+end
+-- Outer edges of a chunk (between a member and a non-member or the cube side),
+-- ordered by angle around the chunk center so a crack can run around it.
+function D.outline(cube: any,ids: {number})
+ local member={}
+ for _,id in ipairs(ids) do member[id]=true end
+ local _,cx,cz=D.chunkArea(cube,ids)
+ local edges={}
+ for _,id in ipairs(ids) do
+  local cell=cube.cells[id];local n=#cell.poly
+  for k=1,n do
+   if not member[cell.across[k] or 0] then
+    local a,b=cell.poly[k],cell.poly[k%n+1]
+    local len=math.sqrt((b[1]-a[1])^2+(b[2]-a[2])^2)
+    if len>.05 then
+     local mx,mz=(a[1]+b[1])*.5,(a[2]+b[2])*.5
+     table.insert(edges,{ax=a[1],az=a[2],bx=b[1],bz=b[2],len=len,angle=math.atan2(mz-cz,mx-cx)})
+    end
+   end
+  end
+ end
+ table.sort(edges,function(p,q) return p.angle<q.angle end)
+ return edges,cx,cz
+end
+-- Keep the part of a convex polygon where (v-c).n <= 0.
+local function halfPlane(poly: {{number}},cx: number,cz: number,nx: number,nz: number): {{number}}
+ local out={}
+ local n=#poly
+ for k=1,n do
+  local a,b=poly[k],poly[k%n+1]
+  local da=(a[1]-cx)*nx+(a[2]-cz)*nz;local db=(b[1]-cx)*nx+(b[2]-cz)*nz
+  if da<=0 then table.insert(out,a) end
+  if (da<0 and db>0) or (da>0 and db<0) then
+   local t=da/(da-db)
+   table.insert(out,{a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t})
+  end
+ end
+ return out
+end
+-- Two halves of a chunk along a vertical plane through its center. The angle
+-- comes from the chunk itself, so the crack preview and the split agree.
+function D.split(cube: any,ids: {number})
+ local _,cx,cz=D.chunkArea(cube,ids)
+ local h=0
+ for _,id in ipairs(ids) do h=(h*31+id)%1000003 end
+ local angle=(h*.6180339887)%1*math.pi
+ local nx,nz=math.cos(angle),math.sin(angle)
+ local first=cube.cells[ids[1]]
+ local result={cx=cx,cz=cz,nx=nx,nz=nz,y0=first.y0,y1=first.y1,layer=first.layer,a={},b={},chords={}}
+ for _,id in ipairs(ids) do
+  local poly=cube.cells[id].poly
+  local A=halfPlane(poly,cx,cz,nx,nz);local B=halfPlane(poly,cx,cz,-nx,-nz)
+  if #A>=3 then table.insert(result.a,A) end
+  if #B>=3 then table.insert(result.b,B) end
+  if #A>=3 and #B>=3 then
+   local hits={}
+   local n=#poly
+   for k=1,n do
+    local a,b=poly[k],poly[k%n+1]
+    local da=(a[1]-cx)*nx+(a[2]-cz)*nz;local db=(b[1]-cx)*nx+(b[2]-cz)*nz
+    if (da<0 and db>0) or (da>0 and db<0) then
+     local t=da/(da-db);table.insert(hits,{a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t})
+    end
+   end
+   if #hits==2 then table.insert(result.chords,{ax=hits[1][1],az=hits[1][2],bx=hits[2][1],bz=hits[2][2]}) end
+  end
+ end
+ return result
+end
+-- Intact stretches of the top face and the outer walls render as one block
+-- per tile; a tile breaks into its cells once any cell over it is cut or targeted.
+function D.tiles(cube: any)
+ local W=cube.width;local T=D.TILE
+ local n=math.ceil(W/T)
+ local tiles,cellTiles={},{}
+ for L,layer in ipairs(cube.layers) do
+  for gx=0,n-1 do
+   for gz=0,n-1 do
+    if L==1 or gx==0 or gz==0 or gx==n-1 or gz==n-1 then
+     local key=L*10000+gx*100+gz
+     tiles[key]={key=key,layer=L,x0=gx*T,x1=math.min(W,(gx+1)*T),z0=gz*T,z1=math.min(W,(gz+1)*T),y0=layer.y0,y1=layer.y1,cells={}}
+    end
+   end
+  end
+  for _,id in ipairs(layer.cells) do
+   local c=cube.cells[id];local list={}
+   for gx=math.max(0,math.floor(c.minX/T)),math.min(n-1,math.floor((c.maxX-1e-6)/T)) do
+    for gz=math.max(0,math.floor(c.minZ/T)),math.min(n-1,math.floor((c.maxZ-1e-6)/T)) do
+     local tile=tiles[L*10000+gx*100+gz]
+     if tile then table.insert(tile.cells,id);table.insert(list,tile.key) end
+    end
+   end
+   cellTiles[id]=list
+  end
+ end
+ return tiles,cellTiles
 end
 
 -- Removed set as a compact string: 6 cells per character.
@@ -473,9 +645,9 @@ local function triangle(a: {number},b: {number},c: {number},thick: number,out: {
 end
 -- Wedges for one cell in cube-local coordinates (x,z in [0,W], y up from the bottom).
 function D.wedges(cell: any)
- local poly=D.shrunk(cell)
- local y1=cell.y1-(cell.layer==1 and cell.sink or cell.sink*.3)
- local y0=cell.y0
+ return D.polyWedges(D.shrunk(cell),cell.y0,cell.y1)
+end
+function D.polyWedges(poly: {{number}},y0: number,y1: number)
  local mid=(y0+y1)*.5;local thick=y1-y0
  local out={}
  local p1={poly[1][1],mid,poly[1][2]}

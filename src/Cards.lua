@@ -2,7 +2,7 @@ local Workshop=require('./Workshop')
 local Shops=require('./Shops')
 local DroneRoles=require('./DroneRoles')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=18,BASE_CAPACITY=10,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=19,BASE_CAPACITY=10,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -60,6 +60,8 @@ C.CATALOG={
  card('T02','Battle Formation','Tradeoff',{combat=.60,mining=-.20},'+60% fleet combat shot damage; −20% mining output'),
  card('T03','Heavy Cargo','Tradeoff',{capacity=.60,speed=-.15},'+60% player backpack space; −15% drone speed'),
  card('T04','Hot Emitters','Tradeoff',{startup=1,health=-.20},'Double fleet startup rate alone; −20% maximum hull'),
+ card('F12','Wide Cutters','Fleet',{cut=.5},'+50% Dig Cube cut width: every drone breaks off bigger chunks, with bigger gems'),
+ card('D21','Quarry Saw','Individual',{cut=1,mining=-.15},'Double this drone’s Dig Cube cut width: huge chunks and gems; −15% mining output'),
 }
 C.FALLBACK={
  card('R01','Mining Reserve','Fleet',{mining=.10},'+10% mining output; repeatable until cap'),
@@ -73,7 +75,7 @@ local function support(d)
  return not DroneRoles.isWorker(d.role or d.type)
 end
 local function courier(d) return (d.role or d.type)=='Courier' end
-local workEffects={mining=true,startup=true,yield=true,fork=true,geode=true,forkRange=true,plotAuto=true,aftershock=true,reclaim=true,earlyDrop=true,liveWire=true}
+local workEffects={cut=true,mining=true,startup=true,yield=true,fork=true,geode=true,forkRange=true,plotAuto=true,aftershock=true,reclaim=true,earlyDrop=true,liveWire=true}
 local combatOnly={combat=true,rate=true,crit=true,splash=true,chain=true,range=true,finisher=true,salvage=true}
 local function sums(p,d,extra)
  local s={}
@@ -132,7 +134,7 @@ function C.stats(p,d,extra)
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
   aftershock=cutter and (s.aftershock or 0) or 0,reclaim=s.reclaim or 0,earlyDrop=s.earlyDrop or 0,liveWire=cutter and (s.liveWire or 0) or 0,
-  deepCutMultiplier=1+(cutter and (s.deepCut or 0) or 0),
+  deepCutMultiplier=1+(cutter and (s.deepCut or 0) or 0),cutSize=1+clamp(s.cut or 0,0,2),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
   batteryCapacity=batteryPowered and (Workshop.BATTERY+(s.battery or 0)) or 0,
   courierCapacity=courier(d) and math.floor(8*clamp(1+(s.courierCapacity or 0),1,4)) or 0,
@@ -170,7 +172,7 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={doubleBeam='Laser count bonus',twinThrusters='Thruster kit',oreDuplicator='Duplicator kit',aftershock='Crack echo damage',reclaim='Battery per break',earlyDrop='Extra early ore',batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
+local statLabels={cutSize='Dig cut width',doubleBeam='Laser count bonus',twinThrusters='Thruster kit',oreDuplicator='Duplicator kit',aftershock='Crack echo damage',reclaim='Battery per break',earlyDrop='Extra early ore',batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
 statLabels.liveWire='High-battery damage bonus'
 local function vector(p,c)
  local out={fieldCharge=Workshop.effect(p,'fieldCharge',c),capacity=C.capacity(p,c),magnetBonus=C.magnetBonus(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
@@ -228,12 +230,12 @@ local function preview(p,c)
  end end
  if target then
   local before,after=C.stats(p,target),C.stats(p,target,c)
-  for _,k in ipairs({'aftershock','reclaim','earlyDrop','liveWire','batteryCapacity','miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','deepCutMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
+  for _,k in ipairs({'cutSize','aftershock','reclaim','earlyDrop','liveWire','batteryCapacity','miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','deepCutMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
    if math.abs(before[k]-after[k])>1e-8 then
     local scale=k=='maxStep60' and 60 or 1
     local unit=(k=='warmup' or k=='shotInterval') and 's' or (k=='maxStep60' and 'studs/s' or ((k=='range' or k=='splashRange' or k=='forkRange') and 'studs' or ''))
     if k=='aftershock' or k=='earlyDrop' or k=='liveWire' or k=='damageReduction' or k=='critChance' or k=='splashFraction' or k=='forkFraction' or k=='salvageFraction' then scale=100;unit='%' end
-    if k=='geodeMultiplier' or k=='deepCutMultiplier' or k=='finisherMultiplier' or k=='yieldMultiplier' then unit='×' end
+    if k=='cutSize' or k=='geodeMultiplier' or k=='deepCutMultiplier' or k=='finisherMultiplier' or k=='yieldMultiplier' then unit='×' end
     table.insert(lines,{label=statLabels[k],before=before[k]*scale,after=after[k]*scale,unit=unit})
    end
   end

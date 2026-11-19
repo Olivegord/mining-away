@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — the dig cube's mining look
+
+The owner loved the Dig Cube ("a stroke of genius", "excellent gameplay") and directed the look: **no wiggling until the very end of a rock's life; no visible cracks from the start**; cracks should **form along the Voronoi edges as a drone mines**, so you can see the damage about to happen. **Drone upgrades include bigger cells**, computed in real time; starting cuts a tad smaller than the prototype. Instead of pieces flying everywhere, **still cut it into halves** so the particles show, then a **large pause and something more significant than a regular rock** (the gamble).
+
 ## November 18 — try digging down into one huge cube
 
 After rejecting several whole-world concepts, the owner asked to try digging down: a **huge cube** on the flat plane, cut by a tessellation (not cubes; Voronoi or better) whose cell size can scale for small and big cuts, with **different parts to break (ores)**. Digging must not drill holes or go layer by layer: drones need a way to choose spots that looks organic. The owner's insight is that the satisfying breaks become pieces of a larger mass, so stone needs no placeholder drops; you might get a gem instead. Routine saves only; no release requested.

@@ -36,7 +36,49 @@ for L,layer in ipairs(cube.layers) do
 end
 local smallest,largest=math.huge,0
 for _,s in ipairs(sizes) do smallest=math.min(smallest,s);largest=math.max(largest,s) end
-check(largest/smallest>1.3,'layers mix big and small cuts')
+check(largest/smallest>1.1,'layers use different cell sizes')
+-- Chunks: cut size grows them, halves cover the chunk, outline and split line exist.
+local function polyArea(poly)
+ local a=0
+ for k=1,#poly do local p,q=poly[k],poly[k%#poly+1];a+=p[1]*q[2]-q[1]*p[2] end
+ return math.abs(a)*.5
+end
+local chunkRnd=D.rng(7)
+local avg={}
+for _,cut in ipairs({1,2}) do
+ local total=0
+ for i=1,30 do
+  local seed=cube.layers[1].cells[i*5]
+  local ids=D.chunk(cube,seed,cut,nil,chunkRnd)
+  check(ids[1]~=nil and table.find(ids,seed)~=nil,'chunk holds its seed')
+  for _,id in ipairs(ids) do check(cube.cells[id].layer==1,'chunk stays in one layer') end
+  local area=D.chunkArea(cube,ids)
+  local sp=D.split(cube,ids)
+  local halves=0
+  for _,poly in ipairs(sp.a) do halves+=polyArea(poly) end
+  for _,poly in ipairs(sp.b) do halves+=polyArea(poly) end
+  check(math.abs(halves-area)<area*.01,'halves cover the chunk')
+  check(#sp.a>0 and #sp.b>0 and #sp.chords>0,'chunk splits in two along a line')
+  check(#D.outline(cube,ids)>=3,'chunk outline')
+  check(D.key(D.parseKey(D.key(ids)))==D.key(ids),'chunk key round trip')
+  total+=area
+ end
+ avg[cut]=total/30
+end
+check(avg[2]>avg[1]*2.5,'cut size 2 breaks much bigger chunks: '..avg[1]..' vs '..avg[2])
+check(D.chunkHp(cube,{1,2},2)<D.chunkHp(cube,{1,2},1),'bigger cutters cut faster per area')
+-- Gem roll: some chunks hold a gem, most do not.
+local gems=0
+local gemRnd=D.rng(3)
+for i=1,400 do
+ local ids=D.chunk(cube,cube.layers[1].cells[(i%#cube.layers[1].cells)+1],1,nil,gemRnd)
+ if D.gemRoll(cube,ids,gemRnd)>0 then gems+=1 end
+end
+check(gems>10 and gems<200,'gem chance per chunk '..gems..'/400')
+-- Tiles: every top cell sits under some top tile; outer walls are covered.
+local tiles,cellTiles=D.tiles(cube)
+for _,id in ipairs(cube.layers[1].cells) do check(#cellTiles[id]>0,'top cell under a tile') end
+for _,cell in ipairs(cube.cells) do if cell.boundary then check(#cellTiles[cell.id]>0,'wall cell under a tile') end end
 for _,cell in ipairs(cube.cells) do
  for _,n in ipairs(cell.neighbors) do
   check(table.find(cube.cells[n].neighbors,cell.id)~=nil,'neighbor symmetry '..cell.id..'-'..n)
@@ -113,6 +155,7 @@ local again=D.build(12345)
 check(#again.cells==#cube.cells and again.cells[77].cx==cube.cells[77].cx,'deterministic')
 local counts={}
 for L=1,#cube.layers do counts[#counts+1]=string.format('%d%%',math.floor(100*(areaLayer[L] or 0)/(W*W))) end
+print(string.format('PASS chunks: %.0f sq studs at cut 1, %.0f at cut 2; %d/400 chunks hold a gem',avg[1],avg[2],gems))
 print(string.format('PASS dig cube: %d layers, %d cells (top %d cells, %d wedges), %d boundary panels, %d ore cells; build %.2fs',
  #cube.layers,#cube.cells,#cube.layers[1].cells,wedgeCount,panels,ores,buildTime))
 print('PASS crater digging, share of each layer cut, top to bottom: '..table.concat(counts,' ')..' (core always open above, narrows with depth)')

@@ -36,12 +36,20 @@ pl.Character:PivotTo(CFrame.new(top))
 tick(10)
 assert(p.digging,'standing on the cube puts the crew to work')
 local mining=false
+local chunkSeen=false
 for _=1,300 do
  tick(10)
- for _,d in ipairs(p.drones) do if d.model:GetAttribute('DigMining')==true then mining=true end end
+ for _,d in ipairs(p.drones) do
+  if d.model:GetAttribute('DigMining')==true then mining=true end
+  local key=d.model:GetAttribute('DigChunk')
+  if type(key)=='string' and key~='' then chunkSeen=true;assert(#DigCube.parseKey(key)>=1,'chunk key lists cells') end
+ end
  if dig.cube.removedCount>=6 then break end
 end
 assert(mining,'a drone publishes a dig beam')
+assert(chunkSeen,'drones publish the chunk they cut')
+local breaks=holder:GetAttribute('Breaks')
+assert(type(breaks)=='string' and string.match(breaks,'^%d+:%d+:[%d%.]+'),'breaks replicate: '..tostring(breaks))
 assert(dig.cube.removedCount>=6,'the crew breaks cells, got '..dig.cube.removedCount)
 tick(10)
 local encoded=holder:GetAttribute('Removed')
@@ -60,11 +68,30 @@ for _,c in ipairs(dig.cube.cells) do if c.ore>0 then ore=c;break end end
 assert(ore,'cube has ore')
 local pickups=root:FindFirstChild('OrePickups')
 local before=#pickups:GetChildren()
-scene.digGem(p,p.drones[1],ore)
+scene.digGem(p,pl.UserId,{ore.id},ore.ore,ore.cx,ore.cz)
 local after=pickups:GetChildren()
 assert(#after==before+1,'ore cell drops a gem')
 local gem=after[#after]
 assert(gem:GetAttribute('Owner')==pl.UserId and gem:GetAttribute('RareGemReward')==true,'gem belongs to the player')
+-- A winning roll waits for the reveal pause before the gem appears.
+local held={at=now+DigCube.PAUSE,p=p,owner=pl.UserId,ids={ore.id},tier=2,cx=ore.cx,cz=ore.cz}
+table.insert(dig.pending,held)
+local spawned=0
+local real=scene.digGem
+scene.digGem=function(...) local args={...};if args[3]==held.ids then spawned+=1 end;return real(...) end
+tick(1)
+assert(spawned==0 and table.find(dig.pending,held),'gem held during the pause')
+tick(math.ceil(DigCube.PAUSE/C.Tick)+2)
+scene.digGem=real
+assert(spawned==1 and not table.find(dig.pending,held),'gem appears at the reveal')
+-- A bigger cut stat takes bigger chunks.
+local d1=p.drones[1]
+local small=scene.digPick(d1,p);scene.digDrop(d1)
+d1.stats.cutSize=2
+local sizes=0
+for _=1,10 do local c=scene.digPick(d1,p);d1.digChunk=c;sizes+=#c.ids;scene.digDrop(d1) end
+d1.stats.cutSize=1
+assert(sizes/10>#small.ids+1,'cut size 2 picks bigger chunks: '..(sizes/10)..' vs '..#small.ids)
 -- Tap the far corner: the crew's next cuts move there.
 local corner=dig.origin+Vector3.new(W*.85,dig.cube.height,W*.85)
 p.tokens=10;p.bucketAt=now
@@ -72,7 +99,7 @@ command.OnServerEvent:Fire(pl,'DigFocus',{point=corner})
 assert(p.digFocus==corner,'tap sets the focus')
 local seen={}
 for id in pairs(dig.cube.removed) do seen[id]=true end
-for _=1,120 do tick(10);if dig.cube.removedCount>=count+5 then break end end
+for _=1,400 do tick(10);if dig.cube.removedCount>=count+8 then break end end
 local moved,total=0,0
 for id in pairs(dig.cube.removed) do
  if not seen[id] then
@@ -97,7 +124,7 @@ dig.checkAt=0
 tick(5)
 tick(math.ceil(5/C.Tick))
 assert(holder:GetAttribute('Generation')==2 and dig.cube.removedCount==0,'a dug-out cube is replaced')
-print('PASS dig cube server: crew digs around the player, removed cells replicate, ore drops a gem, tap moves the crater, leaving releases, spent cube resets (API doubles; looks, feel and multiplayer NOT verified)')
+print('PASS dig cube server: crew digs around the player, removed cells replicate, chunks and breaks replicate, gems wait for the reveal, cut size grows chunks, tap moves the crater, leaving releases, spent cube resets (API doubles; looks, feel and multiplayer NOT verified)')
 """
 source = "\n".join([
     (ROOT / "tests/mock-roblox.lua").read_text(),
