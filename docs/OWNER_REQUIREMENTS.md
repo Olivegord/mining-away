@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — try digging down into one huge cube
+
+After rejecting several whole-world concepts, the owner asked to try digging down: a **huge cube** on the flat plane, cut by a tessellation (not cubes; Voronoi or better) whose cell size can scale for small and big cuts, with **different parts to break (ores)**. Digging must not drill holes or go layer by layer: drones need a way to choose spots that looks organic. The owner's insight is that the satisfying breaks become pieces of a larger mass, so stone needs no placeholder drops; you might get a gem instead. Routine saves only; no release requested.
+
 ## November 18 — stop watching paint dry: run and collect
 
 The owner says players just click and watch. Breaking a rock is super satisfying and the gem chance looks cool, but unlike Bee Swarm Simulator, where you run around and collect things, here you watch. From the proposed plan (crew mines around the player, run through the loot, tokens, shared field events) the owner chose **part 2, run through the loot**, first. Routine saves only; no release requested.

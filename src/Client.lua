@@ -1649,6 +1649,7 @@ local function renderDrone(d,dt,now)
    beamSince=s:GetAttribute('MineBreakBeamSince') or now;breakAt=finalAt;breakUntil=finalUntil
   end
  end
+ if pickupView and pickupView.dig then pickupView.dig:droneBeam(s,d.emitter.Position,now,d.cubeLook and d.cubeLook.color) end
  presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
   contact=active,
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
@@ -1898,7 +1899,9 @@ end)
 if profile then pickupView.sales:receiveProfile(profile) end
 pickupView.crew=CrewView.new({gui=safeRoot,player=player,world=world,localFX=localFX,command=command,audio=soundscape,
  presentation=presentation,reduced=CrystalImpactView.reducedMotion,hidden=menusVisible,profile=function() return profile end})
-RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function() pickupView.sales:update();pickupView.crew:update() end)
+pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,presentation=presentation,
+ beat=cameraBeat,reduced=CrystalImpactView.reducedMotion})
+RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function() pickupView.sales:update();pickupView.crew:update();pickupView.dig:update() end)
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,

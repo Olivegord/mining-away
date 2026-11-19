@@ -120,6 +120,8 @@ def module_bundle(names):
    code=code.replace("require('./DroneStatus')",'(function()\n'+(ROOT/'src/DroneStatus.lua').read_text()+'\nend)()')
   if name=='Presentation':
    code=code.replace("require('./FunFX')",'(function()\n'+(ROOT/'src/FunFX.lua').read_text()+'\nend)()')
+  if name=='DigCubeView':
+   code=code.replace("require('./DigCube')",'(function()\n'+(ROOT/'src/DigCube.lua').read_text()+'\nend)()')
   if name=='CrewView':
    code=code.replace("require('./CrewAbilities')",'(function()\n'+(ROOT/'src/CrewAbilities.lua').read_text()+'\nend)()')
   if name=='SaleView':
@@ -136,14 +138,15 @@ def module_bundle(names):
   if 'DroneRoles' in names[:names.index(name)]:code=code.replace("local DroneRoles=require('./DroneRoles')\n",'')
   if 'DroneCatalog' in names[:names.index(name)]:code=code.replace("local DroneCatalog=require('./DroneCatalog')\n",'')
   if 'Consumables' in names[:names.index(name)]:code=code.replace("local Consumables=require('./Consumables')\n",'')
+  if 'DigCube' in names[:names.index(name)]:code=code.replace("local DigCube=require('./DigCube')\n",'')
   boundary=': any' if name=='World' else ''
-  binding={'PlayerHazards':'ToolRules.Hazards','ToolService':'ToolRules.Service'}.get(name)
+  binding={'PlayerHazards':'ToolRules.Hazards','ToolService':'ToolRules.Service','DigCube':'Config.DigCube'}.get(name)
   s+=(binding or ('local '+name+boundary))+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Shops','ShopStands','DroneAbilities','CrewAbilities','DroneCatalog','DroneRoles','Consumables','ConsumableService','ToolRules','PlayerHazards','ToolService','Config','Feel','Mining','ResourcePlacement','JunkField','CrystalCuts','OreDrops','Rules','Profile','Packs','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics','PackDelivery'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Shops','ShopStands','DroneAbilities','CrewAbilities','DroneCatalog','DroneRoles','Consumables','ConsumableService','ToolRules','PlayerHazards','ToolService','Config','Feel','Mining','ResourcePlacement','JunkField','CrystalCuts','OreDrops','Rules','Profile','Packs','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics','PackDelivery','DigCube'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Shops','Feel','JunkField','Mining','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','RockFinish','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','PickupMotion','CrystalImpactView','Presentation','LaserShowcase','ImpactFreeze','CelestialRainPreview','UILayout','Interface','Packs','CardView','DroneRoles','FleetView','PackView','ShopView','AbilityView','ToolRules','ToolArt','ToolView','OreDrops','PickupDisplay','PickupView','SaleView','CommandView','LogisticsView','SelectorView','ChargerView','CrewView'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('Shops','Feel','JunkField','Mining','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','RockFinish','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','PickupMotion','CrystalImpactView','Presentation','LaserShowcase','ImpactFreeze','CelestialRainPreview','UILayout','Interface','Packs','CardView','DroneRoles','FleetView','PackView','ShopView','AbilityView','ToolRules','ToolArt','ToolView','OreDrops','PickupDisplay','PickupView','SaleView','CommandView','LogisticsView','SelectorView','ChargerView','CrewView','DigCubeView'))+(ROOT/'src/Client.lua').read_text()
 def editor_layout_script():
  """Materialize the requested map in Studio Edit without running gameplay."""
  return module_bundle(('Config','Shops','World','ShopStands'))+'''
