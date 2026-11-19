@@ -98,6 +98,8 @@ The [quarry motif pass](../tools/studio_quarry_motifs.lua) stages `scenery` and 
 
 The [courtyard pass](../tools/studio_quarry_courtyard.lua) stages `scenery`, `variants`, and `edits` at `shared.QuarryCourtyard.snapshot`. Run [the scoped saver](../tools/refresh_quarry_courtyard.py) with the export directory and `--baseline-sha256`. After checking the export, call `shared.QuarryCourtyard.apply()` in Edit, rerun the saver with `--write`, and verify the canonical file.
 
+The [Toy World pass](../tools/studio_toy_world.lua) stages `scenery`, `archive`, `moves`, `edits`, `sky`, `air` and `lighting` at `shared.ToyWorld.snapshot`. Read each section in chunks into `<section>.b64`, then run `python3 tools/refresh_toy_world.py <export-directory> --baseline-sha256 <verified-sha256>` for the checked report. Call `shared.ToyWorld.apply()` in Edit (or `undo()` to revert), save, then rerun the saver with `--write`. It only appends `Map.ToyWorld`, `ServerStorage.ToyWorldArchive` and two Lighting children, moves an allowlist into the archive, recolors an allowlist of gameplay parts and sets five Lighting properties after checking their old values.
+
 ## Runtime gem API access
 
 The owner approved enabling **Allow Mesh / Image APIs** for DRONEREVOLUTION on November 14, 2026. The setting was saved and verified by reopening Experience Settings → Security. GemAppearance needs that experience setting for runtime EditableMesh construction. Tool-context Edit samples can succeed while game scripts are blocked, so inspect the actual Play-session logs when diagnosing fallback to the original gem.

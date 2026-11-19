@@ -210,10 +210,10 @@ function HUD.nextStationHint(profile: any, pinned: boolean?, depotApproach: bool
 end
 function HUD.firstCutHint(input: Enum.UserInputType, reachable: boolean, wholeFields: boolean?): string
  if wholeFields then
-  if not reachable then return 'Walk to the Amber field' end
-  if input==Enum.UserInputType.Touch then return 'Tap a field to mine' end
-  if input.Name:match('^Gamepad') then return 'Mine field [RB]' end
-  return 'Click a field to mine'
+  if not reachable then return 'Walk onto the orange field' end
+  if input==Enum.UserInputType.Touch then return 'Tap a rock to send your drones' end
+  if input.Name:match('^Gamepad') then return 'Aim at a rock [RB]' end
+  return 'Click a rock to send your drones'
  end
  if not reachable then return 'Follow the Crystal Run signs' end
  if input==Enum.UserInputType.Touch then return 'Tap to preview' end

@@ -3961,9 +3961,9 @@ function scene.saleMilestoneNotice(p,saleQuartz)
   return '+'..saleQuartz..' Quartz · Pack Counter ready'
  end
 end
-function scene.sendSaleReceipt(p,id,result,full,target)
+function scene.sendSaleReceipt(p,id,result,full,target,auto)
  local receipt={id=id,runId=result.runId,revision=data(p).revision,at=now,
-  cargo=result.cargo,resources=result.resources,cash=result.quartz,full=full,auto=not full,units=result.units,
+  cargo=result.cargo,resources=result.resources,cash=result.quartz,full=full,auto=auto==true,units=result.units,
   milestone=full and scene.saleMilestoneNotice(p,result.quartz) or nil}
  if target then receipt.counter={target.X,target.Y,target.Z} end
  -- The profile also carries recent receipts so a balance snapshot arriving
@@ -4078,7 +4078,7 @@ local function sellBackpack(p: any,automatic: boolean?)
   if ok then return result end;return nil,result
  end,function(result)
   p.nextEmptierPlan=nil
-  scene.sendSaleReceipt(p,tx,result,not automatic,target)
+  scene.sendSaleReceipt(p,tx,result,not automatic,target,automatic and scene.flatFields)
   if automatic then
    local amounts={}
    for _,key in ipairs(Shops.ORDER) do

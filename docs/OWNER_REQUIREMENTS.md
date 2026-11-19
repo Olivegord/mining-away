@@ -1,5 +1,15 @@
 # Owner requirements
 
+## November 18 — make the simple loop fun; Toy World map
+
+After a game-loop discussion the owner set this goal: make the loop work, look good and function well, keep it simple, and make it fun. Remake the map colorful and simple with no extraneous assets, preferring abstract shapes done artistically; shops can be rectangles, obelisks and other simple shapes; use particles to explain things. Routine saves only; no release requested.
+
+- **What the owner likes:** rock breaking is phenomenal; ores look great and are a great drop.
+- **What is wrong:** the loop is mostly watching (Mindustry is fun to watch because you made the decisions); selling is horrible; the game has an identity crisis between the large field and the square fields.
+- **Hard constraints:** it HAS to work in multiplayer in a shared world. Field rarity keeps pros from going back and taking beginners' resources. It HAS to work on mobile with super simple controls. The target age is young.
+- **No player building.** Pressing individual rocks is a good start; the owner likes **abilities that differ by drone type**.
+- **Do not work on pricing or upgrades yet.**
+
 ## November 18 — game direction: mining feel first, automation that brings the work to you, a clean view
 
 The owner rejected the three-click geode opening. After a design discussion they set the direction below and asked for all of it ("do everything"). Routine saves only; no release requested.

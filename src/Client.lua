@@ -692,7 +692,7 @@ openRunCards=function()
  if #profile.run.cards==0 then
   U.icon(body,'cards',UDim2.fromOffset(math.max(0,(width-90)/2),84),UDim2.fromOffset(90,90),palette.mineral)
   local title=label(body,UDim2.fromOffset(6,196),UDim2.fromOffset(width-12,38),'Your first upgrade is waiting',26,palette.text,true);title.TextXAlignment=Enum.TextXAlignment.Center
-  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine Quartz and sell it at SELL ORE. Open a pack and pick an upgrade. Find it again or buy another stack to make it stronger.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
+  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),(world:GetAttribute('WholeFields') and 'Mine rocks. A full bag cashes out by itself. Open a pack and pick an upgrade. Find it again or buy another stack to make it stronger.' or 'Mine Quartz and sell it at SELL ORE. Open a pack and pick an upgrade. Find it again or buy another stack to make it stronger.'),14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
   label(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,30),'Visit the Quartz Workshop',16,palette.muted)
  else
   for index,c in ipairs(profile.run.cards) do
