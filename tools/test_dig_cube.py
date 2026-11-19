@@ -125,6 +125,9 @@ local seen={}
 for i=1,40 do seen[D.cutterFor('Striker','drone'..i)]=true end
 check(seen.cell and seen.sphere and seen.box and seen.core,'Strikers get every cutter')
 check(D.cutterFor('Charger','x')=='sphere' and D.cutterFor('Gridcutter','x')=='box','typed cutters')
+local rot={};for n=1,4 do rot[D.cutterFor('Striker','a',1,n)]=true end
+check(rot.cell and rot.sphere and rot.box and rot.core,'the first drone rotates through every cut')
+check(D.cutterFor('Striker','a',2)=='sphere' and D.cutterFor('Striker','a',3)=='box' and D.cutterFor('Striker','a',4)=='core','other drones keep one cut by slot')
 -- Gem rate per single cut.
 local gems=0;local g=D.rng(8);local gc=D.build(99)
 for i=1,300 do

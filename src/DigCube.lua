@@ -117,11 +117,19 @@ local function stringHash(s: string): number
  for i=1,#s do h=(h*31+string.byte(s,i))%1000003 end
  return h
 end
-function D.cutterFor(role: string?,droneId: string?): string
+-- Which cut a drone makes. Typed drones keep theirs (D.ROLE_CUTTER). Starter
+-- Strikers: the first drone in a fleet is a multi-tool that rotates through
+-- every cut, one after another (`serial` counts its cuts); the others each
+-- keep one by slot (round blast, trench, core bore, ...), so every player's
+-- crew shows every shape. Without a slot, the drone id picks a fixed cut.
+function D.cutterFor(role: string?,droneId: string?,slot: number?,serial: number?): string
  local kind=role and D.ROLE_CUTTER[role]
  if kind then return kind end
  if role==nil or role=='Striker' or role=='Blue' then
-  return D.STRIKER_CUTTERS[stringHash(droneId or '')%#D.STRIKER_CUTTERS+1]
+  local list=D.STRIKER_CUTTERS
+  if slot==1 then return list[(serial or 0)%#list+1] end
+  if slot then return list[(slot-2)%(#list-1)+2] end
+  return list[stringHash(droneId or '')%#list+1]
  end
  return 'cell'
 end

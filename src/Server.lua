@@ -3549,7 +3549,8 @@ function scene.digPick(d,p)
  local seed=DigCube.pick(cube,opts)
  if not seed then return nil end
  local cut=d.stats.cutSize or 1
- local kind=DigCube.cutterFor(d.role,d.id)
+ d.digCuts=(d.digCuts or 0)+1
+ local kind=DigCube.cutterFor(d.role,d.id,d.slot,d.digCuts)
  local yaw=dig.random:NextNumber(0,math.pi)
  local op=DigCube.decodeOp(DigCube.encodeOp(DigCube.planCut(cube,kind,seed,cut,yaw,taken,random)))
  if not op then return nil end
