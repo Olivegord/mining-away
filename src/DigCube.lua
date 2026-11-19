@@ -23,7 +23,7 @@ D.DEPTH_HARD=.03 -- extra hardness per stud of depth
 D.UP=.5 -- a face whose normal points up more than this holds a cell resting on this one
 D.MAX_BLAST=12
 D.RELAX=0 -- Lloyd relaxation steps (measured: barely changes slivers, doubles build time)
-D.TINT=.09 -- per-rock tone swing on pit faces so neighboring rocks read apart
+D.TINT=.16 -- per-rock tone swing on pit faces so neighboring rocks read apart in bright sun
 D.PAUSE=1.1 -- seconds between the split and the gem-or-nothing reveal
 D.TILE=11 -- intact outer surface renders as one slab per tile
 D.BAND=44/12 -- outer wall tile height
@@ -45,7 +45,8 @@ D.ORES={
  {material='Diamond',name='Diamond',color={236,226,246}},
 }
 -- Rock color by height: warm sand at the top to dark slate at the bottom.
-D.GRADIENT={{242,222,180},{234,198,140},{218,162,104},{190,126,86},{152,100,84},{114,86,92},{80,76,98},{54,56,74}}
+D.GRADIENT={{226,196,150},{214,160,104},{192,120,78},{160,92,70},{124,80,76},{92,74,86},{66,64,84},{46,48,64}}
+D.GRADIENT_CURVE=.55 -- below 1: color changes fastest near the top, where pits start
 local ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 -- Boundary labels: -1 bottom, -2 top, -3 west (x=0), -4 east (x=W), -5 south (z=0), -6 north (z=W). 0 = a split cut.
 local BOTTOM,TOP=-1,-2
@@ -81,7 +82,7 @@ function D.noise3(x: number,y: number,z: number,seed: number): number
  return l(l(l(c000,c100,fx),l(c010,c110,fx),fy),l(l(c001,c101,fx),l(c011,c111,fx),fy),fz)
 end
 function D.gradient(y: number,height: number): {number}
- local t=math.clamp(1-y/height,0,1)*(#D.GRADIENT-1)
+ local t=math.clamp(1-y/height,0,1)^D.GRADIENT_CURVE*(#D.GRADIENT-1)
  local i=math.floor(t);local f=t-i
  local a=D.GRADIENT[i+1];local b=D.GRADIENT[math.min(#D.GRADIENT,i+2)]
  return {a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f,a[3]+(b[3]-a[3])*f}
