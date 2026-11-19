@@ -98,7 +98,8 @@ function V:faceShown(piece: any,face: any): boolean
   local sides=self.sideBroken[piece.cell]
   return sides~=nil and sides[l]==true
  end
- return DigCube.faceVisible(self.cube,face)
+ -- Faces between two rocks only show once the neighbor is really gone.
+ return DigCube.faceOpen(self.cube,face)
 end
 
 function V:cellModel(cellId: number): Model
@@ -133,7 +134,7 @@ function V:refreshPiece(pid: number)
  for _,fi in ipairs(shown) do
   local face=piece.faces[fi]
   local color=rgb(DigCube.faceColor(self.cube,piece.cell,face))
-  for _,w in ipairs(DigCube.faceWedges(face)) do
+  for _,w in ipairs(DigCube.pieceWedges(piece.faces,fi)) do
    local part=self:wedge(w,model)
    self:dress(part,color,piece.cell)
    self.base[part]=part.CFrame;self.tone[part]=color

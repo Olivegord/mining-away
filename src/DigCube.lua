@@ -1069,19 +1069,49 @@ local function triangle(a: {number},b: {number},c: {number},outward: {number},th
 end
 -- Wedges for one face (cube-local coordinates). Thin, so a face never pokes
 -- out past a neighboring face that meets it at a sharp angle.
-D.SEAM_OVERLAP=.03 -- studs each face grows past its edges so neighbors leave no hairline gaps
-function D.faceWedges(face: any,thick: number?)
- local out={}
+D.SEAM_OVERLAP=.01 -- studs a face grows past edges it shares with a neighbor's flat surface
+-- Wedges for one face of a piece (cube-local coordinates). Where the face
+-- meets the cube's flat outer surface, its edge is pulled in by the wedge
+-- thickness so its rim stays hidden under that surface (no colored lines
+-- along pit rims); elsewhere it grows a hair so neighbors leave no gaps.
+function D.pieceWedges(faces: {any},index: number,thick: number?): {any}
+ local t=thick or .12
+ local face=faces[index]
+ local function k(v: {number}) return string.format('%.2f,%.2f,%.2f',v[1],v[2],v[3]) end
+ local outer={}
+ local here=face.label<-1 and face.label>-7
+ if not here then
+  for fi,g in ipairs(faces) do
+   if fi~=index and g.label<-1 and g.label>-7 then
+    for _,v in ipairs(g.verts) do outer[k(v)]=true end
+   end
+  end
+ end
  local src=face.verts
  local c={0,0,0}
  for _,v in ipairs(src) do c[1]+=v[1];c[2]+=v[2];c[3]+=v[3] end
  c={c[1]/#src,c[2]/#src,c[3]/#src}
- local vs={}
+ local poly={}
  for i,v in ipairs(src) do
   local d=sub(v,c);local len=math.sqrt(dot(d,d))
-  vs[i]=len>1e-6 and {v[1]+d[1]/len*D.SEAM_OVERLAP,v[2]+d[2]/len*D.SEAM_OVERLAP,v[3]+d[3]/len*D.SEAM_OVERLAP} or v
+  poly[i]=len>1e-6 and {v[1]+d[1]/len*D.SEAM_OVERLAP,v[2]+d[2]/len*D.SEAM_OVERLAP,v[3]+d[3]/len*D.SEAM_OVERLAP} or v
  end
- for i=2,#vs-1 do triangle(vs[1],vs[i],vs[i+1],face.normal,thick or .12,out) end
+ for i=1,#src do
+  local a,b=src[i],src[i%#src+1]
+  if outer[k(a)] and outer[k(b)] then
+   -- Pull this edge in: keep only points at least t inside it.
+   local e=unit(sub(b,a))
+   local inward=unit(cross(face.normal,e))
+   if dot(inward,sub(c,a))<0 then inward=scale(inward,-1) end
+   poly=clipPolygon(poly,{a[1]+inward[1]*t,a[2]+inward[2]*t,a[3]+inward[3]*t},scale(inward,-1))
+   if #poly<3 then return {} end
+  end
+ end
+ local out={}
+ for i=2,#poly-1 do triangle(poly[1],poly[i],poly[i+1],face.normal,t,out) end
  return out
+end
+function D.faceWedges(face: any,thick: number?)
+ return D.pieceWedges({face},1,thick)
 end
 return D
