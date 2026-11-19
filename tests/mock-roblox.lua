@@ -67,6 +67,7 @@ function Instance.new(class)
  return i
 end
 function IM:FireClient(player,payload) table.insert(self.clientMessages,{player=player,payload=payload});self.OnClientEvent:Fire(payload) end
+function IM:FireAllClients(payload) table.insert(self.clientMessages,{all=true,payload=payload});self.OnClientEvent:Fire(payload) end
 function IM:SetTextureOffset(offset) self.TextureOffset=offset end
 function IM:Play() self.Playing=true end
 function IM:Emit(count) self.Emitted=(self.Emitted or 0)+count end

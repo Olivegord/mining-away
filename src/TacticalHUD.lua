@@ -326,6 +326,17 @@ function HUD:updateBackpack(profile,player,world,now,width,fighting)
   and (typeof(target)~='Vector3' or (converter.Position-root.Position).Magnitude<(target-root.Position).Magnitude) then
   target=converter.Position
  end
+ -- Square fields cash a full bag out on the spot: no trip, just a cue.
+ if world:GetAttribute('WholeFields')==true then
+  local soon=ratio>=.6 and not fighting
+  self.sellGuide.Visible=soon;self.sellArrow.Visible=false
+  if soon then
+   self.sellGuide.Text=full and 'Cashing out!' or 'Full bag = cash!'
+   self.sellGuide.TextColor3=C.gold
+   self.sellGuide.Position=UDim2.fromOffset(0,34);self.sellGuide.Size=UDim2.fromOffset(width,22)
+  end
+  return soon and 58 or 36
+ end
  local guide=ratio>=.8 and not fighting and root~=nil and typeof(target)=='Vector3'
  self.sellGuide.Visible=guide;self.sellArrow.Visible=false
  if guide then

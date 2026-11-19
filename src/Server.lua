@@ -1840,6 +1840,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
  if contactKind=='Consumable' or contactKind=='FieldTool' then r.consumableWorked=true end
+ if not abilityOrigin then amount*=CrewAbilities.multiplier(p.crew,d.role,now) end
  local baseAmount=amount
  local discoverySpeed=discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
@@ -1997,6 +1998,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    for _,child in ipairs(revealed) do child.consumableWorked=r.consumableWorked end
   else
    award(recipient,r,specialistCut)
+   scene.crewBreak(recipient.owner)
    if r.field.cfg.ContinuousCrystals and math.random()<Workshop.CRYSTAL_CHANCE then
     scene.leaveGeode(recipient,r,specialistCut)
    end
@@ -3285,6 +3287,9 @@ local function breakerDrone(d,p,hr,field,dt)
  elseif event=='missed' or event=='canceled' then release(d) end
 end
 function scene.autoSellReady(p,profile,units)
+ -- Square fields cash a full bag out where the player stands: no sell trip.
+ -- The real bag size (not the Studio test perk) sets the rhythm.
+ if scene.flatFields then return units>0 and units>=Ca.capacity(profile) and not activeAssault(p) end
  return Workshop.starLevel(profile,'autosell')>0 and units>=Ca.capacity(profile,previewPerks(p)) and not activeAssault(p)
 end
 function scene.emptierOffset(rank)
@@ -3958,7 +3963,7 @@ function scene.saleMilestoneNotice(p,saleQuartz)
 end
 function scene.sendSaleReceipt(p,id,result,full,target)
  local receipt={id=id,runId=result.runId,revision=data(p).revision,at=now,
-  cargo=result.cargo,resources=result.resources,cash=result.quartz,full=full,units=result.units,
+  cargo=result.cargo,resources=result.resources,cash=result.quartz,full=full,auto=not full,units=result.units,
   milestone=full and scene.saleMilestoneNotice(p,result.quartz) or nil}
  if target then receipt.counter={target.X,target.Y,target.Z} end
  -- The profile also carries recent receipts so a balance snapshot arriving
@@ -4080,7 +4085,7 @@ local function sellBackpack(p: any,automatic: boolean?)
     local n=key=='Quartz' and result.quartz or result.cargo[key]
     if n and n>0 then table.insert(amounts,tostring(n)..' '..key) end
    end
-   notice(p,scene.saleMilestoneNotice(p,result.quartz) or 'Auto Sell · +'..table.concat(amounts,', '))
+   notice(p,scene.saleMilestoneNotice(p,result.quartz) or (not scene.flatFields and 'Auto Sell · +'..table.concat(amounts,', ')) or '')
   else
    notice(p,'')
   end
@@ -4596,6 +4601,84 @@ function scene.releaseOpenWorkers(r)
  local workers={};for id in pairs(r.slots) do workers[#workers+1]=drones[id] end
  for _,worker in ipairs(workers) do if worker and worker.target==r then release(worker);worker.squareSearchAt=nil end end
 end
+-- Crew abilities: rock breaks fill one button per drone type; a full button fires.
+do
+ local fx=Instance.new('RemoteEvent');fx.Name='CrewFX';fx.Parent=net
+ scene.crewFX=fx
+end
+function scene.crewRoles(p)
+ local roles={}
+ for _,d in ipairs(p.drones) do if DroneRoles.isWorker(d.role) then table.insert(roles,d.role) end end
+ return roles
+end
+function scene.crewBreak(owner)
+ local p=profiles[owner];if not p or not p.crew then return end
+ CrewAbilities.onBreak(p.crew,scene.crewRoles(p))
+end
+function scene.crewRockOpen(p,r,square)
+ if r.paid or r.hp<=0 or r.openReady or r.openingAt or r.kind=='Geode' or not r.part.Parent or now<r.readyAt then return false end
+ if square and not scene.rockInSquare(square,r) then return false end
+ for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return false end end
+ return true
+end
+function scene.crewAbility(p,payload)
+ if type(payload)~='table' or type(payload.role)~='string' or #payload.role>24 or payload.runId~=data(p).run.id then return end
+ local square=p.miningSquare
+ local hr=characterRoot(p)
+ if not square or not hr or activeAssault(p) or p.busy then notice(p,'Walk onto a field first.');return end
+ local role=CrewAbilities.role(payload.role)
+ local entry=CrewAbilities.ROLES[role];if not entry then return end
+ local center
+ if entry.kind=='Shockwave' then
+  local focus=square.focusId and resources[square.focusId]
+  if focus and scene.crewRockOpen(p,focus,square) then center=focus.position end
+  if not center then
+   local best=math.huge
+   for _,r in ipairs(square.field.resources) do
+    if scene.crewRockOpen(p,r,square) then
+     local distance=(r.position-hr.Position).Magnitude
+     if distance<best then best=distance;center=r.position end
+    end
+   end
+  end
+  if not center then notice(p,'No rocks here to blast.');return end
+ end
+ local ok,_,kind=CrewAbilities.trigger(p.crew,role,scene.crewRoles(p),now)
+ if not ok then notice(p,tostring(_));return end
+ local color=Color3.fromRGB(table.unpack(entry.color))
+ if entry.kind=='Overdrive' then
+  for _,d in ipairs(p.drones) do
+   if CrewAbilities.role(d.role)==role and d.model then
+    d.model:SetAttribute('OverdriveUntil',now+kind.duration);d.model:SetAttribute('OverdriveColor',color)
+   end
+  end
+  scene.crewFX:FireAllClients({kind='Overdrive',role=role,name=entry.name,owner=p.player.UserId,color=color,duration=kind.duration,at=now})
+ else
+  local field,owner=square.field,p.player.UserId
+  local open={}
+  for _,r in ipairs(field.resources) do if scene.crewRockOpen(p,r,square) then table.insert(open,r) end end
+  local targets=CrewAbilities.shockTargets(open,center,kind.radius)
+  scene.crewFX:FireAllClients({kind='Shockwave',role=role,name=entry.name,owner=owner,color=color,position=center,radius=kind.radius,at=now,impact=.42})
+  -- The ring sweeps in on every client first; the rocks burst on impact.
+  p.crewShock={at=now+.42,targets=targets,center=center,fraction=kind.fraction}
+ end
+ p.lastCrewJSON=nil
+ commandReply(p.player,payload,'accepted')
+end
+function scene.crewStep(p)
+ local shock=p.crewShock
+ if not shock or now<shock.at then return end
+ p.crewShock=nil
+ if not healthy(p) then return end
+ local owner=p.player.UserId
+ local actor={id=tostring(owner)..':crew-ability',owner=owner,hp=1,life=1,role='Striker',pos=shock.center,
+  owned={type='Blue'},stats={yieldMultiplier=1,geodeMultiplier=1,miningDPS=0}}
+ for _,r in ipairs(shock.targets) do
+  if scene.crewRockOpen(p,r,nil) then
+   hitResource(actor,r,math.min(r.hp,r.maxHP*shock.fraction),false,nil,r.position+Vector3.yAxis*7,'FieldTool',{consumable=true,toolKind='Shockwave',point=r.position})
+  end
+ end
+end
 function scene.focusResource(p,payload)
  if type(payload)~='table' or payload.runId~=data(p).run.id then return end
  local square=p.miningSquare
@@ -4749,6 +4832,8 @@ local function commandPlayer(pl: any,action: any,payload: any)
   scene.placeSquare(p,payload)
  elseif action=='FocusResource' then
   scene.focusResource(p,payload)
+ elseif action=='CrewAbility' then
+  scene.crewAbility(p,payload)
  elseif action=='OpenResource' then
   scene.openResource(p,payload)
  elseif action=='PickupOre' then
@@ -4987,7 +5072,7 @@ addPlayer=function(pl)
  end
  -- Clear obsolete transient tokens; permanent plot unlocks are retained.
  session.data.run.entitlements={}
- local p={player=pl,session=session,drones={},tokens=7,bucketAt=now,busy=false,dirty=false,leaving=false,publishDirty=true}
+ local p={player=pl,session=session,drones={},tokens=7,bucketAt=now,busy=false,dirty=false,leaving=false,publishDirty=true,crew=CrewAbilities.new()}
  profiles[pl.UserId]=p
  pl:SetAttribute('MA_TestingEnabled',preview);pl:SetAttribute('MA_DevToolsEnabled',RunService:IsStudio());pl:SetAttribute('MA_NoRestock',false)
  pl:SetAttribute('MA_TestLoadoutLabel','Use RANDOM LOADOUT for 2–5 random drones')
@@ -5166,6 +5251,11 @@ RunService.Heartbeat:Connect(function(dt: number)
     local encoded=Http:JSONEncode(DroneAbilities.view(p.ability,now))
     if encoded~=p.lastAbilityJSON then p.lastAbilityJSON=encoded;p.player:SetAttribute('MA_Ability',encoded) end
    end
+   do
+    local encoded=Http:JSONEncode(CrewAbilities.view(p.crew,scene.crewRoles(p),now))
+    if encoded~=p.lastCrewJSON then p.lastCrewJSON=encoded;p.player:SetAttribute('MA_Crew',encoded) end
+   end
+   scene.crewStep(p)
    serviceDeliveries(p);p.player:SetAttribute('MA_InAssault',activeAssault(p))
    scene.publishSquareStatus(p)
    if not p.busy then settleRuntime(p) end

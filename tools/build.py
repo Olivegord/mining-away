@@ -120,6 +120,8 @@ def module_bundle(names):
    code=code.replace("require('./DroneStatus')",'(function()\n'+(ROOT/'src/DroneStatus.lua').read_text()+'\nend)()')
   if name=='Presentation':
    code=code.replace("require('./FunFX')",'(function()\n'+(ROOT/'src/FunFX.lua').read_text()+'\nend)()')
+  if name=='CrewView':
+   code=code.replace("require('./CrewAbilities')",'(function()\n'+(ROOT/'src/CrewAbilities.lua').read_text()+'\nend)()')
   if name=='SaleView':
    code=code.replace("require('./SaleLedger')",'(function()\n'+(ROOT/'src/SaleLedger.lua').read_text()+'\nend)()')
   if name=='PickupView':
@@ -139,9 +141,9 @@ def module_bundle(names):
   s+=(binding or ('local '+name+boundary))+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Shops','ShopStands','DroneAbilities','DroneCatalog','DroneRoles','Consumables','ConsumableService','ToolRules','PlayerHazards','ToolService','Config','Feel','Mining','ResourcePlacement','JunkField','CrystalCuts','OreDrops','Rules','Profile','Packs','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics','PackDelivery'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Shops','ShopStands','DroneAbilities','CrewAbilities','DroneCatalog','DroneRoles','Consumables','ConsumableService','ToolRules','PlayerHazards','ToolService','Config','Feel','Mining','ResourcePlacement','JunkField','CrystalCuts','OreDrops','Rules','Profile','Packs','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics','PackDelivery'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Shops','Feel','JunkField','Mining','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','RockFinish','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','PickupMotion','CrystalImpactView','Presentation','LaserShowcase','ImpactFreeze','CelestialRainPreview','UILayout','Interface','Packs','CardView','DroneRoles','FleetView','PackView','ShopView','AbilityView','ToolRules','ToolArt','ToolView','OreDrops','PickupDisplay','PickupView','SaleView','CommandView','LogisticsView','SelectorView','ChargerView'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('Shops','Feel','JunkField','Mining','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','RockFinish','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','PickupMotion','CrystalImpactView','Presentation','LaserShowcase','ImpactFreeze','CelestialRainPreview','UILayout','Interface','Packs','CardView','DroneRoles','FleetView','PackView','ShopView','AbilityView','ToolRules','ToolArt','ToolView','OreDrops','PickupDisplay','PickupView','SaleView','CommandView','LogisticsView','SelectorView','ChargerView','CrewView'))+(ROOT/'src/Client.lua').read_text()
 def editor_layout_script():
  """Materialize the requested map in Studio Edit without running gameplay."""
  return module_bundle(('Config','Shops','World','ShopStands'))+'''

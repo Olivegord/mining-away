@@ -1896,7 +1896,9 @@ connect(RS.MiningAway:WaitForChild('Sale').OnClientEvent,function(receipt)
  pickupView.sales:receive(receipt)
 end)
 if profile then pickupView.sales:receiveProfile(profile) end
-RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function() pickupView.sales:update() end)
+pickupView.crew=CrewView.new({gui=safeRoot,player=player,world=world,localFX=localFX,command=command,audio=soundscape,
+ presentation=presentation,reduced=CrystalImpactView.reducedMotion,hidden=menusVisible,profile=function() return profile end})
+RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function() pickupView.sales:update();pickupView.crew:update() end)
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,

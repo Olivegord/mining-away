@@ -203,7 +203,13 @@ function Sale:receive(receipt)
  self.seen[receipt.id]=true;table.insert(self.order,receipt.id)
  if #self.order>128 then self.seen[table.remove(self.order,1)]=nil end
  self.refs.onCommitted(receipt)
- if not receipt.full then return end
+ if not receipt.full then
+  -- A full bag cashed out on the field: coins burst from the player.
+  -- Replayed old receipts (rejoin) credit quietly.
+  local fresh=type(receipt.at)=='number' and workspace:GetServerTimeNow()-receipt.at<6
+  if receipt.auto and fresh then self:cashOut(receipt) end
+  return
+ end
  self:clear()
  local amounts=table.clone(receipt.resources or {});amounts.Money=receipt.cash or 0
  local read=Ledger.read(receipt)
@@ -249,9 +255,10 @@ function Sale:shatter(batch)
 end
 
 function Sale:update(now)
+ now=now or os.clock()
+ if self.cash and #self.cash>0 then self:stepCash(now) end
  local batch=self.batch
  if not batch then return end
- now=now or os.clock()
  local age=now-batch.start
  local dt=math.clamp(now-(batch.frame or now),0,.1);batch.frame=now
  if age>=batch.endAt then self:clear();return end
@@ -330,6 +337,117 @@ function Sale:update(now)
  batch.materials.TextTransparency=1-after*(1-fade)*.85;batch.materials.TextStrokeTransparency=1-after*(1-fade)*.6
  if batch.receipt.milestone then
   batch.milestone.TextTransparency=1-after*(1-fade);batch.milestone.TextStrokeTransparency=1-after*(1-fade)*.6
+ end
+end
+
+-- Cash-out: big "+$X" and a fountain of coins from the player into the
+-- money counter. Each coin that lands releases its share of the balance.
+local COIN=Color3.fromRGB(255,214,74)
+local COINS=14
+function Sale:cashOut(receipt)
+ local hud=self.refs.hud
+ local amounts=table.clone(receipt.resources or {});amounts.Money=receipt.cash or 0
+ hud:beginSale(receipt,amounts)
+ local reduced=self.refs.reducedMotion()
+ local character=self.refs.player.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ local camera=workspace.CurrentCamera
+ local gui=self.refs.gui
+ local origin=gui.AbsolutePosition+gui.AbsoluteSize*Vector2.new(.5,.6)
+ if root and camera then
+  local v,onScreen=camera:WorldToViewportPoint(root.Position+Vector3.yAxis*2.5)
+  local screen=gui:FindFirstAncestorWhichIsA('ScreenGui')
+  local inset=(screen and screen.IgnoreGuiInset) and Vector2.zero or game:GetService('GuiService'):GetGuiInset()
+  if onScreen then origin=Vector2.new(v.X,v.Y)-inset end
+ end
+ local cash={receipt=receipt,amounts=amounts,start=os.clock(),coins={},reduced=reduced,landed=0,paid=0}
+ if root then
+  RoleVisuals.ImpactParticles(root.Position+Vector3.yAxis*1.5,COIN,1.5,'CrystalBreak')
+  self.refs.audio:play('sale_finish',root.Position,{level=.9})
+  if self.refs.presentation and not reduced then self.refs.presentation:cameraBeat('Sale',root.Position,os.clock(),.8) end
+ end
+ local card=label(gui,'+'..Ledger.money(amounts.Money),84,CASH,Enum.Font.GothamBlack)
+ card.AnchorPoint=Vector2.new(.5,.5);card.Position=UDim2.fromScale(.5,.3);card.Size=UDim2.new(.8,0,0,90)
+ card.TextStrokeTransparency=.05
+ local scale=Instance.new('UIScale');scale.Parent=card
+ local caption=label(card,'BAG FULL · CASHED OUT',22,PAPER);caption.AnchorPoint=Vector2.new(.5,0)
+ caption.Position=UDim2.new(.5,0,1,-4);caption.Size=UDim2.new(1,0,0,26)
+ cash.card=card;cash.scale=scale;cash.caption=caption
+ if reduced then
+  for key,amount in pairs(amounts) do if amount>0 then hud:currencyHit(receipt.id,key,amount,true,true) end end
+  cash.paid=COINS
+ else
+  local count=amounts.Money>0 and COINS or 0
+  for i=1,count do
+   local coin=Instance.new('Frame');coin.Name='Coin';coin.AnchorPoint=Vector2.new(.5,.5);coin.Size=UDim2.fromOffset(22,22)
+   coin.BackgroundColor3=COIN;coin.BorderSizePixel=0;coin.Parent=gui
+   local round=Instance.new('UICorner');round.CornerRadius=UDim.new(1,0);round.Parent=coin
+   local edge=Instance.new('UIStroke');edge.Color=Color3.fromRGB(176,118,22);edge.Thickness=2;edge.Parent=coin
+   local mark=label(coin,'$',18,Color3.fromRGB(122,78,10));mark.Size=UDim2.fromScale(1,1);mark.TextStrokeTransparency=1
+   local angle=(i/count)*math.pi*2+math.random()*.6
+   local speed=170+math.random()*150
+   table.insert(cash.coins,{gui=coin,from=origin-gui.AbsolutePosition,velocity=Vector2.new(math.cos(angle),math.sin(angle)-.6)*speed,
+    delay=(i-1)*.035,flyAt=.42+(i-1)*.035,share=(i==count) and nil or math.floor(amounts.Money/count)})
+  end
+ end
+ self.cash=self.cash or {}
+ table.insert(self.cash,cash)
+end
+function Sale:stepCash(now)
+ for index=#(self.cash or {}),1,-1 do
+  local cash=self.cash[index]
+  local age=now-cash.start
+  local hud=self.refs.hud
+  local target=hud:currencyTarget('Money')
+  local gui=self.refs.gui
+  for i,coin in ipairs(cash.coins) do
+   if coin.done then continue end
+   local t=age-coin.delay
+   if t<0 then coin.gui.Visible=false;continue end
+   coin.gui.Visible=not self.refs.hidden()
+   local burst=math.min(t,coin.flyAt-coin.delay)
+   -- Coins burst out, slow down, then home in on the counter.
+   local spread=coin.from+coin.velocity*(1-math.exp(-burst*5))/5+Vector2.new(0,1)*120*burst*burst
+   if t<coin.flyAt-coin.delay then
+    coin.gui.Position=UDim2.fromOffset(spread.X,spread.Y);coin.spread=spread
+   else
+    local goal=target and (target-gui.AbsolutePosition) or Vector2.new(60,40)
+    local k=math.clamp((t-(coin.flyAt-coin.delay))/.38,0,1)
+    local eased=k*k*(3-2*k)
+    local pos=(coin.spread or spread):Lerp(goal,eased)
+    coin.gui.Position=UDim2.fromOffset(pos.X,pos.Y);coin.gui.Size=UDim2.fromOffset(22-8*eased,22-8*eased)
+    if k>=1 then
+     coin.done=true;coin.gui:Destroy();cash.landed+=1
+     local last=cash.landed>=#cash.coins
+     local share=last and math.max(0,cash.amounts.Money-cash.paid) or coin.share
+     cash.paid+=share
+     hud:currencyHit(cash.receipt.id,'Money',share,false,last)
+     self.refs.audio:play('sale_credit',nil,{level=.5,pitch=.95+cash.landed*.045})
+     if last then
+      for key,amount in pairs(cash.amounts) do if key~='Money' and amount>0 then hud:currencyHit(cash.receipt.id,key,amount,false,true) end end
+     end
+    end
+   end
+  end
+  if #cash.coins==0 and not cash.creditedRest then
+   cash.creditedRest=true
+   for key,amount in pairs(cash.amounts) do if amount>0 then hud:currencyHit(cash.receipt.id,key,amount,cash.reduced,true) end end
+  end
+  local pop=.55+.55*ease(age/.2)-.1*ease((age-.2)/.3)
+  cash.scale.Scale=pop
+  local fade=math.clamp((age-1.5)/.4,0,1)
+  cash.card.TextTransparency=fade;cash.card.TextStrokeTransparency=.05+.95*fade
+  cash.caption.TextTransparency=fade;cash.caption.TextStrokeTransparency=.3+.7*fade
+  cash.card.Visible=not self.refs.hidden()
+  if age>2.4 then
+   for _,coin in ipairs(cash.coins) do if not coin.done then coin.gui:Destroy() end end
+   if cash.landed<#cash.coins then
+    local rest=math.max(0,cash.amounts.Money-cash.paid)
+    if rest>0 then hud:currencyHit(cash.receipt.id,'Money',rest,false,true) end
+    for key,amount in pairs(cash.amounts) do if key~='Money' and amount>0 then hud:currencyHit(cash.receipt.id,key,amount,false,true) end end
+   end
+   cash.card:Destroy();table.remove(self.cash,index)
+  end
  end
 end
 
