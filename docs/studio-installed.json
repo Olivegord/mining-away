@@ -1,16 +1,16 @@
 {
-  "commit": "909e363264fbf6a31bf0d0bed45d99e0c615dcee",
-  "installed_at": "2026-11-19T15:55:54+00:00",
+  "commit": "670add986cd0ca3976f92efc8c83835af8ec84fe",
+  "installed_at": "2026-11-19T15:58:20+00:00",
   "place_id": 124078027733625,
   "universe_id": 10774898335,
-  "canonical_sha256": "9795da557f223f56a17328c044984523e7b67c9e4bf147570ae2c7e5bb92ca3f",
+  "canonical_sha256": "5dc7df58181df49f229a29b94391cc32536aa6b7eb61de7fcf6b779025ea9880",
   "sources": {
     "ReplicatedStorage.Shared.CrystalAudio": "e7a2af785430e054385eec1ffe3b69036a1af8d4f33d43634fd91e65eed0215e",
     "ReplicatedStorage.Shared.DroneConfig": "df771afc6c3ebc6f2f55f0f0ac7f342ba4a0970ef8e8d4fa1c4d7cf319208f94",
     "ReplicatedStorage.Shared.TacticalHUD": "1dd12c12320a2ff2c259fa72b683a26272924ec19e9d91fd81dd7b48bfcebd46",
     "ServerScriptService.DroneRoleEffects": "a84d86988d99e49ed0a574b3a26012e9fa5004613764e7ce0f01a9760ee9d4c3",
-    "ServerScriptService.GlobalDroneControl": "f3a2e756ff7ed1b60e1027fc68b7b327fceadd6f69714fcde54977419528c61f",
+    "ServerScriptService.GlobalDroneControl": "40556110e94f19c545c5b6ca861be8a59b30cd1c3645da5e84100a328f71589d",
     "ServerScriptService.MiningDiscoveries": "1b00ffe6a06f6a109eb34b28694bb0d0ea94312ba8c8264946e3f723e1f5e6d8",
-    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "8b53025d07417a54115d967878a6fa26cb7676e5cb3f14b5848dfeabc0af8ffd"
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "8c1c4143d6e3a8d8b4d6ac9d22378d29090b3421015b3501faf2e37095680fd5"
   }
 }
