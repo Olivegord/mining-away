@@ -1069,9 +1069,18 @@ local function triangle(a: {number},b: {number},c: {number},outward: {number},th
 end
 -- Wedges for one face (cube-local coordinates). Thin, so a face never pokes
 -- out past a neighboring face that meets it at a sharp angle.
+D.SEAM_OVERLAP=.03 -- studs each face grows past its edges so neighbors leave no hairline gaps
 function D.faceWedges(face: any,thick: number?)
  local out={}
- local vs=face.verts
+ local src=face.verts
+ local c={0,0,0}
+ for _,v in ipairs(src) do c[1]+=v[1];c[2]+=v[2];c[3]+=v[3] end
+ c={c[1]/#src,c[2]/#src,c[3]/#src}
+ local vs={}
+ for i,v in ipairs(src) do
+  local d=sub(v,c);local len=math.sqrt(dot(d,d))
+  vs[i]=len>1e-6 and {v[1]+d[1]/len*D.SEAM_OVERLAP,v[2]+d[2]/len*D.SEAM_OVERLAP,v[3]+d[3]/len*D.SEAM_OVERLAP} or v
+ end
  for i=2,#vs-1 do triangle(vs[1],vs[i],vs[i+1],face.normal,thick or .12,out) end
  return out
 end
