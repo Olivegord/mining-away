@@ -109,6 +109,45 @@ local ring=D.outline(fresh,top,{44,H,44})
 check(#ring.edges>=6 and ring.reach>2,'round blast outline: '..#ring.edges)
 local trench=D.outline(fresh,{kind='b',x=20,y=H-1,z=20,yaw=0,sx=8,sy=3.2,sz=3.4},{20,H,20})
 check(#trench.edges>=4,'trench outline')
+-- No holes: straight down the middle of every cut there is a drawn floor
+-- (a face part that touches air), for crack-outs and shapes alike.
+local function inside2(poly,x,z)
+ local sign=0
+ for i=1,#poly do
+  local a,b=poly[i],poly[i%#poly+1]
+  local c=(b[1]-a[1])*(z-a[3])-(b[3]-a[3])*(x-a[1])
+  if math.abs(c)>1e-9 then
+   local s=c>0 and 1 or -1
+   if sign==0 then sign=s elseif s~=sign then return false end
+  end
+ end
+ return true
+end
+for _,kind in ipairs({'strata','voronoi'}) do
+ local hc=D.build(555,kind);local hr=D.rng(6)
+ local holes=0
+ for step=1,60 do
+  local id=D.pick(hc,{focusX=44,focusZ=44,random=hr});if not id then break end
+  local op=D.decodeOp(D.encodeOp(D.planCut(hc,({'cell','sphere','box','core'})[step%4+1],id,1,step,nil,hr)))
+  local res=D.apply(hc,op)
+  local x,z=res.center[1],res.center[3]
+  local found=false
+  for _,piece in pairs(hc.pieces) do
+   for _,f in ipairs(piece.faces) do
+    if f.normal[2]>.5 then
+     for _,poly in ipairs(D.exposedPolygons(hc,piece,f)) do
+      if inside2(poly,x,z) then found=true;break end
+     end
+    end
+    if found then break end
+   end
+   if found then break end
+  end
+  -- A cut that went all the way through to the ground is fine.
+  if not found and res.center[2]>6 then holes+=1 end
+ end
+ check(holes==0,kind..' every cut has a drawn floor below it ('..holes..' holes)')
+end
 -- Same ops, same rock: replaying an op list reproduces the geometry exactly.
 local a,b=D.build(4242),D.build(4242)
 local rr=D.rng(1)

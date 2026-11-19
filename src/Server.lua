@@ -3612,7 +3612,8 @@ function scene.digBreak(job,d,p)
  if tier>0 then
   local c=result.center
   table.insert(dig.pending,{at=now+DigCube.PAUSE,p=p,owner=d.owner,tier=tier,volume=result.volume,
-   position=dig.origin+Vector3.new(c[1],c[2],c[3]),floor=dig.origin.Y+math.max(0,c[2]-3)})
+   -- Pop straight up out of the cut and land on its own floor, where the player can reach it.
+   position=dig.origin+Vector3.new(c[1],result.bottom+1,c[3]),floor=dig.origin.Y+result.bottom})
  end
 end
 function scene.digGem(p,owner,tier,volume,position,floor)
@@ -3628,7 +3629,7 @@ function scene.digGem(p,owner,tier,volume,position,floor)
  scene.spawnOrePickup(dig.template,{owner=owner,runId=profile.run.id,nodeId='dig:'..dig.cube.opCount,
   material=cargo,tierMaterial=ore.material,value=Workshop.saleItem(cargo).cash,
   stone=false,rareGem=true,units=1,raw=true,oreArc=true,floor=floor+.22,reachBonus=0,modifiers=0},
-  position,Vector3.new(vx*.3,vy*.75,vz*.3),Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]))
+  position,Vector3.new(vx*.05,vy*.6,vz*.05),Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]))
  p.dirty=true;p.publishDirty=true
 end
 -- Replicate new operations at most ten times a second, 64 per attribute so

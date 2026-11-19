@@ -901,6 +901,11 @@ function D.apply(cube: any,op: any): any
  cube.removedVolume+=result.volume
  cube.opCount+=1
  local w,c=0,{0,0,0}
+ local bottom=math.huge
+ for _,chunk in ipairs(result.removed) do
+  for _,f in ipairs(chunk.faces) do for _,v in ipairs(f.verts) do bottom=math.min(bottom,v[2]) end end
+ end
+ result.bottom=bottom<math.huge and bottom or 0
  for _,chunk in ipairs(result.removed) do
   local v,cen=measure(chunk.faces)
   w+=v;c[1]+=cen[1]*v;c[2]+=cen[2]*v;c[3]+=cen[3]*v
@@ -1105,6 +1110,47 @@ local function triangle(a: {number},b: {number},c: {number},outward: {number},th
 end
 -- Wedges for one face (cube-local coordinates). Thin, so a face never pokes
 -- out past a neighboring face that meets it at a sharp angle.
+-- Convex polygon minus convex polygon (same plane), as convex parts.
+local function subtract(poly: {{number}},cut: {{number}},normal: {number}): {{{number}}}
+ local c={0,0,0}
+ for _,v in ipairs(cut) do c[1]+=v[1];c[2]+=v[2];c[3]+=v[3] end
+ c={c[1]/#cut,c[2]/#cut,c[3]/#cut}
+ local out={};local rest=poly
+ for i=1,#cut do
+  local a,b=cut[i],cut[i%#cut+1]
+  local e=cross(sub(b,a),normal)
+  if dot(e,sub(c,a))>0 then e=scale(e,-1) end
+  -- e points out of the cut across this edge.
+  local outside=clipPolygon(rest,a,scale(e,-1))
+  if #outside>=3 and polyArea(outside)>1e-4 then table.insert(out,outside) end
+  rest=clipPolygon(rest,a,e)
+  if #rest<3 then return out end
+ end
+ return out
+end
+-- The parts of a face that touch air. A face against a neighbor that was only
+-- partly cut away shows exactly where the neighbor's rock is gone.
+function D.exposedPolygons(cube: any,piece: any,face: any): {{{number}}}
+ local l=face.label
+ if l<=0 or cube.removed[l] or not cube.touched[l] then
+  return D.faceOpen(cube,face) and {face.verts} or {}
+ end
+ local parts={face.verts}
+ for pid in pairs(cube.cellPieces[l]) do
+  for _,g in ipairs(cube.pieces[pid].faces) do
+   if g.label==piece.cell and dot(g.normal,face.normal)<-.999 and math.abs(dot(face.normal,sub(g.center,face.center)))<1e-3 then
+    local nextParts={}
+    for _,part in ipairs(parts) do for _,q in ipairs(subtract(part,g.verts,face.normal)) do table.insert(nextParts,q) end end
+    parts=nextParts
+    if #parts==0 then return parts end
+   end
+  end
+ end
+ local out={}
+ for _,q in ipairs(parts) do if polyArea(q)>.05 then table.insert(out,q) end end
+ return out
+end
+
 D.SEAM_OVERLAP=.01 -- studs a face grows past edges it shares with a neighbor's flat surface
 -- Wedges for one face of a piece (cube-local coordinates). Where the face
 -- meets the cube's flat outer surface, its edge is pulled in by the wedge
@@ -1114,9 +1160,14 @@ local function covering(g: any): boolean
  return (g.label<-1 and g.label>-7) or (g.normal~=nil and g.normal[2]>.7)
 end
 -- shown: optional {[faceIndex]=true} of faces drawn too (default: all).
-function D.pieceWedges(faces: {any},index: number,thick: number?,shown: {[number]:boolean}?): {any}
+function D.pieceWedges(faces: {any},index: number,thick: number?,shown: {[number]:boolean}?,polygon: {{number}}?): {any}
  local t=thick or .12
  local face=faces[index]
+ if polygon then
+  -- An exposed part of a face: no rim pull-in (its edges are not the face's).
+  face={verts=polygon,normal=face.normal,label=CUT}
+  faces={face};index=1;shown=nil
+ end
  local function k(v: {number}) return string.format('%.2f,%.2f,%.2f',v[1],v[2],v[3]) end
  -- Edges this face shares with a drawn covering face (the flat outer
  -- surface, or a floor) are pulled in, so its rim hides under that surface.

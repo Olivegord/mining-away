@@ -123,23 +123,50 @@ end
 function V:refreshPiece(pid: number)
  local piece=self.cube.pieces[pid]
  if not piece then self:dropPieceModel(pid);return end
- local shown={}
- for fi,f in ipairs(piece.faces) do if self:faceShown(piece,f) then table.insert(shown,fi) end end
- local sig=table.concat(shown,',')
+ -- Each shown face: its index and the polygons that touch air.
+ local shown={};local sigParts={}
+ for fi,f in ipairs(piece.faces) do
+  local l=f.label
+  local polys
+  if l<-1 and l>-7 then
+   local sides=self.sideBroken[piece.cell]
+   polys=(sides~=nil and sides[l]==true) and {f.verts} or nil
+  elseif l>0 then
+   polys=DigCube.exposedPolygons(self.cube,piece,f)
+   if #polys==0 then polys=nil end
+  elseif l==0 then polys={f.verts} end
+  if polys then
+   table.insert(shown,{fi=fi,polys=polys,whole=polys[1]==f.verts})
+   table.insert(sigParts,fi..':'..#polys..':'..string.format('%.1f',polys[1][1][1]+polys[1][1][3]))
+  end
+ end
+ local sig=table.concat(sigParts,',')
  if sig==(self.sig[pid] or '') then return end
  self:dropPieceModel(pid)
  self.sig[pid]=sig
  if #shown==0 then return end
  local model=Instance.new('Model');model.Name='Piece'..pid
  local shownSet={}
- for _,fi in ipairs(shown) do shownSet[fi]=true end
- for _,fi in ipairs(shown) do
-  local face=piece.faces[fi]
+ for _,item in ipairs(shown) do if item.whole then shownSet[item.fi]=true end end
+ for _,item in ipairs(shown) do
+  local face=piece.faces[item.fi]
   local color=rgb(DigCube.faceColor(self.cube,piece.cell,face))
-  for _,w in ipairs(DigCube.pieceWedges(piece.faces,fi,nil,shownSet)) do
-   local part=self:wedge(w,model)
-   self:dress(part,color,piece.cell)
-   self.base[part]=part.CFrame;self.tone[part]=color
+  for _,poly in ipairs(item.polys) do
+   local wedges=item.whole and DigCube.pieceWedges(piece.faces,item.fi,nil,shownSet) or DigCube.pieceWedges(piece.faces,item.fi,nil,nil,poly)
+   for _,w in ipairs(wedges) do
+    local part=self:wedge(w,model)
+    self:dress(part,color,piece.cell)
+    self.base[part]=part.CFrame;self.tone[part]=color
+   end
+   -- Floors also get thick invisible collision underneath, so a fast fall
+   -- never slips through the thin visible surface.
+   if face.normal[2]>.5 then
+    for _,w in ipairs(DigCube.pieceWedges(piece.faces,item.fi,1.4,nil,poly)) do
+     local solid=self:wedge(w,model)
+     solid.Anchored=true;solid.CanCollide=true;solid.CanQuery=false;solid.CanTouch=false
+     solid.Transparency=1;solid.CastShadow=false;solid.Name='DigFloor'
+    end
+   end
   end
  end
  model.Parent=self:cellModel(piece.cell)
