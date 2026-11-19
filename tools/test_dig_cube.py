@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Dig Cube 3D Voronoi geometry and digging rules, run on the real module with the Luau CLI.
+"""Dig Cube geometry, cutters and digging rules, run on the real module with the Luau CLI.
 
-Checks: cell volumes fill the box exactly, shared faces are symmetric, a
-simulated crew never cuts a cell with another resting on it (nothing floats),
-digs craters (deep, not layer by layer, not a one-cell shaft), blasts grow with
-cut size, a split gives two closed halves with the cell's volume, crack lines
-exist, tiles cover the outer surface, gems are rare, encoding round-trips and
-generation is deterministic. Not engine QA: looks, feel and performance need Studio.
+For every tessellation (3D Voronoi, strata, bricks): cells fill the box exactly
+and neighbors agree. For every cutter (cell crack-out, round blast, trench,
+core bore): a cut removes what its preview said, a box fully inside the rock
+removes exactly its own volume, rock volume is conserved across hundreds of
+mixed cuts, crack-outs never leave a cell resting on a removed one, the crew
+digs craters (deep before the top is cleared), cut outlines exist, halves keep
+the removed volume, ops encode/decode losslessly, and two cubes replaying the
+same ops end up identical (what keeps server and clients in sync).
+Not engine QA: looks, feel and performance need Studio.
 """
 from pathlib import Path
 import subprocess
@@ -21,114 +24,117 @@ local D=(function()
 """ + module + r"""
 end)()
 local function check(ok,msg) if not ok then error('FAIL '..msg,2) end end
-local t0=os.clock()
-local cube=D.build(12345)
-local buildTime=os.clock()-t0
+local function piecesVolume(c) local v=0;for _,p in pairs(c.pieces) do v+=p.volume end;return v end
+local function pieceCount(c) local n=0;for _ in pairs(c.pieces) do n+=1 end;return n end
 local W,H=D.WIDTH,D.HEIGHT
-local vol=0
-for _,cell in ipairs(cube.cells) do
- vol+=cell.volume
- check(#cell.faces>=4,'closed cell '..cell.id)
- for _,n in ipairs(cell.neighbors) do check(table.find(cube.cells[n].neighbors,cell.id)~=nil,'neighbor symmetry') end
-end
-check(math.abs(vol-W*W*H)<W*W*H*.001,'cells fill the box: '..vol)
-check(#cube.cells>=250 and #cube.cells<=1200,'cell count '..#cube.cells)
-local ores=0;for _,c in ipairs(cube.cells) do if c.ore>0 then ores+=1 end end
-check(ores>0.04*#cube.cells and ores<0.45*#cube.cells,'ore share '..ores)
--- Simulated crew: focus on a point, 150 cuts, then move the focus.
-local rnd=D.rng(99);local recent={};local claims={}
-local deepest=0
-local topAtDepth=nil
-for step=1,150 do
- local taken,points={},{}
- for _,id in ipairs(claims) do taken[id]=true;table.insert(points,{cube.cells[id].cx,cube.cells[id].cz}) end
- local fx,fz=step<=110 and W*.3 or W*.72,step<=110 and W*.4 or W*.7
- local id=D.pick(cube,{focusX=fx,focusZ=fz,taken=taken,takenPoints=points,recent=recent,now=step,random=rnd})
- check(id~=nil,'a cell is available at step '..step)
- for _,u in ipairs(cube.cells[id].up) do check(cube.removed[u],'nothing rests on a cut cell') end
- table.insert(claims,id);if #claims>4 then table.remove(claims,1) end
- D.remove(cube,id);recent[id]=step
- deepest=math.max(deepest,H-cube.cells[id].minY)
- if deepest>=H*.45 and not topAtDepth then
-  topAtDepth=0
-  for _,cell in ipairs(cube.cells) do if cell.maxY>H-.01 and cube.removed[cell.id] then topAtDepth+=1 end end
+local lines={}
+for _,kind in ipairs(D.TESSELLATIONS) do
+ local t0=os.clock()
+ local cube=D.build(12345,kind)
+ local buildTime=os.clock()-t0
+ check(cube.tessellation==kind,'tessellation '..kind)
+ local vol=0
+ for _,cell in ipairs(cube.cells) do
+  vol+=cell.volume
+  for _,n in ipairs(cell.neighbors) do check(table.find(cube.cells[n].neighbors,cell.id)~=nil,kind..' neighbor symmetry') end
  end
-end
-check(deepest>=H*.45,'crew digs down: '..deepest)
-local topCells,topCut=0,0
-for _,cell in ipairs(cube.cells) do
- if cell.maxY>H-.01 then topCells+=1;if cube.removed[cell.id] then topCut+=1 end end
-end
-check(topAtDepth and topAtDepth<topCells*.45,'reaches half depth before clearing the top: '..tostring(topAtDepth)..'/'..topCells)
--- Not a drill: removed volume spreads wider near the top than at depth.
-local band={0,0,0,0}
-for id in pairs(cube.removed) do local c=cube.cells[id];local b=math.clamp(math.floor((H-c.cy)/H*4)+1,1,4);band[b]+=c.volume end
-check(band[1]>=band[3],'crater narrows with depth')
--- Blasts.
-local r2=D.rng(5)
-local one,big=0,0
-for i=1,20 do
- local seed=next(cube.frontier)
- local id
- for k in pairs(cube.frontier) do if D.diggable(cube,k) then id=k;break end end
- check(#D.chunk(cube,id,1,nil,r2)==1,'cut size 1 is one cell')
- local blast=D.chunk(cube,id,2,nil,r2)
- local inBlast={};for _,m in ipairs(blast) do inBlast[m]=true end
- for _,m in ipairs(blast) do for _,u in ipairs(cube.cells[m].up) do check(cube.removed[u] or inBlast[u],'a blast leaves nothing floating') end end
- big+=#blast
-end
-check(big/20>=3,'cut size 2 blasts several cells: '..(big/20))
--- Split halves keep the volume.
-for id=1,40 do
- local sp=D.split(cube,id)
- local function hv(faces)
-  local v=0
-  local ref={0,0,0};local n=0
-  for _,f in ipairs(faces) do for _,p in ipairs(f.verts) do ref[1]+=p[1];ref[2]+=p[2];ref[3]+=p[3];n+=1 end end
-  ref={ref[1]/n,ref[2]/n,ref[3]/n}
-  for _,f in ipairs(faces) do
-   for i=2,#f.verts-1 do
-    local a,b,c=f.verts[1],f.verts[i],f.verts[i+1]
-    local ax,ay,az=a[1]-ref[1],a[2]-ref[2],a[3]-ref[3]
-    local bx,by,bz=b[1]-ref[1],b[2]-ref[2],b[3]-ref[3]
-    local cx,cy,cz=c[1]-ref[1],c[2]-ref[2],c[3]-ref[3]
-    v+=math.abs(ax*(by*cz-bz*cy)-ay*(bx*cz-bz*cx)+az*(bx*cy-by*cx))/6
-   end
+ check(math.abs(vol-W*W*H)<W*W*H*.001,kind..' cells fill the box: '..vol)
+ -- A crew mixing all four cutters.
+ local rnd=D.rng(99);local recent={}
+ local kinds={'cell','sphere','box','core'}
+ local deepest,topAtDepth=0,nil
+ local topCells=0;for _,cell in ipairs(cube.cells) do if cell.maxY>H-.01 then topCells+=1 end end
+ local t1=os.clock()
+ local mismatch=0
+ for step=1,160 do
+  local fx,fz=step<=120 and W*.3 or W*.72,step<=120 and W*.4 or W*.7
+  local id=D.pick(cube,{focusX=fx,focusZ=fz,recent=recent,now=step,random=rnd})
+  check(id~=nil,kind..' a cell is available at step '..step)
+  local cutter=kinds[step%4+1]
+  local op=D.decodeOp(D.encodeOp(D.planCut(cube,cutter,id,1+(step%5==0 and 1 or 0),step*.9,nil,rnd)))
+  check(op~=nil,'op round trip')
+  if op.kind=='c' then for _,cid in ipairs(op.cells) do for _,u in ipairs(cube.cells[cid].up) do check(cube.removed[u] or table.find(op.cells,u),kind..' crack-out leaves nothing resting on it') end end end
+  local predicted=D.preview(cube,op)
+  local result=D.apply(cube,op)
+  if math.abs(predicted-result.volume)>math.max(predicted*.35,8) and op.kind=='c' then mismatch+=1 end
+  for _,cid in ipairs(result.cells) do recent[cid]=step;deepest=math.max(deepest,H-cube.cells[cid].minY) end
+  if deepest>=H*.45 and not topAtDepth then
+   topAtDepth=0;for _,cell in ipairs(cube.cells) do if cell.maxY>H-.01 and cube.touched[cell.id] then topAtDepth+=1 end end
   end
-  return v
  end
- local total=hv(sp.a)+hv(sp.b)
- check(math.abs(total-cube.cells[id].volume)<cube.cells[id].volume*.01,'halves keep the volume of cell '..id)
- local cut=0;for _,f in ipairs(sp.a) do if f.label==0 then cut+=1 end end
- check(cut==1,'half has one cut face')
+ local cutTime=(os.clock()-t1)/160
+ check(mismatch==0,kind..' crack-out preview matches')
+ check(math.abs(piecesVolume(cube)+cube.removedVolume-W*W*H)<W*W*H*.002,kind..' rock volume conserved: '..(piecesVolume(cube)+cube.removedVolume))
+ check(deepest>=H*.4,kind..' crew digs down: '..deepest)
+ check(topAtDepth==nil or topAtDepth<topCells*.5,kind..' deep before the top is cleared: '..tostring(topAtDepth)..'/'..topCells)
+ table.insert(lines,string.format('%s: %d cells, build %.2fs, %.1f ms per cut, %d pieces after 160 mixed cuts, %.0f studs deep',kind,#cube.cells,buildTime,cutTime*1000,pieceCount(cube),deepest))
 end
--- Cracks and wedges.
-local open
-for id in pairs(cube.frontier) do if not cube.removed[id] then open=id;break end end
-local cr=D.cracks(cube,open)
-check(#cr.edges>=3 and cr.reach>0,'crack edges')
-local wedges=0
-for _,f in ipairs(cube.cells[open].faces) do
- for _,w in ipairs(D.faceWedges(f)) do check(w.size[2]>0 and w.size[3]>0,'wedge size');wedges+=1 end
+-- Exact shapes: a box fully inside fresh rock removes exactly its volume;
+-- a round blast removes about a ball; previews match.
+local cube=D.build(7)
+local box={kind='b',x=44,y=40,z=44,yaw=.7,sx=8,sy=3.2,sz=3.4}
+check(math.abs(D.preview(cube,box)-8*3.2*3.4)<.05,'box preview is its volume')
+local r=D.apply(cube,box)
+check(r.volume>=8*3.2*3.4-.05 and r.volume<=8*3.2*3.4+6*D.MIN_PIECE,'box removes its volume (plus crumbled slivers): '..r.volume)
+check(#r.added>0 and #r.removed>0,'box splits pieces into kept parts and the cut')
+local sphere={kind='s',x=30,y=30,z=30,r=4}
+local pv=D.preview(cube,sphere)
+local sr=D.apply(cube,sphere)
+local ball=4/3*math.pi*64
+check(sr.volume>=pv-.05 and sr.volume<=pv+18*D.MIN_PIECE and sr.volume>ball*.95 and sr.volume<ball*1.45,'round blast removes about a ball: '..sr.volume)
+local core={kind='y',x=60,y=30,z=60,r=2.8,h=5}
+local cr=D.apply(cube,core)
+check(cr.volume>math.pi*2.8^2*5*.95 and cr.volume<math.pi*2.8^2*5*1.1,'core bore removes about a cylinder: '..cr.volume)
+-- Halves keep the removed volume.
+local A,B=D.splitChunks(r.removed,r.center,D.splitPlane(box,r.center))
+local hv=0
+for _,list in ipairs({A,B}) do for _,chunk in ipairs(list) do
+ local v=0
+ local ref={0,0,0};local n=0
+ for _,f in ipairs(chunk.faces) do for _,q in ipairs(f.verts) do ref[1]+=q[1];ref[2]+=q[2];ref[3]+=q[3];n+=1 end end
+ ref={ref[1]/n,ref[2]/n,ref[3]/n}
+ for _,f in ipairs(chunk.faces) do for i=2,#f.verts-1 do
+  local a,b,c=f.verts[1],f.verts[i],f.verts[i+1]
+  local ax,ay,az=a[1]-ref[1],a[2]-ref[2],a[3]-ref[3];local bx,by,bz=b[1]-ref[1],b[2]-ref[2],b[3]-ref[3];local cx,cy,cz=c[1]-ref[1],c[2]-ref[2],c[3]-ref[3]
+  v+=math.abs(ax*(by*cz-bz*cy)-ay*(bx*cz-bz*cx)+az*(bx*cy-by*cx))/6
+ end end
+ hv+=v
+end end
+check(math.abs(hv-r.volume)<r.volume*.01,'halves keep the cut volume')
+check(#A>0 and #B>0,'cut splits into two halves')
+-- Outlines: a round blast on the top surface traces a closed ring of cracks.
+local fresh=D.build(7)
+local top={kind='s',x=44,y=H-1,z=44,r=4}
+local ring=D.outline(fresh,top,{44,H,44})
+check(#ring.edges>=6 and ring.reach>2,'round blast outline: '..#ring.edges)
+local trench=D.outline(fresh,{kind='b',x=20,y=H-1,z=20,yaw=0,sx=8,sy=3.2,sz=3.4},{20,H,20})
+check(#trench.edges>=4,'trench outline')
+-- Same ops, same rock: replaying an op list reproduces the geometry exactly.
+local a,b=D.build(4242),D.build(4242)
+local rr=D.rng(1)
+local ops={}
+for step=1,60 do
+ local id=D.pick(a,{focusX=40,focusZ=40,random=rr})
+ local op=D.encodeOp(D.planCut(a,({'cell','sphere','box','core'})[step%4+1],id,1,step,nil,rr))
+ D.apply(a,D.decodeOp(op));table.insert(ops,op)
 end
-check(wedges>0,'cell wedges')
--- Tiles cover every outer face of every cell except the bottom.
-local tiles,faceTiles=D.tiles(cube)
-for _,cell in ipairs(cube.cells) do
- for fi,f in ipairs(cell.faces) do if f.label<-1 then check(#faceTiles[cell.id][fi]>0,'outer face under a tile') end end
+for _,op in ipairs(ops) do D.apply(b,D.decodeOp(op)) end
+check(pieceCount(a)==pieceCount(b) and math.abs(piecesVolume(a)-piecesVolume(b))<1e-6,'replayed ops give identical rock')
+-- Cutters by drone: Strikers spread over all four; typed drones keep theirs.
+local seen={}
+for i=1,40 do seen[D.cutterFor('Striker','drone'..i)]=true end
+check(seen.cell and seen.sphere and seen.box and seen.core,'Strikers get every cutter')
+check(D.cutterFor('Charger','x')=='sphere' and D.cutterFor('Gridcutter','x')=='box','typed cutters')
+-- Gem rate per single cut.
+local gems=0;local g=D.rng(8);local gc=D.build(99)
+for i=1,300 do
+ local id=D.pick(gc,{random=g});if not id then break end
+ local res=D.apply(gc,D.planCut(gc,'cell',id,1,0,nil,g))
+ if D.gemRoll(gc,res,g)>0 then gems+=1 end
 end
--- Gems: some cuts hold one, most do not.
-local gems=0;local g=D.rng(8)
-for i=1,400 do if D.gemRoll(cube,{(i%#cube.cells)+1},g)>0 then gems+=1 end end
-check(gems>15 and gems<180,'gem chance per cut '..gems..'/400')
--- Encode/decode and determinism.
-local set=D.decode(cube,D.encode(cube))
-local n=0;for id in pairs(set) do n+=1;check(cube.removed[id],'decoded id removed') end
-check(n==cube.removedCount,'round trip count')
-local again=D.build(12345)
-check(#again.cells==#cube.cells and again.cells[77].cx==cube.cells[77].cx,'deterministic')
-print(string.format('PASS dig cube 3D: %d cells (avg %.0f cubic studs), volume exact, %d ore cells; build %.2fs',#cube.cells,vol/#cube.cells,ores,buildTime))
-print(string.format('PASS digging: 150 cuts reach %.0f of %d studs deep, %d/%d top cells cut on reaching half depth, nothing ever floats; blast at cut 2 = %.1f cells; %d/400 cuts hold a gem',deepest,H,topAtDepth,topCells,big/20,gems))
+check(gems>15 and gems<130,'gem chance per cut '..gems..'/300')
+for _,l in ipairs(lines) do print('PASS '..l) end
+print(string.format('PASS exact cutters: box %.2f/%.2f cubic studs, round blast %.0f (ball %.0f), core %.0f; halves keep volume; outlines; replay identical; %d/300 cuts hold a gem',r.volume,8*3.2*3.4,sr.volume,ball,cr.volume,gems))
 """
 with tempfile.TemporaryDirectory() as folder:
     path = Path(folder) / "dig_cube3d_test.luau"

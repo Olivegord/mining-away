@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 18 — the rock must support any kind of cut
+
+Make the Dig Cube ready for **all sorts of manipulation**: drones that take out **circular chunks**, others that take out **straight rectangles**, "on and on"; support **Voronoi and other tessellations**. Also: **too much flash when opening rocks**, and the **weird edges** on the rocks have to go.
+
 ## November 18 — dig cube readability and reused effects
 
 The owner found the 3D facets confusing and everything hard to see; after flat per-rock colors they approved ("oh yess"). For the mining outline, **reuse the pulsing outline from the field rocks**, and **reuse many particle effects from the old loop**.
