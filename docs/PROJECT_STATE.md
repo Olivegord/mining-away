@@ -1,5 +1,9 @@
 # Shared project context
 
+## November 18 — Quarry World restyle and Laser Barrage (replaces Toy World look and Overdrive)
+
+Owner critique of the Toy World build: tiny, candyland, too many colors, the buff sucks, the mineral stands were removed. **Map:** `tools/studio_quarry_world.lua` + `tools/refresh_quarry_world.py` archive `Map.ToyWorld` and `Lighting.ToyWorldAir` into `ServerStorage.ToyWorldArchive`, move `MineralLineup` (the glowing display stands) back onto the map, and add `Map.QuarryWorld`: a stepped sandstone basin rim (84 terrace blocks), 20 slate monoliths, 16 distant mesas in warm haze, sand paving slabs between fields, slate field beacons with neon pips, one stone ring at spawn, and the same station markers in one accent each. Palette: sand, stone, slate, muted green; the five field colors (beds at 50% toward charcoal) are the only strong accents. Light: 15:00, brightness 2.4, warm ambient, exposure −0.2, environment diffuse 0.35 / specular 0.3 so shade stays warm. Team Create save 420; canonical mirrored with all 50 Sources preserved. **Abilities:** Overdrive is gone. Laser types now fire a **Laser Barrage**: each drone of that type charges an orb, then fires one thick beam at its own rock, 0.16 s apart. A shot is 5 s of that drone's mining (starter: 150 damage, which breaks an Amber rock of 110 HP but is only 3% of a Diamond rock), so hard fields stay hard. Shockwave damage is now capped by the crew's power the same way. Ability breaks do not refill buttons. `tools/test_crew_loop.py` covers this. Installed by `tools/studio_apply.py` (save 421). **Not verified in Play.**
+
 ## November 18 — the simple loop: crew abilities, on-field cash-out, Toy World map
 
 Follows the owner's "make the loop fun" goal (see OWNER_REQUIREMENTS). Branch `codex/fun-loop`, merged into `codex/restore-feel-prestige`.
