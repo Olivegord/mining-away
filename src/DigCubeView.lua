@@ -149,9 +149,9 @@ function V:puff(at: Vector3,color: Color3,scale: number,glints: number)
  self.puffs+=1
  anchor.Destroying:Connect(function() self.puffs-=1 end)
  local dust=Instance.new('ParticleEmitter');dust.Name='Dust'
- EnergyDisc.configure(dust,.8*scale,.5,.5,1.5,.25)
+ EnergyDisc.configure(dust,1.1*scale,.42,.5,1.6,.25)
  dust.LightEmission=0;dust.LightInfluence=1;dust.Brightness=1
- dust.Color=ColorSequence.new(color:Lerp(STONE_LIGHT,.25))
+ dust.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(255,246,226),.5))
  dust.Enabled=false;dust.Rate=0
  dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
  dust.Speed=NumberRange.new(4*scale,10*scale);dust.Lifetime=NumberRange.new(.3,.55);dust.Drag=5
@@ -347,8 +347,9 @@ function V:split(op: any,now: number)
  local ctx=self.ctx
  local serverNow=workspace:GetServerTimeNow()
  local floor=o.Y+first.y0
- -- Particles a little brighter than the (muted) rock so they read on it.
- local vivid=color:Lerp(Color3.fromRGB(255,244,220),.35)
+ -- Particles much lighter than the rock: in the rock's own color the whole
+ -- burst disappeared against the pit.
+ local vivid=color:Lerp(Color3.fromRGB(255,246,226),.62)
  local lively=not self:reduced()
  local rock=self.holder and self.holder:FindFirstChild('Rock')
  local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
@@ -358,7 +359,7 @@ function V:split(op: any,now: number)
   self:puff(top,color,.8,4)
   -- The field rocks' break particles and chips, smaller than the full split.
   if lively then
-   if ctx.effects then ctx.effects.ImpactParticles(top,vivid,.75,'CrystalBreak',nil,color,nil,.6) end
+   if ctx.effects then ctx.effects.ImpactParticles(top,vivid,1.15,'CrystalBreak',nil,vivid,nil,.8) end
    if ctx.impact and surface then ctx.impact:chips(serverNow,top,Vector3.yAxis,surface,3,floor) end
    if ctx.beat then ctx.beat('Split',center,serverNow,.45) end
   end
@@ -373,8 +374,8 @@ function V:split(op: any,now: number)
  if lively then
   local strength=math.clamp(bulk/4,1,2.2)
   if ctx.effects then
-   ctx.effects.ImpactParticles(center,vivid,strength*.85,'CrystalBreak',nil,color)
-   ctx.effects.Pulse(Vector3.new(center.X,floor+.09,center.Z),vivid,strength*.5,strength*5,.45)
+   ctx.effects.ImpactParticles(top,vivid,strength*1.3,'CrystalBreak',nil,vivid)
+   ctx.effects.Pulse(Vector3.new(center.X,floor+.09,center.Z),vivid,strength*.6,strength*6.5,.5)
   end
   if ctx.impact then
    ctx.impact:fireworks(center,floor,vivid,strength,serverNow,4)
