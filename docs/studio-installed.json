@@ -1,9 +1,9 @@
 {
-  "commit": "a9e6acf51ac54e82616d02c36ccee21d12faa8fa",
-  "installed_at": "2026-11-20T04:59:15+00:00",
+  "commit": "b9c95a5cf789a2649df2869ccf184d069d2abe2b",
+  "installed_at": "2026-11-20T05:00:17+00:00",
   "place_id": 124078027733625,
   "universe_id": 10774898335,
-  "canonical_sha256": "f08fa1a10e2cfa55256f5c33e6028e7872c2060da63c2a7b931c4fc8d0da291c",
+  "canonical_sha256": "757084236159e6ac99931d88ff3285657685ac76d8fa54f2715debbabdeae5c2",
   "sources": {
     "ReplicatedStorage.Shared.CrystalAudio": "e7a2af785430e054385eec1ffe3b69036a1af8d4f33d43634fd91e65eed0215e",
     "ReplicatedStorage.Shared.DroneConfig": "df771afc6c3ebc6f2f55f0f0ac7f342ba4a0970ef8e8d4fa1c4d7cf319208f94",
