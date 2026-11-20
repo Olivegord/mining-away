@@ -1,5 +1,25 @@
 # Shared project context
 
+## November 19 — Dig Cube breaks play the field rocks' whole break, with the frame pause
+
+Owner: "make sure breaks carry over almost all effects of the old system, ESPECIALLY the cocktail of particle effects and frame pauses when breaking rocks." The old break was traced in `CrystalImpactView.split`, `ImpactFreeze` and the split callback in `Client.lua`, and `DigCubeView:split`/`:burst` now run the same sequence (`00c9313`):
+
+| Old field rock break | Dig Cube break now |
+| --- | --- |
+| `ImpactFreeze`: the rock holds 1 frame (Split) or 2 (HeavySplit), own breaks only, at most once per 0.9 s | The piece flashes hot (`DigBreakFlash` plate on its top face) and everything waits 2 frames for a piece, 3 for a split, 5 for a heavy split; own breaks only; at most once per 0.3 s for splits, 0.9 s for pieces. Longer than the original on purpose so it is felt |
+| `crystal_split` + `crystal_impact` + `crystal_release_tink` | Same three cues, same levels (62% for other players) |
+| Split callback: combo counter and `Split`/`HeavySplit` camera hit | Same function, shared as `rockDamage.splitBeat` |
+| `releaseSparks`: 8 streaks and embers | `fireworks(..., 8)` |
+| Floor `Pulse` ring, strength×0.55 → ×6.6 over 0.58 s | Same values |
+| `ImpactParticles(..., strength×0.83, 'CrystalBreak')` | Same call |
+| 8 `CrystalBreakPiece` chips, two tink on landing; `CrystalSplitSpark` pop | Same, through the new `CrystalImpactView:breakPieces` |
+| Two halves hinge open | Not carried over: the real shards do this job |
+| Crack stage (`seamBurst`): chips, 2 sparks, light particle burst, small ring | A piece breaking before the last: 4 chips, 3 sparks, particle burst at 0.55 density, small ring, `Split` beat at 0.55 |
+
+Break strength is `clamp(bulk × 0.36, 0.9, 2.45)` with `bulk` the cube root of the broken volume; heavy at 1.35 as before. The view learns which cells its player's drones are cutting from their `DigOp` keys, so only your own breaks pause, count toward the combo and play at full volume. Particle colors stay 62% lighter than the rock and the tumbling pieces darker, since rock-colored effects vanish against the pit. Field rocks are unchanged.
+
+A Play recording (agent-started, stopped; no script errors) counted every element live (`DigBreakFlash`, `CrystalFireworkStreak`, `CrystalDriftingEmber`, `CrystalBreakPiece`, `CrystalSplitSpark`, `RolePressureFront`, `CrystalBreakParticles`, `CrystalChip`) and showed the hot flash, ring, shards and the "x2 COMBO" counter on screen. Whether the pause length and the mix feel right is the owner's call; sound was not heard. `test_refinement_client.py` and `test_physical_mining.py` fail identically without this change. Team Create save **458**; not published; Studio left in Edit.
+
 ## November 19 — owner: "most effects are missing"; break effects and glow restored
 
 The strip-down of the Dig Cube went too far. Owner, after playing it: "no.. most effects are missing dude. bad." Two causes. First, the break itself had been cut to shards plus one small puff. Second, the shared `MiningEnergyBloom` was only ever created by a `work:burst` call the rework removed, so on the Dig Cube nothing glowed at all; both blooms had also been cut hard.

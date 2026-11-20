@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 19 — Dig Cube breaks must carry the old break over
+
+"Make sure breaks carry over almost all effects of the old system, ESPECIALLY the cocktail of particle effects and frame pauses when breaking rocks." The field rock break (sounds, combo, camera hit, sparks, ring, particle burst, tumbling pieces, pop, and the frame hold before it) is the standard for every break in the Dig Cube.
+
 ## November 19 — do not strip the effects: "most effects are missing dude. bad"
 
 After the cracking rework removed most Dig Cube effects, the owner rejected it. Breaking must keep its burst, sparks, shock ring, chips, beam contact feedback and glow. What the owner disliked earlier was noise, low-quality particles, glare, blur and jagged drawn lines, not the presence of effects. Keep the piece-by-piece breaking and the shards; remove an effect only when the owner names it.
