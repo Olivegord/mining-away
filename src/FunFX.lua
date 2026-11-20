@@ -79,7 +79,7 @@ function Fun.paintCube(view,body,id)
  trail.Lifetime=.32;trail.MinLength=.1;trail.FaceCamera=true;trail.Enabled=false;trail.Parent=body
  -- Little sparkles shed from the belly while lasering.
  local motes=Instance.new('ParticleEmitter');motes.Name='FunMotes';motes.Texture=SPARKLE
- motes.Color=ColorSequence.new(color:Lerp(WHITE,.5),color);motes.LightEmission=.4;motes.LightInfluence=0
+ motes.Color=ColorSequence.new(color:Lerp(WHITE,.5),color);motes.LightEmission=.7;motes.LightInfluence=0
  motes.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(1,0)})
  motes.Transparency=NumberSequence.new(.1,1);motes.Lifetime=NumberRange.new(.5,.9);motes.Rate=0
  motes.Speed=NumberRange.new(1.5,3.5);motes.SpreadAngle=Vector2.new(70,70);motes.EmissionDirection=Enum.NormalId.Bottom
@@ -93,7 +93,7 @@ function Fun.stepCube(record,speed,working,hidden,now)
  local calm=reduced()
  local cruising=not hidden and not calm and speed>9
  if record.trail.Enabled~=cruising then record.trail.Enabled=cruising end
- local rate=(working and not hidden and not calm) and 6 or 0
+ local rate=(working and not hidden and not calm) and 11 or 0
  if record.motes.Rate~=rate then record.motes.Rate=rate end
  -- A steady, small glow: a wide light strobing under every working cube lit
  -- the ground in flickering colored patches and drowned the effects.

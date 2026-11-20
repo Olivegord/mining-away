@@ -126,8 +126,8 @@ function W:energyBloom()
  local lighting=game:GetService('Lighting')
  local existing=lighting:FindFirstChild('MiningEnergyBloom')
  local bloom=existing or Instance.new('BloomEffect');bloom.Name='MiningEnergyBloom'
- -- Kept faint and tight: a wide bloom smeared every bright effect into a haze.
- bloom.Enabled=true;bloom.Intensity=.18;bloom.Size=10;bloom.Threshold=1.6;bloom.Parent=lighting
+ -- A little under the original (.5, 20, 1.25): cut much lower, bright effects went flat.
+ bloom.Enabled=true;bloom.Intensity=.4;bloom.Size=16;bloom.Threshold=1.3;bloom.Parent=lighting
  self.bloom=bloom;self.ownsBloom=existing==nil
 end
 function W:burst(position,normal,color,count,now)

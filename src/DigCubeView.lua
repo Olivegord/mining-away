@@ -159,8 +159,8 @@ function V:puff(at: Vector3,color: Color3,scale: number,glints: number)
  dust.Parent=anchor;dust:Emit(math.floor(6+4*scale))
  if glints>0 then
   local spark=Instance.new('ParticleEmitter');spark.Name='Glints'
-  EnergyDisc.configure(spark,.24*scale,.08,1,0,.3)
-  spark.LightEmission=.25;spark.LightInfluence=0;spark.Brightness=1
+  EnergyDisc.configure(spark,.3*scale,.05,1,0,.3)
+  spark.LightEmission=.6;spark.LightInfluence=0;spark.Brightness=1
   spark.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(255,246,224),.65))
   spark.Enabled=false;spark.Rate=0
   spark.EmissionDirection=Enum.NormalId.Top;spark.SpreadAngle=Vector2.new(70,70)
@@ -346,11 +346,22 @@ function V:split(op: any,now: number)
  self:shards(op,now,center)
  local ctx=self.ctx
  local serverNow=workspace:GetServerTimeNow()
+ local floor=o.Y+first.y0
+ -- Particles a little brighter than the (muted) rock so they read on it.
+ local vivid=color:Lerp(Color3.fromRGB(255,244,220),.35)
+ local lively=not self:reduced()
+ local rock=self.holder and self.holder:FindFirstChild('Rock')
+ local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
  if op.partial then
   -- Each piece of a chunk cracks a step higher, building to the full split.
   if ctx.audio then ctx.audio:play('crystal_impact',top,{pitch=.88+.14*(op.stage or 1)+self.random:NextNumber(-.03,.03),level=.85,rockSize=bulk}) end
   self:puff(top,color,.8,4)
-  if ctx.beat and not self:reduced() then ctx.beat('Split',center,serverNow,.4) end
+  -- The field rocks' break particles and chips, smaller than the full split.
+  if lively then
+   if ctx.effects then ctx.effects.ImpactParticles(top,vivid,.75,'CrystalBreak',nil,color,nil,.6) end
+   if ctx.impact and surface then ctx.impact:chips(serverNow,top,Vector3.yAxis,surface,3,floor) end
+   if ctx.beat then ctx.beat('Split',center,serverNow,.45) end
+  end
   return
  end
  if ctx.audio then
@@ -358,7 +369,19 @@ function V:split(op: any,now: number)
   ctx.audio:play('crystal_release_tink',top,{level=.8})
  end
  self:puff(top,color,1.25,8)
- if ctx.beat and not self:reduced() then ctx.beat(bulk>6 and 'HeavySplit' or 'Split',center,serverNow,math.clamp(.5+bulk/9,.6,1.25)) end
+ -- The full split: the field rocks' break burst, a ground shock ring, sparks.
+ if lively then
+  local strength=math.clamp(bulk/4,1,2.2)
+  if ctx.effects then
+   ctx.effects.ImpactParticles(center,vivid,strength*.85,'CrystalBreak',nil,color)
+   ctx.effects.Pulse(Vector3.new(center.X,floor+.09,center.Z),vivid,strength*.5,strength*5,.45)
+  end
+  if ctx.impact then
+   ctx.impact:fireworks(center,floor,vivid,strength,serverNow,4)
+   if surface then ctx.impact:chips(serverNow,top,Vector3.yAxis,surface,4,floor) end
+  end
+  if ctx.beat then ctx.beat(bulk>6 and 'HeavySplit' or 'Split',center,serverNow,math.clamp(.5+bulk/9,.6,1.25)) end
+ end
  if op.tier>0 then
   table.insert(self.splits,{at=now,tier=op.tier,treasure=op.treasure,center=center,size=bulk,revealed=false})
  end
@@ -370,7 +393,11 @@ function V:reveal(e: any,now: number)
  local color=rgb(DigCube.ORES[e.tier].color)
  if ctx.audio then ctx.audio:play('gem_reveal',e.center,{pitch=1+e.tier*.08,level=1}) end
  if not self:reduced() then
-  if ctx.effects then ctx.effects.ImpactParticles(e.center,color,1+e.tier*.15,'GemReward') end
+  if ctx.effects then
+   ctx.effects.ImpactParticles(e.center,color,1+e.tier*.2,'GemReward')
+   ctx.effects.Pulse(e.center,color,.5,3+e.tier*1.6,.45)
+  end
+  if ctx.impact then ctx.impact:fireworks(e.center,e.center.Y-1.5,color,1.2+e.tier*.15,workspace:GetServerTimeNow(),6) end
   if ctx.beat then ctx.beat(e.tier>=3 and 'HeavySplit' or 'Split',e.center,workspace:GetServerTimeNow(),math.min(1.2,.6+e.tier*.12)) end
  end
  if e.treasure then
@@ -420,8 +447,8 @@ end
 -- One beam per digging drone, from its rendered emitter to its cut: a faint
 -- wide ribbon and a thin core (soft edges, no glow rods), and a few small
 -- sparks where it touches the rock. Other players' beams are fainter.
-local BEAM_BODY=NumberSequence.new({NumberSequenceKeypoint.new(0,.9),NumberSequenceKeypoint.new(.15,.72),NumberSequenceKeypoint.new(1,.6)})
-local BEAM_CORE_FADE=NumberSequence.new({NumberSequenceKeypoint.new(0,.7),NumberSequenceKeypoint.new(.15,.25),NumberSequenceKeypoint.new(1,.1)})
+local BEAM_BODY=NumberSequence.new({NumberSequenceKeypoint.new(0,.85),NumberSequenceKeypoint.new(.15,.55),NumberSequenceKeypoint.new(1,.42)})
+local BEAM_CORE_FADE=NumberSequence.new({NumberSequenceKeypoint.new(0,.5),NumberSequenceKeypoint.new(.15,.08),NumberSequenceKeypoint.new(1,0)})
 local BEAM_FAINT=NumberSequence.new({NumberSequenceKeypoint.new(0,.9),NumberSequenceKeypoint.new(.15,.7),NumberSequenceKeypoint.new(1,.6)})
 function V:hideBeam(beam: any)
  if not beam.on then return end
@@ -451,14 +478,17 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
    r.LightEmission=emission;r.LightInfluence=0;r.Brightness=1;r.Enabled=false;r.Parent=root
    return r
   end
-  local body=ribbon('Body',mine and .42 or .3,tint,BEAM_BODY,.3)
-  local core=ribbon('Core',mine and .11 or .08,tint:Lerp(BEAM_CORE,.7),mine and BEAM_CORE_FADE or BEAM_FAINT,.45)
+  local body=ribbon('Body',mine and .6 or .36,tint,BEAM_BODY,.55)
+  local core=ribbon('Core',mine and .18 or .1,tint:Lerp(BEAM_CORE,.7),mine and BEAM_CORE_FADE or BEAM_FAINT,.8)
   local sparks=Instance.new('ParticleEmitter');sparks.Name='Contact'
-  EnergyDisc.configure(sparks,.2,.1,1,0,.35)
-  sparks.LightEmission=.25;sparks.LightInfluence=0;sparks.Brightness=1
+  EnergyDisc.configure(sparks,.3,.05,1,0,.35)
+  sparks.LightEmission=.6;sparks.LightInfluence=0;sparks.Brightness=1.4
   sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(65,65)
   sparks.Speed=NumberRange.new(5,11);sparks.Lifetime=NumberRange.new(.18,.38);sparks.Drag=2
-  sparks.Acceleration=Vector3.new(0,-26,0);sparks.Rate=mine and 14 or 6;sparks.Enabled=false;sparks.Parent=b
+  sparks.Acceleration=Vector3.new(0,-26,0);sparks.Rate=mine and 26 or 10;sparks.Enabled=false;sparks.Parent=b
+  -- The shared energy bloom gives beams and sparks their glow.
+  local work=self.ctx.presentation and self.ctx.presentation.work
+  if work and work.energyBloom then work:energyBloom() end
   beam={root=root,a=a,body=body,core=core,sparks=sparks,on=false}
   self.beams[id]=beam
  end
@@ -474,6 +504,19 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
   beam.on=true;beam.body.Enabled=true;beam.core.Enabled=true;beam.sparks.Enabled=not self:reduced()
  end
  beam.seen=now
+ -- The field rocks' contact feedback: chips knocked off where the beam
+ -- hits and a small ring pulse on the surface.
+ if now>=(beam.chipAt or 0) and not self:reduced() then
+  beam.chipAt=now+.23+(now%.07)
+  local serverNow=workspace:GetServerTimeNow()
+  local rock=self.holder and self.holder:FindFirstChild('Rock')
+  local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
+  if self.ctx.impact and surface then self.ctx.impact:chips(serverNow,point,Vector3.yAxis,surface,1,point.Y-4) end
+  if self.ctx.effects and now>=(beam.pulseAt or 0) then
+   beam.pulseAt=now+.45
+   self.ctx.effects.Pulse(point+Vector3.yAxis*.1,tint:Lerp(BEAM_CORE,.5),.19,1.65,.18,Vector3.yAxis,.78)
+  end
+ end
 end
 function V:stepBeams(now: number)
  for id,beam in pairs(self.beams) do
