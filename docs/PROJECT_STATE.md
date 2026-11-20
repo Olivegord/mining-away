@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 19 — revised Version 1 wind speed, silhouettes and impact frames
+
+The original Version 1 repeated a flared crown across nearly every strike. A second inspection of the [59.94 fps reference](https://www.youtube.com/watch?v=-RYr9ZNJPGM&t=30s) showed a flat air disc, a dark cut, an opaque light silhouette for about two frames, then a thin rising column while the floor and sky keep their values. Later marks include a detached collar, a sideward cut, a low sweep and a second heavy impact. The pressure front has its own travel curve. The server still timestamps each cast at the existing **WIND / V1** plinth.
+
+`src/WindVortexV1.lua` now draws these distinct 3D shapes on frame cues. The heavy silhouette has a perforated, twisting surface, and a strip-based drawing also supplies the shape when local mesh memory is unavailable. The first flash spans approximately 38 ms, the second approximately 32 ms. The last ring travels to a radius of 55 studs in 0.48 s while rocks and thin wind trails continue. The full cast lasts 4.05 s. Cast orientation, sweep direction, and rock trajectories vary with the replicated timestamp. Reduced-effects preferences lower the impact contrast.
+
+The [real-time Studio Edit recording](review/media/wind-v1-revised.mp4) shows a single cast on a temporary copy of the actual rig. The update loop recorded 245 draws in 4.07 s. The old pose sheet below documents the previous revision. `tools/studio_repose_wind_v1.lua` and `tools/repose_wind_v1.py` update the existing authored pose and verify the before/after property columns. Shared destination is DRONEREVOLUTION, place 124078027733625 in universe 10774898335. No player publication or multiplayer Play test.
+
 ## November 19 — counter sale made readable; rising crack pitch
 
 A recorded counter sale at SELL ORE (agent-started Play, stopped) showed the big total sitting exactly over the rock on the counter and reading "+$0" for half a second before anything was priced; the rock itself was a 1.75-stud speck. `SaleView` now keeps the total at a point just above the rocks and their price tags (projected each frame, clamped to the screen), hides it until the first rock is priced, and sizes sale rocks by camera distance (1.75–3.2 studs). A second recording confirmed the rock dropping onto the counter in view and the total appearing above it once priced. Only a two-rock stone sale was seen; a mixed bag with modifiers was not.

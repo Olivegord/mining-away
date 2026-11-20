@@ -74,9 +74,9 @@ local label=Instance.new("TextLabel"); label.Name="Version"; label.Size=UDim2.fr
 label.Text="WIND   /   V1"; label.TextSize=59; label.Font=Enum.Font.GothamBold; label.TextColor3=ivory; label.Parent=gui
 local prompt=Instance.new("ProximityPrompt"); prompt.Name="CastWindV1"; prompt.ActionText="Cast vortex"; prompt.ObjectText="Wind • Version 1"
 prompt.MaxActivationDistance=9; prompt.RequiresLineOfSight=false; prompt.Parent=station
--- Freeze the first airborne crown for the Studio editor. Runtime starts with a clear floor.
+-- Freeze the torn white impact silhouette for the Studio editor. Runtime starts with a clear floor.
 local rig=WindVortexV1.bind(model)
-WindVortexV1.pose(rig,1.155)
+WindVortexV1.pose(rig,WindVortexV1.editPose)
 local encoding=game:GetService("EncodingService")
 local blob=game:GetService("SerializationService"):SerializeInstancesAsync({model})
 local encoded=buffer.tostring(encoding:Base64Encode(encoding:CompressBuffer(blob,Enum.CompressionAlgorithm.Zstd)))
