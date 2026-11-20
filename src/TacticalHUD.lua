@@ -377,6 +377,9 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local saleOffset,saleVisible=self:pendingSaleBalances(p,now)
  local mouse=UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
  local at=r.resources.AbsolutePosition;local hover=mouse.X>=at.X and mouse.X<=at.X+width and mouse.Y>=at.Y and mouse.Y<=at.Y+180
+ -- Money stays on top; mineral rows that show for a moment after a sale go
+ -- under everything else, so the backpack and progress rows never jump.
+ local extra={}
  for _,entry in ipairs(self.wallets) do
   local money=entry.key=='Money'
   local authoritative=money and (wallet.Quartz or 0) or (resources[entry.key] or 0)
@@ -385,7 +388,8 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
   local opacity=money and 1 or saleVisible[entry.key] and 1 or hover and balance>0 and 1 or math.clamp((entry.untilAt-now)/.7,0,1)
   entry.tile.Visible=opacity>0
   if opacity>0 then
-   entry.tile.Position=UDim2.fromOffset(0,shown*rowHeight);entry.tile.Size=UDim2.fromOffset(width,rowHeight);shown+=1
+   entry.tile.Size=UDim2.fromOffset(width,rowHeight)
+   if money then entry.tile.Position=UDim2.fromOffset(0,shown*rowHeight);shown+=1 else table.insert(extra,entry) end
    local value=money and balance or balance/100
    entry.value.Text=value<10000 and not money and string.format('%.2f',value):gsub('0+$',''):gsub('%.$','') or compact(value)
    entry.name.TextTransparency=1-opacity;entry.value.TextTransparency=1-opacity
@@ -404,7 +408,9 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local growthVisible=growth~=nil and type(growth.saleRequired)=='number'
  local cargoHeight=self:updateBackpack(p,Players.LocalPlayer,world,now,width,fighting)
  local afterCargo=shown*rowHeight+cargoHeight
- local height=afterCargo+((batteryVisible and 1 or 0)+(growthVisible and 1 or 0))*rowHeight
+ local fixed=afterCargo+((batteryVisible and 1 or 0)+(growthVisible and 1 or 0))*rowHeight
+ for i,entry in ipairs(extra) do entry.tile.Position=UDim2.fromOffset(0,fixed+(i-1)*rowHeight) end
+ local height=fixed+#extra*rowHeight
  local sideY=8 -- Keep the flat list above the mobile movement controls.
  -- One framed card, clear of Roblox's own buttons, instead of bare text over the world.
  local pad=8
