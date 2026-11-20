@@ -3529,27 +3529,38 @@ function scene.digBuildRock()
  end
  rock.Parent=dig.holder;dig.rock=rock
 end
--- Subtract a broken chunk from the blocks it reaches.
+-- Subtract broken cells from the blocks they reach. A job may hold the cells
+-- of several chunks (everything queued while the last carve ran), and each
+-- block is cut once with only the cells that touch it.
 function scene.digCarve(job)
  local dig=scene.dig;local cube=dig.cube;local o=dig.origin
  if job.generation~=dig.generation then return end
- local negatives={}
- local lx,ly,lz,hx,hy,hz=math.huge,math.huge,math.huge,-math.huge,-math.huge,-math.huge
- for _,w in ipairs(DigCube.prismWedges(cube,job.ids)) do
-  local p=Instance.new('WedgePart');p.Anchored=true;p.CanCollide=false
-  p.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
-  p.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
-   Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
-  table.insert(negatives,p)
- end
- for _,id in ipairs(job.ids) do
-  local c=cube.cells[id]
-  lx=math.min(lx,c.minX-.2);hx=math.max(hx,c.maxX+.2);lz=math.min(lz,c.minZ-.2);hz=math.max(hz,c.maxZ+.2)
-  ly=math.min(ly,c.y0-.1);hy=math.max(hy,c.y1+.6)
+ local made,wedges={},{}
+ local function wedgesFor(id)
+  local list=wedges[id]
+  if list then return list end
+  list={}
+  for _,w in ipairs(DigCube.prismWedges(cube,{id})) do
+   local p=Instance.new('WedgePart');p.Anchored=true;p.CanCollide=false
+   p.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+   p.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+    Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+   table.insert(list,p);table.insert(made,p)
+  end
+  wedges[id]=list
+  return list
  end
  for i=#dig.blocks,1,-1 do
   local block=dig.blocks[i]
-  if block.hi.X>lx and block.lo.X<hx and block.hi.Y>ly and block.lo.Y<hy and block.hi.Z>lz and block.lo.Z<hz then
+  local negatives={}
+  for _,id in ipairs(job.ids) do
+   local c=cube.cells[id]
+   if block.hi.X>c.minX-.5 and block.lo.X<c.maxX+.5 and block.hi.Y>c.y0-.1 and block.lo.Y<c.y1+.6
+    and block.hi.Z>c.minZ-.5 and block.lo.Z<c.maxZ+.5 then
+    for _,w in ipairs(wedgesFor(id)) do table.insert(negatives,w) end
+   end
+  end
+  if #negatives>0 then
    local ok,result=pcall(function()
     return block.part:SubtractAsync(negatives,Enum.CollisionFidelity.PreciseConvexDecomposition,Enum.RenderFidelity.Precise)
    end)
@@ -3564,7 +3575,7 @@ function scene.digCarve(job)
    end
   end
  end
- for _,p in ipairs(negatives) do p:Destroy() end
+ for _,p in ipairs(made) do p:Destroy() end
 end
 -- Drain the carve queue in order; the worker starts when a chunk is queued.
 function scene.digCarveLoop()
@@ -3573,7 +3584,12 @@ function scene.digCarveLoop()
  dig.carving=true
  task.spawn(function()
   while #dig.csg>0 do
-   local job=table.remove(dig.csg,1)
+   -- Take everything queued for this cube in one pass: pieces break often,
+   -- and one cut per block keeps the rock in step with the breaks.
+   local job={generation=dig.csg[1].generation,ids={}}
+   while #dig.csg>0 and dig.csg[1].generation==job.generation do
+    for _,id in ipairs(table.remove(dig.csg,1).ids) do table.insert(job.ids,id) end
+   end
    local ok,err=pcall(scene.digCarve,job)
    if not ok and not dig.carveWarned then dig.carveWarned=true;(warn or print)('[DigCube] carve failed: '..tostring(err)) end
   end
@@ -3624,7 +3640,7 @@ function scene.digPick(d,p)
   local worker=drones[droneId]
   if worker and worker.hp>0 and worker.digJob then
    taken[id]=true
-   if worker.digJob.ids[1]==id then table.insert(points,{worker.digJob.cx,worker.digJob.cz}) end
+   if worker.digJob.left[1]==id then table.insert(points,{worker.digJob.cx,worker.digJob.cz}) end
   else dig.claimed[id]=nil end
  end
  local hr=characterRoot(p)
@@ -3644,10 +3660,49 @@ function scene.digPick(d,p)
  local ids=DigCube.chunk(cube,seed,scale,taken,random)
  for _,id in ipairs(ids) do dig.claimed[id]=d.id end
  local _,cx,cz=DigCube.chunkArea(cube,ids)
- local contact=DigCube.contact(cube,ids)
  local hp=DigCube.chunkHp(cube,ids,scale)
- return {ids=ids,key=DigCube.key(ids),cx=cx,cz=cz,hp=hp,maxHp=hp,
-  contact=dig.origin+Vector3.new(contact[1],contact[2],contact[3])}
+ -- The chunk comes away in pieces from its middle outward; the beam works
+ -- on the next piece to go.
+ local job={ids=ids,left=table.clone(ids),key=DigCube.key(ids),cx=cx,cz=cz,hp=hp,maxHp=hp,
+  pieces=DigCube.pieces(cube,ids),stage=0,rock=DigCube.rockDrops(DigCube.volume(cube,ids)),rockPaid=0}
+ scene.digAim(job)
+ return job
+end
+-- Point the beam at the next piece: the top of its cell nearest the middle.
+function scene.digAim(job)
+ local dig=scene.dig
+ local piece=job.pieces and job.pieces[job.stage+1]
+ local c=dig.cube.cells[piece and piece.ids[1] or job.left[1]]
+ job.contact=dig.origin+Vector3.new(c.cx,c.y1,c.cz)
+end
+-- One piece of a chunk breaks off before the rest: it leaves the rock now
+-- (ops flag P: no gem roll yet) and pays its share of the chunk's rock.
+function scene.digChip(job,d,p)
+ local dig=scene.dig;local cube=dig.cube
+ job.stage+=1
+ local piece=job.pieces[job.stage]
+ local gone={}
+ for _,id in ipairs(piece.ids) do
+  gone[id]=true
+  if DigCube.remove(cube,id) then dig.recent[id]=now end
+  if dig.claimed[id]==d.id then dig.claimed[id]=nil end
+ end
+ local left={}
+ for _,id in ipairs(job.left) do if not gone[id] then table.insert(left,id) end end
+ job.left=left
+ d.digCell=left[1]
+ table.insert(dig.ops,'c'..DigCube.key(piece.ids)..'|0|P')
+ dig.dirty=true
+ table.insert(dig.csg,{generation=dig.generation,ids=piece.ids})
+ scene.digCarveLoop()
+ local share=math.floor(job.rock*piece.at)-job.rockPaid
+ if share>0 then
+  job.rockPaid+=share
+  local _,px,pz=DigCube.chunkArea(cube,piece.ids)
+  local _,floor=DigCube.contact(cube,piece.ids)
+  scene.digRock(p,d.owner,piece.ids,share,dig.origin+Vector3.new(px,floor+1,pz))
+ end
+ scene.digAim(job)
 end
 function scene.digDrone(d,p,dt)
  local dig=scene.dig;local cube=dig.cube
@@ -3657,7 +3712,7 @@ function scene.digDrone(d,p,dt)
   move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt);return
  end
  local job=d.digJob
- if job and (cube.removed[job.ids[1]] or dig.claimed[job.ids[1]]~=d.id) then scene.digDrop(d);job=nil end
+ if job and (cube.removed[job.left[1]] or dig.claimed[job.left[1]]~=d.id) then scene.digDrop(d);job=nil end
  -- Walked away: let go of chunks left behind so the crew follows you.
  if job and hr then
   local lx,lz=hr.Position.X-dig.origin.X,hr.Position.Z-dig.origin.Z
@@ -3666,7 +3721,7 @@ function scene.digDrone(d,p,dt)
  if not job and now>=(d.digPickAt or 0) then
   d.digPickAt=now+.2;d.digWarm=nil;d.digProgress=0
   job=scene.digPick(d,p)
-  d.digJob=job;d.digCell=job and job.ids[1] or nil
+  d.digJob=job;d.digCell=job and job.left[1] or nil
  end
  if not job then
   d.state='Follow';d.mining=false
@@ -3684,12 +3739,16 @@ function scene.digDrone(d,p,dt)
  d.state='Mine';d.mining=true;d.lastBeamAt=now
  job.hp-=d.stats.miningDPS*dt
  d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
+ while job.hp>0 and job.stage<#job.pieces-1 and d.digProgress>=job.pieces[job.stage+1].at do scene.digChip(job,d,p) end
  if job.hp<=0 then scene.digBreak(job,d,p) end
 end
+-- The last piece of a chunk breaks (job.left; earlier pieces already left
+-- the rock). The gem roll covers the whole chunk.
 function scene.digBreak(job,d,p)
  local dig=scene.dig;local cube=dig.cube
  scene.digDrop(d);d.digPickAt=0;d.digProgress=0
- for _,id in ipairs(job.ids) do
+ local last=job.left or job.ids
+ for _,id in ipairs(last) do
   if DigCube.remove(cube,id) then dig.recent[id]=now end
  end
  -- The gamble: the chunk splits, holds for DigCube.PAUSE, then shows a gem or nothing.
@@ -3706,16 +3765,18 @@ function scene.digBreak(job,d,p)
  elseif milestone then
   tier=math.max(tier,DigCube.layerTier(layer));flag='|D'..layer
  end
- table.insert(dig.ops,'c'..job.key..'|'..tier..flag)
+ table.insert(dig.ops,'c'..DigCube.key(last)..'|'..tier..flag)
  dig.dirty=true
- table.insert(dig.csg,{generation=dig.generation,ids=job.ids})
+ table.insert(dig.csg,{generation=dig.generation,ids=last})
  scene.digCarveLoop()
  scene.crewBreak(d.owner)
  local volume=DigCube.volume(cube,job.ids)
- local _,floor=DigCube.contact(cube,job.ids)
- local center=dig.origin+Vector3.new(job.cx,floor+1,job.cz)
- -- Rock comes out right away: bigger chunks drop more.
- scene.digRock(p,d.owner,job.ids,DigCube.rockDrops(volume),center)
+ local _,lx,lz=DigCube.chunkArea(cube,last)
+ local _,floor=DigCube.contact(cube,last)
+ local center=dig.origin+Vector3.new(lx,floor+1,lz)
+ -- Rock comes out right away: bigger chunks drop more (less what the
+ -- earlier pieces already paid).
+ scene.digRock(p,d.owner,last,math.max(1,(job.rock or DigCube.rockDrops(volume))-(job.rockPaid or 0)),center)
  if tier>0 then
   for i=1,treasure and DigCube.TREASURE_GEMS or 1 do
    table.insert(dig.pending,{at=now+DigCube.PAUSE+(i-1)*.15,p=p,owner=d.owner,tier=tier,volume=volume,position=center+Vector3.new(0,i*.3,0)})

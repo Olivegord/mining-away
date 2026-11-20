@@ -58,14 +58,19 @@ D.STRATA={
 }
 local ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
--- Rock color: every layer has its own bright hue (no darkening with depth, so
--- deep pits stay readable), and each layer shifts across its face toward a
--- second tone, so a single layer reads as a gradient rather than a flat slab.
+-- Rock color: every layer has its own hue (no darkening with depth, so deep
+-- pits stay readable), and each layer shifts across its face toward a second
+-- tone, so a single layer reads as a gradient rather than a flat slab. The
+-- hues are muted toward stone and lowered in value (LAYER_MUTE, LAYER_VALUE):
+-- at full strength the rock was brighter than the effects on top of it.
 D.LAYER_HUES={
  {238,208,142},{242,170,92},{228,122,86},{216,106,130},{180,110,192},
  {122,126,216},{88,162,216},{80,184,168},{126,198,114},{204,208,98},
 }
 D.LAYER_SHIFT=.5 -- how far a layer's second tone leans toward the next hue
+D.LAYER_MUTE=.34 -- share of neutral stone mixed into every hue
+D.LAYER_VALUE=.8 -- overall brightness of the rock
+local STONE_TONE={132,124,120}
 local function mix(a: {number},b: {number},t: number): {number}
  return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t}
 end
@@ -74,10 +79,11 @@ function D.layerColor(cube: any,L: number,x: number,z: number): {number}
  local n=#D.LAYER_HUES
  local a=D.LAYER_HUES[(L-1)%n+1]
  local b=mix(a,D.LAYER_HUES[L%n+1],D.LAYER_SHIFT)
- b=mix(b,{255,250,236},.18)
+ b=mix(b,{255,250,236},.08)
  local t=D.noise3(x/22,L*5.7,z/22,(cube and cube.seed or 1)%100000)
  t=math.clamp((t-.2)/.6,0,1)
- return mix(a,b,t)
+ local c=mix(mix(a,b,t),STONE_TONE,D.LAYER_MUTE)
+ return {c[1]*D.LAYER_VALUE,c[2]*D.LAYER_VALUE,c[3]*D.LAYER_VALUE}
 end
 -- Layer index holding height y (cube-local).
 function D.layerAt(cube: any,y: number): number
@@ -546,6 +552,31 @@ function D.chunkHp(cube: any,ids: {number},cutSize: number?): number
  for _,id in ipairs(ids) do hp+=cube.cells[id].hp end
  -- Bigger cuts take longer but move more rock per second than small ones.
  return hp/math.sqrt(math.max(.5,cutSize or 1))
+end
+-- A chunk breaks off in pieces, like the field rocks shrinking a band at a
+-- time: the cells nearest its middle go first, then the rock around them.
+-- Each piece is {ids, at}: it breaks once the chunk's damage reaches `at`
+-- (its share of the chunk's work, cumulative; the last piece is 1).
+function D.pieces(cube: any,ids: {number}): {any}
+ local _,cx,cz=D.chunkArea(cube,ids)
+ local order=table.clone(ids)
+ local function far(id: number): number local c=cube.cells[id];return (c.cx-cx)^2+(c.cz-cz)^2 end
+ table.sort(order,function(a,b) local da,db=far(a),far(b);if da==db then return a<b end;return da<db end)
+ local count=#order<=2 and #order or #order<=5 and 3 or 4
+ local total=0
+ for _,id in ipairs(order) do total+=cube.cells[id].hp end
+ local out={}
+ local done,index=0,1
+ for k=1,count do
+  local piece={ids={},at=1}
+  -- Even shares of the work, at least one cell each, leaving one for every later piece.
+  while index<=#order-(count-k) and (#piece.ids==0 or k==count or done+cube.cells[order[index]].hp*.5<=total*k/count) do
+   table.insert(piece.ids,order[index]);done+=cube.cells[order[index]].hp;index+=1
+  end
+  piece.at=k==count and 1 or done/math.max(total,1e-6)
+  table.insert(out,piece)
+ end
+ return out
 end
 function D.volume(cube: any,ids: {number}): number
  local v=0

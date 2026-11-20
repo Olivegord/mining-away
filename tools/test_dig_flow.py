@@ -74,10 +74,30 @@ assert(count>=10,'op count replicates: '..tostring(count))
 local replay=DigCube.build(holder:GetAttribute('Seed'))
 for i=1,math.ceil(count/64) do
  for entry in string.gmatch(holder:GetAttribute('Ops'..i),'[^;]+') do
-  local key,tier=string.match(entry,'^c([%d%.]+)|(%d+)|?[TD]?%d*$')
+  local key,tier=string.match(entry,'^c([%d%.]+)|(%d+)|?[TDP]?%d*$')
   assert(key and tier,'op format: '..entry)
   for _,id in ipairs(DigCube.parseKey(key)) do DigCube.remove(replay,id) end
  end
+end
+-- Chunks come away in pieces: partial breaks (flag P) carry no gem, and
+-- every chunk of more than one cell ends with a final break.
+local partial,final=0,0
+for _,entry in ipairs(dig.ops) do
+ if string.match(entry,'|P$') then partial+=1;assert(string.match(entry,'|0|P$'),'a partial break carries no gem: '..entry) else final+=1 end
+end
+assert(partial>=3 and final>=3,'chunks break off in pieces: '..partial..' partial, '..final..' final')
+do
+ local sample=DigCube.build(7)
+ local seed=DigCube.pick(sample,{random=function() return .5 end})
+ local ids=DigCube.chunk(sample,seed,1.9,nil,function() return .9 end)
+ local pieces=DigCube.pieces(sample,ids)
+ local seen,n,last=0,{},0
+ for _,piece in ipairs(pieces) do
+  assert(#piece.ids>=1 and piece.at>last,'pieces are non-empty and in order')
+  last=piece.at
+  for _,id in ipairs(piece.ids) do assert(not n[id],'a cell is in one piece');n[id]=true;seen+=1 end
+ end
+ assert(seen==#ids and last==1 and #pieces>=2 and #pieces<=4,'pieces cover the chunk: '..#pieces..' for '..#ids..' cells')
 end
 local server=DigCube.build(holder:GetAttribute('Seed'))
 for i=1,count do for _,id in ipairs(DigCube.parseKey(string.match(dig.ops[i],'^c([%d%.]+)'))) do DigCube.remove(server,id) end end
@@ -158,7 +178,7 @@ dig.checkAt=0
 tick(5)
 tick(math.ceil(5/C.Tick))
 assert(holder:GetAttribute('Generation')==2 and dig.cube.removedCount==0 and holder:GetAttribute('OpCount')==0,'a dug-out cube is replaced')
-print('PASS dig cube server: solid rock blocks, drones mark and cut chunks of different sizes, chunks drop rock, ops replicate, gems wait for the reveal, upgrades grow chunks, walking moves the crater, rock dust collects, leaving releases, spent cube resets (API doubles; carving, looks, feel and multiplayer NOT verified)')
+print('PASS dig cube server: solid rock blocks, drones mark and cut chunks of different sizes, chunks break off in pieces, chunks drop rock, ops replicate, gems wait for the reveal, upgrades grow chunks, walking moves the crater, rock dust collects, leaving releases, spent cube resets (API doubles; carving, looks, feel and multiplayer NOT verified)')
 """
 source = "\n".join([
     (ROOT / "tests/mock-roblox.lua").read_text(),
