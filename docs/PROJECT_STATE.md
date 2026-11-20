@@ -1,5 +1,11 @@
 # Shared project context
 
+## November 19 — VERSION 2 wind effect (Pressure Strike) added to the shared Workspace
+
+`Workspace["VERSION 2"]` is a self-contained showcase of the ranged strike at 30.07–33.30 s of the [Wind Moveset reference](https://www.youtube.com/watch?v=-RYr9ZNJPGM), built independently of Version 1 (which turned out to use the same strike). It sits on the open baseplate south of the hub at (0, 3.8, 135): a 70-stud dark stage, a 5-stud stand-in figure, one sign, the `PressureStrikeV2` module and a client `Replay` script. Stage table, method and limits are in [the VFX notes](VFX_INSTRUCTIONS.md). Sources: `tools/vfx_version2/`, installer `tools/studio_vfx_version2.py`.
+
+Roblox Studio was already open (owner in Play at the start; work waited for Edit, and no Play was started or stopped by this chat). Built in shared Edit of DRONEREVOLUTION, place 124078027733625, universe 10774898335, and saved there as Team Create version 455. **Not published.** **`build/DRONE_GAME.rbxl` does not contain the model yet**: it needs a scoped export once the owner chooses between the versions. The seven managed Sources were not touched. Posed and compared in Edit only; not seen in Play.
+
 ## November 19 — revised Version 1 wind speed, silhouettes and impact frames
 
 The original Version 1 repeated a flared crown across nearly every strike. A second inspection of the [59.94 fps reference](https://www.youtube.com/watch?v=-RYr9ZNJPGM&t=30s) showed a flat air disc, a dark cut, an opaque light silhouette for about two frames, then a thin rising column while the floor and sky keep their values. Later marks include a detached collar, a sideward cut, a low sweep and a second heavy impact. The pressure front has its own travel curve. The server still timestamps each cast at the existing **WIND / V1** plinth.

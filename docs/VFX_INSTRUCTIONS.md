@@ -1,5 +1,25 @@
 # VFX instructions — owner feedback and implementation
 
+## November 19 — VERSION 2: the Pressure Strike showcase
+
+Owner: recreate one attack from the [Wind Moveset video](https://www.youtube.com/watch?v=-RYr9ZNJPGM), looking closely at how the layers progress, as a second version built without collaborating with the chat doing Version 1. The first pick (the green whirlwind at 25.7 s) was rejected because it is built around the character. **Pick effects that land on a spot in the world.** Version 2 is the ranged strike at 30.07–33.30 s. It lives in `Workspace["VERSION 2"]` at (0, 3.8, 135), on the open baseplate south of the hub, and replays by itself for anyone within 420 studs.
+
+What the video does, read at 30 frames per second (`t` = video time − 30.07 s):
+
+| t | What happens |
+| --- | --- |
+| 0.05–0.66 s | Five pulses about 0.135 s apart. Each: a pale drum (radius ~10.5, 4.6 tall) is faint and high, bright as it passes head height, soft as it lands; a curtain of pointed streaks hangs under it; a thin ground ring flashes and holds faintly. The ring grows from 4.5 to 8 studs across the five, and the last two curtains are dark. |
+| 0.66–0.86 s | Nothing. |
+| 0.86–0.96 s | A larger faint drum falls from about 27 studs; core flame, dark tube and sky halo for two frames; **one frame** of a huge white tulip of streak sheets; then only a thin shock ring (21 → 31 studs), a dark spike crown and thrown rock. |
+| 1.13–2.73 s | Seven follow-up hits at 1.13, 1.33, 1.73, 2.12, 2.33, 2.53 and 2.73 s, each a ground ring with some of: a thin white pillar, a faint tulip, a sky halo one frame early. A second full tulip at 1.93 s. Low sparks at 1.23 and 2.36 s. |
+| 2.80–3.25 s | A white column drops; a bright puck lands (radius 11.5) and runs out as one ring: 16.5 at +0.04 s, 22.5 at +0.07, 30 at +0.10, 37 at +0.14, 47 at +0.21, 52 at +0.27. The spike crown sinks away after it. |
+
+The red boxes that blink during the pulses in the video are the author's hitbox display and are left out.
+
+**Implementation.** `tools/vfx_version2/PressureStrikeV2.lua` draws every layer from the time alone (`rig:Seek(t)`), so any moment can be posed in Edit and compared with its video frame; `rig:Step(t)` adds the only particles (pale specks, one smoke curl). Rings and arcs are curved Beams (`Ribbon`), everything upright is a camera-facing Beam (`Streak`), rocks are 28 anchored Parts on a ballistic path. No uploaded textures or meshes. One strike costs about 1.6 ms a frame with 224 beams. `Replay.client.lua` loops it with a 1.6 s rest. `python3 tools/studio_vfx_version2.py` rebuilds the model in Edit (`--wait` for Play, `--save` to save); it replaces only its own model. Edit shows the strike frozen at 1.74 s (`EditPreview`), which the replay script removes at run time.
+
+Checked in Studio Edit by posing at 0.20, 0.90, 0.93, 0.97, 1.14, 1.335, 2.81, 2.865, 2.905 and 2.97 s against the video frames, and by one real-time run of `Step` in Edit with no errors. **Not seen in Play**, so real-time pacing, the particles and how it reads from a player's camera are unverified. Things learned: a Beam with `FaceCamera=false` is as wide along its attachments' Y axis; `TextureSpeed` defaults to 1 and scrolls even a stretched glow; a glossy floor mirrors the strike light as a long smear, so the stage is Concrete.
+
 ## November 18 — ordinary rock breaks get the full older break again
 
 Owner: get the older Codex rock-break effects with lots of different types back. Since `4679617` (Nov 15) rocks whose cargo is Stone skipped the gem-release glint spray and slow colored discs and the release chime, and got a burst at 0.52 instead of 0.83. That gating is removed in `src/CrystalImpactView.lua`: every ordinary break plays chips, split spark, floor pulse, full `CrystalBreak` burst, release spray, colored discs and chime. The confetti layer from `6c631ff` is gone too. Do not tone ordinary breaks down again without a request.
