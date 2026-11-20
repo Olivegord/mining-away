@@ -1,5 +1,15 @@
 # Owner requirements
 
+## November 19 — rework the cracking: it must move in chunks; far less noise, brightness and blur
+
+The owner hates the black spreading crack "because it is constant (should move out in chunks) like the old rock fields"; none of it is satisfying. The game is "far too cluttered", the indicators "suck", breaking is not satisfying and the particles are "really really bad". Then: it is **too bright**, the **effects are shrouded**, there is "too much noise and not enough good quality of particles and lighting", **tone down blur**, and **jagged edges (mainly the cracks, circles and effects) look bad**. The owner approved this plan ("Build all of it"):
+
+- A chunk breaks off in **real pieces at damage steps** (nothing moves between steps), not along a drawn line. No crack lines, no target circle, no neon rods.
+- The **shards are the break**: pieces of the actual rock pop out and fly to the bag. One hit and one sound for plain rock; the hold-then-reveal only when a gem is inside.
+- **Far fewer particles**, small and sharp (circle discs stay). Text only for gems and treasure.
+- **Less glare**: no Neon in dig effects, dimmer pit lamp, muted rock, less haze, saturation and bloom.
+- Still open: an audit of the HUD and the rest of the screen for clutter.
+
 ## November 19 — make it more fun; focus on satisfying cracking
 
 "Make it more fun", then: **focus on making rock cracking satisfying and reworking the growing cracks.**
