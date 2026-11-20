@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 19 — Dig Cube rubble: the rock cracks into many pieces that slump, tip and fade
+
+Owner: "make better rock particles of the actual rock. maybe just crack it a bunch and then push those pieces down and with random orientation and then those pieces fade/ shrink." This replaces the shards that flew up and into the bag (`dcec239`, tuned after).
+
+`DigCubeView:shards` cuts each cell of a broken piece into many prisms from its own outline: every fan triangle is split across its longest edge, then into an upper and a lower layer (about 16–20 pieces a cell). Detail steps down as live pieces fill: no edge split above 110, one layer above 190, nothing new above 260. Pieces start exactly where the rock was at 0.93 scale so the cracks between them show, in the rock's own color with 4–30% darkening. The crack spreads from the middle of the break (up to 0.14 s later at the edge). Each piece jolts up 0.35–0.95 studs, is pushed down to the floor of the hole while tipping 0.5–2.4 radians about a random axis, rests 0.3–0.7 s, then shrinks to a quarter size and fades over 0.45 s. One piece per rock drop becomes a small pebble that waits for collection and flies to its owner when the server credits the `Dust` part. The old break cocktail (pause, sounds, combo, sparks, ring, burst, tumbling chips) is unchanged and plays on top.
+
+A Play recording of `dcec239` (agent-started, stopped; no script errors) showed the rubble filling the hole, tipping and fading; from the pulled-back camera it read as subtle, so the jolt and rest were raised afterwards and that tuning has not been seen running. Peak 208 rubble parts with four drones. The client ran at 14–15 fps both at the cube and away from it with no rubble, which points at Studio running unfocused, so real frame cost is not measured. Not published; Studio left in Edit.
+
 ## November 19 — Dig Cube breaks play the field rocks' whole break, with the frame pause
 
 Owner: "make sure breaks carry over almost all effects of the old system, ESPECIALLY the cocktail of particle effects and frame pauses when breaking rocks." The old break was traced in `CrystalImpactView.split`, `ImpactFreeze` and the split callback in `Client.lua`, and `DigCubeView:split`/`:burst` now run the same sequence (`00c9313`):

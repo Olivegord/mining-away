@@ -184,7 +184,7 @@ end
 local SHARD_FULL,SHARD_LAYERS,SHARD_COARSE=110,190,260 -- live pieces: detail steps down as these fill
 local SHARD_DARK=Color3.fromRGB(46,38,36)
 local SHARD_GAP=.93 -- pieces sit slightly apart, so the cracks between them show
-local SHARD_FADE=.38
+local SHARD_FADE=.45
 local function splitTriangle(tri: {{number}},t: number): ({{number}},{{number}})
  local best,longest=1,-1
  for k=1,3 do
@@ -246,8 +246,8 @@ function V:shards(op: any,now: number,center: Vector3)
        turn=self.random:NextNumber(.5,2.4)*(self.random:NextNumber()<.5 and -1 or 1),
        from=mid,land=Vector3.new(mid.X,landY,mid.Z)+out*self.random:NextNumber(.1,.9),
        at=now+math.min(.14,far*.016)+self.random:NextNumber(0,.03),
-       T=.2+math.sqrt(2*drop/GRAVITY)*1.15,hop=self.random:NextNumber(.15,.55),
-       wait=self.random:NextNumber(.12,.4),born=now,pos=mid}
+       T=.24+math.sqrt(2*drop/GRAVITY)*1.15,hop=self.random:NextNumber(.35,.95),
+       wait=self.random:NextNumber(.3,.7),born=now,pos=mid}
       table.insert(self.frags,f);table.insert(made,f)
      end
     end
