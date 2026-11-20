@@ -3706,7 +3706,7 @@ function scene.digChip(job,d,p)
  for _,id in ipairs(job.left) do if not gone[id] then table.insert(left,id) end end
  job.left=left
  d.digCell=left[1]
- table.insert(dig.ops,'c'..DigCube.key(piece.ids)..'|0|P')
+ table.insert(dig.ops,'c'..DigCube.key(piece.ids)..'|0|P'..job.stage)
  dig.dirty=true
  table.insert(dig.csg,{generation=dig.generation,ids=piece.ids})
  scene.digCarveLoop()

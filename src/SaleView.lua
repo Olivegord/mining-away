@@ -90,7 +90,9 @@ function Sale:makeOre(item)
  return ore,gem
 end
 
--- Large running total near the top of the screen.
+-- Large running total. It sits just above the rocks on the counter (see
+-- update) so it never covers them, and stays hidden until the first rock
+-- is priced: a "+$0" waiting on screen read as a dead sale.
 function Sale:show(batch)
  local card=Instance.new('Frame');card.Name='OreSaleTotal'
  card.AnchorPoint=Vector2.new(.5,0);card.Position=UDim2.new(.5,0,.12,0)
@@ -155,14 +157,19 @@ function Sale:stage(batch,root)
  right=Vector3.new(right.X,0,right.Z)
  right=right.Magnitude>.001 and right.Unit or forward:Cross(Vector3.yAxis)
  batch.target=target;batch.rocks={}
+ -- Rocks are sized for the camera: from a pulled-back view a 1.75-stud rock
+ -- on the counter was a speck under the total.
+ local far=camera and (camera.CFrame.Position-target).Magnitude or 30
+ local base=math.clamp(far*.075,1.75,3.2)
  local slots,width={},0
  for i,group in ipairs(batch.groups) do
   local ore,gem=self:makeOre(group.item)
   local extent=math.max(ore.Size.X,ore.Size.Y,ore.Size.Z)
   -- Keep every rock legible while Big, Massive and Titan still read larger.
   local tier=Mining.sizeTier(group.item.mask)
-  ore.Size*=(1.75*(1+(tier-1)*.22))/extent
+  ore.Size*=(base*(1+(tier-1)*.22))/extent
   local slot=math.max(3.1,math.max(ore.Size.X,ore.Size.Z)+.9)
+  batch.tall=math.max(batch.tall or 0,ore.Size.Y)
   slots[i]={ore=ore,gem=gem,slot=slot};width+=slot
  end
  local cursor=-width*.5
@@ -323,6 +330,21 @@ function Sale:update(now)
  if math.abs(batch.cashTarget-batch.cashShown)<.5 then batch.cashShown=batch.cashTarget end
  local gui=batch.gui
  gui.Visible=not hidden
+ -- Keep the total just above the rocks and their price tags.
+ local camera=workspace.CurrentCamera
+ if batch.target and camera and batch.rocks then
+  local v,onScreen=camera:WorldToViewportPoint(batch.target+Vector3.yAxis*((batch.tall or 2)+3.4))
+  if onScreen then
+   local holder=self.refs.gui
+   local screen=holder:FindFirstAncestorWhichIsA('ScreenGui')
+   local inset=(screen and screen.IgnoreGuiInset) and Vector2.zero or game:GetService('GuiService'):GetGuiInset()
+   local at=Vector2.new(v.X,v.Y)-inset-holder.AbsolutePosition
+   local size=holder.AbsoluteSize
+   batch.cardAt=Vector2.new(math.clamp(at.X,170,math.max(170,size.X-170)),math.clamp(at.Y-112,8,math.max(8,size.Y-200)))
+  end
+ end
+ if batch.cardAt then gui.Position=UDim2.fromOffset(batch.cardAt.X,batch.cardAt.Y) end
+ batch.reveal=math.min(1,(batch.reveal or 0)+((batch.cashTarget>0 or batch.shattered) and dt*9 or 0))
  batch.total.Text='+'..Ledger.money(math.floor(batch.cashShown+.5))
  if (batch.receipt.cash or 0)<=0 and batch.shattered then batch.total.Text='Sold' end
  batch.totalScale.Scale=1+(batch.bumpSize or 0)*pulse(now-batch.bumpAt,.26)
@@ -331,7 +353,8 @@ function Sale:update(now)
  local after=batch.shattered and math.clamp((age-batch.shatterAt)/.25,0,1) or 0
  batch.total.TextColor3=CASH:Lerp(Color3.new(1,1,1),batch.shattered and pulse(age-batch.shatterAt,.4) or 0)
  for _,text in ipairs(batch.labels) do
-  text.TextTransparency=fade;text.TextStrokeTransparency=.15+.85*fade
+  local clear=math.max(fade,1-batch.reveal)
+  text.TextTransparency=clear;text.TextStrokeTransparency=.15+.85*clear
  end
  batch.materials.Text=batch.read.materials
  batch.materials.TextTransparency=1-after*(1-fade)*.85;batch.materials.TextStrokeTransparency=1-after*(1-fade)*.6

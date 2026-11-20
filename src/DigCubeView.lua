@@ -133,7 +133,7 @@ function V:sync()
   self.applied+=1
   local key,tier,flag,depth=string.match(s,'^c([%d%.]+)|?(%d*)|?(%a?)(%d*)$')
   if key then
-   local op={kind='c',cells=DigCube.parseKey(key),tier=tonumber(tier) or 0,treasure=flag=='T',partial=flag=='P',layer=flag=='D' and tonumber(depth) or nil}
+   local op={kind='c',cells=DigCube.parseKey(key),tier=tonumber(tier) or 0,treasure=flag=='T',partial=flag=='P',stage=flag=='P' and tonumber(depth) or nil,layer=flag=='D' and tonumber(depth) or nil}
    -- Out of the cube first, so shards land on the floor the break leaves.
    for _,id in ipairs(op.cells) do DigCube.remove(self.cube,id) end
    self:split(op,now)
@@ -347,7 +347,8 @@ function V:split(op: any,now: number)
  local ctx=self.ctx
  local serverNow=workspace:GetServerTimeNow()
  if op.partial then
-  if ctx.audio then ctx.audio:play('crystal_impact',top,{pitch=self.random:NextNumber(.9,1.2),level=.85,rockSize=bulk}) end
+  -- Each piece of a chunk cracks a step higher, building to the full split.
+  if ctx.audio then ctx.audio:play('crystal_impact',top,{pitch=.88+.14*(op.stage or 1)+self.random:NextNumber(-.03,.03),level=.85,rockSize=bulk}) end
   self:puff(top,color,.8,4)
   if ctx.beat and not self:reduced() then ctx.beat('Split',center,serverNow,.4) end
   return

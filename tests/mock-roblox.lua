@@ -147,7 +147,8 @@ function game:BindToClose(fn) shutdown=fn end
 function game:GetService(n)
  if n=='Lighting' then return lighting elseif n=='SoundService' then return soundService elseif n=='Players' then return players elseif n=='ReplicatedStorage' then return rs elseif n=='ServerStorage' then return serverStorage elseif n=='RunService' then return runService elseif n=='HttpService' then return http
  elseif n=='DataStoreService' then return {GetDataStore=function() return runtimeStore end}
- elseif n=='Debris' then return {AddItem=function() end} end
+ elseif n=='Debris' then return {AddItem=function() end}
+ elseif n=='ProximityPromptService' then return {PromptTriggered={Connect=function() return {Disconnect=function() end} end}} end
  error('Missing mock service '..n)
 end
 local RaycastParams={new=function() return {} end}

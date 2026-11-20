@@ -83,7 +83,7 @@ end
 -- every chunk of more than one cell ends with a final break.
 local partial,final=0,0
 for _,entry in ipairs(dig.ops) do
- if string.match(entry,'|P$') then partial+=1;assert(string.match(entry,'|0|P$'),'a partial break carries no gem: '..entry) else final+=1 end
+ if string.match(entry,'|P%d+$') then partial+=1;assert(string.match(entry,'|0|P%d+$'),'a partial break carries no gem: '..entry) else final+=1 end
 end
 assert(partial>=3 and final>=3,'chunks break off in pieces: '..partial..' partial, '..final..' final')
 do
