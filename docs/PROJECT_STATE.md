@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 19 — counter sale made readable; rising crack pitch
+
+A recorded counter sale at SELL ORE (agent-started Play, stopped) showed the big total sitting exactly over the rock on the counter and reading "+$0" for half a second before anything was priced; the rock itself was a 1.75-stud speck. `SaleView` now keeps the total at a point just above the rocks and their price tags (projected each frame, clamped to the screen), hides it until the first rock is priced, and sizes sale rocks by camera distance (1.75–3.2 studs). A second recording confirmed the rock dropping onto the counter in view and the total appearing above it once priced. Only a two-rock stone sale was seen; a mixed bag with modifiers was not.
+
+Dig sound: partial ops now carry the piece number (`|0|P1`…`P3`) and each piece's `crystal_impact` plays a step higher (0.88 + 0.14 per piece), building to the `crystal_split`. Not listened to: no audio review is possible from this side, so the mix is still the owner's to judge.
+
+`tests/mock-roblox.lua` gained a `ProximityPromptService` double; the server-bundle suites (dig flow, selling, flat fields, pickup flow, crew loop) pass again. Revision `088cd26`, installed with `tools/studio_apply.py` in DRONEREVOLUTION (place **124078027733625**, universe **10774898335**), Team Create save **451**; canonical `build/DRONE_GAME.rbxl`. Not published. Studio left open in Edit.
+
 ## November 19 — polish pass after watching Play footage: lights, shards, cash-out, HUD
 
 Owner: "keep working on polishing systems and making sure selling and everything FEELS good." Two 30-second agent-started Play recordings of digging and auto cash-out (stopped; Studio back in Edit) were reviewed frame by frame; frames were pulled with a small AVFoundation tool since ffmpeg is not installed. What they showed and what changed (`6a59676`, then the HUD row order):
