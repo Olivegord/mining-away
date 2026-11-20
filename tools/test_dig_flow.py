@@ -66,7 +66,7 @@ assert(count>=10,'op count replicates: '..tostring(count))
 local replay=DigCube.build(holder:GetAttribute('Seed'))
 for i=1,math.ceil(count/64) do
  for entry in string.gmatch(holder:GetAttribute('Ops'..i),'[^;]+') do
-  local key,tier=string.match(entry,'^c([%d%.]+)|(%d+)$')
+  local key,tier=string.match(entry,'^c([%d%.]+)|(%d+)|?[TD]?%d*$')
   assert(key and tier,'op format: '..entry)
   for _,id in ipairs(DigCube.parseKey(key)) do DigCube.remove(replay,id) end
  end
@@ -74,13 +74,29 @@ end
 local server=DigCube.build(holder:GetAttribute('Seed'))
 for i=1,count do for _,id in ipairs(DigCube.parseKey(string.match(dig.ops[i],'^c([%d%.]+)'))) do DigCube.remove(server,id) end end
 assert(replay.removedCount==server.removedCount and replay.removedCount>0,'replicated chunks match the server')
+-- Depth milestones: the first chunk into a new layer is flagged and pays a gem.
+local flagged=false
+for _,entry in ipairs(dig.ops) do
+ local tier,layer=string.match(entry,'|(%d+)|D(%d+)$')
+ if layer then flagged=true;assert(tonumber(tier)>=1,'a new layer pays a gem') end
+end
+assert(flagged or dig.deepest==1,'the first chunk into a new layer is a milestone')
+-- Treasure pockets exist, sit deep, and pay several gems.
+local pockets=0
+for id in pairs(dig.cube.treasure) do pockets+=1;assert(dig.cube.cells[id].layer>=3,'treasure sits deep') end
+assert(pockets==DigCube.TREASURES,'treasure pockets: '..pockets)
+local tid=next(dig.cube.treasure)
+local pendingBefore=#dig.pending
+scene.digBreak({ids={tid},key=tostring(tid),cx=dig.cube.cells[tid].cx,cz=dig.cube.cells[tid].cz},p.drones[1],p)
+assert(#dig.pending-pendingBefore==DigCube.TREASURE_GEMS,'a treasure pays several gems')
+assert(string.match(dig.ops[#dig.ops],'|T$'),'treasure break is flagged')
 -- Cuts near the player went first.
 local near=0
 for id in pairs(dig.cube.removed) do
  local c=dig.cube.cells[id]
  if (c.cx-W*.3)^2+(c.cz-W*.3)^2<22*22 then near+=1 end
 end
-assert(near>=dig.cube.removedCount*.7,'crew digs around the player: '..near..'/'..dig.cube.removedCount)
+assert(near>=(dig.cube.removedCount-1)*.7,'crew digs around the player: '..near..'/'..dig.cube.removedCount)
 -- A gem waits for the reveal pause.
 local held={at=now+DigCube.PAUSE,p=p,owner=pl.UserId,tier=2,volume=200,position=dig.origin+Vector3.new(30,40,30)}
 table.insert(dig.pending,held)

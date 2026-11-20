@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 19 — make it more fun; focus on satisfying cracking
+
+"Make it more fun", then: **focus on making rock cracking satisfying and reworking the growing cracks.**
+
 ## November 19 — back to Voronoi chunks, sized per drone; ore arcs
 
 Owner: "nah" to the shape cutters. Go back to a **Voronoi system**: each drone takes out **a single chunk, marked as such**. Keep it flexible: **some drones start with tiny chunks, others larger ones, so they collect more rock**. **Give ores their arc back.**

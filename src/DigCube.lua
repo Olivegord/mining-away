@@ -37,8 +37,10 @@ D.PAUSE=1.1 -- seconds between the split and the gem-or-nothing reveal
 D.TILE=11 -- intact stretches render as one block per tile
 D.GEM_CHANCE_ORE=.5 -- per hidden ore cell in a chunk
 D.GEM_CHANCE_STONE=.05 -- per plain cell: a lucky find anywhere
-D.ROCK_PER_UNIT=90 -- cubic studs of rock per rock drop (bigger chunks drop more)
-D.MAX_ROCK_DROPS=6
+D.ROCK_PER_UNIT=150 -- cubic studs of rock per rock drop (bigger chunks drop more)
+D.MAX_ROCK_DROPS=4
+D.TREASURES=6 -- hidden jackpot cells per cube
+D.TREASURE_GEMS=3
 -- Ore tiers follow the existing crystal tiers (Workshop.CRYSTAL_TIERS).
 D.ORES={
  {material='Amber',name='Amber',color={255,153,20}},
@@ -311,6 +313,25 @@ function D.build(seed: number)
    cell.hp=math.max(2,cell.area*(y1-y0)*D.HP_SCALE*hardness)
   end
  end
+ -- Treasure pockets: a few cells deep in the rock pay a jackpot. Their
+ -- sparkles on the surface above give players something to hunt for.
+ cube.treasure={} :: {[number]:boolean}
+ local placed=0
+ for _=1,400 do
+  if placed>=D.TREASURES then break end
+  local L=math.floor(R(3,D.LAYERS+.999))
+  local layer=cube.layers[math.min(D.LAYERS,L)]
+  local id=layer.cells[math.floor(R(1,#layer.cells+.999))]
+  local c=id and cube.cells[id]
+  if c and not cube.treasure[id] and c.cx>8 and c.cx<W-8 and c.cz>8 and c.cz<W-8 then
+   local apart=true
+   for other in pairs(cube.treasure) do
+    local o=cube.cells[other]
+    if (o.cx-c.cx)^2+(o.cz-c.cz)^2<18*18 then apart=false;break end
+   end
+   if apart then cube.treasure[id]=true;placed+=1 end
+  end
+ end
  cube.removed={} :: {[number]:boolean}
  cube.frontier={} :: {[number]:boolean}
  for _,id in ipairs(cube.layers[1].cells) do cube.frontier[id]=true end
@@ -540,6 +561,16 @@ function D.chunkArea(cube: any,ids: {number}): (number,number,number)
  return area,cx/area,cz/area
 end
 -- Gem roll for a chunk. Returns the ore tier (0 = nothing inside).
+-- Did this chunk crack a treasure pocket?
+function D.hasTreasure(cube: any,ids: {number}): boolean
+ for _,id in ipairs(ids) do if cube.treasure[id] then return true end end
+ return false
+end
+-- Gem tier for a layer (deeper layers hold richer ore).
+function D.layerTier(layer: number): number
+ local t=(layer-1)/math.max(1,D.LAYERS-1)
+ return math.clamp(math.floor(1+t*4.2),1,#D.ORES)
+end
 function D.gemRoll(cube: any,ids: {number},random: () -> number): number
  local miss=1;local tier=0;local deepest=1
  for _,id in ipairs(ids) do

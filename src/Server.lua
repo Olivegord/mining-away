@@ -3479,7 +3479,7 @@ function scene.digReset()
  local dig=scene.dig
  dig.generation+=1
  local seedValue=dig.random:NextInteger(1,2000000000)
- dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.resetAt=nil;dig.dirty=false;dig.csg={}
+ dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.resetAt=nil;dig.dirty=false;dig.csg={};dig.deepest=1
  for _,d in pairs(drones) do d.digJob=nil;d.digCell=nil;d.digWarm=nil end
  local holder=dig.holder
  for i=1,math.ceil(#dig.ops/OPS_PER_ATTRIBUTE) do holder:SetAttribute('Ops'..i,nil) end
@@ -3679,7 +3679,19 @@ function scene.digBreak(job,d,p)
  end
  -- The gamble: the chunk splits, holds for DigCube.PAUSE, then shows a gem or nothing.
  local tier=DigCube.gemRoll(cube,job.ids,function() return dig.random:NextNumber() end)
- table.insert(dig.ops,'c'..job.key..'|'..tier)
+ local layer=cube.cells[job.ids[1]].layer
+ -- Jackpots: a treasure pocket pays several rare gems; the first chunk into
+ -- each new layer pays a guaranteed gem of that layer's tier.
+ local treasure=DigCube.hasTreasure(cube,job.ids)
+ local milestone=layer>(dig.deepest or 1)
+ if milestone then dig.deepest=layer end
+ local flag=''
+ if treasure then
+  tier=math.max(tier,3,math.min(#DigCube.ORES,DigCube.layerTier(layer)+1));flag='|T'
+ elseif milestone then
+  tier=math.max(tier,DigCube.layerTier(layer));flag='|D'..layer
+ end
+ table.insert(dig.ops,'c'..job.key..'|'..tier..flag)
  dig.dirty=true
  table.insert(dig.csg,{generation=dig.generation,ids=job.ids})
  scene.digCarveLoop()
@@ -3690,7 +3702,9 @@ function scene.digBreak(job,d,p)
  -- Rock comes out right away: bigger chunks drop more.
  scene.digRock(p,d.owner,job.ids,DigCube.rockDrops(volume),center)
  if tier>0 then
-  table.insert(dig.pending,{at=now+DigCube.PAUSE,p=p,owner=d.owner,tier=tier,volume=volume,position=center})
+  for i=1,treasure and DigCube.TREASURE_GEMS or 1 do
+   table.insert(dig.pending,{at=now+DigCube.PAUSE+(i-1)*.15,p=p,owner=d.owner,tier=tier,volume=volume,position=center+Vector3.new(0,i*.3,0)})
+  end
  end
 end
 -- Launch one cargo pickup in its arc and land it on the real rock surface.
@@ -3720,8 +3734,8 @@ function scene.digRock(p,owner,ids,count,position)
  if not tier then return end
  local c=DigCube.gradient(cube.cells[ids[1]].cy or (cube.cells[ids[1]].y0+cube.cells[ids[1]].y1)*.5,cube.height)
  for i=1,count do
-  local value=math.max(1,math.floor(tier.value*.3+.5))
-  local cargo=Workshop.saleCargo(ore.material,value,true,Workshop.PITY_PERCENT,100,0,'Original')
+  local value=math.max(1,math.floor(tier.value*.5+.5))
+  local cargo=Workshop.saleCargo(ore.material,value,true,Workshop.PITY_PERCENT,150,0,'Original')
   scene.digLaunch(p,owner,cargo,ore.material,true,false,position+Vector3.new(0,i*.2,0),Color3.fromRGB(c[1],c[2],c[3]),'dig:'..dig.generation..':'..#dig.ops..':'..i)
  end
  p.dirty=true;p.publishDirty=true
