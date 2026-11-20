@@ -17,6 +17,8 @@ Pew’s [Wind Moveset](https://www.youtube.com/watch?v=-RYr9ZNJPGM&t=30s) is the
 
 The authored model is `Workspace["VERSION 1"]`. Its Replay plinth at (-14, 4.68, 11) faces a cast centered at (-17, 4, -7). Its Edit pose shows an airborne crown. In Play, **Cast vortex** starts a shared, replayable 4.32-second visual sequence. The timestamp comes from the server, and each client animates the authored layers locally. The controller works from the model's origin so the whole model can be repositioned. `src/WindVortexV1.lua` owns the timeline. `tools/studio_wind_v1.lua` and `tools/refresh_wind_v1.py` stage and check the exact scoped native export. Routine shared Edit and canonical saves only.
 
+Studio was open when work began. In Edit, the reference-timed gap and cleanup frames had zero visible beams and rocks. The opening and residual wind were checked separately in the engine. The [Studio pose sheet](review/media/wind-v1-studio.jpg) shows the wind-up, crown, ground ring and aftermath. Team Create save 449 added the model. Save 450 installed gameplay revision `b4f05b4` in place 124078027733625, universe 10774898335. Canonical snapshot commit `b032102` contains the model (94 linked beams) and the seven matching Sources. No player release or agent-started Play. Multiplayer activation and continuous Play motion remain unverified.
+
 ## November 19 — Dig Cube: chunks break off in real pieces; shards, soft beams, calmer light
 
 Supersedes the drawn cracking below (growing loop, four snaps, target circle, rock-dust motes).
