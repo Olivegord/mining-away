@@ -149,14 +149,14 @@ function V:puff(at: Vector3,color: Color3,scale: number,glints: number)
  self.puffs+=1
  anchor.Destroying:Connect(function() self.puffs-=1 end)
  local dust=Instance.new('ParticleEmitter');dust.Name='Dust'
- EnergyDisc.configure(dust,1.5*scale,.62,.45,1.7,.2)
+ EnergyDisc.configure(dust,.8*scale,.5,.5,1.5,.25)
  dust.LightEmission=0;dust.LightInfluence=1;dust.Brightness=1
  dust.Color=ColorSequence.new(color:Lerp(STONE_LIGHT,.25))
  dust.Enabled=false;dust.Rate=0
  dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
- dust.Speed=NumberRange.new(3*scale,7*scale);dust.Lifetime=NumberRange.new(.35,.7);dust.Drag=4
+ dust.Speed=NumberRange.new(4*scale,10*scale);dust.Lifetime=NumberRange.new(.3,.55);dust.Drag=5
  dust.Acceleration=Vector3.new(0,1,0)
- dust.Parent=anchor;dust:Emit(math.floor(5+3*scale))
+ dust.Parent=anchor;dust:Emit(math.floor(6+4*scale))
  if glints>0 then
   local spark=Instance.new('ParticleEmitter');spark.Name='Glints'
   EnergyDisc.configure(spark,.24*scale,.08,1,0,.3)
@@ -175,6 +175,7 @@ end
 -- outline, so what flies out is the rock that was there. Each one is thrown
 -- to a landing spot chosen on the real pit floor (never up onto a wall).
 local SHARD_CAP=90
+local SHARD_DARK=Color3.fromRGB(46,38,36)
 local SHARD_SCALE=.7
 local SHARD_WAIT=2.2 -- seconds uncollected rock keeps all its shards
 function V:throw(f: any,now: number,from: Vector3,target: Vector3,rise: number)
@@ -212,7 +213,8 @@ function V:shards(op: any,now: number,center: Vector3)
     for _,v in ipairs(tri) do mx+=v[1];mz+=v[2] end
     mx/=#tri;mz/=#tri
     local mid=o+Vector3.new(mx,(c.y0+c.y1)*.5,mz)
-    local color=self:colorAt(c.y1-.01,mx,mz):Lerp(Color3.new(0,0,0),self.random:NextNumber(0,.14))
+    -- Darker than the pit (fresh-broken rock) so the shards read against it.
+    local color=self:colorAt(c.y1-.01,mx,mz):Lerp(SHARD_DARK,self.random:NextNumber(.3,.5))
     local inverse=CFrame.new(mid):Inverse()
     local parts={}
     for _,w in ipairs(DigCube.polyWedges(tri,c.y0,c.y1)) do

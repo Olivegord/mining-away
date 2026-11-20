@@ -3968,9 +3968,9 @@ local function droneStep(d: any,dt: number)
   return
  end
  if scene.digActive(p) then
-  if not p.digging then p.digging=true;leaveField(p) end
+  if not p.digging then p.digging=true;p.player:SetAttribute('MA_Digging',true);leaveField(p) end
   scene.digDrone(d,p,dt);return
- elseif p.digging then p.digging=false;scene.digRelease(p) end
+ elseif p.digging then p.digging=false;p.player:SetAttribute('MA_Digging',false);scene.digRelease(p) end
  if scene.chargingStation and not d.carrierId and d.stats.batteryCapacity>0 then
   local committed=scene.committedWork(d)
   if d.chargedPin and (d.chargedPin~=p.miningSquare or committed) then d.chargedPin=nil end
