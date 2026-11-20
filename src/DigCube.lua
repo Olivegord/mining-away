@@ -1182,6 +1182,9 @@ function D.cellWedges(cube: any,id: number): {any}?
  end
  local out={}
  for i=2,#poly-1 do triangle(poly[1],poly[i],poly[i+1],{0,0,0},h+.06,out) end
+ -- Grow every wedge a little so neighbors overlap: wedges that only touch
+ -- edge to edge leave paper-thin walls along their seams when subtracted.
+ for _,w in ipairs(out) do w.size[2]+=.16;w.size[3]+=.16 end
  return out
 end
 
