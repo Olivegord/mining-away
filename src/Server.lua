@@ -3473,13 +3473,18 @@ do
  holder.Name='DigCube';holder.Parent=root
  local template=Instance.new('Part');template.Name='DigGem';template.Size=Vector3.new(1,1,1)
  scene.dig={origin=origin,holder=holder,template=template,generation=0,recent={},random=Random.new(),
-  dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},ops={},published=0,pending={},csg={},blocks={}}
+  dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},ops={},published=0,pending={},csg={},blocks={},dust={},dustAt=0}
+ local dustFolder=holder:FindFirstChild('Dust') or Instance.new('Folder')
+ dustFolder.Name='Dust';dustFolder.Parent=holder
+ scene.dig.dustFolder=dustFolder
 end
 function scene.digReset()
  local dig=scene.dig
  dig.generation+=1
  local seedValue=dig.random:NextInteger(1,2000000000)
  dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.resetAt=nil;dig.dirty=false;dig.csg={};dig.deepest=1
+ for _,dust in ipairs(dig.dust) do dust.part:Destroy() end
+ dig.dust={}
  for _,d in pairs(drones) do d.digJob=nil;d.digCell=nil;d.digWarm=nil end
  local holder=dig.holder
  for i=1,math.ceil(#dig.ops/OPS_PER_ATTRIBUTE) do holder:SetAttribute('Ops'..i,nil) end
@@ -3505,13 +3510,14 @@ function scene.digBuildRock()
  local T=DigCube.TILE;local n=math.ceil(cube.width/T)
  for _,layer in ipairs(cube.layers) do
   local y0,y1=layer.y0,layer.y1
-  local c=DigCube.gradient((y0+y1)*.5,cube.height)
   for gx=0,n-1 do
    for gz=0,n-1 do
     local x0,x1=gx*T,math.min(cube.width,(gx+1)*T)
     local z0,z1=gz*T,math.min(cube.width,(gz+1)*T)
+    local c=DigCube.layerColor(cube,layer.index,(x0+x1)*.5,(z0+z1)*.5)
     local part=Instance.new('Part');part.Name='RockBlock'
-    part.Anchored=true;part.CanTouch=false;part.CastShadow=true
+    -- No cast shadows: the low morning sun would fill every pit with shadow.
+    part.Anchored=true;part.CanTouch=false;part.CastShadow=false
     part.Material=Enum.Material.SmoothPlastic;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
     part.Color=Color3.fromRGB(c[1],c[2],c[3])
     part.Size=Vector3.new(x1-x0,y1-y0,z1-z0)
@@ -3549,7 +3555,7 @@ function scene.digCarve(job)
    end)
    if job.generation~=dig.generation then break end
    if ok and result then
-    result.Anchored=true;result.CanTouch=false;result.UsePartColor=true;result.Color=block.part.Color
+    result.Anchored=true;result.CanTouch=false;result.CastShadow=false;result.UsePartColor=true;result.Color=block.part.Color
     result.Material=block.part.Material;result.Name='RockBlock'
     result.Parent=dig.rock
     block.part:Destroy();block.part=result
@@ -3622,12 +3628,16 @@ function scene.digPick(d,p)
   else dig.claimed[id]=nil end
  end
  local hr=characterRoot(p)
- local point=p.digFocus and now<(p.digFocusUntil or 0) and p.digFocus or hr and hr.Position
+ if not hr then return nil end
+ -- Drones only cut near their player: a tapped spot steers the crater only
+ -- when it is within reach, so walking is how you move the dig.
+ local point=hr.Position
+ local tapped=p.digFocus and now<(p.digFocusUntil or 0) and p.digFocus
+ if tapped and Vector3.new(tapped.X-point.X,0,tapped.Z-point.Z).Magnitude<=DigCube.MINE_RADIUS then point=tapped end
  local random=function() return dig.random:NextNumber() end
- local opts={taken=taken,takenPoints=points,recent=dig.recent,now=now,random=random}
- if point then
-  opts.focusX=math.clamp(point.X-dig.origin.X,0,DigCube.WIDTH);opts.focusZ=math.clamp(point.Z-dig.origin.Z,0,DigCube.WIDTH)
- end
+ local opts={taken=taken,takenPoints=points,recent=dig.recent,now=now,random=random,
+  anchorX=hr.Position.X-dig.origin.X,anchorZ=hr.Position.Z-dig.origin.Z}
+ opts.focusX=math.clamp(point.X-dig.origin.X,0,DigCube.WIDTH);opts.focusZ=math.clamp(point.Z-dig.origin.Z,0,DigCube.WIDTH)
  local seed=DigCube.pick(cube,opts)
  if not seed then return nil end
  local scale=DigCube.chunkScale(d.role,d.id,d.slot)*(d.stats.cutSize or 1)
@@ -3648,6 +3658,11 @@ function scene.digDrone(d,p,dt)
  end
  local job=d.digJob
  if job and (cube.removed[job.ids[1]] or dig.claimed[job.ids[1]]~=d.id) then scene.digDrop(d);job=nil end
+ -- Walked away: let go of chunks left behind so the crew follows you.
+ if job and hr then
+  local lx,lz=hr.Position.X-dig.origin.X,hr.Position.Z-dig.origin.Z
+  if math.sqrt((job.cx-lx)^2+(job.cz-lz)^2)>DigCube.MINE_RADIUS+8 then scene.digDrop(d);job=nil end
+ end
  if not job and now>=(d.digPickAt or 0) then
   d.digPickAt=now+.2;d.digWarm=nil;d.digProgress=0
   job=scene.digPick(d,p)
@@ -3712,33 +3727,80 @@ function scene.digLaunch(p,owner,cargo,material,stone,rareGem,position,color,nod
  local dig=scene.dig;local profile=data(p)
  local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
  local guess=position.Y-1
+ -- The cube knows its own floor exactly; carving runs a moment behind, so a
+ -- raycast would land drops on rock that is about to disappear (floating gems).
+ local function floorAt(x,z)
+  local top=DigCube.surfaceAt(dig.cube,x-dig.origin.X,z-dig.origin.Z)
+  if top then return dig.origin.Y+top end
+  return scene.digFloorAt(x,z,dig.origin.Y+dig.cube.height+6)
+ end
  local arc=OreDrops.rawArc(position.X,position.Y,position.Z,vx,vy,vz,guess)
- local floor=scene.digFloorAt(arc.landX,arc.landZ,dig.origin.Y+dig.cube.height+6)
+ local floor=floorAt(arc.landX,arc.landZ)
  if floor then
   arc=OreDrops.rawArc(position.X,position.Y,position.Z,vx,vy,vz,floor)
-  floor=scene.digFloorAt(arc.landX,arc.landZ,dig.origin.Y+dig.cube.height+6) or floor
+  floor=floorAt(arc.landX,arc.landZ) or floor
  end
  scene.spawnOrePickup(dig.template,{owner=owner,runId=profile.run.id,nodeId=nodeId,
   material=cargo,tierMaterial=material,value=Workshop.saleItem(cargo).cash,
   stone=stone,rareGem=rareGem,units=1,raw=true,oreArc=true,floor=(floor or guess)+.22,reachBonus=0,modifiers=0},
   position,Vector3.new(vx,vy,vz),color)
 end
--- Plain rock from a chunk, in the stone of its depth (deeper rock sells for more).
+-- Plain rock from a chunk, in the stone of its depth (deeper rock sells for
+-- more). No physical pickups: the chunk leaves a little pile of glowing rock
+-- dust on the pit floor that flies into your bag once you come close.
+local DUST_RANGE=14
 function scene.digRock(p,owner,ids,count,position)
  if not healthy(p) then return end
  local dig=scene.dig;local cube=dig.cube
- local layer=cube.cells[ids[1]].layer
+ local first=cube.cells[ids[1]]
+ local layer=first.layer
  local tierIndex=math.clamp(1+math.floor((layer-1)/2.2),1,#DigCube.ORES)
  local ore=DigCube.ORES[tierIndex]
  local tier=Workshop.CRYSTAL_BY_MATERIAL[ore.material]
  if not tier then return end
- local c=DigCube.gradient(cube.cells[ids[1]].cy or (cube.cells[ids[1]].y0+cube.cells[ids[1]].y1)*.5,cube.height)
- for i=1,count do
-  local value=math.max(1,math.floor(tier.value*.5+.5))
-  local cargo=Workshop.saleCargo(ore.material,value,true,Workshop.PITY_PERCENT,150,0,'Original')
-  scene.digLaunch(p,owner,cargo,ore.material,true,false,position+Vector3.new(0,i*.2,0),Color3.fromRGB(c[1],c[2],c[3]),'dig:'..dig.generation..':'..#dig.ops..':'..i)
+ local c=DigCube.layerColor(cube,layer,position.X-dig.origin.X,position.Z-dig.origin.Z)
+ local value=math.max(1,math.floor(tier.value*.5+.5))
+ local cargo=Workshop.saleCargo(ore.material,value,true,Workshop.PITY_PERCENT,150,0,'Original')
+ local part=Instance.new('Part');part.Name='DigDust'
+ part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false;part.Transparency=1
+ part.Size=Vector3.new(.2,.2,.2);part.Position=position
+ part:SetAttribute('Owner',owner);part:SetAttribute('Count',count);part:SetAttribute('FloorY',dig.origin.Y+first.y0)
+ part:SetAttribute('Color',Color3.fromRGB(c[1],c[2],c[3]));part:SetAttribute('Born',now)
+ part.Parent=dig.dustFolder
+ table.insert(dig.dust,{p=p,owner=owner,part=part,position=Vector3.new(position.X,dig.origin.Y+first.y0+.5,position.Z),
+  cargo=cargo,units=count,readyAt=now+DigCube.PAUSE*.6,expires=now+150})
+end
+-- Rock dust flies into its owner's bag when they come within range.
+function scene.digDustStep()
+ local dig=scene.dig
+ if now<dig.dustAt then return end
+ dig.dustAt=now+.1
+ for i=#dig.dust,1,-1 do
+  local dust=dig.dust[i]
+  local p=dust.p
+  if profiles[dust.owner]~=p or now>=dust.expires or not dust.part.Parent then
+   dust.part:Destroy();table.remove(dig.dust,i)
+  elseif now>=dust.readyAt and healthy(p) then
+   local hr=characterRoot(p)
+   if hr and (hr.Position-dust.position).Magnitude<=math.max(DUST_RANGE,p.cargoReach or 0) then
+    local accepted=Pro.addCargo(data(p),dust.cargo,dust.units,Ca.capacity(data(p),previewPerks(p)))
+    if accepted>0 then
+     dust.units-=accepted;p.dirty=true;p.publishDirty=true
+     p.collectSerial=(p.collectSerial or 0)+1
+     p.collectTotal=(p.collectTotal or 0)+accepted
+     p.player:SetAttribute('CollectedOreTotal',p.collectTotal)
+     local color=dust.part:GetAttribute('Color') or Color3.new(1,1,1)
+     p.player:SetAttribute('MA_Collect',Http:JSONEncode({serial=p.collectSerial,total=p.collectTotal,at=now,units=accepted,pickupId=0,exhausted=dust.units==0,physical=true,
+      x=dust.position.X,y=dust.position.Y,z=dust.position.Z,r=math.floor(color.R*255),g=math.floor(color.G*255),b=math.floor(color.B*255)}))
+     dust.part:SetAttribute('Count',dust.units)
+     if dust.units==0 then
+      dust.part:SetAttribute('CollectedAt',now)
+      Debris:AddItem(dust.part,2);table.remove(dig.dust,i)
+     end
+    end
+   end
+  end
  end
- p.dirty=true;p.publishDirty=true
 end
 function scene.digGem(p,owner,tier,volume,position)
  if not healthy(p) then return end
@@ -3757,6 +3819,7 @@ end
 function scene.digStep()
  local dig=scene.dig
  if not dig.cube then scene.digReset();return end
+ scene.digDustStep()
  if dig.dirty and now>=dig.publishAt then
   dig.dirty=false;dig.publishAt=now+.1
   local first=math.floor(dig.published/OPS_PER_ATTRIBUTE)+1

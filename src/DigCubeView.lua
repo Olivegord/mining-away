@@ -2,14 +2,16 @@
 -- Client effects for the Dig Cube. The rock itself is solid server geometry
 -- (blocks carved by each broken chunk's Voronoi cells, Roblox CSG), so this
 -- view draws what happens on it:
---  * each drone's chunk is marked on the rock in that drone's color, pulsing
---    like a field rock under attack, as soon as the drone claims it
---  * cracks run around the chunk's outline as it is cut, then the split line
+--  * each drone's target is marked with a circle in that drone's color (the
+--    chunk's real shape stays a surprise), pulsing while the drone claims it
+--  * the crack: a closed loop that starts small at the beam's hit point and
+--    grows, warping and gaining corners, until it matches the chunk's real
+--    outline and cracks through
 --  * beams with the field rocks' contact chips and ring pulses
---  * the break: the field rocks' own split halves, scaled to the chunk, jump
---    apart with chips and dust, hold (the gamble), then a gem bursts out or
---    the halves crumble
---  * the launch pad and tap-to-focus
+--  * the break: chips and dust, a hold (the gamble), then a gem bursts out
+--  * rock dust: glowing motes that settle on the pit floor and fly to their
+--    owner when they come close (the server credits the rock then)
+--  * a soft lamp on the player down in the pit, the launch pad and tap-to-focus
 -- The cube (built from the replicated seed) supplies chunk outlines.
 local DigCube=require('./DigCube')
 local UIS=game:GetService('UserInputService')
@@ -20,7 +22,6 @@ local BEAM_CORE=Color3.fromRGB(255,250,235)
 local HOT=Color3.fromRGB(222,128,62)
 local CRACK=Color3.fromRGB(34,26,22)
 local STONE_LIGHT=Color3.fromRGB(188,177,164) -- RockFinish.StoneLight
-local POP=.2
 local GRAVITY=70
 local TIER_NAMES={'AMBER!','RUBY!','QUARTZ!','VIOLET!','DIAMOND!'}
 
@@ -34,7 +35,7 @@ local function fxPart(parent: Instance,name: string,color: Color3,class: string?
 end
 
 function V.new(ctx: any)
- local self=setmetatable({ctx=ctx,beams={},cracks={},splits={},debris={},banners={},cube=nil,origin=Vector3.zero,
+ local self=setmetatable({ctx=ctx,beams={},cracks={},splits={},debris={},banners={},dust={},motes=0,cube=nil,origin=Vector3.zero,
   generation=-1,applied=0,random=Random.new(),connections={},tapAt=0},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
@@ -49,6 +50,15 @@ function V:watch()
  local holder=self.ctx.world:FindFirstChild('DigCube')
  if not holder or holder==self.holder then return end
  self.holder=holder
+ local function watchDust(folder: Instance)
+  for _,child in ipairs(folder:GetChildren()) do self:addDust(child,false) end
+  table.insert(self.connections,folder.ChildAdded:Connect(function(child) self:addDust(child,true) end))
+ end
+ local folder=holder:FindFirstChild('Dust')
+ if folder then watchDust(folder)
+ else
+  table.insert(self.connections,holder.ChildAdded:Connect(function(child) if child.Name=='Dust' then watchDust(child) end end))
+ end
  table.insert(self.connections,holder.AttributeChanged:Connect(function(name)
   if name=='Generation' or name=='OpCount' or string.sub(name,1,3)=='Ops' then self:sync() end
  end))
@@ -59,8 +69,8 @@ function V:reduced(): boolean
  return self.ctx.reduced~=nil and self.ctx.reduced()==true
 end
 
-function V:colorAt(y: number): Color3
- return rgb(DigCube.gradient(y,self.cube.height))
+function V:colorAt(y: number,x: number?,z: number?): Color3
+ return rgb(DigCube.colorAt(self.cube,x or self.cube.width*.5,y,z or self.cube.width*.5))
 end
 
 function V:buildPad()
@@ -157,36 +167,6 @@ function V:cutBox(op: any): (CFrame?,Vector3?)
  end
 end
 
--- The field rocks' split halves (CrystalFractures template), scaled to the cut.
-function V:halves(frame: CFrame,size: Vector3,color: Color3)
- local template=self.ctx.fractures and (self.ctx.fractures('Original') or nil)
- local left=template and template:FindFirstChild('Left')
- local right=template and template:FindFirstChild('Right')
- local out={}
- local foot=Vector3.yAxis*((template and template:GetAttribute('HingeY') or -.5)*size.Y)
- local hinge=frame*CFrame.new(foot)
- for index=1,2 do
-  local original=index==1 and left or right
-  local half: BasePart
-  local center: Vector3
-  if original and original:IsA('BasePart') then
-   half=original:Clone()
-   for _,child in ipairs(half:GetChildren()) do child:Destroy() end
-   local sizeRatio=original:GetAttribute('SizeRatio');local centerRatio=original:GetAttribute('CenterRatio')
-   half.Size=typeof(sizeRatio)=='Vector3' and sizeRatio*size or size*Vector3.new(.5,1,1)
-   center=typeof(centerRatio)=='Vector3' and centerRatio*size or Vector3.new((index==1 and -.25 or .25)*size.X,0,0)
-  else
-   half=Instance.new('Part');half.Size=size*Vector3.new(.5,1,1)
-   center=Vector3.new((index==1 and -.25 or .25)*size.X,0,0)
-  end
-  half.Name='DigHalf';half.Anchored=true;half.CanCollide=false;half.CanQuery=false;half.CanTouch=false
-  half.Material=Enum.Material.SmoothPlastic;half.Color=color;half.CastShadow=true;half.Transparency=0
-  half.CFrame=frame*CFrame.new(center);half.Parent=self.fx
-  table.insert(out,{part=half,side=index==1 and -1 or 1,offset=center-foot,size=half.Size})
- end
- return out,hinge
-end
-
 -- Small rock chips that fly, tumble, land, bounce once and fade.
 function V:chips(at: Vector3,color: Color3,count: number,speed: number,floor: number,now: number)
  if self:reduced() then return end
@@ -225,21 +205,16 @@ function V:stepDebris(now: number)
  end
 end
 
--- The break: the field rocks' halves at the cut jump apart, hold while the
--- gem rolls, then burst (gem) or crumble (nothing). Calm: no glow or flash.
+-- The break: chips and dust burst from the chunk, hold while the gem rolls,
+-- then a gem bursts out (or a last puff of dust). No leftover rock pieces.
 function V:split(op: any,now: number)
  local frame,size=self:cutBox(op)
  if not frame or not size then return end
  local center=frame.Position
- local color=self:colorAt(center.Y-self.origin.Y)
- -- Turn the halves to the op's split plane so each cut opens its own way.
- local yaw=((op.cells and op.cells[1] or 1)*.6180339887)%1*math.pi*2
- local turned=CFrame.new(center)*CFrame.Angles(0,-yaw,0)
- local edge=math.max(size.X,size.Z)
- local halves,hinge=self:halves(turned,Vector3.new(edge,size.Y,math.min(size.X,size.Z)),color)
+ local color=self:colorAt(center.Y-self.origin.Y,center.X-self.origin.X,center.Z-self.origin.Z)
  local floor=center.Y-size.Y*.5
  local bulk=(size.X*size.Y*size.Z)^(1/3)
- table.insert(self.splits,{at=now,tier=op.tier or 0,treasure=op.treasure,layer=op.layer,hinge=hinge,halves=halves,color=color,center=center,floor=floor,size=bulk,revealed=false})
+ table.insert(self.splits,{at=now,tier=op.tier or 0,treasure=op.treasure,layer=op.layer,color=color,center=center,floor=floor,size=bulk,revealed=false})
  local ctx=self.ctx
  if ctx.audio then
   ctx.audio:play('crystal_split',center,{rockSize=bulk})
@@ -311,36 +286,11 @@ end
 
 function V:stepSplits(now: number)
  local pause=DigCube.PAUSE
- local reduced=self:reduced()
  for i=#self.splits,1,-1 do
   local e=self.splits[i]
   local age=now-e.at
   if age>=pause and not e.revealed then self:reveal(e,now) end
-  if age>=pause+.7 then
-   for _,h in ipairs(e.halves) do h.part:Destroy() end
-   table.remove(self.splits,i)
-  else
-   -- Same motion as a field rock's split: open around the shared lower seam.
-   local pop=reduced and 1 or 1-(1-math.clamp(age/POP,0,1))^3
-   local gap,lift,open=.5*pop,.5*pop,.35*pop
-   local fade,shrink=0,1
-   if age>=pause then
-    local q=math.clamp((age-pause)/.6,0,1)
-    if e.tier>0 then
-     local fly=1-(1-q)^2
-     gap+=2.5*fly;lift+=1.2*fly-3*q*q;open+=.7*fly
-    else
-     lift-=e.size*.6*q*q;open+=.15*q;shrink=1-.4*q
-    end
-    fade=math.clamp((q-.4)/.6,0,1)
-   end
-   for _,h in ipairs(e.halves) do
-    local f=e.hinge*CFrame.new(h.side*gap,lift,0)*CFrame.Angles(0,0,-h.side*open)
-    h.part.CFrame=f*CFrame.new(h.offset*shrink)
-    h.part.Size=h.size*shrink
-    h.part.Transparency=fade
-   end
-  end
+  if age>=pause+.7 then table.remove(self.splits,i) end
  end
  for i=#self.banners,1,-1 do
   local b=self.banners[i];local t=now-b.at
@@ -364,16 +314,39 @@ function V:outline(ids: {number}): ({any},number)
  return out,y
 end
 
--- A drone's chunk: marked in the drone's color as soon as it is claimed.
--- While it is cut, the rock fractures in four snaps (CRACK_STAGES): jagged
--- cracks fork out from the beam's hit point toward the chunk's edge, each
--- snap with a crack sound, chips and dust; the last snap cracks the whole
--- outline through and the lines open up with a dim ember glow inside.
+-- A drone's target: a circle in the drone's color as soon as it is claimed,
+-- so you cannot see which cells you are about to get. While it is cut, a
+-- crack loop opens at the beam's hit point and grows outward: it starts as a
+-- small warped diamond, gains corners as it spreads (each new point appears
+-- on an edge and pushes out), and its warp settles until it lies exactly on
+-- the chunk's real outline. Four snaps (CRACK_STAGES) along the way play a
+-- crack sound with chips and dust and kick the warp; the last cracks the
+-- real outline through and it opens with a dim ember glow inside.
 local CRACK_STAGES={.12,.38,.62,.86}
-local RUN_TIME=.16 -- seconds for a new crack to run its length
+local RUN_TIME=.16 -- seconds for the final crack to run around the outline
+local CIRCLE_SEGMENTS=28
 local function jitter(seed: number): number
  local x=math.sin(seed*12.9898)*43758.5453
  return (x-math.floor(x))*2-1
+end
+local function smoothstep(t: number): number
+ t=math.clamp(t,0,1)
+ return t*t*(3-2*t)
+end
+-- Distance from c along direction (dx,dz) to the nearest outline edge.
+local function rayToOutline(edges: {any},c: Vector3,dx: number,dz: number): number?
+ local best=nil
+ for _,e in ipairs(edges) do
+  local ax,az=e.a.X-c.X,e.a.Z-c.Z
+  local ex,ez=e.b.X-e.a.X,e.b.Z-e.a.Z
+  local den=dx*ez-dz*ex
+  if math.abs(den)>1e-9 then
+   local t=(ax*ez-az*ex)/den
+   local u=(ax*dz-az*dx)/den
+   if t>.05 and u>=-1e-6 and u<=1+1e-6 and (not best or t<best) then best=t end
+  end
+ end
+ return best
 end
 function V:buildCrack(droneId: string,key: string,mine: boolean,color: Color3?,point: Vector3?)
  local ids=DigCube.parseKey(key)
@@ -382,36 +355,47 @@ function V:buildCrack(droneId: string,key: string,mine: boolean,color: Color3?,p
  local edges,y=self:outline(ids)
  local seed=0
  for _,id in ipairs(ids) do seed=(seed*31+id)%100003 end
- local _,cx,cz=DigCube.chunkArea(self.cube,ids)
- local center=point and Vector3.new(point.X,y,point.Z) or Vector3.new(self.origin.X+cx,y,self.origin.Z+cz)
- -- Fracture branches: jagged lines from the hit point to outline corners,
- -- spread around the chunk and dealt out to the first three snaps.
- local corners={}
- for _,e in ipairs(edges) do table.insert(corners,e.a) end
- table.sort(corners,function(a,b)
-  return math.atan2(a.Z-center.Z,a.X-center.X)<math.atan2(b.Z-center.Z,b.X-center.X)
- end)
- local want=math.clamp(#corners,3,9)
- local branches={}
- for i=1,want do
-  local target=corners[math.floor((i-1)*#corners/want)+1]
-  if target then
-   local pts={center}
-   local dir=target-center;local len=dir.Magnitude
-   local side=Vector3.new(-dir.Z,0,dir.X)
-   side=side.Magnitude>.01 and side.Unit or Vector3.xAxis
-   local steps=math.clamp(math.floor(len/1.3),2,6)
-   for k=1,steps-1 do
-    local t=k/steps
-    local wobble=jitter(seed+i*17+k*3)*math.min(.7,len*.12)*math.sin(t*math.pi)
-    table.insert(pts,center:Lerp(target,t)+side*wobble)
+ local area,cx,cz=DigCube.chunkArea(self.cube,ids)
+ local middle=Vector3.new(self.origin.X+cx,y,self.origin.Z+cz)
+ local center=point and Vector3.new(point.X,y,point.Z) or middle
+ -- Loop points: fixed angles around the hit point, each knowing how far the
+ -- real outline is in its direction.
+ local perimeter=0
+ for _,e in ipairs(edges) do perimeter+=e.len end
+ local count=math.clamp(math.floor(perimeter/1.1+.5),14,40)
+ local fallback=math.sqrt(area/math.pi)
+ local pts={}
+ for k=1,count do
+  local angle=(k-1+.35*jitter(seed+k*3.1))/count*math.pi*2
+  local dx,dz=math.cos(angle),math.sin(angle)
+  local reach=rayToOutline(edges,center,dx,dz) or fallback
+  pts[k]={dx=dx,dz=dz,reach=reach,warp=jitter(seed+k*7.3),drift=jitter(seed+k*1.7)*math.pi,t=0,anchor=false}
+ end
+ -- Order of appearance: four starting corners, then repeated bisection of
+ -- the gaps, so the loop gains detail evenly all the way around.
+ local order={}
+ local active={}
+ for q=0,3 do local k=math.floor(q*count/4)+1;if not active[k] then active[k]=true;table.insert(order,k) end end
+ local changed=true
+ while changed do
+  changed=false
+  local list=table.clone(order);table.sort(list)
+  for i=1,#list do
+   local a=list[i];local b=list[i%#list+1]
+   local gap=(b-a)%count
+   if gap>=2 then
+    local k=(a-1+math.floor(gap/2))%count+1
+    if not active[k] then active[k]=true;table.insert(order,k);changed=true end
    end
-   table.insert(pts,target)
-   table.insert(branches,{pts=pts,stage=((i-1)%3)+1,parts={}})
   end
  end
- local crack={key=key,ids=ids,edges=edges,branches=branches,center=center,parts={},marks={},seamParts={},progress=0,seen=0,
-  stage=0,stageAt={},since=os.clock(),mine=mine,color=color or HOT,y=y}
+ for rank,k in ipairs(order) do
+  if rank<=4 then pts[k].t=-1;pts[k].anchor=true
+  else pts[k].t=.04+.7*(rank-4)/math.max(1,#order-4)+.03*jitter(seed+k) end
+ end
+ local radius=math.max(1.2,fallback*1.08)
+ local crack={key=key,ids=ids,edges=edges,pts=pts,center=center,middle=middle,radius=radius,parts={},marks={},loop={},
+  progress=0,shown=0,drawAt=os.clock(),seen=0,stage=0,stageAt={},since=os.clock(),mine=mine,color=color or HOT,y=y}
  self.cracks[droneId]=crack
  return crack
 end
@@ -421,8 +405,7 @@ function V:dropCrack(droneId: string)
  if not crack then return end
  for _,p in pairs(crack.parts) do p:Destroy() end
  for _,p in pairs(crack.marks) do p:Destroy() end
- for _,p in pairs(crack.seamParts) do p:Destroy() end
- for _,b in ipairs(crack.branches) do for _,p in pairs(b.parts) do p:Destroy() end end
+ for _,p in pairs(crack.loop) do p:Destroy() end
  self.cracks[droneId]=nil
 end
 
@@ -441,7 +424,7 @@ end
 function V:crackSnap(crack: any,stage: number)
  local ctx=self.ctx
  local at=crack.center
- local tone=self:colorAt(at.Y-self.origin.Y)
+ local tone=self:colorAt(at.Y-self.origin.Y,at.X-self.origin.X,at.Z-self.origin.Z)
  if ctx.audio then
   ctx.audio:play(stage>=4 and 'crystal_split' or 'crystal_impact',at,{pitch=.85+stage*.12,level=(crack.mine and .9 or .5)*(stage>=4 and .7 or 1),rockSize=2})
  end
@@ -461,44 +444,73 @@ function V:crackSnap(crack: any,stage: number)
 end
 
 function V:drawCrack(crack: any,now: number)
+ local dt=math.min(.1,now-crack.drawAt);crack.drawAt=now
+ -- Ease the shown progress toward the replicated one so growth is smooth.
+ crack.shown+=(crack.progress-crack.shown)*math.min(1,dt*7)
  local p=crack.progress
- -- Snaps happen as damage crosses each stage line.
  while crack.stage<#CRACK_STAGES and p>=CRACK_STAGES[crack.stage+1] do
   crack.stage+=1
   crack.stageAt[crack.stage]=now
   self:crackSnap(crack,crack.stage)
  end
- -- The mark: the chunk's outline in the drone's color, pulsing like a field
- -- rock under attack (brighter for your own crew), until it cracks through.
  local through=crack.stage>=4
+ local reduced=self:reduced()
+ -- The target circle in the drone's color (brighter and pulsing for your
+ -- own crew), until the chunk cracks through.
  local wave=.5+.5*math.cos((now-crack.since)*7.5)
- local markAlpha=through and 1 or (crack.mine and .50-.43*wave or .7)
- for i,e in ipairs(crack.edges) do
-  crack.marks[i]=self:line(crack.marks[i],e.a+Vector3.yAxis*.01,e.b+Vector3.yAxis*.01,.15,crack.color:Lerp(Color3.new(1,1,1),.35),markAlpha)
+ local markAlpha=through and 1 or (crack.mine and .5-.43*wave or .7)
+ local markColor=crack.color:Lerp(Color3.new(1,1,1),.35)
+ local ring=crack.radius*(1+(crack.mine and not reduced and .04*wave or 0))
+ for i=1,CIRCLE_SEGMENTS do
+  local a0=(i-1)/CIRCLE_SEGMENTS*math.pi*2;local a1=i/CIRCLE_SEGMENTS*math.pi*2
+  local from=crack.middle+Vector3.new(math.cos(a0)*ring,.01,math.sin(a0)*ring)
+  local to=crack.middle+Vector3.new(math.cos(a1)*ring,.01,math.sin(a1)*ring)
+  crack.marks[i]=self:line(crack.marks[i],from,to,.15,markColor,markAlpha)
  end
- -- Opening: after the last snap the cracks widen and glow dimly from inside.
  local open=through and math.clamp((p-CRACK_STAGES[4])/(1-CRACK_STAGES[4]),0,1) or 0
- local tremble=open>0 and not self:reduced() and .05*open or 0
+ local tremble=open>0 and not reduced and .05*open or 0
  local shake=tremble>0 and Vector3.new(math.sin(now*61)*tremble,0,math.cos(now*53)*tremble) or Vector3.zero
  local width=.13+.07*crack.stage/4+.12*open
  local color=CRACK:Lerp(HOT,.55*open)
- for _,b in ipairs(crack.branches) do
-  local at=crack.stageAt[b.stage]
-  local run=at and math.clamp((now-at)/RUN_TIME,0,1) or 0
-  local segments=#b.pts-1
-  local reach=run*segments
-  for k=1,segments do
-   local r=math.clamp(reach-(k-1),0,1)
-   if r<=0 then
-    if b.parts[k] then b.parts[k].Transparency=1 end
+ -- The growing loop (hidden once the real outline has cracked through).
+ local pts=crack.pts;local n=#pts
+ if through then
+  for _,part in pairs(crack.loop) do part.Transparency=1 end
+ else
+  local q=math.clamp(crack.shown/CRACK_STAGES[4],0,1)
+  local grow=.14+.86*q^.85
+  -- Warp fades as the loop nears the outline; each snap kicks it briefly.
+  local kick=0
+  for _,at in pairs(crack.stageAt) do kick=math.max(kick,math.exp(-(now-at)*9)) end
+  local amp=.3*(1-q)^.7+.12*kick
+  local own={}
+  for k,pt in ipairs(pts) do
+   local wobble=reduced and 0 or .25*math.sin(now*2.3+pt.drift)
+   local r=pt.reach*grow*(1+amp*(pt.warp+wobble*(1-q)))
+   r=math.clamp(r,.25,pt.reach)
+   own[k]=crack.center+Vector3.new(pt.dx*r,0,pt.dz*r)
+  end
+  -- Points not yet grown in sit on the edge between their grown neighbors,
+  -- then push out to their own place: the loop gains corners.
+  local final={}
+  for k,pt in ipairs(pts) do
+   local w=pt.anchor and 1 or smoothstep((crack.shown-pt.t)/.12)
+   if w>=1 then final[k]=own[k]
    else
-    local a=b.pts[k]+shake;local c=b.pts[k]:Lerp(b.pts[k+1],r)+shake
-    -- Cracks taper toward their tips.
-    b.parts[k]=self:line(b.parts[k],a+Vector3.yAxis*.02,c+Vector3.yAxis*.02,width*(1-.45*(k-1)/math.max(1,segments)),color,0)
+    local a,b=k,k
+    local da,db=0,0
+    repeat a=(a-2)%n+1;da+=1 until pts[a].anchor or crack.shown>=pts[a].t+.12 or da>=n
+    repeat b=b%n+1;db+=1 until pts[b].anchor or crack.shown>=pts[b].t+.12 or db>=n
+    local edge=own[a]:Lerp(own[b],da/(da+db))
+    final[k]=edge:Lerp(own[k],w)
    end
   end
+  local lift=Vector3.yAxis*.02
+  for k=1,n do
+   crack.loop[k]=self:line(crack.loop[k],final[k]+lift,final[k%n+1]+lift,width,color,0)
+  end
  end
- -- The last snap cracks the whole outline through, running out from the hit.
+ -- The last snap cracks the real outline through, running out from the hit.
  local edgeRun=through and math.clamp((now-crack.stageAt[4])/RUN_TIME,0,1) or 0
  for i,e in ipairs(crack.edges) do
   if edgeRun<=0 then
@@ -557,7 +569,7 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  if now>=(beam.sparkAt or 0) then
   beam.sparkAt=now+.23+(now%.07)
   local serverNow=workspace:GetServerTimeNow()
-  local tone=self:colorAt(to.Y-self.origin.Y)
+  local tone=self:colorAt(to.Y-self.origin.Y,to.X-self.origin.X,to.Z-self.origin.Z)
   if self.ctx.impact then
    local surface=self.holder and self.holder:FindFirstChild('Rock') and self.holder.Rock:FindFirstChildWhichIsA('BasePart')
    if surface then self.ctx.impact:chips(serverNow,to,Vector3.yAxis,surface,1,to.Y-4) end
@@ -567,6 +579,129 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
    self.ctx.effects.Pulse(to+Vector3.yAxis*.1,tone:Lerp(STONE_LIGHT,.38),.19,1.65,.18,Vector3.yAxis,.78)
   end
  end
+end
+
+-- Rock dust from a broken chunk: glowing motes burst out, hang for the gem
+-- roll, settle in a loose ring on the pit floor and bob there. When the
+-- server credits the rock to its owner (they came close), the motes fly into
+-- the owner's character. Motes are capped so huge digs stay cheap.
+local MOTES_PER_UNIT=5
+local MOTE_CAP=180
+function V:addDust(part: Instance,live: boolean)
+ if not part:IsA('BasePart') or self.dust[part] then return end
+ local count=part:GetAttribute('Count') or 1
+ local floor=part:GetAttribute('FloorY') or part.Position.Y-1
+ local tint=part:GetAttribute('Color')
+ local color=(typeof(tint)=='Color3' and tint or STONE_LIGHT):Lerp(Color3.fromRGB(255,248,226),.3)
+ local now=os.clock()
+ local from=part.Position
+ local entry={part=part,owner=part:GetAttribute('Owner'),units=count,initial=count,motes={},born=live and now or now-10,flown=0}
+ local total=math.min(count*MOTES_PER_UNIT,MOTE_CAP-self.motes)
+ for i=1,total do
+  local a=i*2.399963+self.random:NextNumber(0,.5)
+  local r=.5+1.6*math.sqrt(i/math.max(1,total))
+  local home=Vector3.new(from.X+math.cos(a)*r,floor+.3,from.Z+math.sin(a)*r)
+  local peak=Vector3.new(from.X+math.cos(a)*r*1.6,from.Y+1.2+self.random:NextNumber(0,1.6),from.Z+math.sin(a)*r*1.6)
+  local mote=fxPart(self.fx,'DigDustMote',color)
+  ;(mote :: Part).Shape=Enum.PartType.Ball
+  mote.Material=Enum.Material.Neon
+  local size=self.random:NextNumber(.26,.42)
+  mote.Size=Vector3.one*size
+  mote.Position=live and from or home
+  table.insert(entry.motes,{part=mote,home=home,peak=peak,from=from,phase=self.random:NextNumber(0,math.pi*2),size=size})
+  self.motes+=1
+ end
+ self.dust[part]=entry
+ table.insert(self.connections,part:GetAttributeChangedSignal('Count'):Connect(function()
+  entry.units=part:GetAttribute('Count') or 0
+ end))
+end
+
+function V:stepDust(now: number)
+ local pause=DigCube.PAUSE
+ local reduced=self:reduced()
+ for part,entry in pairs(self.dust) do
+  local age=now-entry.born
+  -- How many motes should be on their way to the owner by now.
+  local collected=1-math.clamp(entry.units/math.max(1,entry.initial),0,1)
+  local want=math.floor(#entry.motes*collected+.5)
+  if (part:GetAttribute('CollectedAt') or 0)>0 then want=#entry.motes end
+  if entry.flown<want then
+   for i=entry.flown+1,want do
+    local m=entry.motes[i]
+    if m and not m.flyAt then m.flyAt=now+(i-entry.flown-1)*.025;m.flyFrom=m.part.Position end
+   end
+   entry.flown=want
+  end
+  local gone=not part.Parent
+  if gone and not entry.goneAt then entry.goneAt=now end
+  local player=entry.owner and Players:GetPlayerByUserId(entry.owner)
+  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+  local alive=0
+  for _,m in ipairs(entry.motes) do
+   if m.part.Parent then
+    alive+=1
+    local bob=reduced and 0 or .12*math.sin(now*2.2+m.phase)
+    local rest=m.home+Vector3.new(0,.25+bob,0)
+    local pos
+    if m.flyAt and now>=m.flyAt and root and root:IsA('BasePart') then
+     local t=math.clamp((now-m.flyAt)/.38,0,1)
+     local e=t*t
+     pos=m.flyFrom:Lerp(root.Position,e)+Vector3.yAxis*math.sin(t*math.pi)*1.4
+     m.part.Size=Vector3.one*m.size*(1-.6*t)
+     if t>=1 then m.part:Destroy();self.motes-=1;continue end
+    elseif m.flyAt and now>=m.flyAt then
+     m.part:Destroy();self.motes-=1;continue
+    elseif age<.4 then
+     local t=1-(1-age/.4)^2
+     pos=m.from:Lerp(m.peak,t)
+    elseif age<pause then
+     pos=m.peak+Vector3.new(0,bob*2,0)
+    elseif age<pause+.45 then
+     local t=smoothstep((age-pause)/.45)
+     pos=m.peak:Lerp(rest,t)
+    else
+     pos=rest
+    end
+    if entry.goneAt and not m.flyAt then
+     local f=math.clamp((now-entry.goneAt)/.4,0,1)
+     m.part.Transparency=f
+     if f>=1 then m.part:Destroy();self.motes-=1;continue end
+    end
+    m.part.Position=pos
+   end
+  end
+  if alive==0 and (gone or entry.flown>=#entry.motes) then self.dust[part]=nil end
+ end
+end
+
+-- A soft warm lamp on the player while they are down in the cube: the pit
+-- walls around you stay readable however deep the crater gets.
+function V:stepLamp()
+ if not self.cube then return end
+ local character=Players.LocalPlayer and Players.LocalPlayer.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ local depth=0
+ if root and root:IsA('BasePart') then
+  local l=root.Position-self.origin
+  local W=self.cube.width
+  if l.X>=-2 and l.X<=W+2 and l.Z>=-2 and l.Z<=W+2 then
+   depth=math.clamp((self.cube.height+3-l.Y)/(self.cube.height*.6),0,1)
+  end
+ end
+ local lamp=self.lamp
+ if depth<=0 then
+  if lamp then lamp.Enabled=false end
+  return
+ end
+ if not lamp or lamp.Parent~=root then
+  if lamp then lamp:Destroy() end
+  lamp=Instance.new('PointLight');lamp.Name='DigLamp';lamp.Shadows=false
+  lamp.Color=Color3.fromRGB(255,234,200);lamp.Range=26
+  lamp.Parent=root;self.lamp=lamp
+ end
+ lamp.Enabled=true
+ lamp.Brightness=.5+1.3*depth
 end
 
 function V:stepCracks(now: number)
@@ -663,12 +798,15 @@ function V:update()
  self:stepCracks(now)
  self:stepSplits(now)
  self:stepDebris(now)
+ self:stepDust(now)
+ self:stepLamp()
  self:stepPad(now)
 end
 
 function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for id in pairs(self.cracks) do self:dropCrack(id) end
+ if self.lamp then self.lamp:Destroy() end
  self.fx:Destroy()
 end
 return V

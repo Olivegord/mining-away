@@ -31,6 +31,8 @@ D.CROWD_RADIUS=7
 D.RECENT_TIME=20
 D.CENTER={140,4,20} -- bottom center in world space (on the flat plane east of the hub)
 D.HP_SCALE=.2
+D.HARDNESS_PER_LAYER=.4 -- the bottom layer takes about 4.6x the work of the top
+D.MINE_RADIUS=16 -- studs: drones only cut chunks this close to their player, so you move to keep digging
 D.BASE_CUT_AREA=48 -- square studs of top face in a chunk at cutSize 1 (about 8 studs across)
 D.MAX_CHUNK=40
 D.PAUSE=1.1 -- seconds between the split and the gem-or-nothing reveal
@@ -56,14 +58,34 @@ D.STRATA={
 }
 local ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
--- Rock color by height: sand at the top through orange, rust and mauve to slate.
-D.GRADIENT={{226,196,150},{214,160,104},{192,120,78},{160,92,70},{124,80,76},{92,74,86},{66,64,84},{46,48,64}}
-D.GRADIENT_CURVE=.55 -- below 1: color changes fastest near the top, where pits start
-function D.gradient(y: number,height: number): {number}
- local t=math.clamp(1-y/height,0,1)^D.GRADIENT_CURVE*(#D.GRADIENT-1)
- local i=math.floor(t);local f=t-i
- local a=D.GRADIENT[i+1];local b=D.GRADIENT[math.min(#D.GRADIENT,i+2)]
- return {a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f,a[3]+(b[3]-a[3])*f}
+-- Rock color: every layer has its own bright hue (no darkening with depth, so
+-- deep pits stay readable), and each layer shifts across its face toward a
+-- second tone, so a single layer reads as a gradient rather than a flat slab.
+D.LAYER_HUES={
+ {238,208,142},{242,170,92},{228,122,86},{216,106,130},{180,110,192},
+ {122,126,216},{88,162,216},{80,184,168},{126,198,114},{204,208,98},
+}
+D.LAYER_SHIFT=.5 -- how far a layer's second tone leans toward the next hue
+local function mix(a: {number},b: {number},t: number): {number}
+ return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t}
+end
+-- Color of layer L at cube-local x,z.
+function D.layerColor(cube: any,L: number,x: number,z: number): {number}
+ local n=#D.LAYER_HUES
+ local a=D.LAYER_HUES[(L-1)%n+1]
+ local b=mix(a,D.LAYER_HUES[L%n+1],D.LAYER_SHIFT)
+ b=mix(b,{255,250,236},.18)
+ local t=D.noise3(x/22,L*5.7,z/22,(cube and cube.seed or 1)%100000)
+ t=math.clamp((t-.2)/.6,0,1)
+ return mix(a,b,t)
+end
+-- Layer index holding height y (cube-local).
+function D.layerAt(cube: any,y: number): number
+ for L,layer in ipairs(cube.layers) do if y>=layer.y0-1e-6 then return L end end
+ return #cube.layers
+end
+function D.colorAt(cube: any,x: number,y: number,z: number): {number}
+ return D.layerColor(cube,D.layerAt(cube,y),x,z)
 end
 -- How big a chunk each drone takes (times BASE_CUT_AREA, squared). Tiny
 -- chunks break fast; big ones take longer but drop more rock per break.
@@ -309,7 +331,7 @@ function D.build(seed: number)
    if n>.75-.12*t then
     cell.ore=math.clamp(math.floor(1+t*4.2+R(-.7,.7)),1,#D.ORES)
    end
-   local hardness=1+.15*(L-1)
+   local hardness=1+D.HARDNESS_PER_LAYER*(L-1)
    cell.hp=math.max(2,cell.area*(y1-y0)*D.HP_SCALE*hardness)
   end
  end
@@ -438,6 +460,8 @@ end
 --  focusX/focusZ: local point the crew should favor (player or tapped spot)
 --  taken: {[cellId]=true} claimed by other drones; takenPoints: {{x,z}} of those claims
 --  recent: {[cellId]=time} of removals; now; random: () -> number
+--  anchorX/anchorZ: the player's local position; only cells within radius
+--  (default D.MINE_RADIUS) of it are cut, so the player has to move along
 function D.pick(cube: any,opts: any): number?
  local total=0
  local choices,weights={},{}
@@ -455,8 +479,9 @@ function D.pick(cube: any,opts: any): number?
   apex=math.min(D.LAYERS,apex+D.LEAD)
  end
  for id in pairs(cube.frontier) do
-  if not (opts.taken and opts.taken[id]) and D.diggable(cube,id) then
-   local cell=cube.cells[id]
+  local cell=cube.cells[id]
+  local near=not opts.anchorX or math.sqrt((cell.cx-opts.anchorX)^2+(cell.cz-opts.anchorZ)^2)-cell.radius<=(opts.radius or D.MINE_RADIUS)
+  if near and not (opts.taken and opts.taken[id]) and D.diggable(cube,id) then
    local w=D.DEPTH_PULL^(cell.layer-1)
    if opts.focusX then
     local d=math.sqrt((cell.cx-opts.focusX)^2+(cell.cz-opts.focusZ)^2)
@@ -545,7 +570,7 @@ function D.prismWedges(cube: any,ids: {number}): {any}
  local out={}
  for _,id in ipairs(ids) do
   local cell=cube.cells[id]
-  local poly=D.shrunk(cell,-.04)
+  local poly=D.grown(cell.poly,D.CARVE_OVERLAP)
   local y1=cell.y1+(cell.layer==1 and .5 or .03)
   for _,w in ipairs(D.polyWedges(poly,cell.y0-.03,y1)) do
    w.size[2]+=.16;w.size[3]+=.16
@@ -582,6 +607,38 @@ function D.gemRoll(cube: any,ids: {number},random: () -> number): number
  if tier>0 then return tier end
  local t=(deepest-1)/math.max(1,D.LAYERS-1)
  return math.clamp(math.floor(1+t*4.2+(random()*1.4-.7)),1,#D.ORES)
+end
+local function contains(poly: {{number}},x: number,z: number): boolean
+ local sign=0
+ local n=#poly
+ for k=1,n do
+  local a,b=poly[k],poly[k%n+1]
+  local c=(b[1]-a[1])*(z-a[2])-(b[2]-a[2])*(x-a[1])
+  if c>1e-9 or c<-1e-9 then
+   local s=c>0 and 1 or -1
+   if sign==0 then sign=s elseif s~=sign then return false end
+  end
+ end
+ return true
+end
+-- The cell of layer L under local x,z.
+function D.cellAt(cube: any,L: number,x: number,z: number): number?
+ local layer=cube.layers[L]
+ if not layer then return nil end
+ local list=layer.grid[bucketKey(math.floor(x/BUCKET),math.floor(z/BUCKET))]
+ if list then for _,id in ipairs(list) do if contains(cube.cells[id].poly,x,z) then return id end end end
+ return nil
+end
+-- Top of the remaining rock at local x,z (0 when dug to the bottom), or nil
+-- off the cube. Exact from the cube itself, so drops land on the real floor
+-- even before the server finishes carving the geometry.
+function D.surfaceAt(cube: any,x: number,z: number): number?
+ if x<0 or x>cube.width or z<0 or z>cube.width then return nil end
+ for L=1,#cube.layers do
+  local id=D.cellAt(cube,L,x,z)
+  if id and not cube.removed[id] then return cube.cells[id].y1 end
+ end
+ return 0
 end
 function D.key(ids: {number}): string
  local out=table.create(#ids)
@@ -712,6 +769,40 @@ function D.decode(cube: any,s: string): {[number]:boolean}
  return set
 end
 
+-- A convex polygon pushed out by d along every edge normal (mitred corners,
+-- capped for sharp ones). Carving with these overlaps every neighbor, so no
+-- sliver survives at a seam or at a corner where three cells meet: those
+-- slivers stood as thin spires once the rock under them was dug away.
+D.CARVE_OVERLAP=.3
+function D.grown(poly: {{number}},d: number): {{number}}
+ local n=#poly
+ local signed=0
+ for k=1,n do local a,b=poly[k],poly[k%n+1];signed+=a[1]*b[2]-b[1]*a[2] end
+ local flip=signed>=0 and 1 or -1
+ local normals={}
+ for k=1,n do
+  local a,b=poly[k],poly[k%n+1]
+  local ex,ez=b[1]-a[1],b[2]-a[2]
+  local len=math.sqrt(ex*ex+ez*ez)
+  -- Zero-length edges get a zero normal and borrow the neighbor's below.
+  if len<1e-9 then normals[k]={0,0} else normals[k]={ez/len*flip,-ex/len*flip} end
+ end
+ local out={}
+ for k=1,n do
+  local prev=normals[(k-2)%n+1];local nxt=normals[k]
+  local v=poly[k]
+  if prev[1]==0 and prev[2]==0 then prev=nxt end
+  if nxt[1]==0 and nxt[2]==0 then nxt=prev end
+  if nxt[1]==0 and nxt[2]==0 then table.insert(out,{v[1],v[2]})
+  else
+   local mx,mz=prev[1]+nxt[1],prev[2]+nxt[2]
+   local denom=1+prev[1]*nxt[1]+prev[2]*nxt[2]
+   local f=denom>.15 and d/denom or d/.15
+   table.insert(out,{v[1]+mx*f,v[2]+mz*f})
+  end
+ end
+ return out
+end
 -- Geometry for rendering. Polygon shrunk toward its centroid to open a crack line.
 function D.shrunk(cell: any,gap: number?)
  local g=gap or D.GAP;local out={}

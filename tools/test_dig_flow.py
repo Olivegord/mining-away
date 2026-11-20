@@ -53,12 +53,20 @@ for _=1,400 do
  if #dig.ops>=10 then break end
 end
 for _,c in ipairs(pickups:GetChildren()) do if c:GetAttribute('Owner')==pl.UserId and c:GetAttribute('StoneCargo')==true then stones+=1 end end
+assert(stones==0,'chunks leave rock dust, not floating rock pickups: '..stones)
+local dustFolder=holder:FindFirstChild('Dust')
+assert(dustFolder,'rock dust replicates')
+for id in pairs(dig.cube.removed) do
+ local c=dig.cube.cells[id]
+ local l=pl.Character.HumanoidRootPart.Position-dig.origin
+ assert(math.sqrt((c.cx-l.X)^2+(c.cz-l.Z)^2)-c.radius<=DigCube.MINE_RADIUS+8,'drones only cut near their player (chunks grow a few cells past the seed)')
+end
 assert(mining,'a drone publishes a dig beam')
 assert(marked,'drones publish (mark) the chunk they are cutting')
 local sizeCount=0;for _ in pairs(sizes) do sizeCount+=1 end
 assert(sizeCount>=2,'drones cut different chunk sizes')
 assert(#dig.ops>=10,'the crew breaks chunks, got '..#dig.ops)
-assert(stones>0 or Pro.cargoUnits(data(p))>0,'chunks drop rock')
+assert((p.collectTotal or 0)>0,'rock dust flies into the bag of a player standing by')
 tick(10)
 -- Replication: replaying the published chunks gives the server's removed set.
 local count=holder:GetAttribute('OpCount')
@@ -120,11 +128,17 @@ end
 local tiny,huge,upgraded=avg(1,1),avg(4,1),avg(1,2)
 assert(huge>tiny*2,'huge-chunk drones take bigger chunks: '..huge..' vs '..tiny)
 assert(upgraded>tiny,'cut-size upgrades grow chunks')
--- Tap the far corner: the crew's next cuts move there.
-local corner=dig.origin+Vector3.new(W*.85,dig.cube.height,W*.85)
+-- A tap out of reach does not pull the crew away from the player.
+local far=dig.origin+Vector3.new(W*.85,dig.cube.height,W*.85)
 p.tokens=10;p.bucketAt=now
-command.OnServerEvent:Fire(pl,'DigFocus',{point=corner})
-assert(p.digFocus==corner,'tap sets the focus')
+command.OnServerEvent:Fire(pl,'DigFocus',{point=far})
+local job=scene.digPick(d1,p)
+local l=pl.Character.HumanoidRootPart.Position-dig.origin
+assert(job and math.sqrt((job.cx-l.X)^2+(job.cz-l.Z)^2)<DigCube.MINE_RADIUS+6,'far taps are ignored')
+scene.digDrop(d1)
+-- Walk to the far corner: the crew's next cuts move there with you.
+local corner=far
+pl.Character:PivotTo(CFrame.new(corner+Vector3.new(0,3,0)))
 local seen={};for id in pairs(dig.cube.removed) do seen[id]=true end
 local before=#dig.ops
 for _=1,500 do tick(10);if #dig.ops>=before+5 then break end end
@@ -132,7 +146,7 @@ local moved,fresh=0,0
 for id in pairs(dig.cube.removed) do
  if not seen[id] then fresh+=1;local c=dig.cube.cells[id];if (c.cx-W*.85)^2+(c.cz-W*.85)^2<24*24 then moved+=1 end end
 end
-assert(fresh>=3 and moved>=fresh*.7,'tap moves the crew: '..moved..'/'..fresh)
+assert(fresh>=3 and moved>=fresh*.7,'walking moves the crew: '..moved..'/'..fresh)
 -- Walk away: the crew is released.
 pl.Character:PivotTo(CFrame.new(Vector3.new(0,6,10)))
 tick(10)
@@ -144,7 +158,7 @@ dig.checkAt=0
 tick(5)
 tick(math.ceil(5/C.Tick))
 assert(holder:GetAttribute('Generation')==2 and dig.cube.removedCount==0 and holder:GetAttribute('OpCount')==0,'a dug-out cube is replaced')
-print('PASS dig cube server: solid rock blocks, drones mark and cut chunks of different sizes, chunks drop rock, ops replicate, gems wait for the reveal, upgrades grow chunks, tap moves the crater, leaving releases, spent cube resets (API doubles; carving, looks, feel and multiplayer NOT verified)')
+print('PASS dig cube server: solid rock blocks, drones mark and cut chunks of different sizes, chunks drop rock, ops replicate, gems wait for the reveal, upgrades grow chunks, walking moves the crater, rock dust collects, leaving releases, spent cube resets (API doubles; carving, looks, feel and multiplayer NOT verified)')
 """
 source = "\n".join([
     (ROOT / "tests/mock-roblox.lua").read_text(),
