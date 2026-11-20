@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 19 — owner: "most effects are missing"; break effects and glow restored
+
+The strip-down of the Dig Cube went too far. Owner, after playing it: "no.. most effects are missing dude. bad." Two causes. First, the break itself had been cut to shards plus one small puff. Second, the shared `MiningEnergyBloom` was only ever created by a `work:burst` call the rework removed, so on the Dig Cube nothing glowed at all; both blooms had also been cut hard.
+
+Restored on top of the real piece breaks and shards (`5e1cc3b`, `0056685`): piece break plays the field rocks' `CrystalBreak` particles and chips; the full split adds the ground shock ring (`Pulse`), spark fireworks and chips; the gem reveal has its ring and fireworks again; beam contact has chips and the small ring pulse, more and brighter sparks, and wider, brighter ribbons. `DigCubeView` now calls `work:energyBloom()` when a beam starts (bloom 0.4 / 16 / 1.3); `Lighting.Bloom` intensity 0.45→0.8 (shared Edit and canonical, scoped merge); cube belly sparkles back to 11 a second. Break particles are 62% lighter than the rock and larger, because in the rock's own color the burst vanished against the pit. Still gone by the owner's earlier direction: drawn crack lines, target circles, Neon rods and motes, the strobing drone light.
+
+A Play recording of `5e1cc3b` (agent-started, stopped) showed beams, contact rings, gem bursts, shards and the shock ring, with no script errors, and showed the rock-colored break burst still hard to see; the lighter, larger burst in `0056685` has not been seen running. **Do not strip effects again without the owner naming what to remove:** "too much noise" meant quality and clutter, not fewer effects overall. Team Create save **457**; not published; Studio left in Edit.
+
 ## November 19 — VERSION 2 wind effect (Pressure Strike) added to the shared Workspace
 
 `Workspace["VERSION 2"]` is a self-contained showcase of the ranged strike at 30.07–33.30 s of the [Wind Moveset reference](https://www.youtube.com/watch?v=-RYr9ZNJPGM), built independently of Version 1 (which turned out to use the same strike). It sits on the open baseplate south of the hub at (0, 3.8, 135): a 70-stud dark stage, a 5-stud stand-in figure, one sign, the `PressureStrikeV2` module and a client `Replay` script. Stage table, method and limits are in [the VFX notes](VFX_INSTRUCTIONS.md). Sources: `tools/vfx_version2/`, installer `tools/studio_vfx_version2.py`.

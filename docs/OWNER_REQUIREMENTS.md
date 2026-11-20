@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 19 — do not strip the effects: "most effects are missing dude. bad"
+
+After the cracking rework removed most Dig Cube effects, the owner rejected it. Breaking must keep its burst, sparks, shock ring, chips, beam contact feedback and glow. What the owner disliked earlier was noise, low-quality particles, glare, blur and jagged drawn lines, not the presence of effects. Keep the piece-by-piece breaking and the shards; remove an effect only when the owner names it.
+
 ## November 19 — rework the cracking: it must move in chunks; far less noise, brightness and blur
 
 The owner hates the black spreading crack "because it is constant (should move out in chunks) like the old rock fields"; none of it is satisfying. The game is "far too cluttered", the indicators "suck", breaking is not satisfying and the particles are "really really bad". Then: it is **too bright**, the **effects are shrouded**, there is "too much noise and not enough good quality of particles and lighting", **tone down blur**, and **jagged edges (mainly the cracks, circles and effects) look bad**. The owner approved this plan ("Build all of it"):
