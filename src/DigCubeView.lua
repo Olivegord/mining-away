@@ -175,7 +175,8 @@ end
 -- outline, so what flies out is the rock that was there. Each one is thrown
 -- to a landing spot chosen on the real pit floor (never up onto a wall).
 local SHARD_CAP=90
-local SHARD_SCALE=.86
+local SHARD_SCALE=.7
+local SHARD_WAIT=2.2 -- seconds uncollected rock keeps all its shards
 function V:throw(f: any,now: number,from: Vector3,target: Vector3,rise: number)
  local o=self.origin
  local top=DigCube.surfaceAt(self.cube,target.X-o.X,target.Z-o.Z) or 0
@@ -194,9 +195,18 @@ function V:shards(op: any,now: number,center: Vector3)
   if c and #self.frags<SHARD_CAP+20 then
    local poly=c.poly;local n=#poly
    -- Over budget: the cell flies as one smaller block.
-   local whole=#self.frags+n-2>SHARD_CAP or n<=3
+   local whole=#self.frags+3>SHARD_CAP or n<=3
    local tris={}
-   if whole then tris[1]=poly else for k=2,n-1 do table.insert(tris,{poly[1],poly[k],poly[k+1]}) end end
+   if whole then tris[1]=poly
+   else
+    -- At most three shards a cell: runs of its fan triangles, joined.
+    local run=math.ceil((n-2)/3)
+    for k=2,n-1,run do
+     local piece={poly[1]}
+     for j=k,math.min(n,k+run) do table.insert(piece,poly[j]) end
+     table.insert(tris,piece)
+    end
+   end
    for _,tri in ipairs(tris) do
     local mx,mz=0,0
     for _,v in ipairs(tri) do mx+=v[1];mz+=v[2] end
@@ -240,12 +250,19 @@ function V:shards(op: any,now: number,center: Vector3)
  -- Rock dust the server already dropped here claims these shards.
  for _,entry in pairs(self.dust) do
   if now-entry.born<2.5 and Vector3.new(entry.at.X-center.X,0,entry.at.Z-center.Z).Magnitude<10 then
-   for _,f in ipairs(made) do f.dust=entry;table.insert(entry.frags,f) end
+   for _,f in ipairs(made) do self:claim(entry,f) end
    break
   end
  end
 end
 
+-- A shard joins the rock dust it came from. The first one is the keeper:
+-- if the rock is not collected soon (full bag, owner gone) the others
+-- crumble and the keeper stays, smaller, to mark rock still lying there.
+function V:claim(entry: any,f: any)
+ f.dust=entry;table.insert(entry.frags,f)
+ if not entry.keeper then entry.keeper=f;f.keeper=true end
+end
 function V:dropShard(f: any)
  f.dead=true
  for _,q in ipairs(f.parts) do q.part:Destroy() end
@@ -268,7 +285,7 @@ function V:stepShards(now: number)
    if not root or not root:IsA('BasePart') or e>=1 then self:dropShard(f);table.remove(self.frags,i);continue end
    pos=f.flyFrom:Lerp(root.Position,e*e)+Vector3.yAxis*math.sin(e*math.pi)*1.6
    angle=f.spin*f.T+e*4
-   k=f.k*(1-.7*e)
+   k=(f.flyK or f.k)*(1-.7*e)
   elseif t<=0 then
    pos=f.from
   elseif t<f.T then
@@ -288,12 +305,15 @@ function V:stepShards(now: number)
    end
    -- Nobody is collecting it: it crumbles away.
    local gone=f.dust and f.dust.goneAt
-   local fadeAt=gone or (not f.dust and f.at+f.T+1 or nil)
+   local fadeAt=gone or (not f.dust and f.at+f.T+.45 or nil)
+   if f.dust and age>SHARD_WAIT then
+    if f.keeper then k=f.k*(1-.4*math.clamp((age-SHARD_WAIT)/.3,0,1)) elseif not fadeAt then fadeAt=f.at+f.T+SHARD_WAIT end
+   end
    if #self.frags>SHARD_CAP and not fadeAt then fadeAt=now end
    if fadeAt and not f.fadeAt then f.fadeAt=math.max(now,fadeAt) end
    if f.fadeAt then
     local fade=math.clamp((now-f.fadeAt)/.3,0,1)
-    k=f.k*(1-fade)
+    k*=1-fade
     if fade>=1 then self:dropShard(f);table.remove(self.frags,i);continue end
    end
   end
@@ -472,7 +492,7 @@ function V:addDust(part: Instance,live: boolean)
  if live then
   for _,f in ipairs(self.frags) do
    if not f.dust and not f.fadeAt and now-f.born<2.5 and Vector3.new(f.pos.X-entry.at.X,0,f.pos.Z-entry.at.Z).Magnitude<10 then
-    f.dust=entry;table.insert(entry.frags,f)
+    self:claim(entry,f)
    end
   end
  end
@@ -491,7 +511,7 @@ function V:stepDust(now: number)
   if entry.flown<want then
    for i=entry.flown+1,want do
     local f=entry.frags[i]
-    if f and not f.dead and not f.flyAt then f.flyAt=now+(i-entry.flown-1)*.03;f.flyFrom=f.pos end
+    if f and not f.dead and not f.flyAt then f.flyAt=now+(i-entry.flown-1)*.03;f.flyFrom=f.pos;f.flyK=f.scale end
    end
    entry.flown=want
   end
