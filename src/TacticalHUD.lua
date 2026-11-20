@@ -299,6 +299,12 @@ function HUD:updateBackpack(profile,player,world,now,width,fighting)
  local ratio=math.clamp(amount/capacity,0,1)
  local full=amount>=capacity
  local runId=profile and profile.run and profile.run.id
+ -- The bar eases to its value: it fills as rock arrives and drains on a sale.
+ local step=math.clamp(now-(self.bagStepAt or now),0,.1);self.bagStepAt=now
+ local shownRatio=self.bagShown or ratio
+ shownRatio+=(ratio-shownRatio)*math.min(1,step*(ratio<shownRatio and 9 or 14))
+ if math.abs(ratio-shownRatio)<.002 or player:GetAttribute('ReducedMotion')==true then shownRatio=ratio end
+ self.bagShown=shownRatio
  if self.bagRun==runId and self.bagAmount and amount>self.bagAmount then
   self.bagPickupAt=now;self.bagBefore=self.bagAmount
  elseif self.bagRun~=runId or (self.bagAmount and amount<self.bagAmount) then
@@ -313,7 +319,7 @@ function HUD:updateBackpack(profile,player,world,now,width,fighting)
   local segmentWidth=(width-3*9)/10
   slot.track.Position=UDim2.fromOffset((i-1)*(segmentWidth+3),25)
   slot.track.Size=UDim2.fromOffset(segmentWidth,7)
-  slot.fill.Size=UDim2.fromScale(math.clamp(ratio*10-(i-1),0,1),1)
+  slot.fill.Size=UDim2.fromScale(math.clamp(shownRatio*10-(i-1),0,1),1)
   local newFill=i>math.floor((self.bagBefore or amount)/capacity*10)
   slot.fill.BackgroundColor3=color:Lerp(C.text,newFill and glow*.8 or 0)
  end
@@ -328,7 +334,10 @@ function HUD:updateBackpack(profile,player,world,now,width,fighting)
  end
  -- Square fields cash a full bag out on the spot: no trip, just a cue.
  if world:GetAttribute('WholeFields')==true then
-  local soon=ratio>=.6 and not fighting
+  -- Taught once: after the first cash-out the cue is only noise.
+  local run=profile and profile.run
+  local taught=run~=nil and ((run.quartzEarnings or 0)>0 or ((run.wallet and run.wallet.Quartz) or 0)>0)
+  local soon=ratio>=.6 and not fighting and not taught
   self.sellGuide.Visible=soon;self.sellArrow.Visible=false
   if soon then
    self.sellGuide.Text=full and 'Cashing out!' or 'Full bag = cash!'
@@ -387,7 +396,10 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
   end
  end
  local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)
+ -- Battery only when it matters: not full, or drones charging or docking.
  local batteryVisible=activity.maxBattery>0 and not Players.LocalPlayer:GetAttribute('MA_InSquareField')
+  and not Players.LocalPlayer:GetAttribute('MA_Digging')
+  and (activity.battery<activity.maxBattery*.995 or activity.charging>0 or activity.docking>0)
  local growth=p and p.prestigePreview
  local growthVisible=growth~=nil and type(growth.saleRequired)=='number'
  local cargoHeight=self:updateBackpack(p,Players.LocalPlayer,world,now,width,fighting)
@@ -431,7 +443,8 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
   guidance=r.packReadyToOpen and r.packReadyToOpen() and HUD.packHoldHint(self.input)
    or HUD.nextStationHint(p,pinned,pinned and r.depotApproach(pin))
   if not guidance and HUD.needsFirstCutHint(p,pinned) then
-   guidance=HUD.firstCutHint(self.input,r.starterReachable(),world:GetAttribute('WholeFields')==true)
+   guidance=Players.LocalPlayer:GetAttribute('MA_Digging')==true and 'Drones dig near you. Keep moving!'
+    or HUD.firstCutHint(self.input,r.starterReachable(),world:GetAttribute('WholeFields')==true)
   end
  end
  local statusText=guidance or (pinned and type(status)=='string' and selectorText[status]) or nil

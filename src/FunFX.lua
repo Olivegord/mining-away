@@ -67,7 +67,7 @@ function Fun.paintCube(view,body,id)
  -- The glowing belly the laser comes out of.
  local glow=bare(view,'FunGlow',Vector3.new(s.X*.62,.06,s.Z*.62),color:Lerp(WHITE,.25),Enum.Material.Neon)
  attach(glow,body,CFrame.new(0,-s.Y*.5-.025,0))
- local light=Instance.new('PointLight');light.Name='FunLight';light.Color=color;light.Range=6;light.Brightness=.35
+ local light=Instance.new('PointLight');light.Name='FunLight';light.Color=color;light.Range=7;light.Brightness=.2
  light.Shadows=false;light.Parent=glow
  -- A ribbon trail in the cube's color while it cruises.
  local a0=Instance.new('Attachment');a0.Name='FunTrailTop';a0.Position=Vector3.new(0,s.Y*.32,s.Z*.5);a0.Parent=body
@@ -79,7 +79,7 @@ function Fun.paintCube(view,body,id)
  trail.Lifetime=.32;trail.MinLength=.1;trail.FaceCamera=true;trail.Enabled=false;trail.Parent=body
  -- Little sparkles shed from the belly while lasering.
  local motes=Instance.new('ParticleEmitter');motes.Name='FunMotes';motes.Texture=SPARKLE
- motes.Color=ColorSequence.new(color:Lerp(WHITE,.5),color);motes.LightEmission=.8;motes.LightInfluence=0
+ motes.Color=ColorSequence.new(color:Lerp(WHITE,.5),color);motes.LightEmission=.4;motes.LightInfluence=0
  motes.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(1,0)})
  motes.Transparency=NumberSequence.new(.1,1);motes.Lifetime=NumberRange.new(.5,.9);motes.Rate=0
  motes.Speed=NumberRange.new(1.5,3.5);motes.SpreadAngle=Vector2.new(70,70);motes.EmissionDirection=Enum.NormalId.Bottom
@@ -93,12 +93,12 @@ function Fun.stepCube(record,speed,working,hidden,now)
  local calm=reduced()
  local cruising=not hidden and not calm and speed>9
  if record.trail.Enabled~=cruising then record.trail.Enabled=cruising end
- local rate=(working and not hidden and not calm) and 14 or 0
+ local rate=(working and not hidden and not calm) and 6 or 0
  if record.motes.Rate~=rate then record.motes.Rate=rate end
- local pulse=working and (.5+.5*math.sin(now*14)) or 0
- record.light.Brightness=hidden and 0 or (.25+pulse*1.2)
- record.light.Range=working and 11 or 8
- record.glow.Color=record.glowBase:Lerp(WHITE,pulse*.45)
+ -- A steady, small glow: a wide light strobing under every working cube lit
+ -- the ground in flickering colored patches and drowned the effects.
+ record.light.Brightness=hidden and 0 or (working and .45 or .2)
+ record.glow.Color=record.glowBase:Lerp(WHITE,working and .25 or 0)
 end
 -- A short, bright confetti pop. The anchor removes itself afterward.
 local active=0
@@ -123,11 +123,11 @@ function Fun.confetti(parent,point,color,strength)
  twinkle.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.9),NumberSequenceKeypoint.new(1,0)})
  twinkle.Transparency=NumberSequence.new(0,1);twinkle.Lifetime=NumberRange.new(.35,.6)
  twinkle.Speed=NumberRange.new(5,11);twinkle.SpreadAngle=Vector2.new(180,180);twinkle.Drag=4;twinkle.Parent=anchor
- local flash=Instance.new('PointLight');flash.Color=color;flash.Range=14;flash.Brightness=3;flash.Shadows=false;flash.Parent=anchor
+ local flash=Instance.new('PointLight');flash.Color=color;flash.Range=9;flash.Brightness=1.2;flash.Shadows=false;flash.Parent=anchor
  bits:Emit(math.floor(14+8*strength))
  twinkle:Emit(math.floor(6+3*strength))
  task.spawn(function()
-  for i=1,8 do task.wait(.03);flash.Brightness=3*(1-i/8) end
+  for i=1,8 do task.wait(.03);flash.Brightness=1.2*(1-i/8) end
   flash.Enabled=false
   task.wait(1.4)
   anchor:Destroy();active-=1

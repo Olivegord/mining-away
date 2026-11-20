@@ -340,8 +340,10 @@ function Sale:update(now)
  end
 end
 
--- Cash-out: big "+$X" and a fountain of coins from the player into the
--- money counter. Each coin that lands releases its share of the balance.
+-- Cash-out: "+$X" pops over the player's head and drifts up while a fountain
+-- of coins flies from the player into the money counter. Each coin that
+-- lands releases its share of the balance. The number sits by the player,
+-- not across the middle of the screen, so it never covers the digging.
 local COIN=Color3.fromRGB(255,214,74)
 local COINS=14
 function Sale:cashOut(receipt)
@@ -362,17 +364,18 @@ function Sale:cashOut(receipt)
  end
  local cash={receipt=receipt,amounts=amounts,start=os.clock(),coins={},reduced=reduced,landed=0,paid=0}
  if root then
-  RoleVisuals.ImpactParticles(root.Position+Vector3.yAxis*1.5,COIN,1.5,'CrystalBreak')
+  RoleVisuals.ImpactParticles(root.Position+Vector3.yAxis*1.5,COIN,1,'CrystalBreak',nil,nil,nil,.6)
   self.refs.audio:play('sale_finish',root.Position,{level=.9})
   if self.refs.presentation and not reduced then self.refs.presentation:cameraBeat('Sale',root.Position,os.clock(),.8) end
  end
- local card=label(gui,'+'..Ledger.money(amounts.Money),84,CASH,Enum.Font.GothamBlack)
- card.AnchorPoint=Vector2.new(.5,.5);card.Position=UDim2.fromScale(.5,.3);card.Size=UDim2.new(.8,0,0,90)
+ local card=label(gui,'+'..Ledger.money(amounts.Money),54,CASH,Enum.Font.GothamBlack)
+ local size=gui.AbsoluteSize
+ local at=origin-gui.AbsolutePosition-Vector2.new(0,64)
+ at=Vector2.new(math.clamp(at.X,130,math.max(130,size.X-130)),math.clamp(at.Y,90,math.max(90,size.Y-60)))
+ card.AnchorPoint=Vector2.new(.5,.5);card.Position=UDim2.fromOffset(at.X,at.Y);card.Size=UDim2.fromOffset(260,60)
  card.TextStrokeTransparency=.05
  local scale=Instance.new('UIScale');scale.Parent=card
- local caption=label(card,'BAG FULL · CASHED OUT',22,PAPER);caption.AnchorPoint=Vector2.new(.5,0)
- caption.Position=UDim2.new(.5,0,1,-4);caption.Size=UDim2.new(1,0,0,26)
- cash.card=card;cash.scale=scale;cash.caption=caption
+ cash.card=card;cash.scale=scale;cash.at=at
  if reduced then
   for key,amount in pairs(amounts) do if amount>0 then hud:currencyHit(receipt.id,key,amount,true,true) end end
   cash.paid=COINS
@@ -433,11 +436,11 @@ function Sale:stepCash(now)
    cash.creditedRest=true
    for key,amount in pairs(cash.amounts) do if amount>0 then hud:currencyHit(cash.receipt.id,key,amount,cash.reduced,true) end end
   end
-  local pop=.55+.55*ease(age/.2)-.1*ease((age-.2)/.3)
+  local pop=.5+.7*ease(age/.14)-.2*ease((age-.14)/.22)
   cash.scale.Scale=pop
-  local fade=math.clamp((age-1.5)/.4,0,1)
+  local fade=math.clamp((age-1.05)/.35,0,1)
   cash.card.TextTransparency=fade;cash.card.TextStrokeTransparency=.05+.95*fade
-  cash.caption.TextTransparency=fade;cash.caption.TextStrokeTransparency=.3+.7*fade
+  if not cash.reduced then cash.card.Position=UDim2.fromOffset(cash.at.X,cash.at.Y-34*ease(age/1.4)) end
   cash.card.Visible=not self.refs.hidden()
   if age>2.4 then
    for _,coin in ipairs(cash.coins) do if not coin.done then coin.gui:Destroy() end end
