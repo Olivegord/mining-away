@@ -708,13 +708,14 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  end
  local tip=Vector3.new(from.X,beam.tip.Y,from.Z)
  if from.Y-tip.Y<.4 then self:hideBeam(beam);return end
- if not beam.on then
-  beam.on=true;beam.core.Enabled=true;beam.glow.Enabled=true;beam.gui.Enabled=true
- end
- beam.root.CFrame=CFrame.new(tip+Vector3.yAxis*.05)
- beam.a.Position=from-tip
  local state=source:GetAttribute('State')
  local cutting=type(key)=='string' and key~='' and source:GetAttribute('DigMining')==true
+ if not beam.on then beam.on=true end
+ -- While the drone lasers, its real beam takes the sight's place.
+ local aiming=not cutting
+ if beam.core.Enabled~=aiming then beam.core.Enabled=aiming;beam.glow.Enabled=aiming;beam.gui.Enabled=aiming end
+ beam.root.CFrame=CFrame.new(tip+Vector3.yAxis*.05)
+ beam.a.Position=from-tip
  local charging=type(key)=='string' and key~='' and state=='Warmup'
  local locked=type(key)=='string' and key~=''
  local size,core,halo
