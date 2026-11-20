@@ -8,6 +8,21 @@ local Debris=game:GetService('Debris')
 local RoleConfig: any,RoleEffects: any,DiscoveryService: any=DroneConfig,DroneRoleEffects,MiningDiscoveries
 local C: any,R: any=Config,Rules
 local Pro: any,Ca: any=Profile,Cards
+-- An opt-in showroom cast. Nearby players share one clock and a single visual pass.
+game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt, player)
+ if prompt.Name ~= "CastWindV1" then return end
+ local root = workspace:FindFirstChild("VERSION 1")
+ if not root or root:GetAttribute("WindVortexVersion") ~= 1 then return end
+ local switch = root:FindFirstChild("Replay")
+ if not switch or prompt.Parent ~= switch or not prompt.Enabled then return end
+ local character = player.Character
+ local body = character and character:FindFirstChild("HumanoidRootPart")
+ if not body or (body.Position-switch.Position).Magnitude > prompt.MaxActivationDistance+2 then return end
+ local now = workspace:GetServerTimeNow()
+ local previous = root:GetAttribute("CastAt")
+ if previous and now-previous < 4.6 then return end
+ root:SetAttribute("CastAt", now + .10)
+end)
 local scene: any=World.initialize()
 World.placeStart(scene)
 World.applyQuarryTextures(scene)
