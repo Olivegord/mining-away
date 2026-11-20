@@ -1,0 +1,65 @@
+{
+  "universeId": 10774898335,
+  "route": {
+    "lastZ": 414,
+    "firstZ": 158,
+    "width": 108
+  },
+  "placeId": 124078027733625,
+  "loadedVersion": 90,
+  "depthOfField": false,
+  "roots": {
+    "ServerScriptService": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "StarterPlayer.StarterPlayerScripts": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "ReplicatedStorage.Shared": "Enum.InstanceFileSyncStatus.SyncedAsRoot"
+  },
+  "sources": {
+    "ReplicatedStorage.Shared.DroneConfig": "1ef69b142a712808d1bf21d389053f248388b47774f1fd019e036a3eb614584c",
+    "ReplicatedStorage.Shared.TacticalHUD": "99b9bebb63217be2ed261aab092b7e18a6a0ff1bdb75e85d152a43176cd5513f",
+    "ReplicatedStorage.Shared.CrystalAudio": "a9023f3576f6a13bb2d7adeba3c97743f90d4c5628ebca661e0f9dba6e213e28",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "1d7cf2767d97ac81af6479a22237042c4fae259a067a99dfc3eb696c9eedfcea",
+    "ServerScriptService.DroneRoleEffects": "c04596e85e081bcf56a184e3e419ab0d4c5c011922fd9f83626549b55ca1165e",
+    "ServerScriptService.MiningDiscoveries": "1b00ffe6a06f6a109eb34b28694bb0d0ea94312ba8c8264946e3f723e1f5e6d8",
+    "ServerScriptService.GlobalDroneControl": "7fb2e324771ec3ee1ced4ac458944027e75a439b991ee461e5775e42e5312406"
+  },
+  "running": false,
+  "otherLightingMatchesReference": true,
+  "nativeFile": "build/DRONE_GAME.rbxl",
+  "nativeSha256": "2ff00c5e5662628a6003fa33cef169536fbb0f4f69466460bdd0b2bc4ae8c8a2",
+  "baselineGit": "eade05ce27ad9037a1cf43860e7b9d27d3c55442",
+  "playStarts": 0,
+  "publication": false,
+  "targetPlayStopped": true,
+  "reference": {
+    "placeId": 14302916915,
+    "universeId": 4945273529,
+    "crystalPrimaryY": 1,
+    "visibleUnionY": 4,
+    "workingDroneY": 11
+  },
+  "nativeEditFixture": {
+    "dof": false,
+    "contactCore": 0.5,
+    "droneBottomToContact": 3.6203536987304688,
+    "contactHalo": 1,
+    "heightFromPrimary": 10,
+    "mineHeight": 7,
+    "sounds": {
+      "RockBreak": {
+        "min": 10,
+        "volume": 0.30000001192092896,
+        "id": "rbxassetid://7158347304",
+        "max": 10000,
+        "rolloff": "Enum.RollOffMode.Inverse"
+      },
+      "RockCrack": {
+        "min": 10,
+        "volume": 0.05000000074505806,
+        "id": "rbxassetid://9119050085",
+        "max": 10000,
+        "rolloff": "Enum.RollOffMode.Inverse"
+      }
+    }
+  },
+  "fixtureRemoved": true
+}

@@ -1,0 +1,93 @@
+{
+  "universeId": 10774898335,
+  "sources": {
+    "ReplicatedStorage.Shared.DroneConfig": "1ef69b142a712808d1bf21d389053f248388b47774f1fd019e036a3eb614584c",
+    "ReplicatedStorage.Shared.TacticalHUD": "7f8578cff07c5fec1cc46645d262f7d275772b791735de21c9fcb12d7b4bb690",
+    "ReplicatedStorage.Shared.CrystalAudio": "85ce0b8fd3a8fe73b278f70cb9469996849fe16320dc75a1a38a8181fd12a0e0",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "6ec208444609886eca710e28348af4dd0b4622b4958e1c3e7dde802a0822fe42",
+    "ServerScriptService.DroneRoleEffects": "c04596e85e081bcf56a184e3e419ab0d4c5c011922fd9f83626549b55ca1165e",
+    "ServerScriptService.MiningDiscoveries": "1b00ffe6a06f6a109eb34b28694bb0d0ea94312ba8c8264946e3f723e1f5e6d8",
+    "ServerScriptService.GlobalDroneControl": "e8536a25f36f1a9ec2a9696326d4395ef2105c866ffc8cdf9ea5a1f0f49d8688"
+  },
+  "roots": {
+    "ServerScriptService": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "ReplicatedStorage.Shared": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "StarterPlayer.StarterPlayerScripts": "Enum.InstanceFileSyncStatus.SyncedAsRoot"
+  },
+  "placeId": 124078027733625,
+  "running": false,
+  "loadedVersion": 90,
+  "nativeFile": "build/DRONE_GAME.rbxl",
+  "nativeSha256": "7dd37d10cbcab1d0ca13aea0e90a3f6c957ce5cbd4561c19daf896b7ff0a94a4",
+  "baselineGit": "84b56bde2ed442aeca02f7e4ac774375cd322031",
+  "referenceTemplate": {
+    "path": "ReplicatedStorage.Crystal.Mesh",
+    "reflectance": 0,
+    "color": [
+      1,
+      0,
+      0
+    ],
+    "class": "UnionOperation",
+    "transparency": 0,
+    "usePartColor": true,
+    "variant": "",
+    "children": [],
+    "material": "SmoothPlastic",
+    "castShadow": true,
+    "size": [
+      3.135000228881836,
+      6.566902160644531,
+      4.4872307777404785
+    ]
+  },
+  "previousTargetCrystal": {
+    "path": "Workspace.MiningAway.Fields.Quartz.Crystal",
+    "reflectance": 0,
+    "color": [
+      1,
+      0,
+      0
+    ],
+    "class": "UnionOperation",
+    "transparency": 0.20000000298023224,
+    "usePartColor": true,
+    "variant": "",
+    "children": [],
+    "material": "Ice",
+    "castShadow": true,
+    "size": [
+      0.783750057220459,
+      1.6417255401611328,
+      1.1218076944351196
+    ]
+  },
+  "nativeEditSamples": [
+    {
+      "transparency": 0,
+      "material": "SmoothPlastic",
+      "size": 3.135000228881836,
+      "red": 1
+    },
+    {
+      "transparency": 0,
+      "material": "SmoothPlastic",
+      "size": 3.135000228881836,
+      "red": 0
+    },
+    {
+      "transparency": 0,
+      "material": "SmoothPlastic",
+      "size": 3.135000228881836,
+      "red": 0
+    },
+    {
+      "transparency": 0,
+      "material": "SmoothPlastic",
+      "size": 2.351250171661377,
+      "red": 1
+    }
+  ],
+  "publication": false,
+  "playStarts": 0
+}

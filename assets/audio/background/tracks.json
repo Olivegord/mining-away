@@ -1,0 +1,60 @@
+{
+  "place_id": 124078027733625,
+  "universe_id": 10774898335,
+  "tracks": {
+    "Amber": {
+      "creator": "Leberch",
+      "title": "Ambient",
+      "filename": "leberch-ambient-578724.mp3",
+      "asset_id": "116857311274471",
+      "operation": "e606775e-5df8-4dbb-a337-cae0d0b546b7",
+      "duration_seconds": 152.032625,
+      "sha256": "8deebe1593024d5ea856d1934dd42af631b84d9a242ae2ea73b3f7acb5630f5d"
+    },
+    "Ruby": {
+      "creator": "mattc90",
+      "title": "Matt's Emotional Ambient Synthscape",
+      "filename": "mattc90-emotional-ambient-synthscape.wav",
+      "asset_id": "81744055232053",
+      "operation": "9a5939aa-3e7c-4436-b1cd-3f74254d9132",
+      "duration_seconds": 141.6,
+      "sha256": "ffe1fc7b7fd4fe5db0057f3361bf51674591269d7c6e489f2c51dd97bc97e407"
+    },
+    "Quartz": {
+      "creator": "Morgan",
+      "title": "Calm Ambient Dreamscape",
+      "filename": "morgan-ambient-calm-ambient-dreamscape-529861.mp3",
+      "asset_id": "105147018523009",
+      "operation": "a1224d3d-1e4f-4b01-8cf0-92990fd08957",
+      "duration_seconds": 222.144,
+      "sha256": "88521606775c8cc0b7b0e2bde3c48e8de40c8e866a1f131a82553e5ba83cae67"
+    },
+    "Violet": {
+      "creator": "AtlasAudio",
+      "title": "Sci-Fi Ambient",
+      "filename": "atlasaudio-sci-fi-ambient-587603.mp3",
+      "asset_id": "133891253196953",
+      "operation": "e1764274-c361-499a-9d29-c80aa0550eb8",
+      "duration_seconds": 135.706094,
+      "sha256": "a37298d7b01da20a9682bed1c2d18724251fa407145a8d92319a5a4362720a04"
+    },
+    "Diamond": {
+      "creator": "AvelineMusic",
+      "title": "Deep Ambient",
+      "filename": "avelinemusic-deep-ambient-608427.mp3",
+      "asset_id": "102181496252358",
+      "operation": "2cd3b280-6be0-4abd-84c1-9374d27cd1eb",
+      "duration_seconds": 157.416,
+      "sha256": "de29826934e515bfe0c45bebc3aa31aded223ce0e2e35241dd8d4c472c600ad0"
+    },
+    "Sell": {
+      "creator": "VelarioMusic",
+      "title": "Chill Ambient",
+      "filename": "velariomusic-chill-ambient-589693.mp3",
+      "asset_id": "124734593853134",
+      "operation": "68c5cad7-ef8e-4140-a524-7d25ee15fab0",
+      "duration_seconds": 224.04,
+      "sha256": "4625f08ff27c5503813c68790c850a7068a7a07d740aad95e0737ff21b3ee196"
+    }
+  }
+}

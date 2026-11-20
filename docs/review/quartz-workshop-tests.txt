@@ -1,0 +1,76 @@
+PASS workshop one real starter drone, no free packs or money
+PASS workshop three distinct useful choices, bounded slots, stable persisted delivery across 150 seeds
+PASS workshop rarity guarantees 1/2/3/4 real starting levels for every blueprint
+PASS workshop repeat prices rise, every accepted level improves stats, caps do not charge
+PASS workshop unowned, unfunded, remote, combat and conflicting receipts fail without mutations
+PASS workshop existing caps exclude useless drafts and prevent charging for capped levels
+PASS workshop Quartz alone advances prestige, upgrades do not subtract progress, resets retain exact fleet
+PASS workshop v8 profiles keep all ownership, modifiers and already-paid offers exactly
+MODEL baseline 38.22 Quartz/min, 12.20s/job incl flight/warmup; excludes human decision time and cascades
+MODEL Q_POWER level1 44.33 Quartz/min (+16.0%)
+MODEL Q_IGNITION level1 42.55 Quartz/min (+11.3%)
+MODEL Q_CARGO level1 41.28 Quartz/min (+8.0%)
+MODEL Q_YIELD level1 45.25 Quartz/min (+18.4%)
+MODEL Q_SCANNER level1 40.04 Quartz/min (+4.8%)
+MODEL Q_SPLIT level1 38.22 Quartz/min (+0.0%)
+PASS workshop pacing model quantifies first-level tradeoffs including selling travel
+9 WORKSHOP checks passed (logic/model; not human enjoyment or native multiplayer)
+PASS mining field hardness changes effective work while preserving authored footprint
+PASS mining harder fields increase mineral value per equivalent mining work
+PASS mining percussion only pays charged active intervals at all supported rates
+PASS mining cutter and resonance retain continuous base output; fracture echoes have finite bounds
+PASS mining autonomous priorities value real work and a payable core instead of a free shell reward
+PASS mining all mineral work is three times the former health without inflating meshes
+6 mining rules checks passed; not Studio results
+PASS persistence fresh profile acquires locked durable session
+PASS persistence duplicate server load rejected and active foreign session blocked
+PASS persistence bounded ordered retries preserve exact candidate
+PASS persistence UpdateAsync callback retries do not reroll prepared mutation
+PASS persistence transaction is durable before local state is exposed
+PASS persistence duplicate transaction returns original result without callback
+PASS persistence mutation rejection and invalid staged schema never save
+PASS persistence save and reentrant operations share one serialization gate
+PASS persistence transient response loss reconciles same receipt exactly once
+PASS persistence uncertain committed write freezes until durable reconciliation
+PASS persistence confirmed uncommitted failure preserves pre-transaction dirty cargo
+PASS persistence failed initial load never creates or overwrites defaults
+PASS persistence malformed future and foreign profile refuse migration without data loss
+PASS persistence explicit legacy migration retains owned fleet and progress
+PASS persistence lease expiry permits takeover and fences old stale writes
+PASS persistence unexpected profile revision cannot overwrite concurrent durable state
+PASS persistence autosave renews lease and persists latest legitimate progress
+PASS persistence release saves and clears lock atomically before a new server loads
+PASS persistence ambiguous release is reconciled even after its lock was removed
+PASS persistence receipt ledger stays bounded and current retry remains available
+PASS persistence serializability finite values and invalid identity fail safely
+PASS persistence preview storage is explicitly labeled and namespace isolated
+PASS persistence crash after commit reloads the durable result without repeating the grant
+PASS persistence failed final save keeps lock and previous data until reconciled
+PASS persistence corrupt lock cannot be interpreted as an unlocked valid profile
+PASS persistence actual Profile missing-target migration refund is durable before presentation
+PASS persistence actual Profile prestige crash retains identities and exactly one permanent grant
+PASS persistence signed Studio identities are accepted only by explicit isolated preview adapter
+28 FINAL persistence tests passed (deterministic storage adapter; live DataStore not executed)
+PASS Quartz server Studio and production both start with one drone, zero Quartz, actual rocks
+DRAFT Q_CARGO Common level 1
+PASS Quartz server one paid pack from the combined Quartz counter, hidden saved choices and owned timed opening
+PASS Quartz server earned repeat purchase applies exactly once at either counter and refuses remote/legacy purchases
+MODEL run1 350.74s worker ticks (travel to stations supplied by double); starter rock 13.97s
+PASS Quartz server actual worker ticks pay all Quartz required for prestige after spending on the run
+PASS Quartz server reconnect preserves reward and the second earned run can buy another blueprint
+5 Quartz production-server checks passed (production configuration; API doubles)
+PASS Quartz server Studio and production both start with one drone, zero Quartz, actual rocks
+DRAFT Q_CARGO Common level 1
+PASS Quartz server one paid pack from the combined Quartz counter, hidden saved choices and owned timed opening
+PASS Quartz server earned repeat purchase applies exactly once at either counter and refuses remote/legacy purchases
+MODEL run1 350.74s worker ticks (travel to stations supplied by double); starter rock 13.97s
+PASS Quartz server actual worker ticks pay all Quartz required for prestige after spending on the run
+PASS Quartz server reconnect preserves reward and the second earned run can buy another blueprint
+5 Quartz production-server checks passed (Studio configuration; API doubles)
+PRODUCTION work from arrival: base 8.867s, power L1 6.983s L2 6.050s, ignition L1 7.267s L2 6.733s
+PRODUCTION Prism tier 1: 3.0 secondary damage per 30 primary hit
+PRODUCTION Prism tier 4: 12.0 secondary damage per 30 primary hit
+PRODUCTION Polisher tier 1: 25.0 ore per two 10-ore rocks
+PRODUCTION Polisher tier 4: 40.0 ore per two 10-ore rocks
+PASS production Route Runner mines a second ready rock without another command
+PASS active capture: deterministic build, exact seven Source paths, all other chunks and backup Sources preserved; not Studio evidence

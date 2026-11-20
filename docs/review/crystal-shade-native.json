@@ -1,0 +1,25 @@
+{
+  "universeId": 10774898335,
+  "sources": {
+    "ReplicatedStorage.Shared.DroneConfig": "1ef69b142a712808d1bf21d389053f248388b47774f1fd019e036a3eb614584c",
+    "ReplicatedStorage.Shared.TacticalHUD": "7f8578cff07c5fec1cc46645d262f7d275772b791735de21c9fcb12d7b4bb690",
+    "ReplicatedStorage.Shared.CrystalAudio": "85ce0b8fd3a8fe73b278f70cb9469996849fe16320dc75a1a38a8181fd12a0e0",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "161391715711bc4cbb3169f0973c5da7a2e6e1eb372cdadfb7edca51f525afcb",
+    "ServerScriptService.DroneRoleEffects": "c04596e85e081bcf56a184e3e419ab0d4c5c011922fd9f83626549b55ca1165e",
+    "ServerScriptService.MiningDiscoveries": "1b00ffe6a06f6a109eb34b28694bb0d0ea94312ba8c8264946e3f723e1f5e6d8",
+    "ServerScriptService.GlobalDroneControl": "97a63a8d3f99601fe5f0056cf9abb0ea8dee7be73f91f61dd2f8c855c2514bf6"
+  },
+  "roots": {
+    "ServerScriptService": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "ReplicatedStorage.Shared": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "StarterPlayer.StarterPlayerScripts": "Enum.InstanceFileSyncStatus.SyncedAsRoot"
+  },
+  "placeId": 124078027733625,
+  "running": false,
+  "loadedVersion": 90,
+  "nativeFile": "build/DRONE_GAME.rbxl",
+  "nativeSha256": "66499e42c4c6d25c5b4a29a38eefd559a7687b249d318aabf4df655159866881",
+  "baselineGit": "408e954881014ac422d9a9b2907da5fe690840aa",
+  "publication": false,
+  "playStarts": 0
+}

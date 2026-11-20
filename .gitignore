@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 build/*
 !build/.gitkeep
+!build/DRONE_GAME.rbxl
 cloud-build/
 cloud-handoff/
 tests/generated-server.spec.lua
@@ -15,3 +16,12 @@ tests/generated-server.spec.lua
 node_modules/
 .tools/
 
+
+tests/generated-beam.spec.lua
+tests/generated-motion.spec.lua
+tests/generated-server-motion.spec.lua
+
+tests/generated-client-intent.spec.lua
+
+tests/generated-world-fern.spec.lua
+reference/local-place-history-*.zip

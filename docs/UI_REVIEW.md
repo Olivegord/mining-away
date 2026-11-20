@@ -1,0 +1,46 @@
+# Client presentation review
+
+The interface descriptions below are historical. The cream/teal UI replacement, current component files, native viewport evidence, and remaining checks are recorded in [UI overhaul review](review/UI_OVERHAUL.md). The movement/effects notes remain useful background; current sentry motion is recorded separately in [SENTRY_ANIMATION.md](review/SENTRY_ANIMATION.md).
+
+These are source/layout notes. Compilation and standalone lint do not establish Roblox text rendering, touch usability, visual polish or multiplayer correctness; Studio review evidence is recorded separately.
+
+## Interface direction
+
+The primary HUD is a rectangular expedition instrument, at most 332 × 72 pixels. Credits and permanent fleet access occupy its first row; cargo and a fully spelled out `PREVIEW / UNSAVED` or save-state indicator share the second. A cyan cargo edge turns amber at capacity. Credits abbreviate only in the small HUD; prices and prestige reset amounts remain exact in their contextual screens. The palette uses ink/navy panels, warm ivory type, amber actions and cyan minerals, with restrained three-pixel corners. UI strokes explicitly apply to borders, avoiding outlined button typography.
+
+One readable 13-pixel next action sits under the HUD. It changes from mining and selling to affordable packs, a full hold, the prestige milestone, a saved card choice or an active sentry telegraph. The current next action has priority over an always-visible numerical prestige paragraph. Recall remains one compact control; Evade appears only during an owned assault. Mobile uses direct button names and places Recall/Evade beside each other above the native movement area. A nearby sentry alone receives the health/charge strip.
+
+Nearby context uses action names: Mine, Fight, Join, Sell, Pack, Choose or Review. Its detail explains the immediate outcome. Native ProximityPrompt activation and the compact action button retain the shared debounce and server command path. Physical depot stations still open pack and prestige screens. Buying and choosing remain server-owned, with transaction/run IDs and the saved offer ID unchanged. Mouse world assignment now respects processed GUI input, so Recall/Fleet/card clicks cannot also send a field order through the button.
+
+## Deliberate choices
+
+A contextual modal uses three 394-pixel cards on desktop and a vertical scrolling stack below 760 pixels. Each card separates its category, name, exact named/type/fleet target, benefit headline, exact effect description, tradeoff, server-computed before/after values and stacking rule. Permanent IDs are removed from player-facing text. Legacy saved choices still render without the new presentation metadata. Percentage previews accept both normalized server percent units and older fractional values, without double conversion.
+
+A selected card says Applying and disables its action until authoritative feedback. Closing keeps the same saved choices. Pack purchase clearly shows its exact credit cost and missing credits, and disables the purchase action when unaffordable. A fresh offer automatically opens only when its saved offer ID changes. Buttons have a subtle 0.06–0.1 second press/hover response and a quiet shared click from `volume_slider.ogg`, whose presence was verified in the installed Studio content directory; audible playback has not yet been checked.
+
+Prestige separates KEEP and RESET, shows the exact before/after permanent fleet, next drone type, run cards/credits/cargo reset, and sale/guarded-field milestone. Confirmation remains disabled until the server reports eligibility and no choice is pending. Fleet inspection shows drone names, type, active run-card count, current mining/combat output, hull and warmup. It has no permanent-ID labels.
+
+## Layout and verification
+
+The modal recomputes width, card direction and height while the viewport changes, including an open modal during rotation. Modal descendants inherit their parent ZIndex so the dimmer cannot cover buttons or card content. Small laptop windows retain vertical scrolling when card height exceeds the visible body. Short landscape windows move the encounter strip beside the narrower HUD and let temporary feedback use the objective area.
+
+The final client bundle compiled and passed standalone `luau-analyze` with explicit `any` host bindings using `/private/tmp/mining-away-luau`. This is source/lint coverage, not Roblox API type validation or a Studio touch test. Studio acceptance should inspect 320/360-pixel portrait, short landscape, a small laptop, repeated open/close, pending-offer reconnect, long reset amounts and prestige with a larger fleet. Check native touch controls, scroll/select on all three cards and device rotation while each modal is open.
+
+## Movement and effects review
+
+All observers use independent local drone viewmodels cloned from the complete original ReplicatedStorage.Drone template, not partially replicated authoritative models. The loader waits for the original Mesh body, Emmiter, Attachment, WeldConstraint and both beam layers, then retries once per deferred replication batch. The original Drone has no SpecialMesh; its actual body and visible emitter are retained, with the emitter and a 55% body tint and thin lower-shell/type-optic trim receiving the type accent. The tint is necessary because read-only geometry inspection found the smaller emitter enclosed by the body; the original shell and emitter geometry remain. Authoritative models are hidden only with local transparency; server position/goal/state, reservations and combat remain untouched. The rendered flight applies the shared original `.03` eased/capped approach at render frequency and horizontal yaw with one `.1` elapsed-time blend. Following can reconstruct the radius-10, +7-height formation from the owner's visible character. Server correction uses a drift deadband, not the rejected double low-pass pose chain. Teleports/life transitions reset the local pose.
+
+Crystal views clone the original union. Server spawn/ready timestamps reconstruct the two-second Quad.Out rise and growth for late arrivals. Server stages reshape the visible mesh to 75%, 50% and 25% with stable seeded tilt. A bounded cosmetic queue holds every newly crossed quarter for at least 0.09 seconds before the final hide/shatter, so 10 Hz snapshots or fast cards cannot skip the visible 25% stage. Damage, rewards and server timing do not wait for this queue. A break implies all quarters crossed even if replication delivers its attribute first. Original RockCrack/RockBreak sounds are cloned when present; otherwise quiet impact sounds from verified Studio engine content provide feedback without external asset IDs. Existing stage/break serials initialize silently on late join, so old cracks/payouts do not replay. The beam endpoint follows the current visible top surface.
+
+The original MiningFX beam template is reused when available, with a two-second show envelope and 0.2-second hide. Beam attachments belong to rendered emitters and local world-space endpoints. Drift correction cannot authorize mining. Turret charge rays use the server-frozen Aim; both original eye and overlaid spawnEye receive the charge/fire accent. A late join initializes ShotSerial rather than replaying old shots. Local chips cap at 48 concurrent parts. The presentation manager separately caps authored debris at 64, pulse/audio objects at 12 and reconstruction scans at 16; each of the five active sentries has one short-range non-shadow charge light.
+
+## Executed checks and findings fixed
+
+- The current client bundle compiled and passed standalone lint after the UI rewrite. Earlier rectangle calculations do not establish the new interface's engine text layout; current Studio viewport acceptance remains explicit above.
+- Standalone Luau analyzer passed with Roblox host globals explicitly typed `any`; this is syntax/lint coverage, not Roblox API type validation.
+- Static review caught and fixed: field-parented resources missed by a Resources-folder-only observer; turret `Turret=true` versus assumed TurretId; externally retained Converter missed by station search; double yaw easing; original spawnEye visually obscuring eye-only telegraphs; wrong case for Player card scope; missing exact prestige reset amounts; fleet stat wrapping; delayed replicated geometry/attributes; original GUIs reappearing on respawn; template descendants arriving after an authoritative model; and fixed HUD/context/notice widths overflowing a 320-pixel viewport.
+- Independent geometry/feel agent reviewed the renderer contract and these corrections.
+
+## Remaining Studio checks
+
+Compare 30/60/144 FPS flight and close mining approach with the original camera/scale; verify no snapshot-driven vibration, downward body pitch or sideways station offset. Check original emitter pivot, downward beam tip, grow-in and all three quarter stages on ordinary rocks and geodes. Confirm three choices scroll/read/select on desktop and touch, native prompts work once, portrait HUD fits, and prestige text remains readable with larger fleets. Join during growth, mining, a turret charge and free reprint from another client. Verify old effects do not replay and every observer sees the same state. No such engine result is claimed here.

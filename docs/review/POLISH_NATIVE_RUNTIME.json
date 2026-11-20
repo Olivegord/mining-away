@@ -1,0 +1,38 @@
+{
+  "edit": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"mode\":\"Edit\",\"sources\":{\"ServerScriptService.GlobalDroneControl\":{\"adler32\":3804867828,\"bytes\":320195},\"ServerScriptService.DroneRoleEffects\":{\"adler32\":1715529311,\"bytes\":16467},\"ReplicatedStorage.Shared.CrystalAudio\":{\"adler32\":3647582290,\"bytes\":5118},\"StarterPlayer.StarterPlayerScripts.ClientDroneControl\":{\"adler32\":3411800698,\"bytes\":258520},\"ReplicatedStorage.Shared.TacticalHUD\":{\"adler32\":1341725128,\"bytes\":20189},\"ServerScriptService.MiningDiscoveries\":{\"adler32\":205849203,\"bytes\":7317},\"ReplicatedStorage.Shared.DroneConfig\":{\"adler32\":1315534951,\"bytes\":11472}},\"placeId\":0}"
+      }
+    ],
+    "isError": false
+  },
+  "fresh": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"hud\":true,\"memoryMB\":3953.44189453125,\"frames\":{\"median\":0.06675366312265396,\"p95\":0.06856653839349747,\"n\":75},\"descendantsAfter\":470,\"luaKB\":6085,\"fx\":true,\"descendants\":470}"
+      }
+    ],
+    "isError": false
+  },
+  "microProfiler": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"steps\":35070,\"frame\":{\"id\":64,\"ms\":16.939749818571728,\"absoluteId\":10247},\"scopes\":{\"25\":{\"name\":\"waitUntilEmpty\",\"totalMs\":3.0241666342772079},\"24\":{\"name\":\"task()\",\"totalMs\":3.1642499661102194},\"23\":{\"name\":\"process\",\"totalMs\":3.244624965249386},\"22\":{\"name\":\"$namecall\",\"totalMs\":4.377374953117396},\"21\":{\"name\":\"processPacket\",\"totalMs\":4.491999951889738},\"20\":{\"name\":\"Simulation\",\"totalMs\":4.567958284409542},\"19\":{\"name\":\"Simulation(Simulation;Game)\",\"totalMs\":4.605874950670113},\"18\":{\"name\":\"Replicator ProcessPackets\",\"totalMs\":4.681916616522358},\"9\":{\"name\":\"RunService.Heartbeat\",\"totalMs\":8.910458237900457},\"1\":{\"name\":\"Sleep\",\"totalMs\":560.8025773270201},\"15\":{\"name\":\"Scene\",\"totalMs\":6.116374934492342},\"3\":{\"name\":\"TS::ArbiterStep\",\"totalMs\":41.3874995567312},\"2\":{\"name\":\"Thread (FG)\",\"totalMs\":47.22316616089665},\"5\":{\"name\":\"$Event\",\"totalMs\":21.26058310562803},\"4\":{\"name\":\"TS::JobStep\",\"totalMs\":40.636416231442129},\"7\":{\"name\":\"Heartbeat(Heartbeat;Game)\",\"totalMs\":10.370708222260874},\"6\":{\"name\":\"TimerTickerJob(Default;DefaultArbiter)\",\"totalMs\":14.017916516531841},\"14\":{\"name\":\"Script_ClientDroneControl\",\"totalMs\":6.480416597260046},\"8\":{\"name\":\"Heartbeat\",\"totalMs\":10.304708222967748},\"16\":{\"name\":\"Script_GlobalDroneControl\",\"totalMs\":5.42474994189979},\"17\":{\"name\":\"Replicator ProcessPackets(Network_ProcessIncoming;Game)\",\"totalMs\":4.703416616292088},\"13\":{\"name\":\"RunService.RenderStepped\",\"totalMs\":6.5210415968249439},\"12\":{\"name\":\"PreRender\",\"totalMs\":7.677041584443941},\"11\":{\"name\":\"Perform\",\"totalMs\":7.843291582663369},\"10\":{\"name\":\"PrepareBound\",\"totalMs\":8.827833238785388}}}"
+      }
+    ],
+    "isError": false
+  },
+  "active": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"memoryMB\":4043.45751953125,\"p95\":0.06921125203371048,\"localDescendants\":524,\"luaKB\":23559,\"median\":0.06642396003007889,\"n\":60}"
+      }
+    ],
+    "isError": false
+  }
+}

@@ -1,0 +1,31 @@
+# Mining impact and the Quartz test field
+
+November 1, 2026. This pass follows the owner's report that normal lasers, orbital strikes and breakers lacked impact. It updates the same Drone Blower revolution place, original crystal/drone assets and review branch.
+
+Ordinary rocks progressively turn nearly black within each health layer, hold a black frame before a layer gives way, then expose fresh mineral at the smaller size. Ordinary rocks keep the original three quarter-health changes. Large rocks use the same original mesh at 2.6 times the usual dimensions, with seven changes, three times the work and three times the ore. Initial fields include a large rock; later crystal spawns have a 20% large-rock chance. These are provisional authoring values, not measured fun or retention results. Surface-attached laser sparks have more density/speed and a larger contact glow; the original two-second beam width ramp and 0.2-second fade remain.
+
+Orbital charging now shows one translucent red cylinder only 0.035 studs thick across the rock's footprint. Confirming begins a four-second server damage channel on that saved target rather than an immediate kill. The red halo, hot core, molten contact and sparks remain for accepted contacts and follow the shrinking top. Recent contacts sustain nearby camera feedback throughout; reduced motion disables camera movement. Invalid range, guards, ownership, life, run, line of sight or a retired target cancel the channel. No stall causes a catch-up damage burst. Storage pauses preserve the remaining work. An initially blocked contact refunds the cooldown and the corrected cooldown is saved. Precision retains one bounded nearby fracture on completion. Orbital and scrap work use their own operators when both are active.
+
+Breakers keep windup, physical contact and recovery, with a shared accelerating 0.28-second powered dive and upward rocket exhaust attached to the rendered original drone. Contact absorbs the downward velocity before recovery; accepted damage triggers a stronger pressure wave, rubble, dust and nearby camera impulse. The healer and other jobs retain their existing mechanics.
+
+A full backpack permits existing work, explicit ore/slot orders, queued work, earned plot automation, scouts and both gadgets. Only collection waits for space. At sixteen pending rock rewards, later rewards of the same mineral combine into an existing physical fragment. At most one extra reward group per previously absent mineral is needed, so continued mining does not produce an unbounded number of Parts. Pickup transfers only the units that fit; the remainder stays in the fragment. Owner/run, save uncertainty and line-of-sight checks still apply. Ground ore remains session-local, as before; collected ore follows the saved inventory path.
+
+`ImpactTest` is field 6, appended without renumbering the original five fields. It is always unlocked and unguarded, pays Quartz, and sits eight studs east of Quartz's edge. In the current editable place its center is `(12, 0.5, 65)`, beside Quartz at `(-56, 0.5, 65)`. Ten rocks have exactly ten times the effective work of equivalent Quartz rocks, including shells, cores and shards; size and reward are unchanged by the test multiplier. The sign and bed are materialized in Edit and in the reproducible layout script. No unrelated map content or backup script is replaced.
+
+Behavior/parity review checked original mesh/flight/beam preservation, stage ordering after coalesced hits, server authority, one permanent production drone, saved fleet/card state and cancellation paths. Pacing/visual/multiplayer code review checked large-rock work versus reward, continuous orbital damage, shared client/server dive timing, contact velocity reset, full-bag reward conservation, bounded ground instances, separate gadget operators, late-join effect state and reduced motion. These reviews do not establish native appearance, multiplayer quality or enjoyment.
+
+Reproduce with:
+
+```sh
+python3 tools/test_shops.py /private/tmp/mining-away-luau
+python3 tools/test_gadgets.py /private/tmp/mining-away-luau
+python3 tools/release.py
+```
+
+Focused checks pass production domain/persistence logic and actual bundled client/server logic using Roblox API doubles. Six new impact regressions cover full-bag commands/damage, 100 continued breaks and partial pickup, always-open tenfold work, seven boulder stages, black-before-shrink sequencing and accelerating dives at 30/60/144 Hz. Sustained-orbital tests cover halfway health, completion, blocked/canceled contacts, save pauses, replay, precision and bounded stall work. Compilation and deterministic binary checks preserve the immutable capture, all non-Source chunks and backup Sources. See `MINING_IMPACT_TEST_RESULTS.txt`.
+
+Three live Sources were applied in Edit after matching the exact previous seven Sources. All seven were read back; 39 unrelated Sources were checked unchanged. HTTP was restored to disabled. The local native editable export was refreshed and its seven Sources verified. The first backup transfer exceeded Roblox's POST limit before any mutation; retry transferred only allowlisted Sources and preserved the full unrelated comparison in Studio. See `MINING_IMPACT_STUDIO.json`.
+
+The owner then explicitly requested immediate testing and continued editing/saving while playing, superseding the earlier no-new-Play instruction for this session. One Play session was started and left running. Read-only inspection confirms the test field is open with ten generated rocks, including two large rocks, and the HUD/presentation initialized. The console query returned no output at that moment. This is startup inspection, not an agent gameplay, motion or multiplayer test. Continue saving repository/build changes alongside the owner's session; do not stop it without asking. Changes to already-running controllers require a deliberate live reload or the owner's next run and must not be represented as automatically hot-loaded.
+
+**NOT VERIFIED:** native impact feel, particle/sight/contact alignment in motion, busy multiplayer/late joining, audio comfort, device layouts, real DataStore recovery and fun. The owner is testing; the review PR remains draft. No Roblox publishing or main merge.

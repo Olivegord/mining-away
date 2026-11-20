@@ -1,0 +1,59 @@
+-- Shared timings and finishes for the themed junk clearings.
+local J={BatchSize=4,Cap=10,LowWork=2,CrewCap=2,DropHeight=53,FallTime=.82,SettleTime=.32}
+J.Props={
+ {name='Pip Block',template='PipsCube',size=5.8,work=54,ore=10,color={232,220,194}},
+ {name='Plaid Cube',template='BlueGinghamPaver',size=6.3,work=65,ore=12,color={184,209,235}},
+ {name='Battered Crate',template='TimberCube',size=6.8,work=82,ore=15,color={164,103,76}},
+ {name='Knit Block',template='KnitCube',size=5.5,work=59,ore=11,color={211,153,155}},
+ {name='Daisy Cube',template='DaisiesCube',size=5.3,work=50,ore=9,color={224,196,154}},
+ {name='Fired Brick',template='BrickLow',size=6.1,work=75,ore=14,color={179,95,77}},
+}
+J.TemplateProps={
+ {name='Suggestion Box',template='SuggestionBox',work=67,ore=12},
+ {name='Alphabet Block',template='AlphabetBlock',work=52,ore=10},
+ {name='Moving Box',template='MovingBox',work=62,ore=11},
+}
+J.TechProps={
+ {name='Glass Fuses',template='CartridgeFuses',work=61,ore=12},
+ {name='Motherboard',template='Motherboard',work=75,ore=15},
+ {name='Ribbon Cable',template='RibbonCable',work=57,ore=11},
+ {name='Circuit Traces',template='CircuitTraces',work=66,ore=13},
+ {name='Fuse Box',template='FuseBox',work=73,ore=14},
+ {name='Heat Sink',template='HeatSink',work=81,ore=16},
+}
+function J.withTemplates(props,specs,folder)
+ local result=table.clone(props)
+ if folder then
+  for _,spec in ipairs(specs) do
+   local template=folder:FindFirstChild(spec.template)
+   if template and template:IsA('Part') then
+    local prop=table.clone(spec);prop.size=template.Size.X;table.insert(result,prop)
+   end
+  end
+ end
+ return result
+end
+function J.fallPose(age,grounded)
+ if age<0 then return grounded+Vector3.yAxis*J.DropHeight end
+ if age<J.FallTime then
+  local t=age/J.FallTime
+  return (grounded+Vector3.yAxis*(J.DropHeight*(1-t*t)))*CFrame.Angles(.62*(1-t),.95*(1-t),-.28*(1-t))
+ end
+ local t=math.clamp((age-J.FallTime)/J.SettleTime,0,1)
+ return (grounded+Vector3.yAxis*(6.4*t*(1-t)))*CFrame.Angles(.13*math.sin(t*math.pi),0,0)
+end
+-- Give crews without a job the next object, then rotate within each job
+-- count by least recent award. Failed/blocked requests cannot lose a turn.
+function J.dispatch(crews,claim)
+ while #crews>0 do
+  table.sort(crews,function(a,b)
+   if a.active~=b.active then return a.active<b.active end
+   if a.turn~=b.turn then return a.turn<b.turn end
+   return a.id<b.id
+  end)
+  local crew=crews[1]
+  if crew.active>=J.CrewCap or not claim(crew) then table.remove(crews,1)
+  else crew.active+=1 end
+ end
+end
+return J

@@ -1,0 +1,136 @@
+{
+  "place_id": 136098934779395,
+  "installed_in": "Edit, then owner-requested Play resumed",
+  "sources": {
+    "ServerScriptService.GlobalDroneControl": {
+      "before_sha256": "4f592d61ea7448895753988998bbcbdf74a128a4be405db245059988e7bf2311",
+      "after_sha256": "527038218880708ec43de83cd49ffb9f66c11d42d6bedac3b4fa498140d2b4f4",
+      "changed": true
+    },
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": {
+      "before_sha256": "35a27e924507f2d8e6082b1f3b80d65d3003ad8eed0d2408d3603739f989a241",
+      "after_sha256": "1a5538dc35be0cc2190a91a6456da7ae4fab4de32bdfb0008b7bed260b0e2625",
+      "changed": true
+    },
+    "ReplicatedStorage.Shared.DroneConfig": {
+      "before_sha256": "b5a6cbdb08b39beaaa8a8cef1fc9f61226f01065fc882d093eee211b5e172a46",
+      "after_sha256": "b5a6cbdb08b39beaaa8a8cef1fc9f61226f01065fc882d093eee211b5e172a46",
+      "changed": false
+    },
+    "ReplicatedStorage.Shared.TacticalHUD": {
+      "before_sha256": "364bc3042fd5686902021370380f413b70faf3280a3144543137fd3b3862ea1a",
+      "after_sha256": "364bc3042fd5686902021370380f413b70faf3280a3144543137fd3b3862ea1a",
+      "changed": false
+    },
+    "ReplicatedStorage.Shared.CrystalAudio": {
+      "before_sha256": "b7c5d5fc9296978ddd7d742a16a75a53fb91a65db55b324b1a976505eb36d88d",
+      "after_sha256": "b7c5d5fc9296978ddd7d742a16a75a53fb91a65db55b324b1a976505eb36d88d",
+      "changed": false
+    },
+    "ServerScriptService.DroneRoleEffects": {
+      "before_sha256": "ebbbec45e6647c0e6cf4c667fdc1be5ec76809242d404026d4e58f72e1b0f74b",
+      "after_sha256": "a6b21634038a569023a1750116d9be748ec42436e38185d1f41001dfcfaaca31",
+      "changed": true
+    },
+    "ServerScriptService.MiningDiscoveries": {
+      "before_sha256": "87036dd88d392a320fd6a46cd69d71f6fa5d6713267fea608aac5b970731b719",
+      "after_sha256": "87036dd88d392a320fd6a46cd69d71f6fa5d6713267fea608aac5b970731b719",
+      "changed": false
+    }
+  },
+  "preserved_other_sources": 39,
+  "http_enabled_after": false,
+  "layout": {
+    "place_id": 136098934779395,
+    "fields": [
+      {
+        "from_spawn": 42.01190185546875,
+        "key": "Quartz",
+        "position": [
+          -56,
+          0.5,
+          65
+        ]
+      },
+      {
+        "from_spawn": 160.11558532714844,
+        "key": "Ruby",
+        "position": [
+          -176,
+          0.5,
+          129
+        ]
+      },
+      {
+        "from_spawn": 174.00286865234375,
+        "key": "Cobalt",
+        "position": [
+          64,
+          0.5,
+          149
+        ]
+      },
+      {
+        "from_spawn": 262.3680725097656,
+        "key": "Violet",
+        "position": [
+          -296,
+          0.5,
+          129
+        ]
+      },
+      {
+        "from_spawn": 280.92169189453125,
+        "key": "Emerald",
+        "position": [
+          184,
+          0.5,
+          169
+        ]
+      },
+      {
+        "from_spawn": 79.93122100830078,
+        "key": "ImpactTest",
+        "position": [
+          12,
+          0.5,
+          65
+        ]
+      }
+    ],
+    "mode": "Edit",
+    "shops": {
+      "Quartz": [
+        -72,
+        2.5,
+        21
+      ],
+      "Violet": [
+        -32,
+        2.5,
+        7
+      ],
+      "Cobalt": [
+        -44,
+        2.5,
+        7
+      ],
+      "Ruby": [
+        -76,
+        2.5,
+        7
+      ],
+      "Emerald": [
+        -20,
+        2.5,
+        7
+      ]
+    },
+    "spawn": [
+      -56,
+      1.5,
+      23
+    ]
+  },
+  "validation": "Exact before guards and seven final Source readbacks; 39 unrelated Sources checked unchanged in Studio. Native local export verified against all seven final Sources. Owner requested immediate testing, so one Play session was started and left running; no agent-driven gameplay or visual/multiplayer acceptance."
+}

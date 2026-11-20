@@ -1,0 +1,238 @@
+-- Pure mining rules shared by the authoritative server, UI and pacing model.
+-- Drone types are permanent; these behaviors do not rewrite saved base traits.
+local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
+M.SELECTOR_RANGE=44
+M.SELECTOR_LEASH=100
+M.ROCK_MODIFIERS={Massive=1,Charged=2,Frosted=4,Big=8,Titan=16}
+M.SIZE_BITS={0,M.ROCK_MODIFIERS.Big,M.ROCK_MODIFIERS.Massive,M.ROCK_MODIFIERS.Titan}
+M.ORE_SIZE_SCALE={1,1.32,1.72,2.18}
+function M.sizeTier(mask)
+ for tier=4,2,-1 do if bit32.btest(mask or 0,M.SIZE_BITS[tier]) then return tier end end
+ return 1
+end
+function M.nextSizeMask(first,second)
+ local tier=M.sizeTier(first)
+ if tier>=4 or tier~=M.sizeTier(second) then return nil end
+ local other=bit32.band(bit32.bor(first or 0,second or 0),bit32.bnot(bit32.bor(M.SIZE_BITS[2],M.SIZE_BITS[3],M.SIZE_BITS[4])))
+ return bit32.bor(other,M.SIZE_BITS[tier+1])
+end
+M.MASSIVE_CHANCE=.09
+M.MASSIVE_SCALE=1.38
+-- Geodes test sustained, accepted work after their first visible crack.
+M.GEODE_CHANCE=.045
+M.GEODE_WINDOW=4
+M.GEODE_RALLY_TIME=8
+M.OPEN_REACH=34
+-- Sealed geodes: walking up to one (or one click on it) calls a swarm strike.
+-- The crew charges together, then blasts it open.
+M.STRIKE_PROXIMITY=9
+M.STRIKE_CHARGE=1.35
+-- Mystery geode loot table (earned, never paid). Rolled on the server at drop
+-- and replicated only when the shell bursts.
+M.GEODE_TIERS={
+ {name='Common',weight=55,gems=1,modifiers=0},
+ {name='Rare',weight=28,gems=2,modifiers=0},
+ {name='Epic',weight=12,gems=3,modifiers=8},
+ {name='Legendary',weight=4,gems=4,modifiers=10},
+ {name='Mythic',weight=1,gems=6,modifiers=10},
+}
+function M.rollGeodeTier(roll)
+ local total=0;for _,t in ipairs(M.GEODE_TIERS) do total+=t.weight end
+ local pick=roll*total
+ for index,t in ipairs(M.GEODE_TIERS) do pick-=t.weight;if pick<0 then return index,t end end
+ return 1,M.GEODE_TIERS[1]
+end
+-- Lucky breaks: a small variable-ratio jackpot on ordinary rock rewards.
+M.LUCKY_TABLE={{chance=.01,multiplier=10},{chance=.06,multiplier=3}}
+function M.luckyMultiplier(roll)
+ local edge=0
+ for _,entry in ipairs(M.LUCKY_TABLE) do edge+=entry.chance;if roll<edge then return entry.multiplier end end
+ return 1
+end
+function M.geode(roll,hardness,ore)
+ local ordinary=M.fieldCrystal(roll,hardness,ore,3)
+ return {work=ordinary.work*8,ore=ordinary.ore,size=4.6+(roll-50)/50*1.4,stages=7}
+end
+function M.geodeProgress(r,amount,now)
+ local work=r.maxHP-10
+ if not r.geodeTestAt and r.hp-amount<=work*.90 then
+  r.geodeTestAt=math.max(now,r.geodeRallyUntil or now);r.geodeTestDamage=0
+  -- Even a huge single hit must hold the shell open through the power test.
+  return math.min(amount,math.max(0,r.hp-work*.90))
+ end
+ if r.geodeTestAt and not r.geodePassed then
+  -- Hold the first crack while the focused crew travels and warms up.
+  if now<r.geodeTestAt then return 0 end
+  r.geodeTestDamage=(r.geodeTestDamage or 0)+amount
+  return math.min(amount,math.max(0,r.hp-work*.20))
+ end
+ return amount
+end
+function M.geodeResult(r,now)
+ if not r.geodeTestAt or r.geodePassed or now-r.geodeTestAt<M.GEODE_WINDOW then return nil end
+ return (r.geodeTestDamage or 0)>= (r.maxHP-10)*.10*M.GEODE_WINDOW
+end
+local SELECTOR_GRID=2
+local DEPOT_ROUTE_RADIUS=54 -- Half the authored Crystal Run bed width.
+function M.selectorCenter(position,frame,size)
+ local point=frame:PointToObjectSpace(Vector3.new(position.X,frame.Position.Y,position.Z))
+ local halfX,halfZ=size.X*.5,size.Z*.5
+ -- Native Vector3 round trips can put a legitimate bed-edge hit just outside.
+ if math.abs(point.X)>halfX+.002 or math.abs(point.Z)>halfZ+.002 then return nil end
+ local maxX,maxZ=math.floor(halfX/SELECTOR_GRID),math.floor(halfZ/SELECTOR_GRID)
+ local x=math.clamp(math.round(point.X/SELECTOR_GRID),-maxX,maxX)*SELECTOR_GRID
+ local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
+ return frame:PointToWorldSpace(Vector3.new(x,size.Y*.5,z))
+end
+function M.inField(position,bed)
+ local offset=bed.CFrame:PointToObjectSpace(position)
+ return math.abs(offset.X)<=bed.Size.X*.5 and math.abs(offset.Z)<=bed.Size.Z*.5
+  and math.abs(offset.Y)<=bed.Size.Y*.5+16
+end
+function M.fieldSelection(position,bed)
+ local point=M.selectorCenter(position,bed.CFrame,bed.Size)
+ if point and bed:GetAttribute('WholeField') then
+  return bed.Position+Vector3.yAxis*(bed.Size.Y*.5),bed.Size.X
+ end
+ return point,nil
+end
+function M.selectorInRange(position,point)
+ local delta=point-position
+ return math.abs(delta.Y)<16 and delta.X*delta.X+delta.Z*delta.Z<=M.SELECTOR_RANGE^2
+end
+function M.onSelectorDepotRoute(position,center,depot,depotFrame,depotSize)
+ if depotFrame and depotSize then
+  local point=depotFrame:PointToObjectSpace(position)
+  if math.abs(point.X)<=depotSize.X*.5 and math.abs(point.Z)<=depotSize.Z*.5 and math.abs(point.Y)<16 then return true end
+  depot=depotFrame.Position
+ end
+ local route=depot-center
+ local lengthSquared=route.X*route.X+route.Z*route.Z
+ if lengthSquared==0 then return false end
+ local delta=position-center
+ local along=math.clamp((delta.X*route.X+delta.Z*route.Z)/lengthSquared,0,1)
+ local offset=delta-route*along
+ return math.abs(offset.Y)<16 and offset.X*offset.X+offset.Z*offset.Z<=DEPOT_ROUTE_RADIUS^2
+end
+function M.onDepotApproach(position,center,depot,depotFrame,depotSize)
+ local destination=depotFrame and depotSize and depotFrame.Position or depot
+ return not M.selectorInRange(position,center)
+  and (position-destination).Magnitude<(center-destination).Magnitude
+  and M.onSelectorDepotRoute(position,center,depot,depotFrame,depotSize)
+end
+function M.selectorContains(center,half,position)
+ return math.abs(position.X-center.X)<=half and math.abs(position.Z-center.Z)<=half
+end
+local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
+function M.kind(kind: string): string return roleKinds[kind] or kind end
+local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
+local descriptions={
+ Blue='Cutter · steady single-crystal mining',
+ Red='Percussion · charged hits; +50% shell/core damage',
+ Green='Healer · repairs nearby drones for 10 health every 2 seconds',
+}
+function M.style(kind: string): string return styles[M.kind(kind)] or 'Cutter' end
+function M.description(kind: string): string
+ local roles={Dart='Cultivator · plants replacement rocks in depleted fields',Striker='Miner · cuts one crystal with a continuous laser',Medic='Healer · follows allies; 10 health every 2 seconds',Courier='Backpack emptier · carries 8 ore to storage, then returns',Charger='Breaker · winds up, dives, hits, then recovers',Orbiter='Orbital · charges, then melts the biggest rock over time',Scrapper='Swarm · launches tiny miners for 10 seconds'}
+ return roles[kind] or descriptions[M.kind(kind)] or descriptions.Blue
+end
+function M.workRole(kind: string): string
+ return ({Dart='Rock grower',Striker='Miner',Medic='Healer',Courier='Backpack emptier',Charger='Breaker',Orbiter='Orbital controller',Scrapper='Swarm fabricator',Blue='Miner',Red='Breaker',Green='Healer'})[kind] or 'Cutter'
+end
+function M.resource(roll: number,kind: string,hardness: number?)
+ -- The original random size remains 2–4 studs. Hardness increases work, never
+ -- the footprint, height or station of an otherwise identical mineral.
+ local mass=roll*(kind=='Geode' and 3 or 1)
+ local work=(mass-10)*(hardness or 1)*M.HEALTH_MULTIPLIER
+ local size=mass/(kind=='Geode' and 37.5 or 25)*(kind=='Shard' and .8 or 1)
+ return {maxHP=work+10,work=work,size=size,mass=mass}
+end
+function M.deepCrystal(roll: number,hardness: number,baseOre: number)
+ -- Size shows the work up front. Small cuts pay sooner; big cuts return
+ -- more Quartz in the same cargo slot.
+ local sizeRoll=(roll-50)/50
+ return {
+  size=2.15+1.7*sizeRoll,
+  work=65*hardness*(.5+sizeRoll)*M.HEALTH_MULTIPLIER,
+  ore=math.max(1,math.floor(baseOre*(.65+.9*sizeRoll)+.5)),
+ }
+end
+local fieldRockSizes={2.10,2.65,3.35,4.40}
+local fieldRockYield={.65,.95,1.40,1.70}
+M.FIELD_ROCK_LAYER_HP=20
+M.FIELD_ROCK_READY_TIME=.65
+function M.fieldCrystal(roll: number,hardness: number,baseOre: number)
+ -- Every layer, including the final break, takes the same base work within a bed.
+ local stages=if roll<65 then 1 elseif roll<80 then 2 elseif roll<93 then 3 else 4
+ return {
+  size=fieldRockSizes[stages],stages=stages,large=math.max(0,(stages-2)*.5),
+  work=M.FIELD_ROCK_LAYER_HP*(stages+1)*hardness,
+  ore=math.max(1,math.round(baseOre*fieldRockYield[stages])),
+ }
+end
+-- Cumulative base ore released by real layer fractures. The rest belongs to
+-- the final collapse; crossing several layers at once never duplicates ore.
+function M.extractedOre(ore: number,stage: number,count: number,bonus: number?): number
+ return math.floor(ore*math.min(1,M.EXTRACTION_SHARE+(bonus or 0))*math.clamp(stage/math.max(1,count),0,1))
+end
+function M.looseSeamsReady(hp: number,maxHP: number,bonus: number?): boolean
+ local work=math.max(1,maxHP-10)
+ return bonus~=nil and bonus>0 and hp<=work*(bonus+1e-10)
+end
+function M.efficiency(kind: string,nodeKind: string): number
+ return M.kind(kind)=='Red' and (nodeKind=='Geode' or nodeKind=='Core') and 1.5 or 1
+end
+-- Outer hard layers reward a physical breaker; exposed inner layers reward
+-- steady cutters. This changes the best fleet/target pairing, without a timer
+-- gate or invalidating the existing continuous hit and fracture rules.
+function M.contactMultiplier(role,_nodeKind,hardness,stage,count)
+ local progress=math.clamp((stage or 0)/math.max(1,count or 3),0,1)
+ if role=='Charger' then
+  local resistance=math.clamp(((hardness or 1)-1)/7,0,1)
+  return 1+resistance*(1-progress)*1.5
+ end
+ if (role=='Striker' or role=='Blue') and (hardness or 1)>1 then return 1+progress*.35 end
+ return 1
+end
+function M.step(kind: string,charge: number?,dt: number,dps: number): (number,number,number)
+ if dt<=0 then return 0,charge or 0,0 end
+ if M.kind(kind)~='Red' then return dps*dt,0,0 end
+ local elapsed=(charge or 0)+dt
+ local count=math.floor((elapsed+1e-9)/M.PULSE_INTERVAL)
+ return count*M.PULSE_INTERVAL*dps,math.max(0,elapsed-count*M.PULSE_INTERVAL),count
+end
+function M.duration(kind: string,nodeKind: string,work: number,dps: number,geodeMultiplier: number?): number
+ if work<=0 then return 0 end
+ local rate=dps*M.efficiency(kind,nodeKind)
+ if nodeKind=='Geode' or nodeKind=='Core' then rate=rate*(geodeMultiplier or 1) end
+ local seconds=work/math.max(.001,rate)
+ if M.kind(kind)=='Red' then seconds=math.ceil(seconds/M.PULSE_INTERVAL-1e-9)*M.PULSE_INTERVAL end
+ return seconds
+end
+function M.resonanceDamage(maxHP: number,dps: number,crossed: number): number
+ -- At most three quarters on one primary hit, one destination, no recursive
+ -- echoes. Hard minerals cannot turn a fracture into unbounded burst damage.
+ return math.min(maxHP*.25*.35,dps*.8)*math.clamp(crossed,0,3)
+end
+function M.targetScore(kind: string,stats: any,node: any,distance: number,neighbors: number?): number
+ local role=kind
+ kind=M.kind(kind)
+ -- An estimate for autonomous selection, not an authority/reach test. Actual
+ -- movement remains the original eased/capped flight and exact arrival gate.
+ local travel=distance/math.max(1,stats.maxStep60*60)+math.log(1+distance)*.35
+ local seconds=travel+stats.warmup+M.duration(kind,node.kind,node.hp,stats.miningDPS,stats.geodeMultiplier)
+ local yield=math.max(1,node.ore)
+ if node.kind=='Geode' then
+  -- A shell itself pays nothing: include the growing core, a fresh warmup and
+  -- its work before valuing the first 4× payout. No speculative shard windfall.
+  seconds=seconds+2+stats.warmup+M.duration(kind,'Core',65*(node.hardness or 1),stats.miningDPS,stats.geodeMultiplier)
+  yield=yield*4
+  if kind=='Blue' then seconds=seconds*1.25 end
+ elseif kind=='Green' then
+  seconds=seconds/(1+math.min(neighbors or 0,3)*.10+math.min(node.stage or 0,3)*.08)
+ end
+ if role=='Dart' then seconds=seconds*(node.kind=='Shard' and .75 or 1)+distance*.035 end
+ if role=='Medic' and node.kind=='Shard' then seconds=seconds*.7 end
+ return seconds/yield
+end
+return M

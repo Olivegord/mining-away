@@ -1,0 +1,67 @@
+{
+  "universeId": 10774898335,
+  "previewRemoved": true,
+  "running": false,
+  "sources": {
+    "ServerScriptService.GlobalDroneControl": "930d6b4e8973b1e65e1106c85922817452950662ccc5053ec4d12c9149dadb6a",
+    "ServerScriptService.DroneRoleEffects": "c04596e85e081bcf56a184e3e419ab0d4c5c011922fd9f83626549b55ca1165e",
+    "ReplicatedStorage.Shared.CrystalAudio": "dc47ebf29dd9062fd0e0980aa42e6ef2c2b20d1eaf26aab951d84a35a8028a74",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "99ac094b9f71ebb113487f8d3b29e786986c4df2107ee990612e9c1b88865504",
+    "ReplicatedStorage.Shared.TacticalHUD": "7f8578cff07c5fec1cc46645d262f7d275772b791735de21c9fcb12d7b4bb690",
+    "ServerScriptService.MiningDiscoveries": "1b00ffe6a06f6a109eb34b28694bb0d0ea94312ba8c8264946e3f723e1f5e6d8",
+    "ReplicatedStorage.Shared.DroneConfig": "1ef69b142a712808d1bf21d389053f248388b47774f1fd019e036a3eb614584c"
+  },
+  "roots": {
+    "StarterPlayer.StarterPlayerScripts": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "ReplicatedStorage.Shared": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "ServerScriptService": "Enum.InstanceFileSyncStatus.SyncedAsRoot"
+  },
+  "placeId": 124078027733625,
+  "loadedVersion": 90,
+  "date": "2026-11-08",
+  "baselineGit": "43daac9fa4ffc278fba9e5d99f677c1a6e359c4a",
+  "nativeFile": "build/DRONE_GAME.rbxl",
+  "nativeSha256": "83159f31ab04bb552d32e6ce7b8905c34821888d4fe475977770fa4a7ccc039a",
+  "publication": {
+    "performed": false,
+    "loadedVersionIsPublicationEvidence": false
+  },
+  "play": {
+    "starts": 0,
+    "fullLoopAndMultiplayerVerified": false,
+    "externallyStartedSessionObservedAndStopped": true
+  },
+  "ui": {
+    "nativeEditPreview": true,
+    "fixtureProfile": true,
+    "wide": {
+      "width": 740,
+      "height": 629,
+      "textOverflows": 0
+    },
+    "narrow": {
+      "width": 351,
+      "height": 620,
+      "textOverflows": 0
+    },
+    "cardTextMeasurement": {
+      "upgradeCount": 13,
+      "sizes": [
+        [
+          252,
+          320
+        ],
+        [
+          252,
+          212
+        ],
+        [
+          297,
+          320
+        ]
+      ],
+      "overflows": 0
+    }
+  },
+  "revision": "54fdaa5dbb656a60d164f2dcbe286f6583faf1c4"
+}

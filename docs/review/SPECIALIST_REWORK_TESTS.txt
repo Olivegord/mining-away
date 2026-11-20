@@ -1,0 +1,326 @@
+Specialist rework verification — Luau 0.745, Python 3.12
+All Lua execution below uses API doubles; this is not native Studio, rendering, multiplayer, timing/FPS or fun evidence.
+Active-capture deterministic build and exact-seven-Source preservation: PASS (python3 tests/live-build.spec.py).
+New Catalog, DroneFX and SpecialDroneMotion standalone lint: PASS, explicit any-typed Roblox globals, not API contract validation.
+git diff --check: PASS.
+Broad tools/test.py runner: FAIL at pre-existing tests/ui_text.spec.py 11px Backpack label; reproduced unchanged on baseline 33ea151. Later legacy suite stages are not established.
+Standalone whole-bundle legacy lint is also not usable as-is: its injected values do not define the Roblox types required by the current role modules.
+
+Integrated base: bdb76e2f521f4c3728e855ff59ab95f75be77656 (latest shared client smoothing).
+
+Specialist production checks
+PASS special/logistics schema-six migration preserves original identities traits material wallets and paid choices
+PASS special/logistics all seven new miners are permanent workers with distinct durations and costs
+PASS special/logistics purchase receipts reject conflicting replay stale run foreign types missing funds and remote context
+PASS special/logistics purchased growth preserves the live game permanent fleet invariant without a new fleet cap
+PASS special/logistics prestige adds one earned drone while retaining purchased identities and base traits
+PASS special/logistics typed deposits accept only free storage space without changing the source bag
+PASS special/logistics launch snapshots exactly one full typed manifest and pays matching mineral balances once
+PASS special/logistics flying backpack preserves mixed mineral overflow until storage becomes available
+PASS special/logistics carrier loadouts reject duplicate foreign sparse excess nonworker and already-loaded identities
+PASS special/logistics prestige retains carriers backpack auto-launch ownership and earned-role sequence
+10 current profile/logistics domain checks passed
+PASS special/logistics server nine simultaneous storage yards stand above the authored terrain footprint
+PASS special/logistics server new production owner still has one original drone and preserves the current map and systems
+PASS special/logistics server permanent miner purchase validates run context range ownership and exactly-once durable retry
+PASS special/logistics server all seven miners take four authoritative chunks and pay once only on depletion
+PASS special/logistics server real fractional Ruby hardness finishes on its fourth chunk without an extra dust cycle
+PASS special/logistics server huge rocks retain a finite work budget and modifiers cannot bypass the final chunk cap
+PASS special/logistics server mining cards accelerate repeated cycles once and retain per-hit budget
+PASS special/logistics server special mining requires authoritative overhead arrival and clear line of sight
+PASS special/logistics server fresh line of sight at the impact defeats an otherwise cached clear work hold
+PASS special/logistics server recall cancels choreography without payout and releases its reservation
+PASS special/logistics server yielding saves freeze anticipation and recovery without duplicating or skipping chunks
+PASS special/logistics server yielding save freezes the lethal recovery without retaining damage authority or losing its source
+PASS special/logistics server special workers use ordinary shared shell mining and cannot instantly remove geodes
+PASS special/logistics server deposit stores typed ore and space launch pays its frozen manifest only after arrival
+PASS special/logistics server carrier reward overflow stays typed and fills the next capsule without losing ore
+PASS special/logistics server automatic launches unlock after the first manual shipment and preserve refill during flight
+PASS special/logistics server flying backpack reaches the owner before pickup and keeps cargo when storage fills
+PASS special/logistics server carrier rejects foreign invalid and guarded loads then deploys four owned miners after travel
+PASS special/logistics server busy or uncertain save sessions freeze launches deposits and transport commands
+PASS special/logistics server reconnect preserves permanent types carriers loadout and typed in-flight manifests
+PASS special/logistics server a teammate finishing an unfinished special target grants ordinary yield and cancels its effect
+21 current production server special/logistics checks passed using API doubles
+PASS special preview preview starts with every miner, test automation and one permanent owner identity
+PASS special preview permanent special purchase appears beside preview roles and survives reconnect
+PASS special preview one plot command assigns every miner and each reserves distinct real work
+PASS special preview test capacity governs actual collection and survives stat refresh without a saved upgrade
+4 Studio-preview ownership logic checks passed with API doubles; not Studio execution
+29 specialist chunk FX lifecycle and 30/60/144 FPS timeline checks passed (API doubles; rendering NOT VERIFIED)
+7 distinct specialist assembly, joint, pause, cancellation and shared-time API-double checks passed; not Studio visual validation
+PASS HUD classifies nine miners independently of six support, other owners, windup, specials, recovery and reprints
+PASS current-game special/logistics source, domain, server and FX lifecycle checks. Studio visual/multiplayer/fun NOT VERIFIED.
+
+Integrated shared client smoothing
+PASS smooth animation server emits only state records for all role effects and scrap poses
+PASS smooth animation two observers and a late join evaluate identical authoritative pulse time
+PASS smooth animation each display frame advances a local pulse at 30 60 and 144 fps
+PASS smooth animation late join skips old impacts and ended orbitals
+PASS smooth animation orbital follows buffered position and ends without replay or server transforms
+PASS smooth animation overlapping charge receipts cannot cancel the newer charge
+PASS smooth animation interpolation is frame-rate independent and bounded under delayed packets
+PASS smooth animation partially replicated receipts wait until every required field is present
+PASS smooth animation render teardown disconnects all state observers
+9 production state/client timeline checks; API doubles, no Studio Play
+PASS production scrap observer, original miniature asset, buffered motion, confirmed chips and cleanup
+
+Mining and observer regressions
+PASS 45 production card summaries/targets/palettes, 9 mechanic families, large-text color contrast and named-drone penalty. Native SurfaceGui legibility/focus/touch NOT VERIFIED.
+PASS committed mining save latency preserves committed travel and freezes damage only
+PASS committed mining warmup has an honest arrival gate and a separate replicated phase
+PASS committed mining queued orders and nearby owner travel never replace a running job
+PASS committed mining already queued work has bounded completion release rather than an idle second
+PASS committed mining breaker cannot start another windup while still returning from impact
+PASS committed mining a save during a powered dive finishes flight without damage or a resume rewind
+PASS committed mining layer mechanics make hard-shell breakers and exposed-layer cutters distinct
+PASS committed mining unhealthy persistence still freezes movement and awards
+PASS committed mining a manually ordered shell continues into its real growing core without granting plot automation
+PASS committed mining powered weight accelerates to the contact plane and stops without an arrival brake
+10 production mining-flight checks using API doubles; not engine or fun evidence
+PASS four-second yielding production save: two matching observers, late join, continuous travel and zero work while busy (API doubles; not network/engine evidence)
+PASS flight observer a missed dive snapshot enters the authoritative contact hold without braking
+PASS flight observer settled station and heading remain stable across stale same-life snapshots
+PASS flight observer work pause keeps flying while withholding mining presentation
+PASS flight observer arrival remains bounded and converges across frame rates
+4 production observer/shared-flight checks; native motion and network transport NOT VERIFIED
+Work-only feasibility seconds: median-size ordinary crystal; excludes travel/warmup/selling
+Quartz hardness 1.0: base 5.65s / +50% cutter 3.77s / 10 ore at value 1
+Ruby hardness 1.8: base 10.13s / +50% cutter 6.77s / 12 ore at value 2
+Cobalt hardness 3.2: base 17.97s / +50% cutter 11.98s / 15 ore at value 4
+Violet hardness 5.2: base 29.18s / +50% cutter 19.45s / 16 ore at value 7
+Emerald hardness 8.0: base 44.87s / +50% cutter 29.92s / 20 ore at value 10
+PASS work difficulty and upgrade leverage. No retention, enjoyment or full-loop pacing claim.
+PASS committed mining + observer regressions. Engine motion/UI/multiplayer/fun NOT VERIFIED.
+
+Existing roles and ability regressions
+PASS gadget unknown gadgets invalid clocks unlock and eligibility fail closed without damage
+PASS gadget largest eligible target has a stable ID tie break
+PASS gadget one activation completes its fixed anticipation without a second input or timing window
+PASS gadget charge view has no token or precision targets and cannot mutate authority
+PASS gadget early forged and replayed confirm cannot accelerate or repeat work
+PASS gadget lost target canceled eligibility and expired charge do not spend cooldown
+PASS gadget four seconds of accepted orbital work melts one biggest rock
+PASS gadget player timing no longer grants neighboring hits or bonus bots
+PASS gadget equipment upgrades alter actual cooldown and bot count
+PASS gadget saved cooldown hydrating and reconnect cannot refresh a strike
+PASS gadget full backpack permits burn while lost eligibility cancels it
+PASS gadget first blocked orbital contact refunds cooldown
+PASS gadget storage pause preserves charge anticipation and remaining work without catch-up damage
+PASS gadget scrap auto deployment preserves hardware actor and lasts ten seconds
+PASS gadget mini miners must travel and charge before mining; per-step contacts are bounded
+PASS gadget mini miners pair on weaker rocks and cap late-field chip work
+PASS gadget swarm movement accelerates continuously instead of snapping on target changes
+PASS gadget swarm eligibility expiry run changes and save pauses preserve correct lifetime
+18 production automatic gadget domain checks passed; not Studio or multiplayer evidence
+PASS role only the ordinary miner grants a continuous mining capability
+PASS role only the miner and breaker accept ordinary rock jobs or combat
+PASS role each support role has one explicit job and hardware ability
+PASS role legacy color identities map to existing jobs without erasing ownership
+PASS role unknown and missing roles fail closed
+PASS role grower never selects or damages existing mineable rocks
+PASS role breaker prioritizes a reachable shell over ordinary work
+PASS role target selection excludes paid growing denied and malformed nodes
+PASS role target tie breaks remain deterministic across list order
+PASS role breaker cannot wind up before actually arriving
+PASS role windup dive impact recovery each emit exactly once
+PASS role a missed dive recovers without ever emitting an impact
+PASS role startup upgrades alter actual windup timing and pose together
+PASS role invalid or changed targets cancel any phase without damage
+PASS role backward or nonfinite clocks cannot skip phases
+PASS role poses give bounded anticipation dive and recovery without movement authority
+16 production role capability/phase checks passed; not engine motion or multiplayer evidence
+PASS ore partition conserves every integer reward without zero fragments
+PASS ore scatter has a visible delay before collection
+PASS ore magnet catches a player moving at walking speed at 30 60 and 144 FPS
+PASS ore blocked or out-of-range pickups cannot arrive and never fall through bed
+PASS ore real falls report contact speed while settled ore is silent
+PASS ore fade is monotonic and expiry never depends on attraction or bag space
+6 production ore trajectory checks; not engine physics
+PASS production resource renderer: idle fast path, live HP invalidation, queued black/shrink/break animation, no duplicate effects over 7200 stable frames
+PASS contact render actual tip sparks, save pause and final cleanup (API doubles; not native rendering)
+PASS swarm isolated drones have zero avoidance and preserve original capped travel
+PASS swarm exact overlaps escape with equal opposite deterministic steering
+PASS swarm head-on approach anticipates contact before positional crowding
+PASS swarm parallel co-moving neighbors do not invent a collision
+PASS swarm pair avoidance conserves center and chooses opposite passing lanes
+PASS swarm settled mining can disable steering and retain exact overhead station
+PASS swarm steering pressure smoothing is continuous and rate-correct at 30/60/144Hz
+PASS swarm frozen grid ignores sequential updates and caller iteration order
+PASS swarm large stacked crowds remain bounded, finite and reproducible
+PASS swarm destroyed neighbors exert no pressure
+PASS swarm flight thrust bounds acceleration from rest and through a reversal
+PASS swarm decreasing cruise speed brakes without discarding momentum
+PASS swarm flight settles over the target at 30 60 and 144 Hz
+PASS swarm zero time and long frame stalls do not invent unbounded catch-up
+PASS swarm replication correction shares the same thrust limit
+15 production steering checks passed using Vector API doubles; not a Studio collision/visual playtest
+PASS client inertia launch and replicated goal reversals retain continuous velocity
+PASS client inertia a delayed authoritative position is corrected through thrust
+PASS client inertia save pause freezes the pose and resumes with retained momentum
+PASS client inertia reprint resets motion and a new life seeds authoritative velocity
+PASS client inertia healers retain their trailing goal with the same finite acceleration
+5 production client inertia checks with API doubles; engine motion/network quality not verified
+PASS gadget server locked gadgets and stale runs cannot create an authoritative charge
+PASS gadget server actual command strike breaks largest node through normal reward path once
+PASS gadget server foreign worker reservations are excluded from selection and reject direct gadget hits
+PASS gadget server leaving plot rejects contact while a full backpack permits mining
+PASS gadget server no living mining worker prevents gadget deployment
+PASS gadget server scrap mining uses real hit path and persistence-busy periods preserve deployment
+PASS gadget server successful gadget cooldown is saved and rehydrated runtime rejects immediate reuse
+PASS gadget server orbital survey and charge choose the largest reachable rock while preserving obstruction and scrap rules
+PASS gadget server fully obstructed orbital fields stay in survey without charge damage or cooldown loops
+PASS gadget server new obstruction between charge and first contact cancels unspent orbital work safely
+10 actual server gadget integration checks passed with API doubles; not Studio visual/multiplayer evidence
+PASS pickups server break scatters conserved owner-only ore and cannot pay twice
+PASS pickups server another nearby player cannot attract or steal the owners fragments
+PASS pickups server a full backpack leaves real fragments until selling makes space
+PASS pickups server save uncertainty pauses pickup without mutating or deleting rewards
+PASS pickups server walls block attraction and collection until an unobstructed route exists
+PASS pickups server old-run or disconnected drops cannot enter a later profile
+PASS pickups server new resources are grounded with health independent of their footprint
+PASS pickups server landing receipts describe real contacts and stop advancing at rest
+PASS pickups server full bags cannot stockpile rewards beyond the wall-clock expiry
+PASS pickups server partial pickup receipts identify the real fragment and retain expiry of the remainder
+10 production pickup server checks with API doubles; not Studio validation
+PASS mining impact full bag accepts manual orders and continues actual miner damage
+PASS mining impact ground rewards stay bounded and conserve ore after many full-bag breaks
+PASS mining impact test field is always open beside Quartz and all rock work is exactly tenfold
+PASS mining impact boulders preserve original crystal identity and seven monotonic size changes
+PASS mining impact each ordinary and large layer becomes black before shrinking, without duplicate cues
+PASS mining impact powered dive accelerates downwards at every render rate and stops at contact
+6 actual mining impact server/helper checks passed with API doubles; not native acceptance
+PASS role server Studio starts every drone type but still owns one permanent drone
+PASS role server ore queue and direct assignments cannot give specialists ordinary mining jobs
+PASS role server grower plants a real replacement with normal health yield growth and bounded population
+PASS role server recall cancels planting and two growers cannot overlap or exceed replacement tokens
+PASS role server only the miner performs a continuous cutting beam after real warmup
+PASS role server breaker arrives winds up dives hits once and recovers even after a killing strike
+PASS role server recall and busy storage cancel or pause breaker and grower work
+PASS role server two backpack emptiers own separate parcels and store each once before orbital payment
+PASS role server orbital hardware automatically strikes a largest rock and persists its cooldown
+PASS role server swarm hardware deploys four physical mini miners for exactly ten seconds
+PASS role server healer preserves real ally repair and never acquires mining
+PASS role server finished mining releases its reservation and lingers before choosing new work
+PASS role server storage pauses preserve the remaining post-mining recovery time
+PASS role server a new explicit order cancels the completed-rock linger
+PASS role server hardware shop upgrades change only their intended real role stats
+PASS role server rock clicks confirm work queue and cancellation without replacing a busy job
+PASS role server field edge padding silently recalls once and clears orders permanently
+PASS role server Studio max bag and named additions preserve permanent ownership and existing drone state
+PASS role server cooperative shell break during held contact recovers safely and continues its revealed work
+PASS role server a shared rock shrinking during the hold moves the weight to its actual surface
+PASS role server powered phase snapshots precede contact effects and record both real contacts
+21 actual production server role checks passed using API doubles; engine motion/multiplayer not verified
+PASS gadget source compilation + production domain/steering/server logic using API doubles. Studio visual/multiplayer/fun not verified.
+
+Energy and fracture regressions
+PASS energy effects moving monochrome transparency stays ordered and bounded at every frame rate
+PASS energy effects small utility sparks preserve bounded burst cleanup
+PASS energy effects existing named bloom is retuned without stacking or deleting unrelated lighting
+PASS energy effects nearby owner sees fresh full-speed mining discs while zoomed far out
+PASS energy effects role burst and orbital cleanup retain their longest particle lifetimes
+PASS energy effects orbital extends above high camera and collapses on authoritative end
+PASS energy effects nearby character feels the impact at far camera zoom and reduced motion opts out
+PASS energy effects real fracture creates authored mesh chunks and honors pool limit
+8 production energy/fragment behavior checks with API doubles; Studio appearance remains separate
+Native asset-fetch check generated: build/energy-asset-check.lua (run in Studio Client; screenshots verify appearance)
+
+Current client refinement checks
+PASS refinement motion recall hop is the same at server time for both observers and settles
+PASS refinement motion late observer does not replay an old recall and pause holds pose
+PASS refinement motion a new mining order cancels the remaining recall flourish
+PASS refinement motion breaker fall accelerates into a hard contact at30/60/144Hz
+PASS refinement motion replicated dive duration drives every observer without a second ease
+5 production client motion cases (API doubles)
+PASS refinement intent one rock gesture naturally targets the field after automation unlock
+PASS refinement intent locked background field click stays quiet and sends no impossible order
+PASS refinement intent ability starts once and never sends a timed confirmation
+3 current client command cases (API doubles)
+PASS authoritative landing/fracture cue distinction and freshness (API doubles)
+PASS current command highlight scope and cleanup (API doubles)
+PASS current client refinements. API doubles; native visuals/input/multiplayer NOT VERIFIED.
+
+Performance call-count checks
+/workspace/mining-away/tools/test_performance.py:33: DeprecationWarning: Python 3.14 will, by default, filter extracted tar archives and reject files or modify their metadata. Use the filter argument to control this behavior.
+  tar.extractall(base)
+before PASS production burn damage, specialist monitoring/final-hit obstruction and snapshot pause/resume coherence; API doubles only
+before Recorded original FX write load for comparison
+before PASS production logistics lifecycle exercised without Studio
+after PASS production burn damage, specialist monitoring/final-hit obstruction and snapshot pause/resume coherence; API doubles only
+after PASS production FX render-frame motion, scenery filtering, geometry budget, distance return and cleanup; API doubles only
+after PASS production logistics lifecycle exercised without Studio
+after PASS production ordinary fracture retained; specialist avoids duplicate showers and retains confirmed break shake
+{
+  "baseline": "09e89298735fdaf7f0a4eae908398b1954b23eb6",
+  "metrics": {
+    "before": {
+      "idle": [
+        1800,
+        22695,
+        4
+      ],
+      "cooldown": [
+        1800,
+        22695,
+        1440
+      ],
+      "burn": [
+        0,
+        0,
+        1560
+      ],
+      "specialists": [
+        840,
+        0,
+        840
+      ],
+      "fx144": [
+        90492
+      ],
+      "logistics": [
+        650,
+        600
+      ]
+    },
+    "after": {
+      "idle": [
+        255,
+        3960,
+        4
+      ],
+      "cooldown": [
+        255,
+        2794,
+        0
+      ],
+      "burn": [
+        0,
+        0,
+        120
+      ],
+      "specialists": [
+        0,
+        0,
+        126
+      ],
+      "fx144": [
+        44718
+      ],
+      "logistics": [
+        0,
+        0
+      ]
+    }
+  },
+  "scope": "Deterministic API-double call counts, not Studio timing/FPS/energy"
+}
+
+Historical binary checks
+PASS binary deterministic native-Lighting build
+PASS binary every original instance parent and asset/property payload preserved except four controller properties
+PASS binary historical controllers disabled and server source round-trips
+PASS binary all native Harbor sky/effects/UI/script properties imported, references rebased, render settings persisted
+PASS binary no imported skinned grass rigs or client foliage runner; original native terrain settings preserved
+PASS binary unverified input rejected
+6 binary build tests passed; engine load is checked separately

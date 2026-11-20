@@ -1,0 +1,64 @@
+{
+  "game": "Drone Blower revolution",
+  "place_id": 136098934779395,
+  "document": "build/DRONE_GAME.rbxl",
+  "studio_id": "3dfb109f-2ec1-44df-a538-737dcfc10c0d",
+  "scope": "Single-client native Studio; no publishing",
+  "installed_source_sha256": {
+    "ServerScriptService.GlobalDroneControl": "466f351ea240b277069ee90ff83d7ad75d766f5947519df38dc0eae6251794e8",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "a849b02c3ab93af643a68f07cd1f6c1dd506e2501c06143e464e743d61641772",
+    "ReplicatedStorage.Shared.DroneConfig": "e2ee217252a3cc4429cd3908b115737464b35efc4980206ca77ded21df4d92c5",
+    "ReplicatedStorage.Shared.TacticalHUD": "92d3ee639935efc53981594669eac28e0ccd6be3f8d6d4f3c0283dcd5833cb7a",
+    "ReplicatedStorage.Shared.CrystalAudio": "b7c5d5fc9296978ddd7d742a16a75a53fb91a65db55b324b1a976505eb36d88d",
+    "ServerScriptService.DroneRoleEffects": "c6b3676ef8149ff4f2342c01c9bf7d62a7e4d52930d87f959a45e042e3370af8",
+    "ServerScriptService.MiningDiscoveries": "87036dd88d392a320fd6a46cd69d71f6fa5d6713267fea608aac5b970731b719"
+  },
+  "final_install": {
+    "preserved": 39,
+    "placeId": 0,
+    "changed": [
+      "ServerScriptService.GlobalDroneControl"
+    ],
+    "verified": 7,
+    "document": "DRONE_GAME.rbxl"
+  },
+  "final_startup": {
+    "seconds": 3.000798416673206,
+    "heartbeatMax": 0.020975250750780106,
+    "physics": 60,
+    "heartbeats": 179,
+    "sky": "Sky",
+    "damageErrors": [],
+    "heartbeatOver33ms": 0,
+    "resources": 53,
+    "landscapeParts": 242,
+    "rendered": 45
+  },
+  "active_mining_sample": {
+    "seconds": 5.013145166623872,
+    "heartbeats": 300,
+    "rendered": 75,
+    "heartbeat_over_33ms": 0,
+    "heartbeat_max_seconds": 0.019608542323112488,
+    "physics_fps": 60
+  },
+  "observed_physical_shapes": {
+    "bubbler": "6:0:3",
+    "smasher": "0:6:5",
+    "class": "MeshPart",
+    "errors": [],
+    "evidence": [
+      "PHYSICAL_BUBBLER.jpg",
+      "PHYSICAL_SMASHER.jpg"
+    ]
+  },
+  "console": "Empty during final native checks",
+  "final_play_state": "Stopped",
+  "save_method": "Guarded Source-only refresh of existing canonical native binary; native Save UI unavailable because macOS session was locked",
+  "unverified": [
+    "True two-client and late-join rendering",
+    "Sustained viewport/device performance: 15 FPS render vs 60 Hz physics; background throttle plausible, not confirmed",
+    "Phone layout",
+    "Owner audio listening and enjoyment"
+  ]
+}

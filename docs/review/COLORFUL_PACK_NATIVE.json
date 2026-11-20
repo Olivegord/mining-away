@@ -1,0 +1,21 @@
+{
+  "fonts": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"phone\":{\"scope\":\"Native production CardView rendering and font metrics; sample choices, no purchase or gameplay test\",\"failures\":[],\"catalog\":45,\"texts\":90},\"desktop\":{\"scope\":\"Native production CardView rendering and font metrics; sample choices, no purchase or gameplay test\",\"failures\":[],\"catalog\":45,\"texts\":90}}"
+      }
+    ],
+    "isError": false
+  },
+  "sourceScope": [
+    "src/CardView.lua",
+    "src/Client.lua"
+  ],
+  "nativeScope": "Production CardView, real catalog, Studio presentation harness. No card transaction or gameplay/multiplayer claim.",
+  "effects": {
+    "focusSparkCount": 4,
+    "reducedMotionVisibleEffects": 0
+  },
+  "deviceReset": true
+}

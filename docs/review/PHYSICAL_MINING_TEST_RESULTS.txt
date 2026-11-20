@@ -1,0 +1,127 @@
+Production logic under API doubles; not native visual, multiplayer, audio or fun validation.
+
+$ python3 tools/test_physical_mining.py
+PASS production resource renderer: idle fast path, live HP invalidation, continuous shrink/break animation, no duplicate effects over 7200 stable frames
+PASS mining impact full bag accepts manual orders and continues actual miner damage
+PASS mining impact ground rewards stay bounded and conserve ore after many full-bag breaks
+PASS mining impact test field is always open beside Quartz and all rock work is exactly tenfold
+PASS mining impact boulders preserve original crystal identity and seven monotonic size changes
+PASS mining impact ordinary and large layers retain mineral color and fracture without duplicate cues
+PASS mining impact physical scar history belongs only to accepted server contacts
+PASS mining impact editable native crystal template survives missing replicated template
+PASS mining impact powered dive accelerates downwards at every render rate and stops at contact
+8 actual mining impact server/helper checks passed with API doubles; not native acceptance
+PASS pickups server break scatters conserved owner-only ore and cannot pay twice
+PASS pickups server another nearby player cannot attract or steal the owners fragments
+PASS pickups server a full backpack leaves real fragments until selling makes space
+PASS pickups server save uncertainty pauses pickup without mutating or deleting rewards
+PASS pickups server walls block attraction and collection until an unobstructed route exists
+PASS pickups server old-run or disconnected drops cannot enter a later profile
+PASS pickups server new resources are grounded with health independent of their footprint
+PASS pickups server landing receipts describe real contacts and stop advancing at rest
+PASS pickups server full bags cannot stockpile rewards beyond the wall-clock expiry
+PASS pickups server partial pickup receipts identify the real fragment and retain expiry of the remainder
+PASS pickups server ore leaving a raised field falls to the actual outside map floor
+11 production pickup server checks with API doubles; not Studio validation
+PASS gadget server locked gadgets and stale runs cannot create an authoritative charge
+PASS gadget server actual command strike breaks largest node through normal reward path once
+PASS gadget server foreign worker reservations are excluded from selection and reject direct gadget hits
+PASS gadget server leaving plot rejects contact while a full backpack permits mining
+PASS gadget server no living mining worker prevents gadget deployment
+PASS gadget server abilities follow the current retained shell after an authoritative physical hit
+PASS gadget server scrap mining uses real hit path and persistence-busy periods preserve deployment
+PASS gadget server successful gadget cooldown is saved and rehydrated runtime rejects immediate reuse
+PASS gadget server orbital survey and charge choose the largest reachable rock while preserving obstruction and scrap rules
+PASS gadget server fully obstructed orbital fields stay in survey without charge damage or cooldown loops
+PASS gadget server new obstruction between charge and first contact cancels unspent orbital work safely
+11 actual server gadget integration checks passed with API doubles; not Studio visual/multiplayer evidence
+PASS physical mining source/authority/shrink/pickup/ability regressions; API doubles, not engine visuals or multiplayer
+
+$ python3 tools/test_rock_damage.py
+PASS 10 physical rock damage queue/ownership checks (API double; native topology not established)
+
+$ python3 tools/test_pickups.py
+PASS ore partition conserves every integer reward without zero fragments
+PASS ore scatter has a visible delay before collection
+PASS ore magnet catches a player moving at walking speed at 30 60 and 144 FPS
+PASS ore blocked or out-of-range pickups cannot arrive and never fall through bed
+PASS ore real falls report contact speed while settled ore is silent
+PASS ore impact energy and scatter distance agree across frame rates
+PASS ore ground friction stops fragments without silently erasing flight momentum
+PASS ore fade is monotonic and expiry never depends on attraction or bag space
+8 production ore trajectory checks; not engine physics
+PASS pickup render buffered falling motion retains a weighted arc and exact sample contacts
+PASS pickup render velocity reversal never overshoots floor or segment and settled ore stays still
+PASS pickup render network stalls bound extrapolation and never tunnel through ground
+PASS pickup render snapshot sampling is independent of render frame rate
+PASS pickup render expiry fades monotonically to invisibility and collection settles exactly
+PASS pickup render angular momentum is continuous at landing and then stops
+PASS pickup render rotated reward fragments keep their lowest corner above the floor
+7 production render-trajectory checks; not native visual acceptance
+PASS pickup view rotating fragment stays supported above the authoritative floor
+PASS pickup view ground sound waits for the buffered visible contact and fires once
+PASS pickup view confirmed collection arrives at the visible backpack instead of the torso center
+PASS pickup view destroy disconnects observers without granting or changing units
+PASS pickup view stale landing state received after registration settles without replaying audio
+5 production PickupView checks with API doubles; native presentation NOT VERIFIED
+PASS pickup math and production view checks. Native motion/audio and multiplayer NOT VERIFIED.
+
+$ python3 tools/test_special_logistics.py /private/tmp/mining-away-luau
+PASS special/logistics schema-six migration preserves original identities traits material wallets and paid choices
+PASS special/logistics all seven new miners are permanent workers with distinct durations and costs
+PASS special/logistics purchase receipts reject conflicting replay stale run foreign types missing funds and remote context
+PASS special/logistics purchased growth preserves the live game permanent fleet invariant without a new fleet cap
+PASS special/logistics prestige adds one earned drone while retaining purchased identities and base traits
+PASS special/logistics typed deposits accept only free storage space without changing the source bag
+PASS special/logistics launch snapshots exactly one full typed manifest and pays matching mineral balances once
+PASS special/logistics flying backpack preserves mixed mineral overflow until storage becomes available
+PASS special/logistics carrier loadouts reject duplicate foreign sparse excess nonworker and already-loaded identities
+PASS special/logistics prestige retains carriers backpack auto-launch ownership and earned-role sequence
+10 current profile/logistics domain checks passed
+PASS special/logistics server nine simultaneous storage yards stand above the authored terrain footprint
+PASS special/logistics server new production owner still has one original drone and preserves the current map and systems
+PASS special/logistics server permanent miner purchase validates run context range ownership and exactly-once durable retry
+PASS special/logistics server all seven miners take four authoritative chunks and pay once only on depletion
+PASS special/logistics server real fractional Ruby hardness finishes on its fourth chunk without an extra dust cycle
+PASS special/logistics server huge rocks retain a finite work budget and modifiers cannot bypass the final chunk cap
+PASS special/logistics server mining cards accelerate repeated cycles once and retain per-hit budget
+PASS special/logistics server special mining requires authoritative overhead arrival and clear line of sight
+PASS special/logistics server fresh line of sight at the impact defeats an otherwise cached clear work hold
+PASS special/logistics server recall cancels choreography without payout and releases its reservation
+PASS special/logistics server yielding saves freeze anticipation and recovery without duplicating or skipping chunks
+PASS special/logistics server yielding save freezes the lethal recovery without retaining damage authority or losing its source
+PASS special/logistics server special workers use ordinary shared shell mining and cannot instantly remove geodes
+PASS special/logistics server deposit stores typed ore and space launch pays its frozen manifest only after arrival
+PASS special/logistics server carrier reward overflow stays typed and fills the next capsule without losing ore
+PASS special/logistics server automatic launches unlock after the first manual shipment and preserve refill during flight
+PASS special/logistics server flying backpack reaches the owner before pickup and keeps cargo when storage fills
+PASS special/logistics server carrier rejects foreign invalid and guarded loads then deploys four owned miners after travel
+PASS special/logistics server busy or uncertain save sessions freeze launches deposits and transport commands
+PASS special/logistics server reconnect preserves permanent types carriers loadout and typed in-flight manifests
+PASS special/logistics server a teammate finishing an unfinished special target grants ordinary yield and cancels its effect
+21 current production server special/logistics checks passed using API doubles
+PASS special preview preview keeps owner-designed miners and automation without granting optional specialists
+PASS special preview permanent special purchase appears beside preview roles and survives reconnect
+PASS special preview one plot command assigns every miner and each reserves distinct real work
+PASS special preview test capacity governs actual collection and survives stat refresh without a saved upgrade
+4 Studio-preview ownership logic checks passed with API doubles; not Studio execution
+30 specialist chunk FX lifecycle and 30/60/144 FPS timeline checks passed (API doubles; rendering NOT VERIFIED)
+Preview reuse, bounded residency, visibility, stream-out and suspension checks passed
+PASS cached curved waves disappear and specialist leases stay bounded
+7 distinct specialist assembly, joint, pause, cancellation and shared-time API-double checks passed; not Studio visual validation
+PASS HUD classifies nine miners independently of six support, other owners, windup, specials, recovery and reprints
+PASS current-game special/logistics source, domain, server and FX lifecycle checks. Studio visual/multiplayer/fun NOT VERIFIED.
+
+$ /private/tmp/mining-away-luau/luau tests/resource-placement.spec.lua
+PASS resource placement rotated and tilted corners stay inside the reserved footprint
+PASS resource placement spacing adds both radii and remains symmetric for large neighbors
+PASS resource placement large rocks and shell reveals fit completely inside field boundaries
+PASS resource placement blocked fields consume at most eighteen expensive clearance queries
+PASS resource placement occupied points reject before querying world geometry
+PASS resource placement grower plans revalidate without rerolling position or material footprint
+PASS resource placement seeded field populations preserve random positions without overlap
+PASS resource placement invalid dimensions and coordinates cannot produce an invalid spawn
+8 pure resource placement checks; native obstruction coverage and population pacing require Studio
+
+$ /private/tmp/mining-away-luau/luau tests/crystal-geometry.spec.lua
+PASS real original crystal data: exact bounds, 345 vertices / 690 valid triangles, closed wound surface, safe point separation and manifold vertex fans; not Studio visual proof

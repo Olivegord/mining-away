@@ -1,0 +1,161 @@
+{
+  "properties": [
+    {
+      "before": "View upgrades",
+      "property": "ActionText",
+      "after": "Open Quartz Workshop",
+      "path": "Workspace.MiningAway.Map.QuartzShop.ProximityPrompt"
+    },
+    {
+      "before": "Quartz shop",
+      "property": "ObjectText",
+      "after": "Quartz Workshop",
+      "path": "Workspace.MiningAway.Map.QuartzShop.ProximityPrompt"
+    },
+    {
+      "before": "QUARTZ SHOP",
+      "property": "Text",
+      "after": "QUARTZ WORKSHOP",
+      "path": "Workspace.MiningAway.Map.QuartzShop.ShopSign.Back.ShopName"
+    },
+    {
+      "before": "QUARTZ SHOP",
+      "property": "Text",
+      "after": "QUARTZ WORKSHOP",
+      "path": "Workspace.MiningAway.Map.QuartzShop.ShopSign.Front.ShopName"
+    },
+    {
+      "before": true,
+      "property": "Enabled",
+      "after": false,
+      "path": "Workspace.MiningAway.Map.RubyShop.ProximityPrompt"
+    },
+    {
+      "before": "View upgrades",
+      "property": "ActionText",
+      "after": "Open Quartz Workshop",
+      "path": "Workspace.MiningAway.Map.RubyShop.ProximityPrompt"
+    },
+    {
+      "before": "Ruby shop",
+      "property": "ObjectText",
+      "after": "Future field",
+      "path": "Workspace.MiningAway.Map.RubyShop.ProximityPrompt"
+    },
+    {
+      "before": "RUBY SHOP",
+      "property": "Text",
+      "after": "RUBY \u00b7 LATER",
+      "path": "Workspace.MiningAway.Map.RubyShop.ShopSign.Back.ShopName"
+    },
+    {
+      "before": "RUBY SHOP",
+      "property": "Text",
+      "after": "RUBY \u00b7 LATER",
+      "path": "Workspace.MiningAway.Map.RubyShop.ShopSign.Front.ShopName"
+    },
+    {
+      "before": true,
+      "property": "Enabled",
+      "after": false,
+      "path": "Workspace.MiningAway.Map.CobaltShop.ProximityPrompt"
+    },
+    {
+      "before": "View upgrades",
+      "property": "ActionText",
+      "after": "Open Quartz Workshop",
+      "path": "Workspace.MiningAway.Map.CobaltShop.ProximityPrompt"
+    },
+    {
+      "before": "Cobalt shop",
+      "property": "ObjectText",
+      "after": "Future field",
+      "path": "Workspace.MiningAway.Map.CobaltShop.ProximityPrompt"
+    },
+    {
+      "before": "COBALT SHOP",
+      "property": "Text",
+      "after": "COBALT \u00b7 LATER",
+      "path": "Workspace.MiningAway.Map.CobaltShop.ShopSign.Back.ShopName"
+    },
+    {
+      "before": "COBALT SHOP",
+      "property": "Text",
+      "after": "COBALT \u00b7 LATER",
+      "path": "Workspace.MiningAway.Map.CobaltShop.ShopSign.Front.ShopName"
+    },
+    {
+      "before": true,
+      "property": "Enabled",
+      "after": false,
+      "path": "Workspace.MiningAway.Map.VioletShop.ProximityPrompt"
+    },
+    {
+      "before": "View upgrades",
+      "property": "ActionText",
+      "after": "Open Quartz Workshop",
+      "path": "Workspace.MiningAway.Map.VioletShop.ProximityPrompt"
+    },
+    {
+      "before": "Violet shop",
+      "property": "ObjectText",
+      "after": "Future field",
+      "path": "Workspace.MiningAway.Map.VioletShop.ProximityPrompt"
+    },
+    {
+      "before": "VIOLET SHOP",
+      "property": "Text",
+      "after": "VIOLET \u00b7 LATER",
+      "path": "Workspace.MiningAway.Map.VioletShop.ShopSign.Front.ShopName"
+    },
+    {
+      "before": "VIOLET SHOP",
+      "property": "Text",
+      "after": "VIOLET \u00b7 LATER",
+      "path": "Workspace.MiningAway.Map.VioletShop.ShopSign.Back.ShopName"
+    },
+    {
+      "before": true,
+      "property": "Enabled",
+      "after": false,
+      "path": "Workspace.MiningAway.Map.EmeraldShop.ProximityPrompt"
+    },
+    {
+      "before": "View upgrades",
+      "property": "ActionText",
+      "after": "Open Quartz Workshop",
+      "path": "Workspace.MiningAway.Map.EmeraldShop.ProximityPrompt"
+    },
+    {
+      "before": "Emerald shop",
+      "property": "ObjectText",
+      "after": "Future field",
+      "path": "Workspace.MiningAway.Map.EmeraldShop.ProximityPrompt"
+    },
+    {
+      "before": "EMERALD SHOP",
+      "property": "Text",
+      "after": "EMERALD \u00b7 LATER",
+      "path": "Workspace.MiningAway.Map.EmeraldShop.ShopSign.Back.ShopName"
+    },
+    {
+      "before": "EMERALD SHOP",
+      "property": "Text",
+      "after": "EMERALD \u00b7 LATER",
+      "path": "Workspace.MiningAway.Map.EmeraldShop.ShopSign.Front.ShopName"
+    },
+    {
+      "before": "UPGRADE PACKS",
+      "property": "Text",
+      "after": "QUARTZ WORKSHOP",
+      "path": "Workspace.MiningAway.Map.SimpleFlatTestMap.PackStationAssembly.PackStation.TestLabel.Text"
+    },
+    {
+      "before": "DRONE PRINTER",
+      "property": "Text",
+      "after": "DRONE YARD",
+      "path": "Workspace.MiningAway.Map.SimpleFlatTestMap.PrinterAssembly.Printer.TestLabel.Text"
+    }
+  ],
+  "baseline": "fede3a948fb48172c24ce95f32ba749f75ccdd7109a076da6ce5031c8ceedf3d"
+}

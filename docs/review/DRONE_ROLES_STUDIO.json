@@ -1,0 +1,60 @@
+{
+  "quartz": [
+    -56,
+    0.5,
+    65
+  ],
+  "place_id": 136098934779395,
+  "spawn": [
+    -56,
+    1.5,
+    23
+  ],
+  "changed": [
+    "ReplicatedStorage.Shared.DroneConfig",
+    "ServerScriptService.DroneRoleEffects",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl",
+    "ServerScriptService.GlobalDroneControl"
+  ],
+  "play_started": false,
+  "mode": "Edit",
+  "sources": {
+    "ServerScriptService.GlobalDroneControl": {
+      "hash": 228940787,
+      "length": 294622,
+      "sha256": "7f1057035e2afe6196c0e0cedad2049f734a632c49cd9a7bb00c21ed7be9eedc"
+    },
+    "ReplicatedStorage.Shared.TacticalHUD": {
+      "hash": 583699677,
+      "length": 20189,
+      "sha256": "364bc3042fd5686902021370380f413b70faf3280a3144543137fd3b3862ea1a"
+    },
+    "ReplicatedStorage.Shared.CrystalAudio": {
+      "hash": 1138997247,
+      "length": 6387,
+      "sha256": "5057652b3cb85998aa7840e53b6a12edf0b73d08361998523f17c36e7d706b68"
+    },
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": {
+      "hash": 1400686272,
+      "length": 230543,
+      "sha256": "0033a51270d02f6a49b1c383f878ecf6ad5c40f7934934f4a583c69137b835b8"
+    },
+    "ServerScriptService.DroneRoleEffects": {
+      "hash": 698433061,
+      "length": 9284,
+      "sha256": "c5e426c5e60b436b210722f49a54f839bfcbc9e0d17105a19fda93832de431ac"
+    },
+    "ServerScriptService.MiningDiscoveries": {
+      "hash": 1740638684,
+      "length": 7317,
+      "sha256": "87036dd88d392a320fd6a46cd69d71f6fa5d6713267fea608aac5b970731b719"
+    },
+    "ReplicatedStorage.Shared.DroneConfig": {
+      "hash": 1300953891,
+      "length": 11454,
+      "sha256": "b5a6cbdb08b39beaaa8a8cef1fc9f61226f01065fc882d093eee211b5e172a46"
+    }
+  },
+  "published": false,
+  "validation": "Applied to the existing Edit-mode place after exact prior Source guards and a seven-source local backup. Read back every generated Source. No Play session or publishing."
+}

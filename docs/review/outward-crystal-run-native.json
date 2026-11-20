@@ -1,0 +1,69 @@
+{
+  "sources": {
+    "ReplicatedStorage.Shared.DroneConfig": "1ef69b142a712808d1bf21d389053f248388b47774f1fd019e036a3eb614584c",
+    "ReplicatedStorage.Shared.TacticalHUD": "99b9bebb63217be2ed261aab092b7e18a6a0ff1bdb75e85d152a43176cd5513f",
+    "ReplicatedStorage.Shared.CrystalAudio": "85ce0b8fd3a8fe73b278f70cb9469996849fe16320dc75a1a38a8181fd12a0e0",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "ad00b4c84c9a29b5503e197315b795158af1f047dcf75567f22a9590fd3fa135",
+    "ServerScriptService.DroneRoleEffects": "c04596e85e081bcf56a184e3e419ab0d4c5c011922fd9f83626549b55ca1165e",
+    "ServerScriptService.MiningDiscoveries": "1b00ffe6a06f6a109eb34b28694bb0d0ea94312ba8c8264946e3f723e1f5e6d8",
+    "ServerScriptService.GlobalDroneControl": "060c8f9388584684771aab1b599f228ad40b31418e26937e52bea0bdcaba91ca"
+  },
+  "universeId": 10774898335,
+  "route": {
+    "id": 124078027733625,
+    "patchChecks": 375,
+    "lastZ": 446,
+    "width": 108,
+    "grove": 19,
+    "universe": 10774898335,
+    "version": 90,
+    "aisleChecks": 113,
+    "patches": 15,
+    "bedChecks": 675,
+    "fields": 5,
+    "firstZ": 126
+  },
+  "roots": {
+    "ServerScriptService": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "StarterPlayer.StarterPlayerScripts": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "ReplicatedStorage.Shared": "Enum.InstanceFileSyncStatus.SyncedAsRoot"
+  },
+  "placeId": 124078027733625,
+  "running": false,
+  "loadedVersion": 90,
+  "referenceLightingMatches": true,
+  "nativeFile": "build/DRONE_GAME.rbxl",
+  "nativeSha256": "0137e8b7b46b74de84dc0d119e27c366b6d28ff6b8da9986c268d5fa44fc0652",
+  "baselineGit": "8781d91dd73c7fd30d79a5942c6d302dff8798bf",
+  "initialTargetMode": "Play",
+  "playStarts": 0,
+  "publication": false,
+  "reference": {
+    "placeId": 14302916915,
+    "universeId": 4945273529,
+    "readOnly": true,
+    "rubyPatch": [
+      30,
+      2,
+      30
+    ],
+    "rubyPopulation": 16,
+    "liveRubyCount": 16,
+    "liveMinNeighborDistance": 1,
+    "crystalSize": [
+      3.135000228881836,
+      6.566902160644531,
+      4.4872307777404785
+    ],
+    "miningOffset": 10,
+    "patchStandbyOffset": 10,
+    "followOffset": 7,
+    "activeInnerBeamRgb": [
+      192,
+      134,
+      80
+    ],
+    "checkerTexture": "rbxassetid://6372755229",
+    "checkerStudsPerTile": 8
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "finalClient": {
+    "wallets": [
+      {
+        "balance": "40",
+        "key": "Quartz",
+        "nameFits": true
+      },
+      {
+        "balance": "0",
+        "key": "Ruby",
+        "nameFits": true
+      },
+      {
+        "balance": "0",
+        "key": "Cobalt",
+        "nameFits": true
+      },
+      {
+        "balance": "0",
+        "key": "Violet",
+        "nameFits": true
+      },
+      {
+        "balance": "0",
+        "key": "Emerald",
+        "nameFits": true
+      }
+    ],
+    "place": 124078027733625,
+    "textClipped": [],
+    "universe": 10774898335,
+    "outlinedDrones": 2,
+    "renderedDrones": 2,
+    "viewport": "515, 339",
+    "obsoleteControls": [],
+    "visibleRocks": {
+      "Quartz": 12,
+      "Ruby": 12,
+      "Cobalt": 6,
+      "Emerald": 8,
+      "ImpactTest": 6,
+      "Violet": 9
+    }
+  },
+  "checks": {
+    "initialStudio": "Already open; shared DRONEREVOLUTION Edit session. Leave open, stop Play.",
+    "baseline": "00b1ebff96ba147278ffa371e951be38e4290983; exact seven installed Source fingerprints matched before export.",
+    "rubyFlow": "Normal Quartz-shop mouse purchase unlocked Ruby: Quartz 100 -> 20. Normal MineOre command mined a real Ruby rock; native converter E sold 14 ore, wallet and HUD Ruby counter both became 14. No currency/cargo/damage grants.",
+    "finalPrinter": "Native E opened the printer yard 33.305 studs from DepotHome, beyond the old 30-stud gate. Mouse bought the 60-Quartz Miner; permanent fleet 1 -> 2, Quartz 100 -> 40.",
+    "finalPack": "Native E bought a free Rare pack, courier had DroneOutline; continuous native E hold opened it. Mouse selected first saved choice, cards 0 -> 1, pending offer cleared, Quartz stayed 40.",
+    "prestige": "Native E opened the actual prestige station; button correctly says Complete the prestige requirements, rather than Return to the depot. Successful earned prestige outside the old home radius is covered by the production-logic regression, not a native earned-prestige run.",
+    "proximity": "Yard and prestige menus closed after leaving; M and O did not open remote menus.",
+    "viewport": "Native desktop 1167x653; simulated iPhone 17 Pro 750x381 and constrained 515x339. All five final mineral names fit. Simulator restored to default.",
+    "console": "Empty after the final native run.",
+    "limits": "No native multiplayer/late join, real device touch/gamepad, production DataStore reconnect/restart, or owner enjoyment approval."
+  }
+}

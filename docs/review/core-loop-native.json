@@ -1,0 +1,111 @@
+{
+  "steps": {
+    "1": {
+      "drones": 1,
+      "firstBagSeconds": 48.8,
+      "capacity": 40,
+      "step": "starter",
+      "grants": false
+    },
+    "2": {
+      "drones": 1,
+      "bag": 0,
+      "sales": 40,
+      "power": 0,
+      "prestiges": 0,
+      "mining": 30,
+      "step": "sold",
+      "wallet": 40
+    },
+    "3": {
+      "drones": 1,
+      "bag": 0,
+      "sales": 40,
+      "power": 1,
+      "prestiges": 0,
+      "mining": 45,
+      "step": "power purchased",
+      "wallet": 20
+    },
+    "4": {
+      "drones": 1,
+      "bag": 40,
+      "sales": 40,
+      "power": 1,
+      "prestiges": 0,
+      "mining": 45,
+      "step": "bag full",
+      "wallet": 20
+    },
+    "5": {
+      "drones": 1,
+      "bag": 0,
+      "sales": 80,
+      "power": 1,
+      "prestiges": 0,
+      "mining": 45,
+      "step": "sold",
+      "wallet": 60
+    },
+    "6": {
+      "drones": 2,
+      "mining": 45,
+      "sales": 80,
+      "step": "permanent miner purchased",
+      "wallet": 0
+    },
+    "7": {
+      "drones": 2,
+      "bag": 40,
+      "sales": 80,
+      "power": 1,
+      "prestiges": 0,
+      "mining": 45,
+      "step": "bag full",
+      "wallet": 0
+    },
+    "8": {
+      "drones": 2,
+      "bag": 0,
+      "sales": 120,
+      "step": "third sale",
+      "wallet": 40
+    },
+    "9": {
+      "drones": 2,
+      "bag": 40,
+      "sales": 120,
+      "power": 1,
+      "prestiges": 0,
+      "mining": 45,
+      "step": "bag full",
+      "wallet": 40
+    },
+    "10": {
+      "drones": 2,
+      "bag": 0,
+      "eligible": true,
+      "sales": 160,
+      "step": "fourth sale",
+      "wallet": 80
+    },
+    "11": {
+      "drones": 3,
+      "bag": 0,
+      "power": 0,
+      "sales": 0,
+      "prestiges": 1,
+      "preservedIds": true,
+      "tools": {
+        "Orbital": 2,
+        "Scrap": 2
+      },
+      "mining": 37.5,
+      "step": "prestige",
+      "wallet": 0
+    }
+  },
+  "result": "PASS native core loop",
+  "method": "Studio Play, normal Command remotes and character movement; no currency, cargo, damage or ownership grants",
+  "scope": "One native player; not multiplayer or an enjoyment verdict"
+}
