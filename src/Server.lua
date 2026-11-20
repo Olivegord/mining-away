@@ -3489,6 +3489,19 @@ do
  local template=Instance.new('Part');template.Name='DigGem';template.Size=Vector3.new(1,1,1)
  scene.dig={origin=origin,holder=holder,template=template,generation=0,recent={},random=Random.new(),
   dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},ops={},published=0,pending={},csg={},blocks={},dust={},dustAt=0}
+ -- Collision groups for the clients' loose rubble: it lands on an invisible
+ -- floor at the bottom of each hole and touches nothing else (players, the
+ -- rock still being carved).
+ pcall(function()
+  local physics=game:GetService('PhysicsService')
+  for _,name in ipairs({'DigRubble','DigRubbleFloor'}) do
+   if not physics:IsCollisionGroupRegistered(name) then physics:RegisterCollisionGroup(name) end
+  end
+  physics:CollisionGroupSetCollidable('DigRubble','Default',false)
+  physics:CollisionGroupSetCollidable('DigRubbleFloor','Default',false)
+  physics:CollisionGroupSetCollidable('DigRubble','DigRubbleFloor',true)
+  physics:CollisionGroupSetCollidable('DigRubble','DigRubble',true)
+ end)
  local dustFolder=holder:FindFirstChild('Dust') or Instance.new('Folder')
  dustFolder.Name='Dust';dustFolder.Parent=holder
  scene.dig.dustFolder=dustFolder
@@ -3636,7 +3649,7 @@ function scene.digActive(p)
 end
 function scene.digRelease(p)
  for _,d in ipairs(p.drones) do
-  scene.digDrop(d)
+  scene.digDrop(d);d.digging=false
   if d.state=='Mine' or d.state=='Warmup' or d.state=='Travel' then d.state='Follow';d.mining=false end
  end
 end
@@ -3644,7 +3657,8 @@ end
 function scene.digDrop(d)
  local dig=scene.dig;local job=d.digJob
  if job then for _,id in ipairs(job.ids) do if dig.claimed[id]==d.id then dig.claimed[id]=nil end end end
- d.digJob=nil;d.digCell=nil;d.digWarm=nil;d.digProgress=nil
+ d.digJob=nil;d.digCell=nil;d.digWarm=nil;d.digProgress=nil;d.digWarmFor=nil
+ if d.digging then d.warmAt=nil end
 end
 -- Pick a seed cell, then grow this drone's chunk around it right now: its
 -- size comes from the drone (DigCube.chunkScale) times cut-size upgrades.
@@ -3746,10 +3760,15 @@ function scene.digDrone(d,p,dt)
  local angle=(d.slot or 1)*2.4
  local goal=top+Vector3.new(math.cos(angle)*1.1,6.5,math.sin(angle)*1.1)
  d.digPoint=top
- if (d.pos-goal).Magnitude>2.4 then d.state='Travel';d.mining=false;d.digWarm=nil;move(d,goal,dt);return end
+ d.digging=true
+ if (d.pos-goal).Magnitude>2.4 then d.state='Travel';d.mining=false;d.digWarm=nil;d.warmAt=nil;move(d,goal,dt);return end
  move(d,goal,dt)
+ -- The field drones' charge-up: the published warmup start and length drive
+ -- the same beam startup on every client.
  d.digWarm=d.digWarm or now
- if now-d.digWarm<.35 then d.state='Warmup';d.mining=false;return end
+ d.digWarmFor=math.clamp((d.stats.warmup or .8)*.75,.3,.9)
+ if not d.mining then d.warmAt=d.digWarm end
+ if now-d.digWarm<d.digWarmFor then d.state='Warmup';d.mining=false;return end
  if not d.mining then d.beamSince=now end
  d.state='Mine';d.mining=true;d.lastBeamAt=now
  job.hp-=d.stats.miningDPS*dt
@@ -3794,7 +3813,8 @@ function scene.digBreak(job,d,p)
  scene.digRock(p,d.owner,last,math.max(1,(job.rock or DigCube.rockDrops(volume))-(job.rockPaid or 0)),center)
  if tier>0 then
   for i=1,treasure and DigCube.TREASURE_GEMS or 1 do
-   table.insert(dig.pending,{at=now+DigCube.PAUSE+(i-1)*.15,p=p,owner=d.owner,tier=tier,volume=volume,position=center+Vector3.new(0,i*.3,0)})
+   -- Gems burst out with the rock (treasure pockets a few beats apart).
+   table.insert(dig.pending,{at=now+(i-1)*.15,p=p,owner=d.owner,tier=tier,volume=volume,position=center+Vector3.new(0,i*.3,0)})
   end
  end
 end
@@ -4226,7 +4246,7 @@ local function snapshotDrone(d)
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,FlightSteering=d.flightSteering or Vector3.zero,
   FlightMass=d.flightMass or 1,FlightResponse=d.flightResponse or 1,FlightWork=d.flightWork==true,
   Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=d.flightSpeed or travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
-  TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=scene.miningWarmup(d,target),
+  TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=d.digWarmFor or scene.miningWarmup(d,target),
   DoubleBeam=d.stats.doubleBeam==1,TwinThrusters=d.stats.twinThrusters==1,OreDuplicator=d.stats.oreDuplicator==1,
   BeamVariant=d.owned.beamVariant,MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
   RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,

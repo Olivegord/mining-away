@@ -1652,7 +1652,16 @@ local function renderDrone(d,dt,now)
    beamSince=s:GetAttribute('MineBreakBeamSince') or now;breakAt=finalAt;breakUntil=finalUntil
   end
  end
- if pickupView and pickupView.dig then pickupView.dig:droneBeam(s,d.emitter.Position,now,d.cubeLook and d.cubeLook.color) end
+ if pickupView and pickupView.dig then
+  pickupView.dig:droneBeam(s,d.emitter.Position,now,d.cubeLook and d.cubeLook.color)
+  -- Digging drones use this same mining beam (charge-up, startup, contact)
+  -- aimed at a hidden plate on their cut in the Dig Cube.
+  local plate=pickupView.dig:beamTarget(s)
+  if plate then
+   part,source,resource=plate,nil,nil;kind='resource';id='dig:'..tostring(s:GetAttribute('DigOp'))
+   extra,extraSource,procId=nil,nil,nil;breakAt,breakUntil=nil,nil
+  end
+ end
  presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
   contact=active,
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
