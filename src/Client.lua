@@ -5,6 +5,7 @@ local RunService=game:GetService('RunService')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
 local TweenService=game:GetService('TweenService')
+WindVortexV1.mount(script)
 local player=Players.LocalPlayer
 local world=workspace:WaitForChild('MiningAway')
 local command=RS:WaitForChild('MiningAway'):WaitForChild('Command')

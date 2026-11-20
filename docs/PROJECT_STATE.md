@@ -1,5 +1,22 @@
 # Shared project context
 
+## November 19 — polish pass after watching Play footage: lights, shards, cash-out, HUD
+
+Owner: "keep working on polishing systems and making sure selling and everything FEELS good." Two 30-second agent-started Play recordings of digging and auto cash-out (stopped; Studio back in Edit) were reviewed frame by frame; frames were pulled with a small AVFoundation tool since ffmpeg is not installed. What they showed and what changed (`6a59676`, then the HUD row order):
+
+- **Drone cubes (`FunFX`):** every working cube strobed a wide colored PointLight on the ground (brightness to 1.45, range 11, 2 Hz). Now a steady 0.45 (0.2 idle) at range 7; belly sparkles 14→6 a second at lower emission; the confetti flash light 3→1.2.
+- **Dig shards** were the pit's own color and vanished against it: now mixed 30–50% toward dark stone. The dust puff is smaller and tighter.
+- **Cash-out (`SaleView.cashOut`):** the `+$` number was 84 pt across the middle of the screen with a caption; it now pops over the player's head at 54 pt, drifts up and fades by 1.4 s. Coins and the counter ticks are unchanged.
+- **HUD (`TacticalHUD`):** the backpack bar eases up and drains on a sale; the battery row shows only below full or while charging/docking, and not on the Dig Cube; "Full bag = cash!" shows only before the first cash-out; on the Dig Cube the first hint reads "Drones dig near you. Keep moving!" (the server publishes `MA_Digging`) instead of "Walk onto the orange field"; mineral rows that appear after a sale sit under the fixed rows so Backpack and Next drone no longer jump.
+
+The second recording confirmed the lights, shards, cash-out position and hints. The HUD row order change was made after it and has not been seen running. Sound, phone layout, the counter sale (`Sale:show`) and multiplayer were not reviewed. After another chat's wind commit (`332bc23`) the server-bundle suites, `test_dig_flow.py` included, stop at "Missing mock service ProximityPromptService"; they passed on `6a59676` before it.
+
+## November 19 — Version 1 wind vortex
+
+Pew’s [Wind Moveset](https://www.youtube.com/watch?v=-RYr9ZNJPGM&t=30s) is the reference. The chosen cast begins at about 29.997 s in the 59.94 fps source. The small wind cups jump between ivory and red until about 30.79, followed by a brief empty beat. The broad eruption starts at about 30.91. Crowns and narrow lances alternate over a darker floor skirt, with several later crests about 0.20 s apart. The final low ring at about 32.92 outruns the column. Dust, suspended rubble, and faint curled filaments have independent tails. Lifetime and easing within each beat are visual estimates.
+
+The authored model is `Workspace["VERSION 1"]`. Its Replay plinth at (-14, 4.68, 11) faces a cast centered at (-17, 4, -7). Its Edit pose shows an airborne crown. In Play, **Cast vortex** starts a shared, replayable 4.32-second visual sequence. The timestamp comes from the server, and each client animates the authored layers locally. The controller works from the model's origin so the whole model can be repositioned. `src/WindVortexV1.lua` owns the timeline. `tools/studio_wind_v1.lua` and `tools/refresh_wind_v1.py` stage and check the exact scoped native export. Routine shared Edit and canonical saves only.
+
 ## November 19 — Dig Cube: chunks break off in real pieces; shards, soft beams, calmer light
 
 Supersedes the drawn cracking below (growing loop, four snaps, target circle, rock-dust motes).
