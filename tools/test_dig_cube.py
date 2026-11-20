@@ -64,6 +64,9 @@ for _,kind in ipairs(D.TESSELLATIONS) do
  end
  local cutTime=(os.clock()-t1)/160
  check(mismatch==0,kind..' crack-out preview matches')
+ local fins=0
+ for _,piece in pairs(cube.pieces) do if cube.touched[piece.cell] and D.thinBox(piece) then fins+=1 end end
+ check(fins==0,kind..' no thin fins left after 160 mixed cuts: '..fins)
  check(math.abs(piecesVolume(cube)+cube.removedVolume-W*W*H)<W*W*H*.002,kind..' rock volume conserved: '..(piecesVolume(cube)+cube.removedVolume))
  check(deepest>=H*.4,kind..' crew digs down: '..deepest)
  check(topAtDepth==nil or topAtDepth<topCells*.5,kind..' deep before the top is cleared: '..tostring(topAtDepth)..'/'..topCells)

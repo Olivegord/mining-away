@@ -675,6 +675,30 @@ function D.chunk(cube: any,seed: number,cutSize: number?,taken: {[number]:any}?,
  return ids
 end
 
+D.FIN=1.1 -- studs: leftover pieces thinner than this are removed with the cut
+-- An oriented box around a piece if it is a thin fin or sliver, else nil.
+-- Thickness is estimated as 2 x volume / largest face area.
+function D.thinBox(piece: any): any?
+ local big
+ for _,f in ipairs(piece.faces) do if not big or f.area>big.area then big=f end end
+ if not big or big.area<1e-6 then return nil end
+ if 2*piece.volume/big.area>=D.FIN then return nil end
+ local n=big.normal
+ local a,b=big.verts[1],big.verts[2]
+ local u=unit(sub(b,a))
+ local v=cross(n,u)
+ local lo={math.huge,math.huge,math.huge};local hi={-math.huge,-math.huge,-math.huge}
+ for _,f in ipairs(piece.faces) do
+  for _,q in ipairs(f.verts) do
+   local p={dot(q,u),dot(q,v),dot(q,n)}
+   for k=1,3 do lo[k]=math.min(lo[k],p[k]);hi[k]=math.max(hi[k],p[k]) end
+  end
+ end
+ local m={(lo[1]+hi[1])*.5,(lo[2]+hi[2])*.5,(lo[3]+hi[3])*.5}
+ local center={u[1]*m[1]+v[1]*m[2]+n[1]*m[3],u[2]*m[1]+v[2]*m[2]+n[2]*m[3],u[3]*m[1]+v[3]*m[2]+n[3]*m[3]}
+ return {center=center,u=u,v=v,n=n,size={hi[1]-lo[1]+.1,hi[2]-lo[2]+.1,hi[3]-lo[3]+.1}}
+end
+
 -- Operations ----------------------------------------------------------------
 -- op = {kind='c', cells={...}} | {kind='s', x,y,z,r} | {kind='b', x,y,z,yaw,sx,sy,sz}
 --    | {kind='y', x,y,z,r,h}; plus tier (gem roll) once it has happened.
@@ -888,6 +912,28 @@ function D.apply(cube: any,op: any): any
      local at=table.find(result.added,piece.id)
      if at then table.remove(result.added,at);table.remove(result.gone,#result.gone) end
     end
+   end
+  end
+ end
+ -- Thin leftovers (fins and slivers between neighboring cuts) go with the
+ -- cut. Each gets a tight oriented box so the rendered rock loses it too.
+ result.boxes={}
+ local check={}
+ for _,id in ipairs(result.cells) do
+  check[id]=true
+  for _,other in ipairs(cube.cells[id].neighbors) do if cube.touched[other] then check[other]=true end end
+ end
+ local ids={}
+ for id in pairs(check) do table.insert(ids,id) end
+ table.sort(ids)
+ for _,id in ipairs(ids) do
+  for _,piece in ipairs(D.piecesOf(cube,id)) do
+   local box=D.thinBox(piece)
+   if box then
+    take(piece)
+    local at=table.find(result.added,piece.id)
+    if at then table.remove(result.added,at);table.remove(result.gone,#result.gone) end
+    table.insert(result.boxes,box)
    end
   end
  end

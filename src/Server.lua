@@ -3541,7 +3541,7 @@ function scene.digBuildRock()
  rock.Parent=dig.holder;dig.rock=rock
 end
 -- Exact cutter shapes for one op (cube-local bounds lo/hi included).
-function scene.digNegatives(op,cells)
+function scene.digNegatives(op,cells,boxes)
  local dig=scene.dig;local cube=dig.cube;local o=dig.origin
  local list={}
  local lo,hi=Vector3.new(math.huge,math.huge,math.huge),Vector3.new(-math.huge,-math.huge,-math.huge)
@@ -3567,6 +3567,13 @@ function scene.digNegatives(op,cells)
   local e=math.sqrt(op.sx^2+op.sz^2)*.5
   grow(Vector3.new(op.x-e,op.y-op.sy*.5,op.z-e),Vector3.new(op.x+e,op.y+op.sy*.5,op.z+e))
  end
+ for _,box in ipairs(boxes or {}) do
+  local b=part();b.Size=Vector3.new(box.size[1],box.size[2],box.size[3])
+  local c=Vector3.new(box.center[1],box.center[2],box.center[3])
+  b.CFrame=CFrame.fromMatrix(o+c,Vector3.new(box.u[1],box.u[2],box.u[3]),Vector3.new(box.v[1],box.v[2],box.v[3]))
+  local e=math.sqrt(box.size[1]^2+box.size[2]^2+box.size[3]^2)*.5
+  grow(c-Vector3.one*e,c+Vector3.one*e)
+ end
  for _,id in ipairs(cells) do
   local cell=cube.cells[id]
   local wedges=DigCube.cellWedges(cube,id)
@@ -3590,7 +3597,7 @@ end
 function scene.digCarve(job)
  local dig=scene.dig
  if job.generation~=dig.generation then return end
- local negatives,lo,hi=scene.digNegatives(job.op,job.cells)
+ local negatives,lo,hi=scene.digNegatives(job.op,job.cells,job.boxes)
  if #negatives==0 then return end
  for i=#dig.blocks,1,-1 do
   local block=dig.blocks[i]
@@ -3732,7 +3739,7 @@ function scene.digBreak(job,d,p)
  -- leftovers go whole, so no thin slivers are left behind).
  local cells={}
  for _,id in ipairs(result.cells) do if cube.removed[id] and not wasRemoved[id] then table.insert(cells,id) end end
- table.insert(dig.csg,{generation=dig.generation,op=op,cells=cells})
+ table.insert(dig.csg,{generation=dig.generation,op=op,cells=cells,boxes=result.boxes})
  scene.digCarveLoop()
  for _,id in ipairs(result.cells) do dig.recent[id]=now end
  -- The gamble: the cut splits, holds for DigCube.PAUSE, then shows a gem or nothing.
