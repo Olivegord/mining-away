@@ -1,5 +1,18 @@
 # Shared project context
 
+## November 19 — colored segment flash, physics rubble, gems with the break, field beam, red sights
+
+Owner request, built in `3394286` (installed as `bc1e307` after the owner ended a Play session; an earlier queued install stopped while Studio was in Play and changed nothing):
+
+- **Segment flash:** every break covers the removed cells (grown 0.06, full height) in the cutting drone's color, holds through the frame pause and fades over 0.2 s. `DigCubeView` learns each cell's drone color from the drones' `DigOp` keys (`cellColor`).
+- **Rubble:** each cell is cut through its middle into 2 or 3 convex pieces (no slivers) at 0.9 scale. The server registers collision groups `DigRubble` and `DigRubbleFloor` (rubble collides only with itself and the floor). The client welds each piece's wedges, releases it with a small pop and spin, and lets Roblox physics drop it onto an invisible floor plate at the hole's bottom; after 1.25–1.6 s pieces are anchored and shrink/fade. Without the groups the old hand-animated slump runs.
+- **Gems:** `digBreak` queues gems at the break (treasure gems 0.15 s apart) and the client reveal fires inside the break burst: two `GemReward` bursts, a lighter `CrystalBreak` burst, two rings, two firework sprays and a sparkle puff, all in the gem's color.
+- **Beam color:** contact sparks and part of every break burst use the drone's beam color.
+- **Field beam:** dig drones now feed `presentation:queueMiningBeam` with a hidden 4×4 plate at their `DigPoint` (`DigCubeView:beamTarget`), so they get the field charge-up and startup. The server publishes `WarmupStart` and a dig warmup of 0.75 × the drone's warmup (0.3–0.9 s) per chunk.
+- **Red sights:** every drone over the cube draws a red line straight down along its beam (two camera-facing ribbons) ending in a soft anti-aliased dot (circle image) that tightens while charging, pulses while cutting and dims when idle.
+
+Agent-started Play check (stopped; Studio back in Edit; no script errors): collision groups registered, loose physics rubble, flashes, rubble floors, beam plates and sights all present; frames show drone-colored segment flashes, red sight dots under each drone, rubble in the pits, gems on the floor and the combo counter. Feel, sound and phone performance not judged. Not published.
+
 ## November 19 — Dig Cube rubble: the rock cracks into many pieces that slump, tip and fade
 
 Owner: "make better rock particles of the actual rock. maybe just crack it a bunch and then push those pieces down and with random orientation and then those pieces fade/ shrink." This replaces the shards that flew up and into the bag (`dcec239`, tuned after).
