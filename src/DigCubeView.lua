@@ -1,15 +1,16 @@
 --!strict
 -- Client effects for the Dig Cube. The rock itself is solid server geometry
--- (blocks carved by exact shapes with Roblox CSG), so this view draws only
--- what happens on it:
---  * cracks that run around the exact outline of each drone's planned cut
---    (a ring, a rectangle, or a rock cell's edge) and glow near the end
+-- (blocks carved by each broken chunk's Voronoi cells, Roblox CSG), so this
+-- view draws what happens on it:
+--  * each drone's chunk is marked on the rock in that drone's color, pulsing
+--    like a field rock under attack, as soon as the drone claims it
+--  * cracks run around the chunk's outline as it is cut, then the split line
 --  * beams with the field rocks' contact chips and ring pulses
---  * the break: the field rocks' own split halves, scaled to the cut, jump
+--  * the break: the field rocks' own split halves, scaled to the chunk, jump
 --    apart with chips and dust, hold (the gamble), then a gem bursts out or
 --    the halves crumble
 --  * the launch pad and tap-to-focus
--- The static cube (built from the replicated seed) supplies cell outlines.
+-- The cube (built from the replicated seed) supplies chunk outlines.
 local DigCube=require('./DigCube')
 local UIS=game:GetService('UserInputService')
 local Players=game:GetService('Players')
@@ -102,9 +103,16 @@ function V:sync()
  if generation~=self.generation then
   for id in pairs(self.cracks) do self:dropCrack(id) end
   self.generation=generation;self.origin=origin
-  self.cube=DigCube.build(seed,holder:GetAttribute('Tessellation'))
+  self.cube=DigCube.build(seed)
   -- Cuts made before this client saw the cube play no effects.
-  self.applied=count
+  self.applied=0
+  while self.applied<count do
+   local entry=self:opAt(self.applied+1)
+   if not entry then break end
+   self.applied+=1
+   local key=string.match(entry,'^c([%d%.]+)')
+   if key then for _,id in ipairs(DigCube.parseKey(key)) do DigCube.remove(self.cube,id) end end
+  end
   self:buildPad()
   return
  end
@@ -113,8 +121,12 @@ function V:sync()
   local s=self:opAt(self.applied+1)
   if not s then break end
   self.applied+=1
-  local op=DigCube.decodeOp(s)
-  if op then self:split(op,now) end
+  local key,tier=string.match(s,'^c([%d%.]+)|?(%d*)$')
+  if key then
+   local op={kind='c',cells=DigCube.parseKey(key),tier=tonumber(tier) or 0}
+   self:split(op,now)
+   for _,id in ipairs(op.cells) do DigCube.remove(self.cube,id) end
+  end
  end
 end
 
@@ -125,7 +137,7 @@ function V:cutBox(op: any): (CFrame?,Vector3?)
   local lo,hi=Vector3.new(math.huge,math.huge,math.huge),Vector3.new(-math.huge,-math.huge,-math.huge)
   for _,id in ipairs(op.cells) do
    local c=self.cube.cells[id]
-   if c then lo=lo:Min(Vector3.new(c.lo[1],c.lo[2],c.lo[3]));hi=hi:Max(Vector3.new(c.hi[1],c.hi[2],c.hi[3])) end
+   if c then lo=lo:Min(Vector3.new(c.minX,c.y0,c.minZ));hi=hi:Max(Vector3.new(c.maxX,c.y1,c.maxZ)) end
   end
   if lo.X==math.huge then return nil end
   return CFrame.new(o+(lo+hi)*.5),hi-lo
@@ -220,8 +232,7 @@ function V:split(op: any,now: number)
  local center=frame.Position
  local color=self:colorAt(center.Y-self.origin.Y)
  -- Turn the halves to the op's split plane so each cut opens its own way.
- local n=DigCube.splitPlane(op,{0,0,0})
- local yaw=math.atan2(n[3],n[1])
+ local yaw=((op.cells and op.cells[1] or 1)*.6180339887)%1*math.pi*2
  local turned=CFrame.new(center)*CFrame.Angles(0,-yaw,0)
  local edge=math.max(size.X,size.Z)
  local halves,hinge=self:halves(turned,Vector3.new(edge,size.Y,math.min(size.X,size.Z)),color)
@@ -324,68 +335,32 @@ function V:stepSplits(now: number)
  end
 end
 
--- The outline a cut will leave on the surface, as a closed loop of points
--- (world space) at the beam's contact height.
-function V:outline(op: any,point: Vector3): {{Vector3}}
+-- A chunk's outline on the surface: its outer cell edges, ordered around it.
+function V:outline(ids: {number}): ({any},number)
  local o=self.origin
- local y=point.Y+.06
- local loops={}
- local function ring(cx: number,cz: number,r: number)
-  local pts={}
-  for i=0,23 do local a=i/24*math.pi*2;table.insert(pts,Vector3.new(cx+math.cos(a)*r,y,cz+math.sin(a)*r)) end
-  table.insert(loops,pts)
- end
- if op.kind=='s' then
-  local d=(point.Y-o.Y)-op.y
-  ring(o.X+op.x,o.Z+op.z,math.sqrt(math.max(.25,op.r*op.r-d*d)))
- elseif op.kind=='y' then ring(o.X+op.x,o.Z+op.z,op.r)
- elseif op.kind=='b' then
-  local r=Vector3.new(math.cos(op.yaw),0,math.sin(op.yaw));local f=Vector3.new(-math.sin(op.yaw),0,math.cos(op.yaw))
-  local c=Vector3.new(o.X+op.x,y,o.Z+op.z)
-  local hx,hz=op.sx*.5,op.sz*.5
-  table.insert(loops,{c+r*hx+f*hz,c-r*hx+f*hz,c-r*hx-f*hz,c+r*hx-f*hz})
- else
-  for _,id in ipairs(op.cells) do
-   local cell=self.cube.cells[id]
-   if cell then
-    local top
-    for _,f in ipairs(cell.faces) do if f.normal[2]>.9 and (not top or f.area>top.area) then top=f end end
-    if top then
-     local pts={}
-     for _,v in ipairs(top.verts) do table.insert(pts,Vector3.new(o.X+v[1],y,o.Z+v[3])) end
-     table.insert(loops,pts)
-    end
-   end
-  end
- end
- return loops
+ local edges=DigCube.outline(self.cube,ids)
+ local y=o.Y+self.cube.cells[ids[1]].y1+.06
+ local out={}
+ for _,e in ipairs(edges) do table.insert(out,{a=Vector3.new(o.X+e.ax,y,o.Z+e.az),b=Vector3.new(o.X+e.bx,y,o.Z+e.bz),len=e.len}) end
+ return out,y
 end
 
--- Cracks for one drone's planned cut: they run around the outline of exactly
--- what the cut will remove, then the split line appears across it.
-function V:buildCrack(droneId: string,key: string,point: Vector3,mine: boolean)
- local op=DigCube.decodeOp(key)
- if not op or not self.cube then return nil end
- local edges={};local total=0
- for _,loop in ipairs(self:outline(op,point)) do
-  for i=1,#loop do
-   local a,b=loop[i],loop[i%#loop+1]
-   local len=(b-a).Magnitude
-   if len>.05 then table.insert(edges,{a=a,b=b,start=total,len=len});total+=len end
-  end
+-- A drone's chunk: marked in the drone's color as soon as it is claimed,
+-- then cracks run around its outline as it is cut, then the split line.
+function V:buildCrack(droneId: string,key: string,mine: boolean,color: Color3?)
+ local ids=DigCube.parseKey(key)
+ if #ids==0 or not self.cube then return nil end
+ for _,id in ipairs(ids) do if not self.cube.cells[id] or self.cube.removed[id] then return nil end end
+ local edges,y=self:outline(ids)
+ local total=0
+ for _,e in ipairs(edges) do e.start=total;total+=e.len end
+ local sp=DigCube.split(self.cube,ids)
+ local seams={}
+ for _,c in ipairs(sp.chords) do
+  table.insert(seams,{a=Vector3.new(self.origin.X+c.ax,y+.01,self.origin.Z+c.az),b=Vector3.new(self.origin.X+c.bx,y+.01,self.origin.Z+c.bz)})
  end
- local frame,size=self:cutBox(op)
- local seam
- if frame and size then
-  local n=DigCube.splitPlane(op,{0,0,0})
-  local across=Vector3.new(-n[3],0,n[1])
-  across=across.Magnitude>.01 and across.Unit or Vector3.xAxis
-  local half=math.min(size.X,size.Z)*.45
-  local c=Vector3.new(frame.Position.X,point.Y+.07,frame.Position.Z)
-  seam={a=c-across*half,b=c+across*half}
- end
- local crack={key=key,op=op,edges=edges,total=math.max(.5,total),seam=seam,parts={},seamPart=nil,progress=0,seen=0,
-  dustAt=0,since=os.clock(),mine=mine}
+ local crack={key=key,ids=ids,edges=edges,total=math.max(.5,total),seams=seams,parts={},marks={},seamParts={},progress=0,seen=0,
+  dustAt=0,since=os.clock(),mine=mine,color=color or HOT}
  self.cracks[droneId]=crack
  return crack
 end
@@ -394,7 +369,8 @@ function V:dropCrack(droneId: string)
  local crack=self.cracks[droneId]
  if not crack then return end
  for _,p in pairs(crack.parts) do p:Destroy() end
- if crack.seamPart then crack.seamPart:Destroy() end
+ for _,p in pairs(crack.marks) do p:Destroy() end
+ for _,p in pairs(crack.seamParts) do p:Destroy() end
  self.cracks[droneId]=nil
 end
 
@@ -411,12 +387,17 @@ end
 
 function V:drawCrack(crack: any,now: number)
  local p=crack.progress
+ -- The mark: the whole outline in the drone's color, pulsing like a field
+ -- rock under attack (brighter for your own crew).
+ local wave=.5+.5*math.cos((now-crack.since)*7.5)
+ local markAlpha=crack.mine and .50-.43*wave or .7
+ for i,e in ipairs(crack.edges) do
+  crack.marks[i]=self:line(crack.marks[i],e.a+Vector3.yAxis*.01,e.b+Vector3.yAxis*.01,.16,crack.color:Lerp(Color3.new(1,1,1),.35),markAlpha)
+ end
+ -- Cracks run around the outline as the cut goes, darkening the mark.
  local heat=math.clamp((p-.74)/.26,0,1)
  local color=CRACK:Lerp(HOT,heat*.8)
- local width=.13+.1*p
- -- Your own crew's cuts pulse like a field rock under attack.
- local pulse=crack.mine and .35*(.5+.5*math.cos((now-crack.since)*7.5)) or 0
- -- Cracks run around the whole outline over most of the cut.
+ local width=.12+.1*p
  local reach=math.clamp((p-.02)/.7,0,1)*crack.total
  local tipAt
  for i,e in ipairs(crack.edges) do
@@ -425,7 +406,7 @@ function V:drawCrack(crack: any,now: number)
    if crack.parts[i] then crack.parts[i].Transparency=1 end
   else
    local tip=e.a:Lerp(e.b,r)
-   crack.parts[i]=self:line(crack.parts[i],e.a,tip,width,color,pulse)
+   crack.parts[i]=self:line(crack.parts[i],e.a+Vector3.yAxis*.02,tip+Vector3.yAxis*.02,width,color,0)
    if r<1 then tipAt=tip end
   end
  end
@@ -433,12 +414,12 @@ function V:drawCrack(crack: any,now: number)
   crack.dustAt=now+.16
   self.ctx.presentation.work:burst(tipAt,Vector3.yAxis,self:colorAt(tipAt.Y-self.origin.Y):Lerp(STONE_LIGHT,.3),3,workspace:GetServerTimeNow())
  end
- if crack.seam then
-  local g=math.clamp((p-.7)/.22,0,1)
+ local g=math.clamp((p-.7)/.22,0,1)
+ for i,sm in ipairs(crack.seams) do
   if g>0 then
-   local m=(crack.seam.a+crack.seam.b)*.5
-   crack.seamPart=self:line(crack.seamPart,m:Lerp(crack.seam.a,g),m:Lerp(crack.seam.b,g),width,color,0)
-  elseif crack.seamPart then crack.seamPart.Transparency=1 end
+   local m=(sm.a+sm.b)*.5
+   crack.seamParts[i]=self:line(crack.seamParts[i],m:Lerp(sm.a,g),m:Lerp(sm.b,g),width,color,0)
+  elseif crack.seamParts[i] then crack.seamParts[i].Transparency=1 end
  end
 end
 
@@ -450,10 +431,10 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  if type(key)~='string' then key='' end
  local point=source:GetAttribute('DigPoint')
  local crack=self.cracks[id]
- if crack and crack.key~=key then self:dropCrack(id);crack=nil end
+ if crack and 'c'..crack.key~=key then self:dropCrack(id);crack=nil end
  if not crack and key~='' and typeof(point)=='Vector3' then
   local player=Players.LocalPlayer
-  crack=self:buildCrack(id,key,point,player~=nil and source:GetAttribute('Owner')==player.UserId)
+  crack=self:buildCrack(id,string.sub(key,2),player~=nil and source:GetAttribute('Owner')==player.UserId,color)
  end
  local progress=source:GetAttribute('DigProgress') or 0
  if crack then crack.progress=math.max(crack.progress,progress);crack.seen=now end

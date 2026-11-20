@@ -60,8 +60,8 @@ C.CATALOG={
  card('T02','Battle Formation','Tradeoff',{combat=.60,mining=-.20},'+60% fleet combat shot damage; −20% mining output'),
  card('T03','Heavy Cargo','Tradeoff',{capacity=.60,speed=-.15},'+60% player backpack space; −15% drone speed'),
  card('T04','Hot Emitters','Tradeoff',{startup=1,health=-.20},'Double fleet startup rate alone; −20% maximum hull'),
- card('F12','Wide Cutters','Fleet',{cut=.5},'+50% Dig Cube blast: every cut blasts out neighboring cells too, with bigger gems'),
- card('D21','Quarry Saw','Individual',{cut=1,mining=-.15},'Double this drone’s Dig Cube blast: huge multi-cell cuts and gems; −15% mining output'),
+ card('F12','Wide Cutters','Fleet',{cut=.5},'+50% Dig Cube chunk size: every drone breaks off bigger chunks that drop more rock'),
+ card('D21','Quarry Saw','Individual',{cut=1,mining=-.15},'Double this drone’s Dig Cube chunk size: huge chunks and more rock; −15% mining output'),
 }
 C.FALLBACK={
  card('R01','Mining Reserve','Fleet',{mining=.10},'+10% mining output; repeatable until cap'),
@@ -172,7 +172,7 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={cutSize='Dig blast size',doubleBeam='Laser count bonus',twinThrusters='Thruster kit',oreDuplicator='Duplicator kit',aftershock='Crack echo damage',reclaim='Battery per break',earlyDrop='Extra early ore',batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
+local statLabels={cutSize='Dig chunk size',doubleBeam='Laser count bonus',twinThrusters='Thruster kit',oreDuplicator='Duplicator kit',aftershock='Crack echo damage',reclaim='Battery per break',earlyDrop='Extra early ore',batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
 statLabels.liveWire='High-battery damage bonus'
 local function vector(p,c)
  local out={fieldCharge=Workshop.effect(p,'fieldCharge',c),capacity=C.capacity(p,c),magnetBonus=C.magnetBonus(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}

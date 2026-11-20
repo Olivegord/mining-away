@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 19 — back to Voronoi chunks, sized per drone; ore arcs
+
+Owner: "nah" to the shape cutters. Go back to a **Voronoi system**: each drone takes out **a single chunk, marked as such**. Keep it flexible: **some drones start with tiny chunks, others larger ones, so they collect more rock**. **Give ores their arc back.**
+
 ## November 19 — perfect shapes, no jagged leftovers
 
 Still too jagged: **spheres should cut out a perfect sphere**, and most cuts left **a bunch of extraneous little edges**. The owner suggested using the **negate feature of parts** (done with runtime CSG, `SubtractAsync`).
