@@ -77,6 +77,30 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
  end
  -- The same streak-and-ember sparks for other breakable rock (the Dig Cube).
  function self:fireworks(point,ground,color,strength,now,count) releaseSparks(point,ground,color,strength,now,count) end
+ -- The split's eight tumbling pieces (two tink when they land) and its pop,
+ -- exactly as a field rock throws them, for other breakable rock.
+ function self:breakPieces(point,ground,stone,strength,now,owned,material)
+  for i=1,8 do
+   if #self.pieces>=48 then break end
+   local theta=i*2.399963+now%3
+   local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
+   local chip=part(parent,'WedgePart','CrystalBreakPiece',stone:Lerp(STONE_LIGHT,variation:NextNumber(.05,.30)))
+   local size=strength*variation:NextNumber(.20,.48)
+   chip.Size=Vector3.new(size*.55,size*variation:NextNumber(1.35,2.65),size)
+   chip.Material=material or Enum.Material.SmoothPlastic
+   local origin=point+direction*.22
+   chip.Position=origin
+   track(chip,now,origin,direction*(7+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
+    ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
+    (i==2 or i==7) and (owned and .64 or .39) or nil,.99)
+  end
+  if #self.pieces<48 then
+   local spark=part(parent,'Part','CrystalSplitSpark',stone:Lerp(STONE_LIGHT,.40))
+   spark.Shape=Enum.PartType.Ball;spark.Material=Enum.Material.Concrete
+   spark.Size=Vector3.one*.10;spark.Position=point
+   self.pieces[#self.pieces+1]={p=spark,at=now,duration=.19,burst=true,size=strength}
+  end
+ end
  function self:seamBurst(r,now,strength)
   local point=r.restPose.Position+Vector3.yAxis*r.view.Size.Y*.22
   local ground=r.source:GetAttribute('GroundY') or point.Y-3

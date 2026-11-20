@@ -33,7 +33,7 @@ local function fxPart(parent: Instance,name: string,color: Color3,class: string?
 end
 
 function V.new(ctx: any)
- local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,cube=nil,origin=Vector3.zero,
+ local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},flashes={},pending={},cube=nil,origin=Vector3.zero,
   generation=-1,applied=0,random=Random.new(),connections={},tapAt=0},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
@@ -110,7 +110,7 @@ function V:sync()
  local count=holder:GetAttribute('OpCount') or 0
  if generation~=self.generation then
   for _,f in ipairs(self.frags) do self:dropShard(f) end
-  self.frags={}
+  self.frags={};self.mine={}
   self.generation=generation;self.origin=origin
   self.cube=DigCube.build(seed)
   -- Cuts made before this client saw the cube play no effects.
@@ -330,61 +330,120 @@ function V:stepShards(now: number)
  end
 end
 
--- A piece breaks off: shards, one dust puff, a crack sound and a camera
--- beat. The last piece of a chunk is the bigger hit; if a gem is inside it
--- shows after the hold (the gamble).
+-- A break plays the field rocks' whole break, in the same order:
+--  * a frame pause first (your own breaks only): the piece flashes hot and
+--    holds for a few frames before anything moves (ImpactFreeze held a field
+--    rock one or two frames; held a little longer here so it is felt)
+--  * then, together: split, impact and tink sounds; the combo counter and
+--    camera hit; eight spark streaks and embers; the ground shock ring; the
+--    break particle burst; eight tumbling pieces that tink as they land; the
+--    pop. The shards (the real rock) stand in for the two opening halves.
+-- A piece that breaks before the last is the old crack beat (seam burst):
+-- chips, two sparks, a lighter particle burst and the small ring.
+local HOLD_PIECE,HOLD_SPLIT,HOLD_HEAVY=2/60,3/60,5/60
+local FLASH=Color3.fromRGB(255,249,216)
+function V:flash(op: any,untilAt: number)
+ local o=self.origin
+ local parts={}
+ for n,id in ipairs(op.cells) do
+  if n>6 then break end
+  local c=self.cube.cells[id]
+  for _,w in ipairs(DigCube.polyWedges(c.poly,c.y1+.04,c.y1+.12)) do
+   local part=fxPart(self.fx,'DigBreakFlash',FLASH,'WedgePart');part.Transparency=.3
+   part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+   part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+    Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+   table.insert(parts,part)
+  end
+ end
+ table.insert(self.flashes,{parts=parts,untilAt=untilAt})
+end
+function V:stepHolds(now: number)
+ for i=#self.flashes,1,-1 do
+  local f=self.flashes[i]
+  if now>=f.untilAt then
+   for _,part in ipairs(f.parts) do part:Destroy() end
+   table.remove(self.flashes,i)
+  end
+ end
+ for i=#self.pending,1,-1 do
+  local e=self.pending[i]
+  if now>=e.at then table.remove(self.pending,i);e.run() end
+ end
+end
 function V:split(op: any,now: number)
  local cube=self.cube;local o=self.origin
  local first=cube.cells[op.cells[1]]
  if not first then return end
  local _,cx,cz=DigCube.chunkArea(cube,op.cells)
- local volume=DigCube.volume(cube,op.cells)
- local bulk=volume^(1/3)
+ local bulk=DigCube.volume(cube,op.cells)^(1/3)
  local center=o+Vector3.new(cx,(first.y0+first.y1)*.5,cz)
- local top=o+Vector3.new(cx,first.y1,cz)
- local color=self:colorAt(first.y1-.01,cx,cz)
- self:shards(op,now,center)
+ local owned=false
+ for _,id in ipairs(op.cells) do if self.mine[id] then owned=true;self.mine[id]=nil end end
+ local strength=math.clamp(bulk*.36,.9,2.45)
+ local heavy=owned and strength>=1.35
+ local hold=0
+ if owned and not self:reduced() and now-(self.heldAt or -10)>=(op.partial and .9 or .3) then
+  hold=op.partial and HOLD_PIECE or heavy and HOLD_HEAVY or HOLD_SPLIT
+  self.heldAt=now
+  self:flash(op,now+hold)
+ end
+ self:shards(op,now+hold,center)
+ local info={center=center,point=o+Vector3.new(cx,first.y1,cz),ground=o.Y+first.y0,bulk=bulk,strength=strength,owned=owned,heavy=heavy,
+  color=self:colorAt(first.y1-.01,cx,cz)}
+ if hold>0 then table.insert(self.pending,{at=now+hold,run=function() self:burst(op,info) end})
+ else self:burst(op,info) end
+ if not op.partial and op.tier>0 then
+  table.insert(self.splits,{at=now+hold,tier=op.tier,treasure=op.treasure,center=center,size=bulk,revealed=false})
+ end
+end
+function V:burst(op: any,e: any)
  local ctx=self.ctx
- local serverNow=workspace:GetServerTimeNow()
- local floor=o.Y+first.y0
- -- Particles much lighter than the rock: in the rock's own color the whole
- -- burst disappeared against the pit.
- local vivid=color:Lerp(Color3.fromRGB(255,246,226),.62)
+ local now=workspace:GetServerTimeNow()
+ local point,ground,strength=e.point,e.ground,e.strength
+ local volume=e.owned and 1 or .62
+ -- Particles much lighter than the rock: in the rock's own color the burst
+ -- disappears against the pit. Pieces are darker, like the shards.
+ local vivid=e.color:Lerp(Color3.fromRGB(255,246,226),.62)
+ local dark=e.color:Lerp(SHARD_DARK,.4)
  local lively=not self:reduced()
  local rock=self.holder and self.holder:FindFirstChild('Rock')
  local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
  if op.partial then
   -- Each piece of a chunk cracks a step higher, building to the full split.
-  if ctx.audio then ctx.audio:play('crystal_impact',top,{pitch=.88+.14*(op.stage or 1)+self.random:NextNumber(-.03,.03),level=.85,rockSize=bulk}) end
-  self:puff(top,color,.8,4)
-  -- The field rocks' break particles and chips, smaller than the full split.
+  if ctx.audio then
+   ctx.audio:play('crystal_impact',point,{pitch=.88+.14*(op.stage or 1)+self.random:NextNumber(-.03,.03),level=volume*.9,rockSize=e.bulk})
+   ctx.audio:play('crystal_release_tink',point,{level=volume*.5,pitch=1+.1*(op.stage or 1)})
+  end
   if lively then
-   if ctx.effects then ctx.effects.ImpactParticles(top,vivid,1.15,'CrystalBreak',nil,vivid,nil,.8) end
-   if ctx.impact and surface then ctx.impact:chips(serverNow,top,Vector3.yAxis,surface,3,floor) end
-   if ctx.beat then ctx.beat('Split',center,serverNow,.45) end
+   if ctx.impact then
+    if surface then ctx.impact:chips(now,point,Vector3.yAxis,surface,4,ground) end
+    ctx.impact:fireworks(point,ground,vivid,strength,now,3)
+   end
+   if ctx.effects then
+    ctx.effects.ImpactParticles(point,vivid,strength,'CrystalBreak',nil,vivid,nil,.55)
+    ctx.effects.Pulse(point+Vector3.yAxis*.1,vivid,.3,2.6*strength,.24,Vector3.yAxis,.78)
+   end
+   if ctx.beat then ctx.beat('Split',point,now,.55*volume) end
   end
   return
  end
  if ctx.audio then
-  ctx.audio:play('crystal_split',top,{rockSize=bulk})
-  ctx.audio:play('crystal_release_tink',top,{level=.8})
+  ctx.audio:play('crystal_split',point,{level=volume,rockSize=e.bulk})
+  ctx.audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
+  ctx.audio:play('crystal_release_tink',point,{level=volume})
  end
- self:puff(top,color,1.25,8)
- -- The full split: the field rocks' break burst, a ground shock ring, sparks.
- if lively then
-  local strength=math.clamp(bulk/4,1,2.2)
-  if ctx.effects then
-   ctx.effects.ImpactParticles(top,vivid,strength*1.3,'CrystalBreak',nil,vivid)
-   ctx.effects.Pulse(Vector3.new(center.X,floor+.09,center.Z),vivid,strength*.6,strength*6.5,.5)
-  end
-  if ctx.impact then
-   ctx.impact:fireworks(center,floor,vivid,strength,serverNow,4)
-   if surface then ctx.impact:chips(serverNow,top,Vector3.yAxis,surface,4,floor) end
-  end
-  if ctx.beat then ctx.beat(bulk>6 and 'HeavySplit' or 'Split',center,serverNow,math.clamp(.5+bulk/9,.6,1.25)) end
+ if not lively then return end
+ -- Combo counter and the camera hit, shared with the field rocks.
+ if ctx.splitBeat then ctx.splitBeat(point,strength,now,false,e.owned,nil)
+ elseif ctx.beat then ctx.beat(e.heavy and 'HeavySplit' or 'Split',point,now,math.clamp(strength*.58,.6,1.35)*volume) end
+ if ctx.impact then
+  ctx.impact:fireworks(point,ground,vivid,strength,now,8)
+  ctx.impact:breakPieces(point,ground,dark,strength,now,e.owned,surface and surface.Material or nil)
  end
- if op.tier>0 then
-  table.insert(self.splits,{at=now,tier=op.tier,treasure=op.treasure,center=center,size=bulk,revealed=false})
+ if ctx.effects then
+  ctx.effects.Pulse(Vector3.new(point.X,ground+.085,point.Z),vivid,strength*.55,strength*6.6,.58)
+  ctx.effects.ImpactParticles(point,vivid,strength*.83,'CrystalBreak',nil,vivid)
  end
 end
 
@@ -490,8 +549,14 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
   -- The shared energy bloom gives beams and sparks their glow.
   local work=self.ctx.presentation and self.ctx.presentation.work
   if work and work.energyBloom then work:energyBloom() end
-  beam={root=root,a=a,body=body,core=core,sparks=sparks,on=false}
+  beam={root=root,a=a,body=body,core=core,sparks=sparks,on=false,mine=mine}
   self.beams[id]=beam
+ end
+ -- Remember which cells this player's own drones are cutting: their breaks
+ -- get the frame pause, full volume and the combo.
+ if beam.mine and beam.key~=key then
+  beam.key=key
+  for _,cell in ipairs(DigCube.parseKey(string.sub(key,2))) do self.mine[cell]=true end
  end
  beam.root.CFrame=CFrame.new(point)
  beam.a.Position=from-point
@@ -685,6 +750,7 @@ function V:update()
  local now=os.clock()
  self:stepSparkles(now)
  self:stepBeams(now)
+ self:stepHolds(now)
  self:stepSplits(now)
  self:stepDust(now)
  self:stepShards(now)

@@ -71,7 +71,8 @@ local function comboBreak(now)
  soundscape:play('crystal_release_tink',nil,{pitch=1+math.min(combo.count,12)*.06,level=.8})
  return 1+math.min(combo.count-1,10)*.07
 end
-rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism,owned,mineral)
+-- Shared by every rock break (field rocks and the Dig Cube): combo and camera hit.
+rockDamage.splitBeat=function(position,strength,now,prism,owned,mineral)
  if owned and not prism then strength*=comboBreak(now) end
  if prism then
   presentation:crystalKick(position,strength,now,true)
@@ -79,7 +80,8 @@ rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,s
   local heavy=owned and strength>=1.35
   cameraBeat(heavy and 'HeavySplit' or 'Split',position,now,math.clamp(strength*.58,.60,1.35)*(owned and 1 or .62))
  end
-end,cameraBeat,function(name)
+end
+rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,rockDamage.splitBeat,cameraBeat,function(name)
  local folder=command.Parent:FindFirstChild('CrystalFractures')
  return folder and folder:FindFirstChild(name)
 end)
@@ -1901,7 +1903,7 @@ if profile then pickupView.sales:receiveProfile(profile) end
 pickupView.crew=CrewView.new({gui=safeRoot,player=player,world=world,localFX=localFX,command=command,audio=soundscape,
  presentation=presentation,reduced=CrystalImpactView.reducedMotion,hidden=menusVisible,profile=function() return profile end})
 pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,presentation=presentation,
- beat=cameraBeat,reduced=CrystalImpactView.reducedMotion,impact=rockDamage.feedback,effects=RoleVisuals,
+ beat=cameraBeat,splitBeat=rockDamage.splitBeat,reduced=CrystalImpactView.reducedMotion,impact=rockDamage.feedback,effects=RoleVisuals,
  fractures=function(name) local folder=command.Parent:FindFirstChild('CrystalFractures');return folder and folder:FindFirstChild(name) end})
 RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function() pickupView.sales:update();pickupView.crew:update();pickupView.dig:update() end)
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
