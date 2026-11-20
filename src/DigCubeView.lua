@@ -3,15 +3,16 @@
 -- (blocks carved by each broken piece's Voronoi cells, Roblox CSG), so this
 -- view draws what happens on it:
 --  * a chunk comes away in pieces (the server breaks its middle first, then
---    the rock around it). Each piece that breaks shatters into shards cut
---    from its real cells: they pop out, tumble, land on the pit floor and fly
---    into their owner's bag when the server credits the rock
---  * one soft ribbon beam per drone with a few sparks where it touches
---  * one lit dust puff per break; a gem (after the hold) gets the gem burst
---    and a name banner
+--    the rock around it). Each piece that breaks is cracked into rubble cut
+--    from its real cells, which slumps into the hole, tips over and fades;
+--    one pebble stays to collect and flies to its owner when credited
+--  * each break plays the field rocks' break: frame pause, sounds, combo,
+--    camera hit, sparks, shock ring, particle burst, tumbling pieces
+--  * one ribbon beam per drone with chips and sparks where it touches
+--  * a gem (after the hold) gets the gem burst and a name banner
 --  * a dim lamp on the player down in the pit, the launch pad and tap-to-focus
--- Nothing is drawn on the rock before it breaks: no target marks or crack
--- lines, and nothing here uses Neon, so gems stay the brightest thing.
+-- Nothing is drawn on the rock before it breaks (no target marks or crack
+-- lines) and nothing here uses Neon.
 local DigCube=require('./DigCube')
 local UIS=game:GetService('UserInputService')
 local Players=game:GetService('Players')
@@ -171,85 +172,89 @@ function V:puff(at: Vector3,color: Color3,scale: number,glints: number)
  task.delay(1.3,function() anchor:Destroy() end)
 end
 
--- Shards: every cell of a broken piece splits into prisms cut from its own
--- outline, so what flies out is the rock that was there. Each one is thrown
--- to a landing spot chosen on the real pit floor (never up onto a wall).
-local SHARD_CAP=90
+-- Rubble: the broken rock itself. Every cell of a broken piece is cracked
+-- into many prisms cut from its own outline (its fan triangles, each split
+-- again across its longest edge, then into an upper and a lower layer), so
+-- for a moment the hole is filled with exactly the rock that was there,
+-- cracked apart. The pieces are then pushed down: each one slumps to the
+-- floor of the hole, tipping to a random orientation as it goes, rests a
+-- beat, then shrinks and fades. The crack spreads outward from the middle of
+-- the break. One small pebble per rock drop stays behind as the thing to
+-- collect and flies to its owner when the server credits it.
+local SHARD_FULL,SHARD_LAYERS,SHARD_COARSE=110,190,260 -- live pieces: detail steps down as these fill
 local SHARD_DARK=Color3.fromRGB(46,38,36)
-local SHARD_SCALE=.7
-local SHARD_WAIT=2.2 -- seconds uncollected rock keeps all its shards
-function V:throw(f: any,now: number,from: Vector3,target: Vector3,rise: number)
- local o=self.origin
- local top=DigCube.surfaceAt(self.cube,target.X-o.X,target.Z-o.Z) or 0
- local land=Vector3.new(target.X,o.Y+top+f.rest,target.Z)
- local apex=math.max(from.Y,land.Y)+rise
- local up=math.sqrt(2*GRAVITY*(apex-from.Y))
- local T=up/GRAVITY+math.sqrt(2*(apex-land.Y)/GRAVITY)
- f.at=now;f.from=from;f.T=T;f.land=land
- f.v=Vector3.new((land.X-from.X)/T,up,(land.Z-from.Z)/T)
+local SHARD_GAP=.93 -- pieces sit slightly apart, so the cracks between them show
+local SHARD_FADE=.38
+local function splitTriangle(tri: {{number}},t: number): ({{number}},{{number}})
+ local best,longest=1,-1
+ for k=1,3 do
+  local a,b=tri[k],tri[k%3+1]
+  local d=(a[1]-b[1])^2+(a[2]-b[2])^2
+  if d>longest then best,longest=k,d end
+ end
+ local a,b,c=tri[best],tri[best%3+1],tri[(best+1)%3+1]
+ local m={a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t}
+ return {a,m,c},{m,b,c}
 end
 function V:shards(op: any,now: number,center: Vector3)
  local o=self.origin;local cube=self.cube
  local made={}
  for _,id in ipairs(op.cells) do
   local c=cube.cells[id]
-  if c and #self.frags<SHARD_CAP+20 then
+  local live=#self.frags
+  if c and live<SHARD_COARSE then
    local poly=c.poly;local n=#poly
-   -- Over budget: the cell flies as one smaller block.
-   local whole=#self.frags+3>SHARD_CAP or n<=3
    local tris={}
-   if whole then tris[1]=poly
-   else
-    -- At most three shards a cell: runs of its fan triangles, joined.
-    local run=math.ceil((n-2)/3)
-    for k=2,n-1,run do
-     local piece={poly[1]}
-     for j=k,math.min(n,k+run) do table.insert(piece,poly[j]) end
-     table.insert(tris,piece)
-    end
+   for k=2,n-1 do
+    local tri={poly[1],poly[k],poly[k+1]}
+    if live<SHARD_FULL then
+     local left,right=splitTriangle(tri,self.random:NextNumber(.36,.64))
+     table.insert(tris,left);table.insert(tris,right)
+    else table.insert(tris,tri) end
    end
+   local thick=c.y1-c.y0
    for _,tri in ipairs(tris) do
-    local mx,mz=0,0
-    for _,v in ipairs(tri) do mx+=v[1];mz+=v[2] end
-    mx/=#tri;mz/=#tri
-    local mid=o+Vector3.new(mx,(c.y0+c.y1)*.5,mz)
-    -- Darker than the pit (fresh-broken rock) so the shards read against it.
-    local color=self:colorAt(c.y1-.01,mx,mz):Lerp(SHARD_DARK,self.random:NextNumber(.3,.5))
-    local inverse=CFrame.new(mid):Inverse()
-    local parts={}
-    for _,w in ipairs(DigCube.polyWedges(tri,c.y0,c.y1)) do
-     local part=fxPart(self.fx,'DigShard',color,'WedgePart');part.CastShadow=true
-     local size=Vector3.new(w.size[1],w.size[2],w.size[3])
-     local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
-      Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
-     table.insert(parts,{part=part,size=size,rel=inverse*frame})
-    end
-    if #parts>0 then
-     local k=whole and SHARD_SCALE*.55 or SHARD_SCALE
-     local axis=Vector3.new(self.random:NextNumber(-1,1),self.random:NextNumber(-.3,.3),self.random:NextNumber(-1,1))
-     local out=Vector3.new(mid.X-center.X,0,mid.Z-center.Z)
-     local far=out.Magnitude
-     local a=self.random:NextNumber(0,math.pi*2)
-     out=far>.3 and out.Unit or Vector3.new(math.cos(a),0,math.sin(a))
-     local f={parts=parts,k=k,scale=k,rest=math.min(c.y1-c.y0,2.4)*.5*k,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
-      spin=self.random:NextNumber(3,7),born=now,pos=mid}
-     -- Land near where it came from; pull in until the spot is no higher
-     -- than this cell's floor (the pit, not the wall beside it).
-     local reach=self.random:NextNumber(1.2,3.6)
-     local target=mid
-     for _=1,4 do
-      local try=mid+out*reach
-      local top=DigCube.surfaceAt(cube,try.X-o.X,try.Z-o.Z)
-      if top and top<=c.y0+.6 then target=try;break end
-      reach*=.5
+    local mx,mz=(tri[1][1]+tri[2][1]+tri[3][1])/3,(tri[1][2]+tri[2][2]+tri[3][2])/3
+    local cut=live<SHARD_LAYERS and c.y0+thick*self.random:NextNumber(.38,.62) or nil
+    local spans=cut and {{c.y0,cut},{cut,c.y1}} or {{c.y0,c.y1}}
+    for _,span in ipairs(spans) do
+     local mid=o+Vector3.new(mx,(span[1]+span[2])*.5,mz)
+     -- The rock's own color, a little darker here and there so the pieces
+     -- read as separate (and fresh-broken faces look deeper).
+     local color=self:colorAt(c.y1-.01,mx,mz):Lerp(SHARD_DARK,self.random:NextNumber(.04,.3))
+     local inverse=CFrame.new(mid):Inverse()
+     local parts={}
+     for _,w in ipairs(DigCube.polyWedges(tri,span[1],span[2])) do
+      local part=fxPart(self.fx,'DigShard',color,'WedgePart');part.CastShadow=true
+      local size=Vector3.new(w.size[1],w.size[2],w.size[3])
+      local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+       Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+      table.insert(parts,{part=part,size=size,rel=inverse*frame})
      end
-     self:throw(f,now+math.min(.09,far*.012),mid,target,(c.y1-c.y0)*.5+self.random:NextNumber(1.2,3.4))
-     table.insert(self.frags,f);table.insert(made,f)
+     if #parts>0 then
+      local height=span[2]-span[1]
+      local out=Vector3.new(mid.X-center.X,0,mid.Z-center.Z)
+      local far=out.Magnitude
+      local a=self.random:NextNumber(0,math.pi*2)
+      out=far>.3 and out.Unit or Vector3.new(math.cos(a),0,math.sin(a))
+      local axis=Vector3.new(self.random:NextNumber(-1,1),self.random:NextNumber(-.35,.35),self.random:NextNumber(-1,1))
+      -- Pushed down to the floor of the hole, lying at whatever angle it lands.
+      local rest=height*.5*SHARD_GAP*self.random:NextNumber(.45,.85)
+      local landY=math.min(mid.Y,o.Y+c.y0+rest)
+      local drop=mid.Y-landY
+      local f={parts=parts,k=SHARD_GAP,scale=0,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
+       turn=self.random:NextNumber(.5,2.4)*(self.random:NextNumber()<.5 and -1 or 1),
+       from=mid,land=Vector3.new(mid.X,landY,mid.Z)+out*self.random:NextNumber(.1,.9),
+       at=now+math.min(.14,far*.016)+self.random:NextNumber(0,.03),
+       T=.2+math.sqrt(2*drop/GRAVITY)*1.15,hop=self.random:NextNumber(.15,.55),
+       wait=self.random:NextNumber(.12,.4),born=now,pos=mid}
+      table.insert(self.frags,f);table.insert(made,f)
+     end
     end
    end
   end
  end
- -- Rock dust the server already dropped here claims these shards.
+ -- Rock dust the server already dropped here claims these pieces.
  for _,entry in pairs(self.dust) do
   if now-entry.born<2.5 and Vector3.new(entry.at.X-center.X,0,entry.at.Z-center.Z).Magnitude<10 then
    for _,f in ipairs(made) do self:claim(entry,f) end
@@ -258,9 +263,9 @@ function V:shards(op: any,now: number,center: Vector3)
  end
 end
 
--- A shard joins the rock dust it came from. The first one is the keeper:
--- if the rock is not collected soon (full bag, owner gone) the others
--- crumble and the keeper stays, smaller, to mark rock still lying there.
+-- A piece joins the rock dust it came from. The first one is the keeper: it
+-- stays as a small pebble until the rock is collected (then flies to its
+-- owner) or the dust expires.
 function V:claim(entry: any,f: any)
  f.dust=entry;table.insert(entry.frags,f)
  if not entry.keeper then entry.keeper=f;f.keeper=true end
@@ -271,62 +276,46 @@ function V:dropShard(f: any)
 end
 
 function V:stepShards(now: number)
- local o=self.origin
- local settle=now>=(self.settleAt or 0)
- if settle then self.settleAt=now+.25 end
  for i=#self.frags,1,-1 do
   local f=self.frags[i]
   local t=now-f.at
   local pos=f.from
   local angle=0
   local k=f.k
+  local clear=0
   if f.flyAt and now>=f.flyAt then
    local player=f.dust and f.dust.owner and Players:GetPlayerByUserId(f.dust.owner)
    local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
    local e=math.clamp((now-f.flyAt)/.36,0,1)
    if not root or not root:IsA('BasePart') or e>=1 then self:dropShard(f);table.remove(self.frags,i);continue end
    pos=f.flyFrom:Lerp(root.Position,e*e)+Vector3.yAxis*math.sin(e*math.pi)*1.6
-   angle=f.spin*f.T+e*4
+   angle=f.turn+e*4
    k=(f.flyK or f.k)*(1-.7*e)
-  elseif t<=0 then
-   pos=f.from
-  elseif t<f.T then
-   pos=f.from+f.v*t-Vector3.yAxis*(GRAVITY*.5*t*t)
-   angle=f.spin*t
-  else
-   local age=t-f.T
-   pos=f.land+Vector3.yAxis*math.max(0,5*age-GRAVITY*.5*age*age)
-   angle=f.spin*f.T
-   -- The rock under it may break later: fall to the new floor.
-   if settle and self.cube then
-    local top=DigCube.surfaceAt(self.cube,pos.X-o.X,pos.Z-o.Z) or 0
-    if o.Y+top+f.rest<f.land.Y-.3 then
-     f.spun=(f.spun or 0)+angle;f.spin=0
-     self:throw(f,now,pos,pos,0)
-    end
-   end
-   -- Nobody is collecting it: it crumbles away.
-   local gone=f.dust and f.dust.goneAt
-   local fadeAt=gone or (not f.dust and f.at+f.T+.45 or nil)
-   if f.dust and age>SHARD_WAIT then
-    if f.keeper then k=f.k*(1-.4*math.clamp((age-SHARD_WAIT)/.3,0,1)) elseif not fadeAt then fadeAt=f.at+f.T+SHARD_WAIT end
-   end
-   if #self.frags>SHARD_CAP and not fadeAt then fadeAt=now end
-   if fadeAt and not f.fadeAt then f.fadeAt=math.max(now,fadeAt) end
-   if f.fadeAt then
-    local fade=math.clamp((now-f.fadeAt)/.3,0,1)
-    k*=1-fade
+  elseif t>0 then
+   local q=math.clamp(t/f.T,0,1)
+   -- A small jolt up as it cracks free, then it is pushed down and tips over.
+   pos=f.from:Lerp(f.land,q*q)+Vector3.yAxis*(f.hop*4*q*(1-q)*(1-q))
+   angle=f.turn*(1-(1-q)^2)
+   local age=t-f.T-f.wait
+   if f.keeper and f.dust and not f.dust.goneAt then
+    -- The pebble left to collect.
+    k=f.k*(1-.55*math.clamp(age/SHARD_FADE,0,1))
+   elseif age>0 then
+    local fade=math.clamp(age/SHARD_FADE,0,1)
+    k=f.k*(1-.75*fade);clear=fade*fade
     if fade>=1 then self:dropShard(f);table.remove(self.frags,i);continue end
    end
   end
   f.pos=pos
-  local frame=CFrame.new(pos)*CFrame.fromAxisAngle(f.axis,(f.spun or 0)+angle)
+  local frame=CFrame.new(pos)*CFrame.fromAxisAngle(f.axis,angle)
   local resize=k~=f.scale
   f.scale=k
   for _,q in ipairs(f.parts) do
    if resize then q.part.Size=q.size*k end
+   if clear~=f.clear then q.part.Transparency=clear end
    q.part.CFrame=frame*(q.rel.Rotation+q.rel.Position*k)
   end
+  f.clear=clear
  end
 end
 
@@ -592,10 +581,9 @@ function V:stepBeams(now: number)
  end
 end
 
--- Rock from a broken piece: the server leaves a (hidden) Dust part where it
--- broke and credits its owner when they are close. The shards from that
--- break belong to it: they wait on the pit floor and fly into the owner as
--- the rock is credited, or crumble if nobody ever collects it.
+-- Rock to collect: the server leaves a (hidden) Dust part where a piece
+-- broke and credits its owner when they are close. One pebble of that
+-- piece's rubble marks it and flies to the owner when it is credited.
 function V:addDust(part: Instance,live: boolean)
  if not part:IsA('BasePart') or self.dust[part] then return end
  local count=part:GetAttribute('Count') or 1
@@ -603,7 +591,7 @@ function V:addDust(part: Instance,live: boolean)
  local entry={part=part,owner=part:GetAttribute('Owner'),units=count,initial=count,frags={},born=live and now or now-10,flown=0,at=part.Position}
  if live then
   for _,f in ipairs(self.frags) do
-   if not f.dust and not f.fadeAt and now-f.born<2.5 and Vector3.new(f.pos.X-entry.at.X,0,f.pos.Z-entry.at.Z).Magnitude<10 then
+   if not f.dust and now-f.born<.5 and Vector3.new(f.pos.X-entry.at.X,0,f.pos.Z-entry.at.Z).Magnitude<10 then
     self:claim(entry,f)
    end
   end
@@ -616,22 +604,18 @@ end
 
 function V:stepDust(now: number)
  for part,entry in pairs(self.dust) do
-  -- How many shards should be on their way to the owner by now.
-  local collected=1-math.clamp(entry.units/math.max(1,entry.initial),0,1)
-  local want=math.floor(#entry.frags*collected+.5)
-  if (part:GetAttribute('CollectedAt') or 0)>0 then want=#entry.frags end
-  if entry.flown<want then
-   for i=entry.flown+1,want do
-    local f=entry.frags[i]
-    if f and not f.dead and not f.flyAt then f.flyAt=now+(i-entry.flown-1)*.03;f.flyFrom=f.pos;f.flyK=f.scale end
-   end
-   entry.flown=want
+  local keeper=entry.keeper
+  local collected=entry.units<entry.initial or (part:GetAttribute('CollectedAt') or 0)>0
+  if collected and keeper and not keeper.dead and not keeper.flyAt then
+   keeper.flyAt=now;keeper.flyFrom=keeper.pos;keeper.flyK=keeper.scale
   end
   if not part.Parent then
-   -- Shards already flying finish; the rest crumble.
-   if entry.flown<#entry.frags and not entry.goneAt then entry.goneAt=now end
-   entry.doneAt=entry.doneAt or now
-   if now-entry.doneAt>3 then self.dust[part]=nil end
+   -- Never collected: the pebble crumbles like the rest.
+   if not entry.goneAt then
+    entry.goneAt=now
+    if keeper and not keeper.dead and not keeper.flyAt then keeper.at=math.min(keeper.at,now-keeper.T-keeper.wait) end
+   end
+   if now-entry.goneAt>3 then self.dust[part]=nil end
   end
  end
 end
