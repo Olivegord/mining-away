@@ -150,7 +150,7 @@ class Studio:
         studios = json.loads(self.call('list_roblox_studios'))['studios']
         matches = [s for s in studios if s.get('placeId') == PLACE_ID and s.get('universeId') == UNIVERSE_ID]
         if not matches:
-            names = ', '.join(s.get('name', '?') for s in studios) or 'none'
+            names = ', '.join(s.get('name') or s.get('state') or '?' for s in studios) or 'none'
             raise Stop(f'DRONEREVOLUTION (place {PLACE_ID}) is not open in Studio. Open sessions: {names}.')
         if len(matches) > 1:
             raise Stop('More than one DRONEREVOLUTION session is open; close the extra one.')
