@@ -6,7 +6,7 @@ from pathlib import Path
 import struct
 
 from build import CANONICAL_OUTPUT, chunk, chunks, packstr, string, u32
-from refresh_native_scenery import Native, read_section, write_snapshot
+from refresh_native_scenery import Native, read_section, split_cframe, write_snapshot
 from refresh_wind_v1 import ROOT, check
 
 POSE = {
@@ -95,6 +95,31 @@ def mirror(base, before_bytes, after_bytes):
     return result, len(changed)
 
 
+def verify_live_pose(expected, live):
+    """Parenting attachments can round rotation entries by a float32 ULP."""
+    wanted, actual = Native(expected), Native(live)
+    assert wanted.parents == actual.parents and wanted.instances == actual.instances
+    assert wanted.props.keys() == actual.props.keys()
+    for (cid, name), value in wanted.props.items():
+        got = actual.props[cid, name]
+        if got == value:
+            continue
+        cls, ids = wanted.classes[cid]
+        assert (cls, name, value[0], got[0]) == ("Attachment", "CFrame", 16, 16)
+        a, apos = split_cframe(value[1], len(ids))
+        b, bpos = split_cframe(got[1], len(ids))
+        assert apos == bpos
+        idx = 0
+        for _ in ids:
+            assert a[idx] == b[idx]
+            if a[idx] == 0:
+                ma, mb = (struct.unpack_from("<9f", data, idx+1) for data in (a, b))
+                assert all(abs(x-y) <= 2e-7 for x, y in zip(ma, mb))
+                idx += 36
+            idx += 1
+        assert idx == len(a) == len(b)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory",type=Path)
@@ -108,8 +133,9 @@ def main():
     if args.write:
         # Studio re-serialized the actual live model after the pose was applied.
         verified, _=mirror(base,read_section(args.directory,"before"),read_section(args.directory,"verified"))
-        assert verified==result
-        write_snapshot(base,result)
+        verify_live_pose(result, verified)
+        result = verified
+        write_snapshot(base, result)
     print(f"Verified {count} scoped property columns. Canonical SHA-256 {sha256(result).hexdigest()}")
 
 
