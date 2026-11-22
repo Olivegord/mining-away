@@ -1,5 +1,15 @@
 # Shared project context
 
+## November 22 — simpler breaks that pop; lights and glow do the work
+
+Owner: mining is visually confusing; too many extraneous break effects; make it simpler, make the important things pop, use lighting and glows. Built in `ed8ee05`, installed by `tools/studio_apply.py` (Studio save 478, canonical sha256 `a19a0a31…`, ledger commit `b465fb6`). Not published.
+
+- Every dig event is one beat in the rock's color plus the beam's (or gem's) color; duplicate fireworks, particle bursts, stand-in pieces, dust and glitter are gone. Full table in [VFX instructions](VFX_INSTRUCTIONS.md).
+- Own full breaks and gems flash Neon and light the pit with a short colored point light; gems hold a strong light for 1.4 s. Other players' breaks are smaller.
+- Beam contact layers are smaller (they had been scaled up 2.2–2.6×) and the contact light is stronger.
+- Down in the pit the client dims ambient and exposure so glowing things stand out; restored on leaving.
+- Verification limit: compile and the dig/beam test suites only. No Play check (an agent-started Play was refused this session), so the look in Play still needs the owner's eyes.
+
 ## November 22 — nested Voronoi stages, sinking Voronoi rubble, impactful gem breaks
 
 Owner: keep the gem-break pause and add colored particles and more screenshake (impactful). A chunk should break as a small Voronoi cell, then a bigger recalculated one, then the actual cell, with the in-between cells shallower than the layer and each turned slightly differently. Each final cell's break pieces should themselves be Voronoi cells with physics, deleted one by one from the bottom up so the rock seems to fall into the hole. Built in `578ded8`, installed and saved. Not published.

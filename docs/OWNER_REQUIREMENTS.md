@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — mining is visually confusing: simpler, make the important things pop
+
+"boy o BOY is this game visualy confusing. when mining its impossible to tell what is going on, what the player is doing, too many extraneous effects when breaking rock etc. lets make this simpler, and make the important things POP. make better use of lighting and and glows and stuff". This names the break effects, so it overrides the November 19 "do not strip the effects" rule for the layers removed in `ed8ee05` (see [VFX instructions](VFX_INSTRUCTIONS.md)). It also overrides "no Neon in dig effects" for the short break flash of your own breaks and gems.
+
 ## November 19 — Dig Cube breaks must carry the old break over
 
 "Make sure breaks carry over almost all effects of the old system, ESPECIALLY the cocktail of particle effects and frame pauses when breaking rocks." The field rock break (sounds, combo, camera hit, sparks, ring, particle burst, tumbling pieces, pop, and the frame hold before it) is the standard for every break in the Dig Cube.

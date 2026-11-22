@@ -1,5 +1,25 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — one beat per break, lights instead of piles of particles
+
+Owner: mining is visually confusing, too many extraneous effects when breaking rock; simpler, make the important things pop, better lighting and glows. Built in `ed8ee05` (`src/DigCubeView.lua`, `src/WorkEffects.lua`).
+
+**Rule:** each event plays one clear beat in two colors: the rock's (rubble, debris rectangles) and the cutting drone's beam (flash, light, sparks, ring). A gem replaces the beam color with its own. Do not stack a second burst, firework or stand-in pieces on top of the real rubble again. Your own crew's breaks get the light, ring and camera hit; other players' breaks play smaller without them.
+
+| Event | Keeps | Removed |
+| --- | --- | --- |
+| Crack pop (inside a stage) | piece pops loose, crack sound, 1–2 chips, small beat (own only) | dust puff, ring; nothing for other players' pieces |
+| Stage break | plain flash (0.3), rubble, small debris + sparks, 0.3 s beam light (own), small beat | chips, two fireworks, two `CrystalBreak` bursts, ring |
+| Full break | frame pause, **Neon** flash (own), rubble, debris + beam sparks, combo/camera hit, beam light 0.45 s, one ring, one `CrystalBreak` | both fireworks, `breakPieces` (duplicated the rubble), second `CrystalBreak`, cloud dust and glitter |
+| Gem | gem-colored Neon flash, gem light (range 20+3·tier, 1.4 s), one `GemReward`, one firework, ring, gem cloud, heavy + follow-up hit, banner | the rock's own beam burst, second `GemReward`, `CrystalBreak`, second ring, second firework, puff |
+| Beam contact | beam sparks 14/s own (4 others), circles 1.7× (was 2.6×), contact glow 1.6× (was 2.2×), stone discs 5/s (was 11), drone-end energy 3.5 / 1.4, contact light range 12, brightness 3–4.2 | the chips and ring every 0.23/0.45 s; first-hit extras cut to 5 discs, 3 sparks, a 12-spark burst |
+
+- Your crew's target outline is the cutting beam's color toward white and pulses 0.02–0.32 transparency.
+- **Pit light:** about a stud below the cube top and deeper (full at 12 studs), the client lowers `Ambient`/`OutdoorAmbient` to 55% and `ExposureCompensation` by 0.35, smoothed, so the pit reads as shaded and the beams, gems and break lights stand out. The authored daylight is restored on climbing out, with Reduced Motion, and on teardown. The player lamp goes up to 0.65.
+- Break lights are pooled (`LIGHT_MAX` 6) and fade as (1−t)².
+
+Compiles; `test_dig_cube.py`, `test_dig_flow.py` and `test_beam_vfx.py` pass. **Not seen in Play**: an agent-started Play check was refused in this session, so brightness of the lights in daylight, the pit darkening and whether the break now reads clearly are unverified.
+
 ## November 19 — VERSION 2: the Pressure Strike showcase
 
 Owner: recreate one attack from the [Wind Moveset video](https://www.youtube.com/watch?v=-RYr9ZNJPGM), looking closely at how the layers progress, as a second version built without collaborating with the chat doing Version 1. The first pick (the green whirlwind at 25.7 s) was rejected because it is built around the character. **Pick effects that land on a spot in the world.** Version 2 is the ranged strike at 30.07–33.30 s. It lives in `Workspace["VERSION 2"]` at (0, 3.8, 135), on the open baseplate south of the hub, and replays by itself for anyone within 420 studs.
