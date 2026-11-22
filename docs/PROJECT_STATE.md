@@ -1,5 +1,16 @@
 # Shared project context
 
+## November 22 — Dig Cube sunk into the ground, stage cracks, glowing things above a muted world
+
+Owner: make the rocks go into the ground so you mine down; make the cracking stage-based like the old fields; keep the world and drones desaturated relative to beams and gems; tune glow and depth of field. Built in `53ebe40` and `7eddafc`, installed (Studio save 470, canonical sha256 `3ab8e927…`). Not published.
+
+- **Sunk cube:** `DigCube.HEIGHT` 44 (layers keep random thickness, scaled to fit), `DigCube.GROUND` 3.8, `CENTER` y = -40.2, so the top is flush with the ground. Scoped map edit (`tools/studio_dig_pit.lua` → `tools/refresh_dig_pit.py`): `Fields.Baseplate` resized to the west part, and `Workspace.MiningAway.DigPit` adds GroundEast/North/South, four shaft walls and a ShaftFloor around and under the 88×88 hole at x 96..184, z -24..64. Launch pad moved to ground level.
+- **Stage cracks:** before each piece breaks off, it cracks at ⅓ and ⅔ of its share of the work. Rock-colored plates over a dark base show dark seams (2, then 3 chunks per cell), darken a step and lift apart, with a crystal crack sound, chips, a puff, a small ring in the beam color, a jolt and (own drones) a light camera beat. The seams appear at once at each stage; they are not a creeping line.
+- **Grade:** `FunColorPop` is now Saturation -0.16, Contrast 0.03. Drone bodies and caps are muted 45% toward gray, while their Neon belly, trail and beam keep full color. Rock `LAYER_MUTE` 0.5. `MiningEnergyBloom` 0.55 / 20 / threshold 1.2 so Neon gems and light-emitting beams glow. New client `PlayFocus` depth of field (FarIntensity 0.22) focuses at the player and keeps everything sharp to about 1.6× that distance; it turns off while the fleet or pack menu blurs the world.
+- **Fix:** `DigCubeView` timed crack jolts and beam idling on `os.clock`, because `renderDrone` passes server time; sights could otherwise linger.
+
+Agent-started Play (Studio later reconnected and is in Edit): the cube top sits at Y 3.8 with the player on it; the crater opens down into the ground; crack plates appear in steps with seams and clear when pieces break; drone bodies read muted while the lasering drone's glow pops. Feel, sound and phone performance not judged; a long dig to the shaft floor not yet watched.
+
 ## November 22 — washed, bright daylight to match the owner's reference clip
 
 Owner: make the lighting "more washed and bright" to match a reference Roblox TikTok clip (bright pastel colors, faint soft bluish shadows, pale blue haze, vivid sky fading to near white at the horizon). This overrides the November 19 "too bright" calmer light. `tools/studio_washed_light.lua` staged 24 exact Lighting property edits in shared Edit, then `tools/refresh_washed_light.py` merged them into `build/DRONE_GAME.rbxl` (no parts, all 50 scripts preserved; sha256 `fe5b9cd2…`). Studio save version 467. Not published.
