@@ -1,5 +1,15 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — whole growing stage cells, attached drone effects, old rectangles, bigger gems
+
+Owner on `cfae949`. Built in `3365b45`.
+
+- **DOF:** `PlayFocus` FarIntensity 0.06 (was 0.22), in-focus radius at least 110 studs. Keep it faint.
+- **Stages:** each nested stage's `shell` (crack piece, outline, flash) is the whole stage cell, not the stage minus the previous one; the final piece's shell is the whole cells. Carving (`parts`) is unchanged. The beam lands on top of the piece (`scene.digAim`, cell top at the chunk center). Do not draw the previous stage as a cutout.
+- **Attached:** drone-end energy (`WorkEffects` origin sparks and glow) and the charge's vapor, sparks and glitter (`BeamVFX`) are `LockedToPart`, so they move with the drone.
+- **Rectangles:** "the old rectangle particles" are read as the old field break's eight tumbling pieces (`CrystalImpactView:breakPieces`), back on every full dig break. The square-texture debris in `breakCloud` is removed; `breakCloud` is now beam sparks only. If the owner meant the earlier chunky square texture particles instead, see `25ef015`.
+- **Gems:** rare gem pickups draw 1.5× (`GEM_SCALE`) and 0.14 more opaque. The halo is 4.4–5.5 studs at brightness 2, with bigger comet, motes and twinkles. The gem light stays dim.
+
 ## November 22 — follow-up: dim lights, rubble only at the end, centered cuts, gem aura
 
 Owner on `ed8ee05`. Built in `cfae949`; supersedes the matching rows of the entry below.

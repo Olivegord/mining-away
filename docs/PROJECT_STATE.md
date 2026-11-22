@@ -1,5 +1,9 @@
 # Shared project context
 
+## November 22 — lighter DOF, whole growing stages, attached drone FX, old rectangles, bigger gems
+
+Owner follow-up on `cfae949`. Built in `3365b45`, installed (Studio save 480, canonical sha256 `f288e5c6…`). Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md). `test_dig_flow.py` now keeps the crew working until three chunks fully break. Compile and the dig, pickup and beam suites pass. Not seen in Play.
+
 ## November 22 — dim lights, rubble only at the end, centered cuts, gem aura
 
 Owner follow-up on `ed8ee05`. Built in `cfae949`, installed by `tools/studio_apply.py` (Studio save 479, canonical sha256 `32d0ec54…`). Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md).

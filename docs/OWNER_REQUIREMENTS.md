@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — lighter DOF, a stage is just a bigger cell, attached effects, old rectangles, bigger gems
+
+After `cfae949` ("nice work"): (1) DOF is too much, tone it down; (2) with the stages of the Voronoi cell getting bigger, the outline of the previous cell is irrelevant to the next: no cutouts, just a cell getting bigger; (3) all effects firmly attached to the drone; (4) restore the old rectangle particles, the new ones are worse; (5) gems overall bigger and brighter.
+
 ## November 22 — dimmer lights, rubble only at the end, centered drones, rock-colored outline, gems that shine
 
 After `ed8ee05`: (1) lights "like a flashbang", much less max brightness; (2) the physics rock debris should ONLY appear after the final cut, the stages before are just the cell outline expanding; (3) drones sometimes dig cells not right under them: a drone chooses its FINAL large cell first, hovers above it and its laser goes there, and the small cells emerge from the laser center, so it is all centered; (4) the mining outline in the rock's color, not the drone's; (5) dropped crystals need MUCH more: particles and effects for the break, the arc, the glow, emissions. Now that everything is colored, ores need to look nicer.
