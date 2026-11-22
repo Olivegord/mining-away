@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — floating layered rock, instant rubble, shorter pause, louder music
+
+After `b382d33`, with a screenshot of the pit: there are weird floating rock formations that still have layers. The physics rocks should appear instantly and start with a little upward force to show they are displaced. The pause is too long for rock breaking; make it shorter. Make the background music a little louder ("there is probably an optimal value online").
+
 ## November 22 — the gem freeze still reads as a pause; rectangles back; smaller circles
 
 After `aa36f3b`: "better, but it still feels like a pause". Make sure the crack sound is there at the start (choose louder crack sounds for gems). The pieces should frantically shake during the pause, with jagged, long electric beam particles coming out for a bit. Don't fade in the camera effects. Make sure the old lingering rectangle particles are back ("i dont see them"). Make most of the circle particles smaller.

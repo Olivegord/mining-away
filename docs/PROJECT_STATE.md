@@ -1,5 +1,14 @@
 # Shared project context
 
+## November 22 — failed carves rebuilt, rubble pop, shorter pauses, louder music
+
+Owner follow-up on `b382d33`. Built in `c03a747`, installed (Studio save 486, canonical sha256 `3df9b30d…`). Not published.
+
+- A failed CSG cut no longer leaves a whole block standing over dug cells: it is rebuilt from a fresh box. This is the likely cause of the floating layered slabs, not confirmed in Play.
+- Sealed gem cells hold nothing up.
+- Rubble pops up together at the end of the pause, pauses are shorter, and music is about 6 dB louder.
+- `test_dig_flow.py` forces a failed cut; `test_dig_cube.py` checks for overhanging caps. Details in [VFX instructions](VFX_INSTRUCTIONS.md).
+
 ## November 22 — gem freeze intensity, rectangles back, smaller circles
 
 Owner follow-up on `aa36f3b`. Built in `b382d33`, installed (Studio save 485, canonical sha256 `0c43f2b2…`). Not published. A loud first-frame crack, a frantic shake, electric arcs and an instant camera punch during the sealed gem freeze. The lingering spinning rectangle debris is back, and round disc particles are 0.6× size. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.

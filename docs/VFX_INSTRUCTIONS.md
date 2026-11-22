@@ -1,5 +1,20 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — floating slabs fixed at the carve, instant rubble pop, shorter pauses, music level
+
+Owner on `b382d33`. Built in `c03a747`.
+
+- **Floating layered rock.** Most likely cause: a block whose CSG cut failed. `digCarve` used to leave that block whole while its cells counted as dug (only the first failure was ever logged), so the crew dug under it and a layered slab hung in the air. The dig-rule simulation showed almost no overhangs, which pointed away from the support rule. Now a failed cut calls `scene.digRebuildBlock`:
+  - It rebuilds the region from a fresh box minus every dug cell, at default fidelity.
+  - If that fails, it splits the region into quarters, up to twice.
+  - As a last resort it keeps a plain box only over undug rock.
+  - Failures are logged, the first 20.
+  - Sealed gem cells no longer count as support (`DigCube.supported`), so nothing can rest on a floating gem cell.
+  - Not confirmed in Play: if slabs still appear, check the Output for `[DigCube] carve failed`.
+- **Rubble:** all pieces release together the moment the pause ends, nudged up 0.12 studs with a 10–15 studs/s upward pop plus the outward throw.
+- **Pauses:** 1/2/3/6 frames (stage piece, split, heavy, gem); sealed gem freeze 8 frames (`HOLD_GEODE`); server gem launch 0.08 s after the request. Hit-stop guides put a medium hit around 5–8 frames.
+- **Music:** group volume 0.27 (menu 0.16, combat 0.105), was 0.14/0.085/0.055. Unity's mixing tutorial puts music around −30 to −20 dB and effects around −10 to −5 dB, so music sits roughly 10–15 dB under effects ([Unity audio mixing](https://learn.unity.com/tutorial/audio-mixing-1)). For loudness targets, see [Audiokinetic](https://blog.audiokinetic.com/loudness-processing-best-practice-chapter-3-scalable-loudness-processing-for-games/) and [Krotos](https://krotos.studio/blog/how-to-balance-music-and-sound-effects). 0.27 is about 11 dB under the effects (0.14 was about 17 dB). These are guide values, tuned by ear afterwards.
+
 ## November 22 — gem freeze: loud crack, frantic shake, electric arcs; rectangles back; smaller discs
 
 Owner on `aa36f3b`. Built in `b382d33`; supersedes the decaying shake and camera fade-in below.
