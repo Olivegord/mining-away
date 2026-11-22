@@ -8,7 +8,8 @@ local Disc={texture='rbxasset://textures/ui/VR/circleWhite.png'}
 Disc.smokeTexture='rbxasset://textures/particles/smoke_main.dds'
 -- The owner asked for the original particles back, so these are neutral: the
 -- discs are exactly their authored size and opacity. Change them only on request.
-Disc.SCALE=1 -- disc diameter relative to the original sizes
+-- Owner, Nov 22: "make most of the circle particles smaller".
+Disc.SCALE=.6 -- disc diameter relative to the original sizes
 Disc.MAX=math.huge -- studs
 Disc.FADE=0 -- extra transparency
 function Disc.configure(emitter,diameter,transparency,startScale,endScale,sizeVariation)
@@ -50,7 +51,7 @@ end
 -- effects (mining contact, charge) stay toned down.
 function Disc.full(fn,...)
  local scale,max,fade=Disc.SCALE,Disc.MAX,Disc.FADE
- Disc.SCALE=1;Disc.MAX=math.huge;Disc.FADE=0
+ Disc.SCALE=.6;Disc.MAX=math.huge;Disc.FADE=0
  local result=table.pack(pcall(fn,...))
  Disc.SCALE=scale;Disc.MAX=max;Disc.FADE=fade
  if not result[1] then error(result[2],0) end

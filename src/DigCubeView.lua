@@ -792,10 +792,13 @@ function V:split(op: any,now: number)
   -- (hard at first, settling), its cracks blaze up, the rays flare, a deep
   -- crack sounds on the very first frame, and the camera punches in.
   local id=op.cells[1]
+  -- The loudest crack cuts (the large rock pool), at full level, with the
+  -- crystal crack and a heavy impact under them, on the very first frame.
   if self.ctx.audio then
-   self.ctx.audio:play('crystal_impact',center,{pitch=.55,level=1.1,rockSize=4})
-   self.ctx.audio:play('crystal_split',center,{pitch=.8,level=.8,rockSize=4})
+   self.ctx.audio:play('crystal_split',center,{level=1.7,rockSize=9})
+   self.ctx.audio:play('crystal_impact',center,{pitch=.8,level=1.4,rockSize=9})
   end
+  if self.ctx.crack then self.ctx.crack:playCrack(center) end
   if self.ctx.freeze then
    self.ctx.freeze(hold,{tint=gem,onFrame=function(u) self:tenseGeode(id,u) end})
   end
@@ -832,8 +835,8 @@ end
 -- particles start exactly in the rock that broke (one box over the whole
 -- chunk put some of them in rock that did not break). The little spinning
 -- rectangles linger longest.
--- Sparks in the beam's color only (owner, Nov 22: the square-texture debris
--- here was worse than the old tumbling rectangles, which `burst` restores).
+-- The lingering spinning rectangles (owner, Nov 22: back) and sparks in the
+-- beam's color. The old field break's tumbling pieces play from `burst`.
 local CLOUD_CELLS=8
 function V:breakCloud(op: any,e: any,big: boolean)
  if self:reduced() or (self.clouds or 0)>=8 then return end
@@ -870,8 +873,19 @@ function V:breakCloud(op: any,e: any,big: boolean)
    p.LockedToPart=false;p.Parent=box
    return p
   end
-  -- Sparks in the beam's color: bright and quick; they carry the glow. The
-  -- rock's rectangles are the old field break's tumbling pieces (burst).
+  -- Debris: little rectangles in the rock's tone, spinning and drifting down
+  -- slowly. These linger longest (restored: owner, Nov 22).
+  local debris=emitter('Debris');debris.Texture='rbxasset://textures/particles/SquareParticle.png'
+  debris.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.2),e.color:Lerp(SHARD_DARK,.45))
+  debris.LightEmission=0;debris.LightInfluence=1;debris.Brightness=1.2
+  debris.Squash=NumberSequence.new(-.35) -- a little longer than wide
+  debris.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.5*k,.18),NumberSequenceKeypoint.new(.85,.42*k,.14),NumberSequenceKeypoint.new(1,0)})
+  debris.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.8,.05),NumberSequenceKeypoint.new(1,1)})
+  debris.Lifetime=NumberRange.new(2.8,4.2);debris.Speed=NumberRange.new(9,18);debris.SpreadAngle=Vector2.new(60,60)
+  debris.EmissionDirection=Enum.NormalId.Top;debris.Acceleration=Vector3.new(0,-14,0);debris.Drag=1.6
+  debris.Rotation=NumberRange.new(0,360);debris.RotSpeed=NumberRange.new(-320,320)
+  debris:Emit(count(12+6*bulk))
+  -- Sparks in the beam's color: bright and quick; they carry the glow.
   local sparks=emitter('Sparks')
   EnergyDisc.configure(sparks,.75*k,.05,1,0,.35)
   sparks.LightEmission=.7;sparks.LightInfluence=0;sparks.Brightness=1.5
@@ -1097,7 +1111,7 @@ function V:buildGeode(id: number,tier: number)
  end
  local center=o+Vector3.new(c.cx,c.y1+.05,c.cz)
  model.Parent=self.fx
- self.geodes[id]={model=model,pieces=pieces,rays=rays,core=core,halo=haloImage,born=os.clock(),center=center,radius=c.radius}
+ self.geodes[id]={model=model,pieces=pieces,rays=rays,core=core,halo=haloImage,born=os.clock(),center=center,radius=c.radius,color=color}
 end
 function V:stepGeodes(now: number)
  local still=self:reduced()
@@ -1229,16 +1243,19 @@ end
 function V:tenseGeode(id: number,u: number)
  local g=self.geodes[id]
  if not g then return end
- local amp=.11*(1-u)^1.2+.015
- local t=os.clock()*60
+ -- Frantic (owner, Nov 22): a big, fast, random shake every frame for the
+ -- whole freeze, easing only a little toward the break.
+ local amp=.17*(1-.35*u)
+ local t=os.clock()*97
  for i,piece in ipairs(g.pieces) do
   local out=Vector3.new(piece.mid.X-g.center.X,0,piece.mid.Z-g.center.Z)
   out=out.Magnitude>.05 and out.Unit or Vector3.zero
   local jitter=Vector3.new(math.noise(t,i*1.3,.1),math.noise(i*2.1,t,.6)*.6,math.noise(.4,i*.9,t))*amp
-  local frame=CFrame.new(piece.mid+out*(.18*u)+jitter)*CFrame.Angles(math.noise(t,i,.9)*amp*.5,0,math.noise(i,.2,t)*amp*.5)
+  local frame=CFrame.new(piece.mid+out*(.18*u)+jitter)*CFrame.Angles(math.noise(t,i,.9)*amp,math.noise(i,t,.3)*amp*.6,math.noise(i,.2,t)*amp)
   for _,q in ipairs(piece.parts) do q.part.CFrame=frame*q.rel end
  end
  for _,part in ipairs(g.core) do part.Transparency=.25*(1-u) end
+ self:arcs(g,u)
  if g.halo then g.halo.ImageTransparency=.5-.4*u end
  for _,ray in ipairs(g.rays or {}) do
   if ray.dir and ray.base then
@@ -1246,6 +1263,69 @@ function V:tenseGeode(id: number,u: number)
    ray.beam.Width1=.75*(1+1.2*u)
    ray.tip.WorldPosition=ray.base+ray.dir*(ray.length or 3)*(1+.5*u)
    ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35-.3*u),NumberSequenceKeypoint.new(.4,.55-.3*u),NumberSequenceKeypoint.new(1,1)})
+  end
+ end
+end
+-- Electric arcs out of the sealed cell during the freeze (owner, Nov 22):
+-- long jagged bolts that re-strike every frame or two, from the cell's
+-- middle out in all directions, then crackle on for a moment after the break.
+local ARC_COUNT,ARC_SEGMENTS,ARC_AFTER=7,7,.4
+function V:arcs(g: any,u: number)
+ if self:reduced() then return end
+ local set=self.arcSet
+ if not set or set.geode~=g then
+  if set then set.anchor:Destroy() end
+  local anchor=fxPart(self.fx,'GeodeArcs',g.color or FLASH);anchor.Transparency=1;anchor.Size=Vector3.one*.05;anchor.Position=g.center
+  local bolts={}
+  for b=1,ARC_COUNT do
+   local points={}
+   for i=0,ARC_SEGMENTS do local a=Instance.new('Attachment');a.Parent=anchor;points[i]=a end
+   local beams={}
+   for i=1,ARC_SEGMENTS do
+    local beam=Instance.new('Beam');beam.Attachment0=points[i-1];beam.Attachment1=points[i];beam.FaceCamera=true;beam.Segments=1
+    beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=1.8
+    beam.Color=ColorSequence.new(Color3.new(1,1,1):Lerp(g.color or FLASH,.35))
+    local w=.2*(1-(i-1)/ARC_SEGMENTS)+.04;beam.Width0=w;beam.Width1=w*.8;beam.Parent=anchor
+    beams[i]=beam
+   end
+   bolts[b]={points=points,beams=beams}
+  end
+  set={geode=g,anchor=anchor,bolts=bolts,strikeAt=0};self.arcSet=set
+ end
+ local now=os.clock()
+ set.untilAt=now+ARC_AFTER
+ if now<set.strikeAt then return end
+ set.strikeAt=now+1/45
+ for b,bolt in ipairs(set.bolts) do
+  local on=self.random:NextNumber()<.85
+  local az=self.random:NextNumber(0,math.pi*2);local el=math.rad(self.random:NextNumber(-15,70))
+  local dir=Vector3.new(math.cos(az)*math.cos(el),math.sin(el),math.sin(az)*math.cos(el))
+  local side=dir:Cross(Vector3.yAxis);side=side.Magnitude>.05 and side.Unit or Vector3.xAxis
+  local up=side:Cross(dir).Unit
+  local length=self.random:NextNumber(5,9)*(1+.3*u)
+  local from=g.center+Vector3.yAxis*.2
+  for i=0,ARC_SEGMENTS do
+   local f=i/ARC_SEGMENTS
+   local kink=(i==0 or i==ARC_SEGMENTS) and 0 or .55*math.sin(f*math.pi)
+   bolt.points[i].WorldPosition=from+dir*length*f+side*self.random:NextNumber(-kink,kink)+up*self.random:NextNumber(-kink,kink)
+  end
+  for _,beam in ipairs(bolt.beams) do beam.Enabled=on end
+ end
+end
+function V:stepArcs(now: number)
+ local set=self.arcSet
+ if not set then return end
+ if now>=set.untilAt then set.anchor:Destroy();self.arcSet=nil;return end
+ -- After the break the arcs keep crackling from where the cell was.
+ if now>=set.strikeAt then
+  set.strikeAt=now+1/30
+  local fade=(set.untilAt-now)/ARC_AFTER
+  for _,bolt in ipairs(set.bolts) do
+   local on=self.random:NextNumber()<fade
+   for i=0,#bolt.points do
+    if i>0 then bolt.points[i].WorldPosition+=Vector3.new(self.random:NextNumber(-.25,.25),self.random:NextNumber(-.25,.25),self.random:NextNumber(-.25,.25)) end
+   end
+   for _,beam in ipairs(bolt.beams) do beam.Enabled=on end
   end
  end
 end
@@ -1621,6 +1701,7 @@ function V:update()
  self:stepShards(now)
  self:stepLights(now)
  self:stepGeodes(now)
+ self:stepArcs(now)
  self:stepLamp(math.clamp(now-(self.lastStep or now),0,.25))
  self.lastStep=now
  self:stepPad(now)

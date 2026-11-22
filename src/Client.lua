@@ -86,11 +86,12 @@ RunService:BindToRenderStep('MiningAwayHitStop',Enum.RenderPriority.First.Value,
  local camera=workspace.CurrentCamera
  if camera and hitStop.cameraFrame then
   local still=CrystalImpactView.reducedMotion()
-  local decay=still and 0 or (1-u)^1.5
+  local decay=still and 0 or 1-.6*u
   local t=os.clock()*55
   local shake=CFrame.new(math.noise(t,.3)*.09*decay,math.noise(.7,t)*.09*decay,0)*CFrame.Angles(0,0,math.noise(t,1.9)*.006*decay)
   camera.CFrame=hitStop.cameraFrame*shake
-  if hitStop.fov and not still then camera.FieldOfView=hitStop.fov-4*math.min(1,u*5) end
+  -- Full strength from the first frame; nothing fades in (owner, Nov 22).
+  if hitStop.fov and not still then camera.FieldOfView=hitStop.fov-5 end
  end
 end)
 return {frozen=frozen,freeze=freezeGame}
