@@ -1,5 +1,16 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — gem freeze: loud crack, frantic shake, electric arcs; rectangles back; smaller discs
+
+Owner on `aa36f3b`. Built in `b382d33`; supersedes the decaying shake and camera fade-in below.
+
+- **First frame:** `crystal_split` with `rockSize` 9 (the large Downloads crash cuts) at level 1.7, a heavy `crystal_impact` (1.4) and `CrystalAudio:playCrack`.
+- **Shake:** frantic for the whole freeze. Amplitude 0.17 easing to 0.11, a new random pose every frame on all three axes, while the pieces strain apart.
+- **Electric arcs (`V:arcs`, `V:stepArcs`):** 7 jagged bolts, 5–9 studs long, 7 kinked segments each, white tinted toward the gem. They re-strike every frame from the cell in all directions and keep crackling, fading, for 0.4 s after the break.
+- **Camera:** the full −5° FOV punch and the tremble start on the first frame; the tremble eases only 60% by the end. Nothing fades in.
+- **Rectangles:** "the old lingering rectangle particles" are the spinning `SquareParticle` debris in `breakCloud` (2.8–4.2 s, 12 + 6·bulk). They are back; the tumbling `breakPieces` stay as well.
+- **Circles:** `EnergyDisc.SCALE` 0.6 (also inside `Disc.full`). This shrinks most round disc particles: contact, charge, break and gem.
+
 ## November 22 — terraced stages, scorched rubble, a freeze that reads as tension
 
 Owner on `d3f37c7`. Built in `aa36f3b`.

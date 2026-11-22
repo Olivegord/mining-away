@@ -1,5 +1,9 @@
 # Shared project context
 
+## November 22 — gem freeze intensity, rectangles back, smaller circles
+
+Owner follow-up on `aa36f3b`. Built in `b382d33`, installed (Studio save 485, canonical sha256 `0c43f2b2…`). Not published. A loud first-frame crack, a frantic shake, electric arcs and an instant camera punch during the sealed gem freeze. The lingering spinning rectangle debris is back, and round disc particles are 0.6× size. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.
+
 ## November 22 — terraced stages, scorched rubble, tension during the freeze
 
 Owner follow-up on `d3f37c7`. Built in `aa36f3b`, installed (Studio save 484, canonical sha256 `056b81b0…`). Not published. Stages are terraced (earlier pits kept deeper inside later ones). Rubble is darker near the beam. The sealed gem freeze adds shake on the cell, blazing cracks and rays, a first-frame sound, a camera punch-in with tremble and a tinted contrast grade, based on hit-stop research (sources in [VFX instructions](VFX_INSTRUCTIONS.md)). Dig, pickup and beam suites pass. Not seen in Play.

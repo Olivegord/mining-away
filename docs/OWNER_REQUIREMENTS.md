@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — the gem freeze still reads as a pause; rectangles back; smaller circles
+
+After `aa36f3b`: "better, but it still feels like a pause". Make sure the crack sound is there at the start (choose louder crack sounds for gems). The pieces should frantically shake during the pause, with jagged, long electric beam particles coming out for a bit. Don't fade in the camera effects. Make sure the old lingering rectangle particles are back ("i dont see them"). Make most of the circle particles smaller.
+
 ## November 22 — terraced stages, darker rubble near the beam, a pause that reads as tension
 
 After `d3f37c7` ("very good"): (1) for the stages, make sure previous stages are preserved so there is more depth; (2) rubble closest to the beam should be darker; (3) the rock pause feels good but can read as lag: research what to do visually with the pause so it reads as tension, not lag.
