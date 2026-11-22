@@ -182,7 +182,8 @@ end
 function Fun.focus()
  local lighting=game:GetService('Lighting')
  local dof=lighting:FindFirstChild('PlayFocus') or Instance.new('DepthOfFieldEffect')
- dof.Name='PlayFocus';dof.NearIntensity=0;dof.FarIntensity=.22;dof.FocusDistance=30;dof.InFocusRadius=60
+ -- Owner, Nov 22: "dof is too much". Only a faint blur on the far skyline.
+ dof.Name='PlayFocus';dof.NearIntensity=0;dof.FarIntensity=.06;dof.FocusDistance=30;dof.InFocusRadius=110
  dof.Parent=lighting
  return dof
 end
@@ -194,6 +195,6 @@ function Fun.stepFocus(dof,camera,subject)
  if dof.Enabled==(menu==true) then dof.Enabled=not menu end
  local distance=subject and (camera.CFrame.Position-subject).Magnitude or 30
  dof.FocusDistance=math.clamp(distance,8,120)
- dof.InFocusRadius=math.max(55,distance*1.6)
+ dof.InFocusRadius=math.max(110,distance*3)
 end
 return Fun

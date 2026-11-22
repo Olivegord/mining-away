@@ -81,6 +81,14 @@ for i=1,math.ceil(count/64) do
  end
 end
 -- Chunks break in nested stages first (flag S, no gem), then the final break.
+-- Keep the crew working until a few chunks have fully broken (the loop above
+-- stops at ten ops, which can be mostly stages).
+local function finals()
+ local n=0
+ for _,entry in ipairs(dig.ops) do if not string.match(entry,'|S%d+$') then n+=1 end end
+ return n
+end
+for _=1,200 do if finals()>=3 then break end;tick(10) end
 local partial,final=0,0
 for _,entry in ipairs(dig.ops) do
  if string.match(entry,'|S%d+$') then partial+=1;assert(string.match(entry,'|0|S%d+$'),'a stage carries no gem: '..entry) else final+=1 end

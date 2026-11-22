@@ -767,8 +767,8 @@ end
 -- particles start exactly in the rock that broke (one box over the whole
 -- chunk put some of them in rock that did not break). The little spinning
 -- rectangles linger longest.
--- Two layers only: the rock's rectangles and sparks in the beam's color.
-local SQUARE='rbxasset://textures/particles/SquareParticle.png'
+-- Sparks in the beam's color only (owner, Nov 22: the square-texture debris
+-- here was worse than the old tumbling rectangles, which `burst` restores).
 local CLOUD_CELLS=8
 function V:breakCloud(op: any,e: any,big: boolean)
  if self:reduced() or (self.clouds or 0)>=8 then return end
@@ -805,20 +805,8 @@ function V:breakCloud(op: any,e: any,big: boolean)
    p.LockedToPart=false;p.Parent=box
    return p
   end
-  -- Debris: little rectangles in the rock's tone, spinning and drifting down
-  -- slowly. These linger longest.
-  local debris=emitter('Debris');debris.Texture=SQUARE
-  debris.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.2),e.color:Lerp(SHARD_DARK,.45))
-  debris.LightEmission=0;debris.LightInfluence=1;debris.Brightness=1.2
-  debris.Squash=NumberSequence.new(-.35) -- a little longer than wide
-  debris.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.5*k,.18),NumberSequenceKeypoint.new(.85,.42*k,.14),NumberSequenceKeypoint.new(1,0)})
-  debris.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.8,.05),NumberSequenceKeypoint.new(1,1)})
-  debris.Lifetime=NumberRange.new(2.8,4.2);debris.Speed=NumberRange.new(9,18);debris.SpreadAngle=Vector2.new(60,60)
-  debris.EmissionDirection=Enum.NormalId.Top;debris.Acceleration=Vector3.new(0,-14,0);debris.Drag=1.6
-  debris.Rotation=NumberRange.new(0,360);debris.RotSpeed=NumberRange.new(-320,320)
-  debris:Emit(count(7+3*bulk))
-  -- Sparks in the beam's color: bright and quick; they carry the glow. No
-  -- dust or glitter on top: one rock color and one beam color read clearly.
+  -- Sparks in the beam's color: bright and quick; they carry the glow. The
+  -- rock's rectangles are the old field break's tumbling pieces (burst).
   local sparks=emitter('Sparks')
   EnergyDisc.configure(sparks,.75*k,.05,1,0,.35)
   sparks.LightEmission=.7;sparks.LightInfluence=0;sparks.Brightness=1.5
@@ -867,6 +855,10 @@ function V:burst(op: any,e: any)
  if gem then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk,owned=e.owned,op=op},os.clock()) end
  if not lively then return end
  if not gem then self:breakCloud(op,{color=vivid,beam=beam,bulk=e.bulk},e.owned) end
+ -- The old field break's eight tumbling rectangles (two tink on landing).
+ local rock=self.holder and self.holder:FindFirstChild('Rock')
+ local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
+ if ctx.impact then ctx.impact:breakPieces(point,ground,e.color:Lerp(SHARD_DARK,.4),strength,now,e.owned,surface and surface.Material or nil) end
  -- Combo counter and the camera hit, shared with the field rocks.
  if ctx.splitBeat then ctx.splitBeat(point,strength,now,false,e.owned,nil)
  elseif ctx.beat then ctx.beat(e.heavy and 'HeavySplit' or 'Split',point,now,math.clamp(strength*.58,.6,1.35)*volume) end

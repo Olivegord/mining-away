@@ -13,6 +13,7 @@ local DISPLAY_TAIL=.28
 local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/1.4,2*math.pi/26
 local GEM_GLINT='rbxassetid://77624818077620'
 local GLINT_LIFETIME=.46
+local GEM_SCALE=1.5
 local function liftDust(view,tint)
  local emitter=Instance.new('ParticleEmitter')
  emitter.Name='OreTransferDust';emitter.Enabled=false;emitter.Rate=14
@@ -120,24 +121,24 @@ local function makeAura(r)
  local at=Instance.new('Attachment');at.Name='GemAura';at.Parent=r.view
  local comet=auraEmitter(at,'GemComet',color)
  comet.Texture=SPARKLE;comet.LightEmission=.8;comet.Brightness=1.6
- comet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(1,0)})
+ comet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.75),NumberSequenceKeypoint.new(1,0)})
  comet.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.1),NumberSequenceKeypoint.new(1,1)})
  comet.Lifetime=NumberRange.new(.35,.7);comet.Speed=NumberRange.new(.5,2.5);comet.SpreadAngle=Vector2.new(180,180)
  comet.Drag=3;comet.Acceleration=Vector3.new(0,-4,0);comet.Rotation=NumberRange.new(0,360);comet.RotSpeed=NumberRange.new(-180,180)
  comet.Rate=70
  local motes=auraEmitter(at,'GemMotes',color)
- EnergyDisc.configure(motes,.22,.25,1,.2,.3)
+ EnergyDisc.configure(motes,.3,.2,1,.2,.3)
  motes.LightEmission=.9;motes.Brightness=1.4
  motes.Lifetime=NumberRange.new(1.2,2);motes.Speed=NumberRange.new(1.2,2.4);motes.SpreadAngle=Vector2.new(35,35)
  motes.EmissionDirection=Enum.NormalId.Top;motes.Acceleration=Vector3.new(0,.6,0);motes.Drag=.8
  motes.Shape=Enum.ParticleEmitterShape.Sphere;motes.Rate=6
  local twinkle=auraEmitter(at,'GemTwinkle',color)
  twinkle.Texture=SPARKLE;twinkle.LightEmission=1;twinkle.Brightness=2
- twinkle.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.35,.7),NumberSequenceKeypoint.new(1,0)})
+ twinkle.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.35,1),NumberSequenceKeypoint.new(1,0)})
  twinkle.Lifetime=NumberRange.new(.4,.7);twinkle.Speed=NumberRange.new(0,.6);twinkle.SpreadAngle=Vector2.new(180,180)
  twinkle.Shape=Enum.ParticleEmitterShape.Sphere;twinkle.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
  twinkle.Rotation=NumberRange.new(0,360);twinkle.Rate=5
- local halo=Instance.new('BillboardGui');halo.Name='GemHalo';halo.LightInfluence=0;halo.Brightness=1.3
+ local halo=Instance.new('BillboardGui');halo.Name='GemHalo';halo.LightInfluence=0;halo.Brightness=2
  halo.Size=UDim2.fromScale(3.4,3.4);halo.MaxDistance=90;halo.Enabled=false;halo.Parent=at
  local image=Instance.new('ImageLabel');image.BackgroundTransparency=1;image.Image=AURA_GLOW;image.ImageColor3=color
  image.Size=UDim2.fromScale(1,1);image.ImageTransparency=.45;image.Parent=halo
@@ -169,8 +170,8 @@ local function stepAura(r,now,flight,resting,off)
  a.halo.Enabled=true;a.light.Enabled=true
  local breathe=.5+.5*math.sin(now*2.6+r.seed)
  local k=resting and 1 or .6
- a.halo.Size=UDim2.fromScale((3+.8*breathe)*k,(3+.8*breathe)*k)
- a.image.ImageTransparency=.5-.15*breathe
+ a.halo.Size=UDim2.fromScale((4.4+1.1*breathe)*k,(4.4+1.1*breathe)*k)
+ a.image.ImageTransparency=.38-.15*breathe
  a.light.Brightness=(.35+.2*breathe)*k
 end
 local function displayOrder(a,b)
@@ -369,10 +370,14 @@ function V.new(root,parent,audio,reducedMotion)
   if (source:GetAttribute('CollectedAt') or 0)>0 or (source:GetAttribute('ProcessedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
   local view,faceted=GemAppearance.clone(source);view.Name='CollectibleOre';view.LocalTransparencyModifier=0
+  -- Owner, Nov 22: gems bigger and brighter. Rare gems draw 1.5x (their
+  -- inclusions and edges follow the shell's size) and more opaque.
+  local rare=source:GetAttribute('RareGemReward')==true and source:GetAttribute('StoneCargo')~=true
+  if rare then view.Size*=GEM_SCALE end
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
   source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
-  local r={lucky=source:GetAttribute('LuckyMultiplier'),view=view,faceted=faceted,gemOpacity=view:GetAttribute('GemOpacity') or .76,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
+  local r={lucky=source:GetAttribute('LuckyMultiplier'),view=view,faceted=faceted,gemOpacity=math.min(1,(view:GetAttribute('GemOpacity') or .76)+(rare and .14 or 0)),pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    stone=source:GetAttribute('StoneCargo')==true,rareGem=source:GetAttribute('RareGemReward')==true,samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')

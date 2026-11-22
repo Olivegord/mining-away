@@ -365,7 +365,7 @@ acquireRich=function(r)
  h.sparks.Enabled=false;h.sparks.Rate=0;h.sparks.Color=ColorSequence.new(CYAN)
  h.sparks.Lifetime=NumberRange.new(.26,.52);h.sparks.Speed=NumberRange.new(2,5);h.sparks.Drag=5;h.sparks.SpreadAngle=Vector2.new(180,180)
  h.sparks.Acceleration=Vector3.new(0,-1,0);h.sparks.Parent=h.particleSource
- -- Round glitter dots left along the ribbons (world space, stay where dropped).
+ -- Round glitter dots along the ribbons (locked to the drone, below).
  h.glitterSource=attachment(r.root,'InflowGlitterSource')
  h.glitter=Instance.new('ParticleEmitter');h.glitter.Name='InflowGlitter'
  h.glitter.Texture=EnergyDisc.texture;h.glitter.LightEmission=1;h.glitter.LightInfluence=0;h.glitter.Brightness=2.5
@@ -374,6 +374,8 @@ acquireRich=function(r)
  h.glitter.Speed=NumberRange.new(0,.4);h.glitter.SpreadAngle=Vector2.new(180,180);h.glitter.Drag=3
  h.glitter.Enabled=false;h.glitter.Rate=0;h.glitter.LockedToPart=false;h.glitter.Color=ColorSequence.new(WHITE,CYAN)
  h.glitter.Parent=h.glitterSource
+ -- Owner, Nov 22: every charge effect stays attached to its drone.
+ h.vapor.LockedToPart=true;h.sparks.LockedToPart=true;h.glitter.LockedToPart=true
  folder.Destroying:Connect(function() h.particleSource:Destroy();h.glitterSource:Destroy() end)
 end
 hideRich=function(r)

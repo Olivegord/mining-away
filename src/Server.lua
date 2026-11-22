@@ -3721,16 +3721,14 @@ function scene.digPick(d,p)
  return job
 end
 -- Point the beam at the chunk's center (DigCube.chunkCenter), where every
--- nested stage grows from: the rock surface there, below any stage already
--- carved out. The drone hovers straight above it.
+-- nested stage grows from, on top of the piece being cut: each stage is
+-- drawn as a whole cell over the rock, so the beam lands on its top. The
+-- drone hovers straight above it.
 function scene.digAim(job)
  local dig=scene.dig
  local cx,cz,id=DigCube.chunkCenter(dig.cube,job.ids)
  local c=dig.cube.cells[id]
- local carved=job.pieces and job.pieces[job.stage]
- local part=carved and carved.parts and carved.parts[1]
- local depth=part and (part.y1-part.y0) or 0
- job.contact=dig.origin+Vector3.new(cx,c.y1-depth,cz)
+ job.contact=dig.origin+Vector3.new(cx,c.y1,cz)
 end
 -- One piece of a chunk breaks off before the rest: it leaves the rock now
 -- (ops flag P: no gem roll yet) and pays its share of the chunk's rock.

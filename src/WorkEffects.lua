@@ -196,6 +196,9 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.glow=particle(anchor,'OriginGlow',beam.tint or WHITE)
   fx.glow.Brightness=.8;fx.glow.LightEmission=.4
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
+  -- Owner, Nov 22: effects firmly attached to the drone. The drone-end
+  -- energy rides with the drone instead of being left behind in the air.
+  fx.sparks.LockedToPart=true;fx.glow.LockedToPart=true
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
   if ink then

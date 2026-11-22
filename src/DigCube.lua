@@ -651,14 +651,10 @@ function D.pieces(cube: any,ids: {number}): {any}
    local q=clipConvex(poly,c.poly)
    if #q>=3 and polyArea(q)>.04 then
     table.insert(parts,{poly=q,y0=c.y1-depth,y1=c.y1})
-    -- The rock this stage newly takes out: its shape minus the last stage's.
-    if last then
-     for _,r in ipairs(outside(q,last)) do table.insert(shell,{poly=r,y0=c.y1-depth,y1=c.y1}) end
-     local inner=clipConvex(q,last)
-     if #inner>=3 and polyArea(inner)>.04 then table.insert(shell,{poly=inner,y0=c.y1-depth,y1=c.y1-lastDepth}) end
-    else
-     table.insert(shell,{poly=q,y0=c.y1-depth,y1=c.y1})
-    end
+    -- What is drawn for this stage (crack piece, outline, flash) is the
+    -- whole stage cell: just a bigger cell, never the last stage cut out of
+    -- it (owner, Nov 22).
+    table.insert(shell,{poly=q,y0=c.y1-depth,y1=c.y1})
    end
   end
   if #parts>0 then
@@ -677,7 +673,10 @@ function D.pieces(cube: any,ids: {number}): {any}
    table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1})
   end
  end
- table.insert(out,{stage=#out+1,at=1,parts=parts,shell=parts,ids=table.clone(ids),final=true})
+ -- Drawn as the whole cells (no hole of the last stage in them).
+ local whole={}
+ for _,id in ipairs(ids) do local c=cube.cells[id];table.insert(whole,{poly=c.poly,y0=c.y0,y1=c.y1}) end
+ table.insert(out,{stage=#out+1,at=1,parts=parts,shell=whole,ids=table.clone(ids),final=true})
  return out
 end
 -- A convex polygon cut into about n Voronoi cells (sites placed at random
