@@ -132,6 +132,36 @@ for step=1,200 do
  maxLayer=math.max(maxLayer,cube.cells[id].layer)
  if step==180 then focusX,focusZ=W*.75,W*.7 end
 end
+-- No regular cell floats: a crew cutting whole chunks leaves every cell
+-- resting on rock under its middle (owner, Nov 22; only sealed gem cells may float).
+do
+ local dug=D.build(4242)
+ local r2=D.rng(7)
+ for step=1,260 do
+  local id=D.pick(dug,{focusX=W*.5,focusZ=W*.5,random=r2})
+  if not id then break end
+  for _,cid in ipairs(D.chunk(dug,id,1+(step%3)*.5,nil,r2)) do D.remove(dug,cid) end
+ end
+ local deepest=1
+ for id in pairs(dug.removed) do deepest=math.max(deepest,dug.cells[id].layer) end
+ check(deepest>=3,'float check digs down: '..deepest)
+ for _,cell in ipairs(dug.cells) do
+  if not dug.removed[cell.id] and cell.layer<#dug.layers then
+   check(D.supported(dug,cell.id,0,nil),'cell '..cell.id..' (layer '..cell.layer..') does not float')
+  end
+ end
+end
+-- A sealed cell may float: it does not stop the cell under it being cut.
+do
+ local probe=D.build(777)
+ local top=probe.layers[1].cells[5]
+ local under=D.below(probe,top)[1]
+ for _,a in ipairs(D.shoulders(probe,under)) do if a~=top then D.remove(probe,a) end end
+ for _,a in ipairs(D.above(probe,under)) do if a~=top then D.remove(probe,a) end end
+ check(not D.diggable(probe,under),'a regular cell above blocks the cut')
+ probe.sealed={[top]=true}
+ check(D.diggable(probe,under),'a sealed gem cell may float')
+end
 local perLayer={}
 local areaLayer={}
 for id in pairs(cube.removed) do local L=cube.cells[id].layer;perLayer[L]=(perLayer[L] or 0)+1;areaLayer[L]=(areaLayer[L] or 0)+cube.cells[id].area end

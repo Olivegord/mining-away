@@ -153,6 +153,21 @@ assert(string.match(dig.ops[#dig.ops],'^c'..tid..'|%d+|X$'),'treasure opening is
 local high=0
 for _,g in ipairs(dig.pending) do if g.high then high+=1 end end
 assert(high==DigCube.TREASURE_GEMS,'a treasure pays several gems, launched high: '..high)
+-- The owner's client asks to open a sealed cell it landed on: opened at once.
+do
+ local other=next(dig.cube.treasure,tid)
+ if other and not dig.cube.removed[other] then
+  scene.digBreak({ids={other},key=tostring(other),cx=dig.cube.cells[other].cx,cz=dig.cube.cells[other].cz},p.drones[1],p)
+  assert(dig.geodes[other],'second cell sealed')
+  local c=dig.cube.cells[other]
+  pl.Character:PivotTo(CFrame.new(dig.origin+Vector3.new(c.cx+40,c.y1+3,c.cz)))
+  scene.digRequestOpen(p,{id=other})
+  assert(dig.geodes[other],'a request from far away is refused')
+  pl.Character:PivotTo(CFrame.new(dig.origin+Vector3.new(c.cx,c.y1+3,c.cz)))
+  scene.digRequestOpen(p,{id=other})
+  assert(dig.geodes[other]==nil and dig.cube.removed[other],'the owner landing (client request) opens it at once')
+ end
+end
 pl.Character:PivotTo(savedRoot)
 -- Cuts near the player went first.
 local near=0

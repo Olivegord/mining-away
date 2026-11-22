@@ -440,9 +440,29 @@ function D.shoulders(cube: any,id: number)
  cube.memo.shoulders[id]=m
  return m
 end
-function D.diggable(cube: any,id: number): boolean
+-- Would `upper` still rest on rock under its middle once `id` (and the cells
+-- in `gone`, a chunk being grown) are removed?
+local function supported(cube: any,upper: number,id: number,gone: {[number]:any}?): boolean
+ local cell=cube.cells[upper]
+ local core={}
+ for _,v in ipairs(cell.poly) do table.insert(core,{cell.cx+(v[1]-cell.cx)*D.CORE,cell.cz+(v[2]-cell.cz)*D.CORE}) end
+ for _,b in ipairs(D.below(cube,upper)) do
+  if b~=id and not cube.removed[b] and not (gone and gone[b]) and not separated(core,cube.cells[b].poly) then return true end
+ end
+ return false
+end
+D.supported=supported
+-- A cell can be cut once nothing rests on its middle, and only if no other
+-- cell would be left floating with nothing under its middle (owner, Nov 22:
+-- regular cells never float). Sealed gem cells (`cube.sealed`, set by the
+-- server) may float: they neither block the cells under them nor need them.
+function D.diggable(cube: any,id: number,gone: {[number]:any}?): boolean
  if cube.removed[id] then return false end
- for _,other in ipairs(D.shoulders(cube,id)) do if not cube.removed[other] then return false end end
+ local sealed=cube.sealed
+ for _,other in ipairs(D.shoulders(cube,id)) do if not cube.removed[other] and not (sealed and sealed[other]) then return false end end
+ for _,upper in ipairs(D.above(cube,id)) do
+  if not cube.removed[upper] and not (sealed and sealed[upper]) and not supported(cube,upper,id,gone) then return false end
+ end
  return true
 end
 -- A cell needs rendering when air touches it: top layer, or a cut cell beside, above or below it.
@@ -535,7 +555,7 @@ function D.chunk(cube: any,seed: number,cutSize: number?,taken: {[number]:any}?,
  local open={}
  local function offer(id: number)
   for _,n in ipairs(cube.cells[id].neighbors) do
-   if not inside[n] and not open[n] and not cube.removed[n] and not (taken and taken[n]) and D.diggable(cube,n) then open[n]=true end
+   if not inside[n] and not open[n] and not cube.removed[n] and not (taken and taken[n]) and D.diggable(cube,n,inside) then open[n]=true end
   end
  end
  offer(seed)
@@ -546,6 +566,9 @@ function D.chunk(cube: any,seed: number,cutSize: number?,taken: {[number]:any}?,
    if d<bestD then best,bestD=id,d end
   end
   if not best then break end
+  -- Re-check against the chunk as it is now: two cells may each hold up the
+  -- same cell above alone, but not both go.
+  if not D.diggable(cube,best,inside) then open[best]=nil;continue end
   local c=cube.cells[best]
   -- Stop when adding this cell overshoots the target by more than it helps.
   if area+c.area*.5>target then break end
@@ -642,7 +665,8 @@ function D.pieces(cube: any,ids: {number}): {any}
  local last,lastDepth
  for k=1,stages do
   local size=stages==1 and .5 or (k==1 and .38 or .66)
-  local depth=thick*(stages==1 and .45 or (k==1 and .3 or .6))
+  -- A little shallower than first built (owner, Nov 22).
+  local depth=thick*(stages==1 and .34 or (k==1 and .2 or .44))
   -- Each stage turned a little from the one before.
   local poly=stageCell(cx,cz,radius*size,base+k*.45,seed+k*7919)
   local parts,shell={},{}

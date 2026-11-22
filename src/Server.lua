@@ -3865,6 +3865,8 @@ function scene.digBreak(job,d,p)
  scene.digRock(p,d.owner,last,math.max(1,(job.rock or DigCube.rockDrops(volume))-(job.rockPaid or 0)),center)
  if sealed then
   dig.geodes[sealed]={id=sealed,tier=tier,treasure=treasure,owner=d.owner,p=p,volume=volume,at=now}
+  -- A sealed cell may float: the crew can dig under it.
+  cube.sealed=cube.sealed or {};cube.sealed[sealed]=true
   scene.digPublishGeodes()
  end
 end
@@ -3872,15 +3874,50 @@ end
 function scene.digPublishGeodes()
  local dig=scene.dig
  local list={}
- for id,g in pairs(dig.geodes) do table.insert(list,id..':'..g.tier..':'..g.owner) end
+ for id,g in pairs(dig.geodes) do table.insert(list,id..':'..g.tier..':'..g.owner..':'..(g.treasure and 1 or 0)) end
  table.sort(list)
  dig.holder:SetAttribute('Geodes',table.concat(list,';'))
 end
 -- Its owner landing on a sealed cell from a jump opens it: the cell breaks
--- (ops flag G, or X for a treasure pocket), and after a short pause the gem
--- flies out on a high arc. The client bounces its own player straight up.
-local GEODE_PAUSE=.2 -- the client's full-game freeze is 12 frames
+-- (ops flag G, or X for a treasure pocket) and the gem flies out. The owner's
+-- client sees its own landing first: it freezes the game that same frame
+-- (the freeze is the pause) and asks with 'DigOpen'. The server's own check
+-- below is the fallback. The gem launches GEODE_LAUNCH after the request,
+-- about when the client's 12-frame freeze ends (it was sent a moment before).
+local GEODE_LAUNCH=.12
 local GEODE_LANDING=8 -- downward speed (studs/s) that counts as landing from a jump
+function scene.digOpenGeode(id,g)
+ local dig=scene.dig;local cube=dig.cube
+ local c=cube.cells[id]
+ dig.geodes[id]=nil
+ if cube.sealed then cube.sealed[id]=nil end
+ if DigCube.remove(cube,id) then dig.recent[id]=now end
+ table.insert(dig.ops,'c'..id..'|'..g.tier..'|'..(g.treasure and 'X' or 'G'))
+ dig.dirty=true
+ table.insert(dig.csg,{generation=dig.generation,ids={id}})
+ scene.digCarveLoop()
+ local at=dig.origin+Vector3.new(c.cx,c.y1+.6,c.cz)
+ for i=1,g.treasure and DigCube.TREASURE_GEMS or 1 do
+  table.insert(dig.pending,{at=now+GEODE_LAUNCH+(i-1)*.15,p=g.p,owner=g.owner,tier=g.tier,volume=g.volume,position=at+Vector3.new(0,i*.3,0),high=true})
+ end
+ scene.digPublishGeodes()
+end
+-- Is this root over the sealed cell (on it, or in a stage hole cut in it)?
+function scene.digOverGeode(hr,c,slack)
+ local l=hr.Position-scene.dig.origin
+ local above=l.Y-c.y1
+ return math.sqrt((l.X-c.cx)^2+(l.Z-c.cz)^2)<=c.radius+1.2+slack and above>=1-(c.y1-c.y0)-slack and above<=5.5+slack
+end
+-- The owner's client asks to open a sealed cell it just landed on. Checked
+-- loosely (latency): its owner, standing over it.
+function scene.digRequestOpen(p,payload)
+ local dig=scene.dig;local cube=dig.cube
+ local id=type(payload)=='table' and tonumber(payload.id)
+ local g=id and dig.geodes[id]
+ local hr=characterRoot(p)
+ if not g or g.p~=p or not hr or cube.removed[id] then return end
+ if scene.digOverGeode(hr,cube.cells[id],3) then scene.digOpenGeode(id,g) end
+end
 function scene.digGeodeStep()
  local dig=scene.dig;local cube=dig.cube
  local changed=false
@@ -3890,24 +3927,11 @@ function scene.digGeodeStep()
   local c=cube.cells[id]
   if cube.removed[id] then dig.geodes[id]=nil;changed=true
   elseif hr and c then
-   local l=hr.Position-dig.origin
-   local above=l.Y-c.y1
    -- Landing on it from a jump (owner, Nov 22: you actually have to jump;
-   -- walking or standing on it does nothing), or into a stage hole cut in it.
+   -- walking or standing on it does nothing).
    local velocity=hr.AssemblyLinearVelocity
    local falling=velocity~=nil and velocity.Y<=-GEODE_LANDING
-   if falling and math.sqrt((l.X-c.cx)^2+(l.Z-c.cz)^2)<=c.radius+1.2 and above>=1-(c.y1-c.y0) and above<=5.5 then
-    dig.geodes[id]=nil;changed=true
-    if DigCube.remove(cube,id) then dig.recent[id]=now end
-    table.insert(dig.ops,'c'..id..'|'..g.tier..'|'..(g.treasure and 'X' or 'G'))
-    dig.dirty=true
-    table.insert(dig.csg,{generation=dig.generation,ids={id}})
-    scene.digCarveLoop()
-    local at=dig.origin+Vector3.new(c.cx,c.y1+.6,c.cz)
-    for i=1,g.treasure and DigCube.TREASURE_GEMS or 1 do
-     table.insert(dig.pending,{at=now+GEODE_PAUSE+(i-1)*.15,p=p,owner=g.owner,tier=g.tier,volume=g.volume,position=at+Vector3.new(0,i*.3,0),high=true})
-    end
-   end
+   if falling and scene.digOverGeode(hr,c,0) then scene.digOpenGeode(id,g) end
   end
  end
  if changed then scene.digPublishGeodes() end
@@ -5452,6 +5476,8 @@ local function commandPlayer(pl: any,action: any,payload: any)
   scene.focusResource(p,payload)
  elseif action=='CrewAbility' then
   scene.crewAbility(p,payload)
+ elseif action=='DigOpen' then
+  scene.digRequestOpen(p,payload)
  elseif action=='DigFocus' then
   local point=type(payload)=='table' and payload.point
   if typeof(point)=='Vector3' and scene.digInside(point,2) then
