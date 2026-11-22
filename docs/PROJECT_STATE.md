@@ -1,5 +1,16 @@
 # Shared project context
 
+## November 22 — washed, bright daylight to match the owner's reference clip
+
+Owner: make the lighting "more washed and bright" to match a reference Roblox TikTok clip (bright pastel colors, faint soft bluish shadows, pale blue haze, vivid sky fading to near white at the horizon). This overrides the November 19 "too bright" calmer light. `tools/studio_washed_light.lua` staged 24 exact Lighting property edits in shared Edit, then `tools/refresh_washed_light.py` merged them into `build/DRONE_GAME.rbxl` (no parts, all 50 scripts preserved; sha256 `fe5b9cd2…`). Studio save version 467. Not published.
+
+- Sun: `TimeOfDay` 13:30, Brightness 2.6, ExposureCompensation 0.15, neutral-warm `ColorShift_Top` (255,238,212) instead of the orange sunset cast, `ColorShift_Bottom` off, ShadowSoftness 0.5.
+- Fill: Ambient (158,164,176), OutdoorAmbient (186,194,208), EnvironmentDiffuse 0.8, Specular 0.2, so shadows stay light and cool.
+- Air (`QuarryAir`): Density 0.28, Offset 0.25, Haze 1.1, Glare 0.2, Color (200,224,248), Decay (120,170,230).
+- Grade: ColorCorrection Brightness 0.02, Contrast -0.06, Saturation 0.18, Tint (250,252,255); Bloom 0.4 / 28 / 1.5; SunRays 0.04.
+
+The ground's own color (118,104,90) now reads as pale taupe-grey instead of sand. Agent-started Play (stopped; Studio back in Edit): the Dig Cube, gems, drones, rings and combo read clearly; beams look paler against the bright rock. A first try with exposure 0.3 and saturation -0.1 washed everything to grey and was pulled back.
+
 ## November 22 — dig drones fire the real beam while cutting; the sight hides
 
 Owner: "make sure the actual beam replaces the targetting sight when lasering." `184847b` hides a drone's red sight (line, glow, dot) while it cuts. Play then showed no beam at all on cutting drones: the field beam only switched on with the server's `Mining` flag, which needs a field target, so dig drones charged but never fired. `ac3b464` switches the beam on from `DigMining` for drones with a dig plate. Installed (`studio_apply`, Studio save version 464; canonical sha256 `5145615b…`); next Play runs `ac3b464`. Agent-started Play check (stopped; Studio back in Edit): at every sample the number of visible sights equals drones minus drones cutting, and a pulled-back frame shows a cutting drone's thick beam with its contact ring and no sight while the others aim with thin red sights. Not published.
