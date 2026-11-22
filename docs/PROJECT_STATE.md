@@ -1,5 +1,11 @@
 # Shared project context
 
+## November 22 — dig drones fire the real beam while cutting; the sight hides
+
+Owner: "make sure the actual beam replaces the targetting sight when lasering." `184847b` hides a drone's red sight (line, glow, dot) while it cuts. Play then showed no beam at all on cutting drones: the field beam only switched on with the server's `Mining` flag, which needs a field target, so dig drones charged but never fired. `ac3b464` switches the beam on from `DigMining` for drones with a dig plate. Installed (`studio_apply`, Studio save version 464; canonical sha256 `5145615b…`); next Play runs `ac3b464`. Agent-started Play check (stopped; Studio back in Edit): at every sample the number of visible sights equals drones minus drones cutting, and a pulled-back frame shows a cutting drone's thick beam with its contact ring and no sight while the others aim with thin red sights. Not published.
+
+The repo moved out of iCloud Documents (offloaded placeholders hung git and the installer): it now lives in `~/Projects/ChatGPT/Get Rich Quick`, with `GRQ-fun-loop` beside it. The old `~/Documents/ChatGPT/...` paths are symlinks to the new folders, and the originals remain as `... (old iCloud copy)` until the owner deletes them.
+
 ## November 19 — colored segment flash, physics rubble, gems with the break, field beam, red sights
 
 Owner request, built in `3394286` (installed as `bc1e307` after the owner ended a Play session; an earlier queued install stopped while Studio was in Play and changed nothing):
