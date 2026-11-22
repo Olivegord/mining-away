@@ -1660,6 +1660,10 @@ local function renderDrone(d,dt,now)
   if plate then
    part,source,resource=plate,nil,nil;kind='resource';id='dig:'..tostring(s:GetAttribute('DigOp'))
    extra,extraSource,procId=nil,nil,nil;breakAt,breakUntil=nil,nil
+   -- The server's Mining flag needs a field target; a digging drone cuts
+   -- under DigMining instead, so that is what switches its beam on.
+   active=alive and s:GetAttribute('DigMining')==true and s:GetAttribute('WorkPaused')~=true
+   if active then charging=false end
   end
  end
  presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
