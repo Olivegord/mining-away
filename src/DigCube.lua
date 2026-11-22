@@ -630,7 +630,8 @@ local function outside(cell: {{number}},hole: {{number}}): {{{number}}}
  return out
 end
 function D.pieces(cube: any,ids: {number}): {any}
- local area,cx,cz=D.chunkArea(cube,ids)
+ local area=D.chunkArea(cube,ids)
+ local cx,cz=D.chunkCenter(cube,ids)
  local first=cube.cells[ids[1]]
  local thick=first.y1-first.y0
  local seed=hashIds(ids)
@@ -763,6 +764,34 @@ function D.prismWedges(cube: any,ids: {number}): {any}
   end
  end
  return out
+end
+-- The point a chunk is worked from (owner, Nov 22: everything centered under
+-- the drone): its area centroid when that lies in one of its cells, else the
+-- middle of its cell nearest the centroid. The nested stages grow from here,
+-- the drone hovers straight above it and its beam lands on it.
+local function inConvex(poly: {{number}},x: number,z: number): boolean
+ local sign=0
+ for k=1,#poly do
+  local a,b=poly[k],poly[k%#poly+1]
+  local c=(b[1]-a[1])*(z-a[2])-(b[2]-a[2])*(x-a[1])
+  if c~=0 then
+   local sg=c>0 and 1 or -1
+   if sign==0 then sign=sg elseif sg~=sign then return false end
+  end
+ end
+ return true
+end
+function D.chunkCenter(cube: any,ids: {number}): (number,number,number)
+ local _,cx,cz=D.chunkArea(cube,ids)
+ local best,bestD=ids[1],math.huge
+ for _,id in ipairs(ids) do
+  local c=cube.cells[id]
+  if inConvex(c.poly,cx,cz) then return cx,cz,id end
+  local d=(c.cx-cx)^2+(c.cz-cz)^2
+  if d<bestD then best,bestD=id,d end
+ end
+ local c=cube.cells[best]
+ return c.cx,c.cz,best
 end
 function D.chunkArea(cube: any,ids: {number}): (number,number,number)
  local area,cx,cz=0,0,0

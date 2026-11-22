@@ -237,7 +237,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.bright=dig;fx.scale=dig and 1.7 or nil
   if dig and not fx.light then
    local light=Instance.new('PointLight');light.Name='DigContactLight';light.Shadows=false
-   light.Range=12;light.Brightness=3;light.Enabled=false;light.Parent=fx.tip
+   light.Range=10;light.Brightness=1;light.Enabled=false;light.Parent=fx.tip
    fx.light=light
   end
  end
@@ -266,7 +266,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if fx.light then
   fx.light.Enabled=dig and working
   fx.light.Color=beam.tint or WHITE
-  fx.light.Brightness=dig and 3+1.2*pulse or 2+.8*pulse
+  fx.light.Brightness=dig and .9+.3*pulse or 2+.8*pulse
  end
  local resonance=sample.style=='Resonance'
  local stoneColor=sample.stoneColor

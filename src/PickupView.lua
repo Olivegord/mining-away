@@ -100,6 +100,79 @@ local function updateGlint(self,r,age,strength,now)
  r.idle.anchor.Parent=r.view
  emitter:Emit(1)
 end
+-- Gem aura (owner, Nov 22: now that everything is colored, dropped gems
+-- need much more to stand out). Only rare gems, client-local, off with
+-- Reduced Effects or far away:
+--  * in flight: a comet of gem-colored sparkles left behind in the air
+--  * landed: a soft camera-facing halo that breathes, a dim light (kept low:
+--    bright break lights read as a flashbang), rising motes and twinkles
+--  * a burst of twinkles the moment it lands
+local SPARKLE='rbxasset://textures/particles/sparkles_main.dds'
+local AURA_GLOW='rbxasset://textures/ui/AvatarExperience/glowLight.png'
+local function auraEmitter(parent,name,color)
+ local e=Instance.new('ParticleEmitter');e.Name=name;e.Enabled=false;e.Rate=0
+ e.LightInfluence=0;e.Color=ColorSequence.new(color:Lerp(PICKUP_HIGHLIGHT,.55),color)
+ e.Parent=parent
+ return e
+end
+local function makeAura(r)
+ local color=r.effectColor or r.color
+ local at=Instance.new('Attachment');at.Name='GemAura';at.Parent=r.view
+ local comet=auraEmitter(at,'GemComet',color)
+ comet.Texture=SPARKLE;comet.LightEmission=.8;comet.Brightness=1.6
+ comet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(1,0)})
+ comet.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.1),NumberSequenceKeypoint.new(1,1)})
+ comet.Lifetime=NumberRange.new(.35,.7);comet.Speed=NumberRange.new(.5,2.5);comet.SpreadAngle=Vector2.new(180,180)
+ comet.Drag=3;comet.Acceleration=Vector3.new(0,-4,0);comet.Rotation=NumberRange.new(0,360);comet.RotSpeed=NumberRange.new(-180,180)
+ comet.Rate=70
+ local motes=auraEmitter(at,'GemMotes',color)
+ EnergyDisc.configure(motes,.22,.25,1,.2,.3)
+ motes.LightEmission=.9;motes.Brightness=1.4
+ motes.Lifetime=NumberRange.new(1.2,2);motes.Speed=NumberRange.new(1.2,2.4);motes.SpreadAngle=Vector2.new(35,35)
+ motes.EmissionDirection=Enum.NormalId.Top;motes.Acceleration=Vector3.new(0,.6,0);motes.Drag=.8
+ motes.Shape=Enum.ParticleEmitterShape.Sphere;motes.Rate=6
+ local twinkle=auraEmitter(at,'GemTwinkle',color)
+ twinkle.Texture=SPARKLE;twinkle.LightEmission=1;twinkle.Brightness=2
+ twinkle.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.35,.7),NumberSequenceKeypoint.new(1,0)})
+ twinkle.Lifetime=NumberRange.new(.4,.7);twinkle.Speed=NumberRange.new(0,.6);twinkle.SpreadAngle=Vector2.new(180,180)
+ twinkle.Shape=Enum.ParticleEmitterShape.Sphere;twinkle.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+ twinkle.Rotation=NumberRange.new(0,360);twinkle.Rate=5
+ local halo=Instance.new('BillboardGui');halo.Name='GemHalo';halo.LightInfluence=0;halo.Brightness=1.3
+ halo.Size=UDim2.fromScale(3.4,3.4);halo.MaxDistance=90;halo.Enabled=false;halo.Parent=at
+ local image=Instance.new('ImageLabel');image.BackgroundTransparency=1;image.Image=AURA_GLOW;image.ImageColor3=color
+ image.Size=UDim2.fromScale(1,1);image.ImageTransparency=.45;image.Parent=halo
+ local light=Instance.new('PointLight');light.Name='GemGlow';light.Color=color;light.Range=8;light.Brightness=.5
+ light.Shadows=false;light.Enabled=false;light.Parent=at
+ return {at=at,comet=comet,motes=motes,twinkle=twinkle,halo=halo,image=image,light=light,color=color}
+end
+local function stepAura(r,now,flight,resting,off)
+ if not r.rareGem or r.stone then return end
+ local a=r.aura
+ if off or not (flight or resting) then
+  if a and (a.comet.Enabled or a.halo.Enabled) then
+   a.comet.Enabled=false;a.motes.Enabled=false;a.twinkle.Enabled=false;a.halo.Enabled=false;a.light.Enabled=false
+  end
+  return
+ end
+ if not a then a=makeAura(r);r.aura=a end
+ local color=r.effectColor or r.color
+ if a.color~=color then
+  a.color=color;a.image.ImageColor3=color;a.light.Color=color
+  local seq=ColorSequence.new(color:Lerp(PICKUP_HIGHLIGHT,.55),color)
+  a.comet.Color=seq;a.motes.Color=seq;a.twinkle.Color=seq
+ end
+ if a.comet.Enabled~=flight then a.comet.Enabled=flight end
+ if resting and not a.landed then
+  a.landed=true;a.twinkle:Emit(12);a.motes:Emit(6)
+ end
+ if a.motes.Enabled~=resting then a.motes.Enabled=resting;a.twinkle.Enabled=resting end
+ a.halo.Enabled=true;a.light.Enabled=true
+ local breathe=.5+.5*math.sin(now*2.6+r.seed)
+ local k=resting and 1 or .6
+ a.halo.Size=UDim2.fromScale((3+.8*breathe)*k,(3+.8*breathe)*k)
+ a.image.ImageTransparency=.5-.15*breathe
+ a.light.Brightness=(.35+.2*breathe)*k
+end
 local function displayOrder(a,b)
  if a.displayDistance==b.displayDistance then return a.seed<b.seed end
  return a.displayDistance<b.displayDistance
@@ -500,7 +573,8 @@ function V:update(dt,now)
     if age<.32 and cameraPosition and (cameraPosition-launch).Magnitude<90 then
      if self.audio then self.audio:play('gem_reveal',launch,{level=r.owner==self.player.UserId and 1 or .64}) end
      if not reducedEffects and not reducedMotion then
-      RoleVisuals.ImpactParticles(launch,r.effectColor,1.2,'GemReward')
+      RoleVisuals.ImpactParticles(launch,r.effectColor,1.5,'GemReward')
+      RoleVisuals.ImpactParticles(launch,r.effectColor:Lerp(PICKUP_HIGHLIGHT,.4),1.1,'CrystalBreak',nil,r.effectColor)
       RoleVisuals.Pulse(launch,r.effectColor,.55,5.2,.42)
      end
     end
@@ -520,7 +594,8 @@ function V:update(dt,now)
        pitch=(r.physical and .84 or 1.02)+(r.seed%4)*.028})
      end
      if r.rareGem and not reducedEffects and not reducedMotion then
-      RoleVisuals.ImpactParticles(point,r.effectColor,.73,'GemReward')
+      RoleVisuals.ImpactParticles(point,r.effectColor,1.25,'GemReward')
+      RoleVisuals.Pulse(point+Vector3.yAxis*.08,r.effectColor,.4,3.6,.4)
      end
     end
    end
@@ -647,6 +722,11 @@ function V:update(dt,now)
     local distanceFade=math.clamp((72-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
     updateGlint(self,r,landingAge,canGlint and glintStrength*distanceFade*opacity or 0,now)
    else removeIdle(self,r) end
+   if r.rareGem then
+    local inAir=live and not pulling and displayAt>=r.born and (r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2))
+    local onGround=live and not seated and not pulling and not docking and landingAge~=nil and landingAge>=0
+    stepAura(r,now,inAir==true,onGround==true,reducedEffects or not cameraPosition or (r.drawPosition-cameraPosition).Magnitude>90 or opacity<.2)
+   end
    if not r.stone and (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
@@ -655,7 +735,8 @@ function V:update(dt,now)
     if r.ribbon then
      if not inFlight or reducedEffects or r.ribbon.untilAt then finishTrail(self,r,now) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
-     r.ribbon=launchTrail(r.view,r.effectColor,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
+     r.ribbon=launchTrail(r.view,r.effectColor,r.physical and .32 or r.rareGem and .3 or .16);r.trailUsed=true;self.trailCount+=1
+     if r.rareGem then r.ribbon.trail.Lifetime=.5 end
     end
    elseif r.ribbon then
     finishTrail(self,r,now)

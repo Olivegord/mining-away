@@ -3720,12 +3720,17 @@ function scene.digPick(d,p)
  scene.digAim(job)
  return job
 end
--- Point the beam at the next piece: the top of its cell nearest the middle.
+-- Point the beam at the chunk's center (DigCube.chunkCenter), where every
+-- nested stage grows from: the rock surface there, below any stage already
+-- carved out. The drone hovers straight above it.
 function scene.digAim(job)
  local dig=scene.dig
- local piece=job.pieces and job.pieces[job.stage+1]
- local c=dig.cube.cells[piece and piece.ids[1] or job.left[1]]
- job.contact=dig.origin+Vector3.new(c.cx,c.y1,c.cz)
+ local cx,cz,id=DigCube.chunkCenter(dig.cube,job.ids)
+ local c=dig.cube.cells[id]
+ local carved=job.pieces and job.pieces[job.stage]
+ local part=carved and carved.parts and carved.parts[1]
+ local depth=part and (part.y1-part.y0) or 0
+ job.contact=dig.origin+Vector3.new(cx,c.y1-depth,cz)
 end
 -- One piece of a chunk breaks off before the rest: it leaves the rock now
 -- (ops flag P: no gem roll yet) and pays its share of the chunk's rock.
@@ -3774,8 +3779,8 @@ function scene.digDrone(d,p,dt)
   move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt);return
  end
  local top=job.contact
- local angle=(d.slot or 1)*2.4
- local goal=top+Vector3.new(math.cos(angle)*1.1,6.5,math.sin(angle)*1.1)
+ -- Straight above the chunk's center, so the beam drops vertically onto it.
+ local goal=top+Vector3.new(0,6.5,0)
  d.digPoint=top
  d.digging=true
  if (d.pos-goal).Magnitude>2.4 then d.state='Travel';d.mining=false;d.digWarm=nil;d.warmAt=nil;move(d,goal,dt);return end
