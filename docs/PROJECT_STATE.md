@@ -1,5 +1,16 @@
 # Shared project context
 
+## November 22 — dim lights, rubble only at the end, centered cuts, gem aura
+
+Owner follow-up on `ed8ee05`. Built in `cfae949`, installed by `tools/studio_apply.py` (Studio save 479, canonical sha256 `32d0ec54…`). Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md).
+
+- Break and contact lights much dimmer and capped; no Neon flash.
+- Physics rubble only on the final cut; stages are just the outline growing.
+- Server: stages, beam and hover share `DigCube.chunkCenter`, so the drone sits straight above where its cut grows from.
+- Target outline in the rock's color.
+- Dropped gems: comet sparkles, halo, dim glow, motes, twinkles, bigger launch/landing bursts.
+- Verified: compile; `test_dig_cube.py`, `test_dig_flow.py`, `test_pickups.py`, `test_field_pickup_flow.py` pass. Not seen in Play.
+
 ## November 22 — simpler breaks that pop; lights and glow do the work
 
 Owner: mining is visually confusing; too many extraneous break effects; make it simpler, make the important things pop, use lighting and glows. Built in `ed8ee05`, installed by `tools/studio_apply.py` (Studio save 478, canonical sha256 `a19a0a31…`, ledger commit `b465fb6`). Not published.

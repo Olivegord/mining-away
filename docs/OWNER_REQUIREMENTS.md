@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — dimmer lights, rubble only at the end, centered drones, rock-colored outline, gems that shine
+
+After `ed8ee05`: (1) lights "like a flashbang", much less max brightness; (2) the physics rock debris should ONLY appear after the final cut, the stages before are just the cell outline expanding; (3) drones sometimes dig cells not right under them: a drone chooses its FINAL large cell first, hovers above it and its laser goes there, and the small cells emerge from the laser center, so it is all centered; (4) the mining outline in the rock's color, not the drone's; (5) dropped crystals need MUCH more: particles and effects for the break, the arc, the glow, emissions. Now that everything is colored, ores need to look nicer.
+
 ## November 22 — mining is visually confusing: simpler, make the important things pop
 
 "boy o BOY is this game visualy confusing. when mining its impossible to tell what is going on, what the player is doing, too many extraneous effects when breaking rock etc. lets make this simpler, and make the important things POP. make better use of lighting and and glows and stuff". This names the break effects, so it overrides the November 19 "do not strip the effects" rule for the layers removed in `ed8ee05` (see [VFX instructions](VFX_INSTRUCTIONS.md)). It also overrides "no Neon in dig effects" for the short break flash of your own breaks and gems.

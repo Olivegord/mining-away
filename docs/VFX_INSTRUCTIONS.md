@@ -1,5 +1,15 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — follow-up: dim lights, rubble only at the end, centered cuts, gem aura
+
+Owner on `ed8ee05`. Built in `cfae949`; supersedes the matching rows of the entry below.
+
+- **Lights:** break lights are scaled 0.22× and capped at brightness 1.6 (`LIGHT_SCALE`, `LIGHT_PEAK`). The break flash is never Neon (0.3 own, 0.45 others). Beam contact light 0.9–1.2, range 10. Break sparks brightness 1.5. Do not raise light brightness again without a request.
+- **Rubble:** physics rubble (`V:shards`) only for the final cut. A nested stage shows only its shell flash (its outline growing), a sound, a dim light and a small beat.
+- **Centering:** `DigCube.chunkCenter` (the chunk's area centroid when inside one of its cells, otherwise its nearest cell's middle) centers the nested stages, the beam contact (`scene.digAim`, at the rock surface below any carved stage) and the drone's hover (straight above, no per-slot offset).
+- **Outline:** the rock's color toward white (0.4), not the beam's.
+- **Dropped gems (`PickupView` gem aura):** gem-colored sparkle comet in flight (70/s), a wider (0.3) and longer (0.5 s) trail, then a breathing camera-facing halo, a dim light (≤0.55), rising motes and twinkles, and a twinkle burst on landing. Launch adds a `CrystalBreak` burst; landing uses `GemReward` 1.25 plus a ring. The dig gem break has two particle waves and two rings again.
+
 ## November 22 — one beat per break, lights instead of piles of particles
 
 Owner: mining is visually confusing, too many extraneous effects when breaking rock; simpler, make the important things pop, better lighting and glows. Built in `ed8ee05` (`src/DigCubeView.lua`, `src/WorkEffects.lua`).
