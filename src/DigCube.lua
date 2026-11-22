@@ -447,7 +447,9 @@ local function supported(cube: any,upper: number,id: number,gone: {[number]:any}
  local core={}
  for _,v in ipairs(cell.poly) do table.insert(core,{cell.cx+(v[1]-cell.cx)*D.CORE,cell.cz+(v[2]-cell.cz)*D.CORE}) end
  for _,b in ipairs(D.below(cube,upper)) do
-  if b~=id and not cube.removed[b] and not (gone and gone[b]) and not separated(core,cube.cells[b].poly) then return true end
+  -- A sealed gem cell may float itself, so it never holds anything up:
+  -- otherwise digging under it leaves whole layered stacks hanging on it.
+  if b~=id and not cube.removed[b] and not (gone and gone[b]) and not (cube.sealed and cube.sealed[b]) and not separated(core,cube.cells[b].poly) then return true end
  end
  return false
 end

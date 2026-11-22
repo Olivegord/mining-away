@@ -279,7 +279,9 @@ function Soundscape:_musicStep()
 end
 function Soundscape:setContext(combat,menu)
  self.combat=combat==true;self.menu=menu==true
- local volume=self.musicMuted and 0 or (self.combat and .055 or (self.menu and .085 or .14))
+ -- Owner, Nov 22: a little louder. Game mixes commonly sit music about
+ -- 10-15 dB under the effects; .27 is about 11 dB under (was .14, ~17 dB).
+ local volume=self.musicMuted and 0 or (self.combat and .105 or (self.menu and .16 or .27))
  if volume~=self.lastMusicVolume then
   self.lastMusicVolume=volume
   if self.musicTween then self.musicTween:Cancel() end

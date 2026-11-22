@@ -140,16 +140,33 @@ do
  for step=1,260 do
   local id=D.pick(dug,{focusX=W*.5,focusZ=W*.5,random=r2})
   if not id then break end
-  for _,cid in ipairs(D.chunk(dug,id,1+(step%3)*.5,nil,r2)) do D.remove(dug,cid) end
+  -- Every 9th chunk seals one cell (a gem), as the server does.
+  local ids=D.chunk(dug,id,1+(step%3)*.5,nil,r2)
+  for k,cid in ipairs(ids) do
+   if step%9==0 and k==1 then dug.sealed=dug.sealed or {};dug.sealed[cid]=true else D.remove(dug,cid) end
+  end
  end
  local deepest=1
  for id in pairs(dug.removed) do deepest=math.max(deepest,dug.cells[id].layer) end
  check(deepest>=3,'float check digs down: '..deepest)
  for _,cell in ipairs(dug.cells) do
-  if not dug.removed[cell.id] and cell.layer<#dug.layers then
+  if not dug.removed[cell.id] and not (dug.sealed and dug.sealed[cell.id]) and cell.layer<#dug.layers then
    check(D.supported(dug,cell.id,0,nil),'cell '..cell.id..' (layer '..cell.layer..') does not float')
   end
  end
+ -- No mushroom caps either: few remaining cells overhang mostly empty space
+ -- (over half of what lies under them dug out).
+ local caps,exposed=0,0
+ for _,cell in ipairs(dug.cells) do
+  if not dug.removed[cell.id] and not (dug.sealed and dug.sealed[cell.id]) and cell.layer<#dug.layers then
+   local under=D.below(dug,cell.id)
+   local gone=0
+   for _,b in ipairs(under) do if dug.removed[b] then gone+=1 end end
+   if gone>0 then exposed+=1 end
+   if #under>0 and gone/#under>.5 then caps+=1 end
+  end
+ end
+ check(caps<=exposed*.08,'overhanging caps: '..caps..' of '..exposed..' cells at the pit edge')
 end
 -- A sealed cell may float: it does not stop the cell under it being cut.
 do

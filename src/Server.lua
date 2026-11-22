@@ -3580,6 +3580,7 @@ function scene.digCarve(job)
   wedges[id]=list
   return list
  end
+ local rebuilt={}
  -- Nested-stage shapes: wedges per part, with their bounds.
  local stageParts={}
  for _,part in ipairs(job.parts or {}) do
@@ -3623,10 +3624,90 @@ function scene.digCarve(job)
     block.part:Destroy();block.part=result
    elseif not ok and string.find(tostring(result),'empty') then
     block.part:Destroy();table.remove(dig.blocks,i)
+   else
+    -- A failed cut used to leave the whole block standing while its cells
+    -- counted as dug, so the crew dug under it: floating layered slabs
+    -- (owner, Nov 22). Rebuild it from a fresh box instead.
+    table.remove(dig.blocks,i)
+    for _,b in ipairs(scene.digRebuildBlock(block,stageParts,0)) do table.insert(rebuilt,b) end
    end
   end
  end
+ for _,b in ipairs(rebuilt) do table.insert(dig.blocks,b) end
  for _,p in ipairs(made) do p:Destroy() end
+end
+-- A block region as a fresh box minus every dug cell (and this pass's stage
+-- shapes) that reaches it, at default fidelity (simpler, sturdier than
+-- cutting an already much-cut part again). If that fails too, the region is
+-- split in four and each quarter rebuilt; a quarter that still fails keeps a
+-- plain box only if its middle is rock that has not been dug.
+local REBUILD_DEPTH=2
+function scene.digRebuildBlock(block,stageParts,depth)
+ local dig=scene.dig;local cube=dig.cube;local o=dig.origin
+ local color,material=block.part.Color,block.part.Material
+ local lo,hi=block.lo,block.hi
+ block.part:Destroy()
+ dig.carveFailures=(dig.carveFailures or 0)+1
+ if dig.carveFailures<=20 then (warn or print)('[DigCube] carve failed; rebuilding block '..tostring(lo)..' (depth '..depth..')') end
+ local box=Instance.new('Part');box.Name='RockBlock'
+ box.Anchored=true;box.CanTouch=false;box.CastShadow=false
+ box.Material=material;box.Color=color;box.TopSurface=Enum.SurfaceType.Smooth;box.BottomSurface=Enum.SurfaceType.Smooth
+ box.Size=hi-lo;box.CFrame=CFrame.new(o+(lo+hi)*.5)
+ local negatives={}
+ local function add(w)
+  local p=Instance.new('WedgePart');p.Anchored=true;p.CanCollide=false
+  p.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+  p.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+   Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+  table.insert(negatives,p)
+ end
+ for id in pairs(cube.removed) do
+  local c=cube.cells[id]
+  if hi.X>c.minX-.5 and lo.X<c.maxX+.5 and hi.Y>c.y0-.1 and lo.Y<c.y1+.6 and hi.Z>c.minZ-.5 and lo.Z<c.maxZ+.5 then
+   for _,w in ipairs(DigCube.prismWedges(cube,{id})) do add(w) end
+  end
+ end
+ for _,sp in ipairs(stageParts or {}) do
+  if hi.X>sp.lo.X-.5 and lo.X<sp.hi.X+.5 and hi.Y>sp.lo.Y-.1 and lo.Y<sp.hi.Y+.6 and hi.Z>sp.lo.Z-.5 and lo.Z<sp.hi.Z+.5 then
+   for _,w in ipairs(sp.wedges) do
+    local p=w:Clone();table.insert(negatives,p)
+   end
+  end
+ end
+ local ok,result=true,nil
+ if #negatives>0 then
+  ok,result=pcall(function() return box:SubtractAsync(negatives,Enum.CollisionFidelity.Default,Enum.RenderFidelity.Automatic) end)
+ end
+ for _,p in ipairs(negatives) do p:Destroy() end
+ if ok and #negatives==0 then box.Parent=dig.rock;return {{part=box,lo=lo,hi=hi}} end
+ if ok and result then
+  box:Destroy()
+  result.Anchored=true;result.CanTouch=false;result.CastShadow=false;result.UsePartColor=true;result.Color=color
+  result.Material=material;result.Name='RockBlock';result.Parent=dig.rock
+  return {{part=result,lo=lo,hi=hi}}
+ end
+ if not ok and string.find(tostring(result),'empty') then box:Destroy();return {} end
+ local size=hi-lo
+ if depth<REBUILD_DEPTH and math.max(size.X,size.Z)>2 then
+  box:Destroy()
+  local out={}
+  local mx,mz=(lo.X+hi.X)*.5,(lo.Z+hi.Z)*.5
+  for _,q in ipairs({{lo.X,mx,lo.Z,mz},{mx,hi.X,lo.Z,mz},{lo.X,mx,mz,hi.Z},{mx,hi.X,mz,hi.Z}}) do
+   local piece=Instance.new('Part');piece.Color=color;piece.Material=material
+   local sub={part=piece,lo=Vector3.new(q[1],lo.Y,q[3]),hi=Vector3.new(q[2],hi.Y,q[4])}
+   for _,b in ipairs(scene.digRebuildBlock(sub,stageParts,depth+1)) do table.insert(out,b) end
+  end
+  dig.carveFailures-=4 -- the quarters are not failures of their own
+  return out
+ end
+ -- Last resort: keep a plain box only over rock that is still there.
+ local middle=(lo+hi)*.5
+ local layer=nil
+ for L,l in ipairs(cube.layers) do if middle.Y>=l.y0 and middle.Y<=l.y1 then layer=L end end
+ local id=layer and DigCube.cellAt(cube,layer,middle.X,middle.Z)
+ if id and not cube.removed[id] then box.Parent=dig.rock;return {{part=box,lo=lo,hi=hi}} end
+ box:Destroy()
+ return {}
 end
 -- Drain the carve queue in order; the worker starts when a chunk is queued.
 function scene.digCarveLoop()
@@ -3884,7 +3965,7 @@ end
 -- (the freeze is the pause) and asks with 'DigOpen'. The server's own check
 -- below is the fallback. The gem launches GEODE_LAUNCH after the request,
 -- about when the client's 12-frame freeze ends (it was sent a moment before).
-local GEODE_LAUNCH=.12
+local GEODE_LAUNCH=.08 -- the client's freeze is 8 frames
 local GEODE_LANDING=8 -- downward speed (studs/s) that counts as landing from a jump
 function scene.digOpenGeode(id,g)
  local dig=scene.dig;local cube=dig.cube

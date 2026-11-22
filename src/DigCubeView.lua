@@ -317,7 +317,7 @@ function V:shards(op: any,now: number,center: Vector3)
      local f={parts=parts,k=SHARD_GAP,scale=SHARD_GAP,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
       turn=self.random:NextNumber(.6,1.8),
       from=mid,land=Vector3.new(mid.X,landY,mid.Z)+out*self.random:NextNumber(.1,.9),
-      at=now+math.min(.14,far*.016)+self.random:NextNumber(0,.03),
+      at=now, -- all at once, the moment the pause ends (owner, Nov 22)
       T=.24+math.sqrt(2*drop/GRAVITY)*1.15,hop=self.random:NextNumber(.35,.95),
       wait=self.random:NextNumber(.3,.7),born=now,pos=mid,out=out,floor=o.Y+c.y0}
      if loose then
@@ -426,7 +426,9 @@ function V:stepShards(now: number)
     -- Thrown and tipped away from where the beam hit (owner, Nov 22), so
     -- it is clear what cracked it: out from the beam's point, rolling
     -- outward about the axis across that direction, plus a little tumble.
-    primary.AssemblyLinearVelocity=f.out*self.random:NextNumber(4,8)+Vector3.yAxis*self.random:NextNumber(5,10)
+    -- An upward pop first, so it reads as knocked loose (owner, Nov 22).
+    primary.CFrame+=Vector3.yAxis*.12
+    primary.AssemblyLinearVelocity=f.out*self.random:NextNumber(4,8)+Vector3.yAxis*self.random:NextNumber(10,15)
     local roll=Vector3.yAxis:Cross(f.out)
     primary.AssemblyAngularVelocity=roll*self.random:NextNumber(4,8)+Vector3.new(self.random:NextNumber(-2,2),self.random:NextNumber(-2,2),self.random:NextNumber(-2,2))
    end
@@ -487,8 +489,10 @@ end
 --    pop. The shards (the real rock) stand in for the two opening halves.
 -- A piece that breaks before the last is the old crack beat (seam burst):
 -- chips, two sparks, a lighter particle burst and the small ring.
-local HOLD_PIECE,HOLD_SPLIT,HOLD_HEAVY,HOLD_GEM=2/60,3/60,5/60,9/60
-local HOLD_GEODE=12/60 -- the full-game freeze after you land on a sealed gem
+-- Shorter (owner, Nov 22: the pause was too long): about 5-8 frames is a
+-- medium hit; past ~20 reads as a bug.
+local HOLD_PIECE,HOLD_SPLIT,HOLD_HEAVY,HOLD_GEM=1/60,2/60,3/60,6/60
+local HOLD_GEODE=8/60 -- the full-game freeze after you land on a sealed gem
 local FLASH=Color3.fromRGB(255,249,216)
 local FLASH_FADE=.2
 -- Every break lights the whole segment that is coming out in the color of

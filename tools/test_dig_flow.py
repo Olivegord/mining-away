@@ -23,6 +23,15 @@ checks = r"""
 local function tick(n) for _=1,n do realTime+=C.Tick;heartbeat:Fire(C.Tick) end end
 local dig=scene.dig
 local DigCube=Config.DigCube
+-- A geometry double for the carve: a cut returns a new part, unless the part
+-- is marked to fail (as Roblox CSG sometimes does on much-cut parts).
+local cuts,failed=0,0
+function IM:SubtractAsync(negatives)
+ if self:GetAttribute('FailCut') then failed+=1;error('CSG operation failed: too complex') end
+ cuts+=1
+ local p=Instance.new('Part');p.Size=self.Size;p.CFrame=self.CFrame
+ return p
+end
 assert(dig and dig.cube,'the cube exists at startup')
 local holder=root:FindFirstChild('DigCube')
 assert(holder and holder:GetAttribute('Seed') and holder:GetAttribute('Generation')==1,'seed and generation replicate')
@@ -121,6 +130,30 @@ end
 local sealedAny=next(dig.geodes)~=nil
 for _,entry in ipairs(dig.ops) do if string.match(entry,'|[GX]$') then sealedAny=true end end
 assert(flagged or sealedAny or dig.deepest==1,'the first chunk into a new layer is a milestone')
+-- A failed cut no longer leaves the block standing over dug cells: the
+-- block is rebuilt from a fresh box (floating layered slabs, owner Nov 22).
+assert(cuts>0,'the carve cuts blocks')
+do
+ local victim=dig.blocks[1]
+ local lo,hi=victim.lo,victim.hi
+ victim.part:SetAttribute('FailCut',true)
+ -- Dig a cell inside that block, then carve.
+ local id
+ for cid,c in ipairs(dig.cube.cells) do
+  if not dig.cube.removed[cid] and c.cx>lo.X and c.cx<hi.X and c.cz>lo.Z and c.cz<hi.Z and c.y0>=lo.Y-.01 and c.y1<=hi.Y+.01 then id=cid;break end
+ end
+ assert(id,'a cell inside the failing block')
+ DigCube.remove(dig.cube,id)
+ local before=failed
+ scene.digCarve({generation=dig.generation,ids={id},parts={}})
+ assert(failed==before+1,'the cut failed')
+ local stillThere=false
+ for _,b in ipairs(dig.blocks) do if b==victim then stillThere=true end end
+ assert(not stillThere,'the failed block is replaced')
+ local covered=0
+ for _,b in ipairs(dig.blocks) do if b.lo.X>=lo.X-.01 and b.hi.X<=hi.X+.01 and b.lo.Z>=lo.Z-.01 and b.hi.Z<=hi.Z+.01 and b.lo.Y==lo.Y then covered+=1 end end
+ assert(covered>=1,'the region is rebuilt from a fresh box')
+end
 -- Treasure pockets exist, sit deep, and pay several gems.
 local pockets=0
 for id in pairs(dig.cube.treasure) do pockets+=1;assert(dig.cube.cells[id].layer>=3,'treasure sits deep') end
