@@ -647,6 +647,76 @@ function V:split(op: any,now: number)
  if hold>0 then table.insert(self.pending,{at=now+hold,run=function() self:burst(op,info) end})
  else self:burst(op,info) end
 end
+-- The break's own particles, bigger and longer-lived than the shared
+-- cocktail, emitted from the whole volume of the rock that broke (a box the
+-- size of the piece), so they come from exactly where it broke: chunky
+-- debris in the rock's tone, a dust cloud that hangs and drifts, bright
+-- sparks in the beam's color and slow glitter that lingers.
+local SQUARE='rbxasset://textures/particles/SquareParticle.png'
+function V:breakCloud(op: any,e: any,big: boolean)
+ if self:reduced() or (self.clouds or 0)>=8 then return end
+ local cube=self.cube;local o=self.origin
+ local lo,hi=Vector3.new(math.huge,math.huge,math.huge),Vector3.new(-math.huge,-math.huge,-math.huge)
+ for _,id in ipairs(op.cells) do
+  local c=cube.cells[id]
+  if c then
+   lo=Vector3.new(math.min(lo.X,c.minX),math.min(lo.Y,c.y0),math.min(lo.Z,c.minZ))
+   hi=Vector3.new(math.max(hi.X,c.maxX),math.max(hi.Y,c.y1),math.max(hi.Z,c.maxZ))
+  end
+ end
+ if lo.X>hi.X then return end
+ local box=fxPart(self.fx,'DigBreakCloud',e.color);box.Transparency=1
+ box.Size=Vector3.new(math.max(.5,hi.X-lo.X),math.max(.5,hi.Y-lo.Y),math.max(.5,hi.Z-lo.Z))
+ box.Position=o+(lo+hi)*.5
+ self.clouds=(self.clouds or 0)+1
+ box.Destroying:Connect(function() self.clouds-=1 end)
+ local k=big and 1 or .65
+ local bulk=math.clamp(e.bulk,1.5,5)
+ local function emitter(name: string): ParticleEmitter
+  local p=Instance.new('ParticleEmitter');p.Name=name;p.Enabled=false;p.Rate=0
+  p.Shape=Enum.ParticleEmitterShape.Box;p.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+  p.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward;p.LockedToPart=false
+  p.Parent=box
+  return p
+ end
+ -- Debris: chunky square bits in the rock's tone, thrown up and falling.
+ local debris=emitter('Debris');debris.Texture=SQUARE
+ debris.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.25),e.color:Lerp(SHARD_DARK,.45))
+ debris.LightEmission=0;debris.LightInfluence=1;debris.Brightness=1.2
+ debris.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.55*k,.2),NumberSequenceKeypoint.new(.8,.45*k,.15),NumberSequenceKeypoint.new(1,0)})
+ debris.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.75,0),NumberSequenceKeypoint.new(1,1)})
+ debris.Lifetime=NumberRange.new(.9,1.6);debris.Speed=NumberRange.new(10,22);debris.SpreadAngle=Vector2.new(55,55)
+ debris.EmissionDirection=Enum.NormalId.Top;debris.Acceleration=Vector3.new(0,-48,0);debris.Drag=.6
+ debris.Rotation=NumberRange.new(0,360);debris.RotSpeed=NumberRange.new(-260,260)
+ debris:Emit(math.floor((10+6*bulk)*k))
+ -- Dust: a big lit cloud that rises a little and hangs before it thins out.
+ local dust=emitter('Dust')
+ EnergyDisc.configure(dust,(2.4+.5*bulk)*k,.35,.45,2.1,.3)
+ dust.LightEmission=0;dust.LightInfluence=.85;dust.Brightness=1.15
+ dust.Color=ColorSequence.new(e.color:Lerp(Color3.fromRGB(255,248,232),.45))
+ dust.Lifetime=NumberRange.new(1.6,2.6);dust.Speed=NumberRange.new(2,6);dust.SpreadAngle=Vector2.new(80,80)
+ dust.EmissionDirection=Enum.NormalId.Top;dust.Acceleration=Vector3.new(0,1.6,0);dust.Drag=2.2
+ dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.25),NumberSequenceKeypoint.new(.5,.45),NumberSequenceKeypoint.new(1,1)})
+ dust:Emit(math.floor((6+2*bulk)*k))
+ -- Sparks in the beam's color: bright, quick, they carry the glow.
+ local sparks=emitter('Sparks')
+ EnergyDisc.configure(sparks,.75*k,.05,1,0,.35)
+ sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=2.2
+ sparks.Color=ColorSequence.new(e.beam:Lerp(BEAM_CORE,.35),e.beam)
+ sparks.Lifetime=NumberRange.new(.45,.9);sparks.Speed=NumberRange.new(14,28);sparks.SpreadAngle=Vector2.new(70,70)
+ sparks.EmissionDirection=Enum.NormalId.Top;sparks.Acceleration=Vector3.new(0,-30,0);sparks.Drag=1.5
+ sparks:Emit(math.floor((10+4*bulk)*k))
+ -- Glitter that lingers: slow falling bright flecks, the last thing to go.
+ local glitter=emitter('Glitter')
+ EnergyDisc.configure(glitter,.32*k,.1,1,.4,.4)
+ glitter.LightEmission=.8;glitter.LightInfluence=0;glitter.Brightness=1.8
+ glitter.Color=ColorSequence.new(e.beam:Lerp(BEAM_CORE,.6),e.color:Lerp(BEAM_CORE,.5))
+ glitter.Lifetime=NumberRange.new(2.2,3.4);glitter.Speed=NumberRange.new(3,8);glitter.SpreadAngle=Vector2.new(85,85)
+ glitter.EmissionDirection=Enum.NormalId.Top;glitter.Acceleration=Vector3.new(0,-2.2,0);glitter.Drag=2.6
+ glitter.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.1),NumberSequenceKeypoint.new(.8,.25),NumberSequenceKeypoint.new(1,1)})
+ glitter:Emit(math.floor((8+3*bulk)*k))
+ task.delay(3.6,function() box:Destroy() end)
+end
 function V:burst(op: any,e: any)
  local ctx=self.ctx
  local now=workspace:GetServerTimeNow()
@@ -663,6 +733,7 @@ function V:burst(op: any,e: any)
  local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
  if op.partial then
   -- Each piece of a chunk cracks a step higher, building to the full split.
+  self:breakCloud(op,{color=vivid,beam=beam,bulk=e.bulk},false)
   if ctx.audio then
    ctx.audio:play('crystal_impact',point,{pitch=.88+.14*(op.stage or 1)+self.random:NextNumber(-.03,.03),level=volume*.9,rockSize=e.bulk})
    ctx.audio:play('crystal_release_tink',point,{level=volume*.5,pitch=1+.1*(op.stage or 1)})
@@ -670,12 +741,12 @@ function V:burst(op: any,e: any)
   if lively then
    if ctx.impact then
     if surface then ctx.impact:chips(now,point,Vector3.yAxis,surface,4,ground) end
-    ctx.impact:fireworks(point,ground,vivid,strength,now,2)
-    ctx.impact:fireworks(point,ground,beam,strength,now,2)
+    ctx.impact:fireworks(point,ground,vivid,strength*2.2,now,4)
+    ctx.impact:fireworks(point,ground,beam,strength*2.2,now,4)
    end
    if ctx.effects then
-    ctx.effects.ImpactParticles(point,vivid,strength,'CrystalBreak',nil,vivid,nil,.55)
-    ctx.effects.ImpactParticles(point,beam,strength*.7,'CrystalBreak',nil,beam,nil,.3)
+    ctx.effects.ImpactParticles(point,vivid,strength*1.5,'CrystalBreak',nil,vivid,nil,.8)
+    ctx.effects.ImpactParticles(point,beam,strength*1.2,'CrystalBreak',nil,beam,nil,.5)
     ctx.effects.Pulse(point+Vector3.yAxis*.1,beam,.3,2.6*strength,.24,Vector3.yAxis,.78)
    end
    if ctx.beat then ctx.beat('Split',point,now,.55*volume) end
@@ -690,18 +761,19 @@ function V:burst(op: any,e: any)
  -- A gem bursts out with the rock, not after it.
  if op.tier>0 then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk},os.clock()) end
  if not lively then return end
+ self:breakCloud(op,{color=vivid,beam=beam,bulk=e.bulk},true)
  -- Combo counter and the camera hit, shared with the field rocks.
  if ctx.splitBeat then ctx.splitBeat(point,strength,now,false,e.owned,nil)
  elseif ctx.beat then ctx.beat(e.heavy and 'HeavySplit' or 'Split',point,now,math.clamp(strength*.58,.6,1.35)*volume) end
  if ctx.impact then
-  ctx.impact:fireworks(point,ground,vivid,strength,now,5)
-  ctx.impact:fireworks(point,ground,beam,strength,now,4)
+  ctx.impact:fireworks(point,ground,vivid,strength*2.4,now,8)
+  ctx.impact:fireworks(point,ground,beam,strength*2.4,now,7)
   ctx.impact:breakPieces(point,ground,dark,strength,now,e.owned,surface and surface.Material or nil)
  end
  if ctx.effects then
   ctx.effects.Pulse(Vector3.new(point.X,ground+.085,point.Z),vivid,strength*.55,strength*6.6,.58)
-  ctx.effects.ImpactParticles(point,vivid,strength*.83,'CrystalBreak',nil,vivid)
-  ctx.effects.ImpactParticles(point,beam,strength*.6,'CrystalBreak',nil,beam,nil,.45)
+  ctx.effects.ImpactParticles(point,vivid,strength*1.5,'CrystalBreak',nil,vivid,nil,1.3)
+  ctx.effects.ImpactParticles(point,beam,strength*1.2,'CrystalBreak',nil,beam,nil,.8)
  end
 end
 
@@ -868,13 +940,14 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  if from.Y-tip.Y<.4 then self:hideBeam(beam);return end
  local state=source:GetAttribute('State')
  local cutting=type(key)=='string' and key~='' and source:GetAttribute('DigMining')==true
+ local charging=type(key)=='string' and key~='' and state=='Warmup'
  if not beam.on then beam.on=true end
- -- While the drone lasers, its real beam takes the sight's place.
- local aiming=not cutting
+ -- The red targeting laser shows only while the drone charges, right before
+ -- it fires; then the real beam takes its place.
+ local aiming=charging and not cutting
  if beam.core.Enabled~=aiming then beam.core.Enabled=aiming;beam.glow.Enabled=aiming;beam.gui.Enabled=aiming end
  beam.root.CFrame=CFrame.new(tip+Vector3.yAxis*.05)
  beam.a.Position=from-tip
- local charging=type(key)=='string' and key~='' and state=='Warmup'
  local locked=type(key)=='string' and key~=''
  local size,core,halo
  if cutting then

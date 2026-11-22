@@ -3765,8 +3765,13 @@ function scene.digDrone(d,p,dt)
  move(d,goal,dt)
  -- The field drones' charge-up: the published warmup start and length drive
  -- the same beam startup on every client.
- d.digWarm=d.digWarm or now
- d.digWarmFor=math.clamp((d.stats.warmup or .8)*.75,.3,.9)
+ -- Long enough to see the charge (the owner asked for it back): about the
+ -- drone's own warmup per chunk, longer for the first shot after a rest.
+ if not d.digWarm then
+  d.digWarm=now
+  local rested=now-(d.lastBeamAt or -math.huge)>scene.FIRST_CHARGE_REST
+  d.digWarmFor=rested and 1.3 or math.clamp(d.stats.warmup or .8,.7,1.1)
+ end
  if not d.mining then d.warmAt=d.digWarm end
  if now-d.digWarm<d.digWarmFor then d.state='Warmup';d.mining=false;return end
  if not d.mining then d.beamSince=now end
