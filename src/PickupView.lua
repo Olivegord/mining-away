@@ -162,7 +162,7 @@ local function stepAura(r,now,flight,resting,off)
   local seq=ColorSequence.new(color:Lerp(PICKUP_HIGHLIGHT,.55),color)
   a.comet.Color=seq;a.motes.Color=seq;a.twinkle.Color=seq
  end
- if a.comet.Enabled~=flight then a.comet.Enabled=flight end
+ if a.comet.Enabled~=flight then a.comet.Enabled=flight;a.comet.Rate=r.geode and 140 or 70 end
  if resting and not a.landed then
   a.landed=true;a.twinkle:Emit(12);a.motes:Emit(6)
  end
@@ -378,7 +378,7 @@ function V.new(root,parent,audio,reducedMotion)
   source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={lucky=source:GetAttribute('LuckyMultiplier'),view=view,faceted=faceted,gemOpacity=math.min(1,(view:GetAttribute('GemOpacity') or .76)+(rare and .14 or 0)),pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
-   stone=source:GetAttribute('StoneCargo')==true,rareGem=source:GetAttribute('RareGemReward')==true,samples={},owner=source:GetAttribute('Owner'),
+   stone=source:GetAttribute('StoneCargo')==true,rareGem=source:GetAttribute('RareGemReward')==true,geode=source:GetAttribute('GeodeGem')==true,samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
   local velocity=source:GetAttribute('OreLaunchVelocity')
@@ -509,7 +509,6 @@ function V:update(dt,now)
     self.lastGemAt=now
     local at=r.drawPosition or r.pos
     if self.audio then self.audio:play('sale_gem',at,{pitch=1.25+self.gemChain*.09,level=1.1}) end
-    if r.rareGem then popText(self.parent,at+Vector3.yAxis*1.5,'+GEM',r.effectColor or r.color,20) end
     if not reducedEffects and not reducedMotion then RoleVisuals.ImpactParticles(at,r.effectColor or r.color,.7,'GemReward') end
    end
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease=PickupMotion.collection(t)
@@ -564,7 +563,6 @@ function V:update(dt,now)
     local launch=source:GetAttribute('OreLaunchOrigin') or r.pos
     if age<.5 and cameraPosition and (cameraPosition-launch).Magnitude<110 and r.owner==self.player.UserId then
      local gold=Color3.fromRGB(255,206,64)
-     popText(self.parent,launch+Vector3.yAxis*2,'LUCKY x'..r.lucky..'!',gold,r.lucky>=10 and 34 or 26)
      if self.audio then self.audio:play('gem_reveal',launch,{pitch=r.lucky>=10 and 1.5 or 1.2,level=.9}) end
      if not reducedEffects and not reducedMotion then
       RoleVisuals.ImpactParticles(launch,gold,r.lucky>=10 and 2.2 or 1.3,'GemReward')
@@ -740,8 +738,10 @@ function V:update(dt,now)
     if r.ribbon then
      if not inFlight or reducedEffects or r.ribbon.untilAt then finishTrail(self,r,now) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
-     r.ribbon=launchTrail(r.view,r.effectColor,r.physical and .32 or r.rareGem and .3 or .16);r.trailUsed=true;self.trailCount+=1
-     if r.rareGem then r.ribbon.trail.Lifetime=.5 end
+     -- A gem out of a sealed cell flies high with a long, thick trail.
+     r.ribbon=launchTrail(r.view,r.effectColor,r.physical and .32 or r.geode and .6 or r.rareGem and .3 or .16);r.trailUsed=true;self.trailCount+=1
+     if r.rareGem then r.ribbon.trail.Lifetime=r.geode and 1.1 or .5 end
+     if r.geode then r.ribbon.trail.MaxLength=40 end
     end
    elseif r.ribbon then
     finishTrail(self,r,now)

@@ -51,31 +51,15 @@ end,function(from,to,level,now)
  if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
 end,cameraBeat,function(at) return impactFreeze:holdsNomad(at) end)
 -- Break combo: owned breaks within 1.6 s of each other stack a counter that
--- makes each following shake and sound a little bigger. Rock breaks use only
+-- makes each following shake and sound a little bigger (no text). Rock breaks use only
 -- the original break particles (no confetti layer).
 do
 local combo={count=0,at=-10}
 local function comboBreak(now)
  combo.count=now-combo.at<=1.6 and combo.count+1 or 1;combo.at=now
  if combo.count<2 then return 1 end
- if not combo.gui then
-  local screen=Instance.new('ScreenGui');screen.Name='BreakCombo';screen.ResetOnSpawn=false;screen.IgnoreGuiInset=true
-  local label=Instance.new('TextLabel');label.AnchorPoint=Vector2.new(.5,.5);label.Position=UDim2.fromScale(.5,.2)
-  label.Size=UDim2.fromOffset(240,64);label.BackgroundTransparency=1;label.Font=Enum.Font.FredokaOne;label.TextScaled=true
-  label.TextColor3=Color3.fromRGB(255,214,90);label.TextStrokeTransparency=0;label.TextStrokeColor3=Color3.fromRGB(40,24,8);label.Parent=screen
-  local scale=Instance.new('UIScale');scale.Parent=label
-  screen.Parent=player:WaitForChild('PlayerGui');combo.gui=screen;combo.label=label;combo.scale=scale
-  table.insert(connections,RunService.RenderStepped:Connect(function()
-   local age=workspace:GetServerTimeNow()-combo.at
-   combo.gui.Enabled=combo.count>=2 and age<1.9
-   if combo.gui.Enabled then
-    combo.scale.Scale=CrystalImpactView.reducedMotion() and 1 or 1+.45*math.exp(-age*12)
-    local fade=math.clamp((age-1.3)/.6,0,1);combo.label.TextTransparency=fade;combo.label.TextStrokeTransparency=fade
-   end
-  end))
- end
- combo.label.Text='x'..combo.count..' COMBO'
- combo.label.TextColor3=Color3.fromRGB(255,214,90):Lerp(Color3.fromRGB(255,80,120),math.clamp((combo.count-2)/10,0,1))
+ -- No on-screen combo text (owner, Nov 22); the climbing tink and the
+ -- growing shake carry the streak.
  soundscape:play('crystal_release_tink',nil,{pitch=1+math.min(combo.count,12)*.06,level=.8})
  return 1+math.min(combo.count-1,10)*.07
 end

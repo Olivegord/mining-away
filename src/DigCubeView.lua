@@ -9,7 +9,8 @@
 --  * each break plays the field rocks' break: frame pause, sounds, combo,
 --    camera hit, sparks, shock ring, particle burst, tumbling pieces
 --  * one ribbon beam per drone with chips and sparks where it touches
---  * a gem (after the hold) gets the gem burst and a name banner
+--  * a gem cell stays sealed (cracked, wiggling, glowing) until its owner
+--    jumps on it; then it breaks with the gem burst. No on-screen text
 --  * a dim lamp on the player down in the pit, the launch pad and tap-to-focus
 --  * before each piece breaks it cracks in two stages, like the reference
 --    rocks: it darkens under the beam, then pops loose (lifts, tilts, turns)
@@ -23,7 +24,6 @@ V.__index=V
 local BEAM_CORE=Color3.fromRGB(255,250,235)
 local HOT=Color3.fromRGB(222,128,62)
 local GRAVITY=70
-local TIER_NAMES={'AMBER!','RUBY!','QUARTZ!','VIOLET!','DIAMOND!'}
 
 local function rgb(t: {number}) return Color3.fromRGB(t[1],t[2],t[3]) end
 local function fxPart(parent: Instance,name: string,color: Color3,class: string?): BasePart
@@ -36,7 +36,7 @@ end
 
 function V.new(ctx: any)
  local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
-  generation=-1,applied=0,random=Random.new(),connections={},tapAt=0},V)
+  generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={}},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
  self:watch()
@@ -61,6 +61,7 @@ function V:watch()
  end
  table.insert(self.connections,holder.AttributeChanged:Connect(function(name)
   if name=='Generation' or name=='OpCount' or string.sub(name,1,3)=='Ops' then self:sync() end
+  if name=='Geodes' then self:syncGeodes() end
  end))
  self:sync()
 end
@@ -127,6 +128,8 @@ function V:sync()
   end
   self:buildPad()
   self:clearSparkles()
+  self:clearGeodes()
+  self:syncGeodes()
   return
  end
  local now=os.clock()
@@ -137,13 +140,16 @@ function V:sync()
   local key,tier,flag,depth=string.match(s,'^c([%d%.]+)|?(%d*)|?(%a?)(%d*)$')
   if key then
    local staged=flag=='S'
-   local op={kind='c',cells=DigCube.parseKey(key),tier=tonumber(tier) or 0,treasure=flag=='T',partial=staged or flag=='P',
-    staged=staged,stage=(staged or flag=='P') and tonumber(depth) or nil,layer=flag=='D' and tonumber(depth) or nil}
+   -- G: a sealed gem cell opened by its owner (X: a treasure pocket one).
+   local op={kind='c',cells=DigCube.parseKey(key),tier=tonumber(tier) or 0,treasure=flag=='T' or flag=='X',partial=staged or flag=='P',
+    staged=staged,stage=(staged or flag=='P') and tonumber(depth) or nil,layer=flag=='D' and tonumber(depth) or nil,geode=flag=='G' or flag=='X'}
    -- The rock that breaks here: a nested stage's shell, or what is left of
    -- the cells after the last stage (the same shapes the server carved).
    local pieces=DigCube.pieces(self.cube,op.cells)
    local piece=staged and pieces[op.stage] or pieces[#pieces]
    op.parts=piece and piece.shell or nil
+   -- A sealed cell breaks whole (it was never cut as its own chunk).
+   if op.geode then op.parts=nil end
    -- Out of the cube first, so shards land on the floor the break leaves.
    if not staged then for _,id in ipairs(op.cells) do DigCube.remove(self.cube,id) end end
    self:split(op,now)
@@ -473,6 +479,7 @@ end
 -- A piece that breaks before the last is the old crack beat (seam burst):
 -- chips, two sparks, a lighter particle burst and the small ring.
 local HOLD_PIECE,HOLD_SPLIT,HOLD_HEAVY,HOLD_GEM=2/60,3/60,5/60,9/60
+local HOLD_GEODE=10/60 -- the beat after you land on a sealed gem
 local FLASH=Color3.fromRGB(255,249,216)
 local FLASH_FADE=.2
 -- Every break lights the whole segment that is coming out in the color of
@@ -739,6 +746,10 @@ function V:split(op: any,now: number)
  for _,id in ipairs(op.cells) do
   self:clearCrack(id)
   if self.mine[id] then owned=true end
+  if op.geode then
+   owned=self.geodeOwner[id]~=nil and Players.LocalPlayer~=nil and self.geodeOwner[id]==Players.LocalPlayer.UserId
+   self:dropGeode(id)
+  end
   beam=beam or self.cellColor[id]
   -- A nested stage leaves the chunk's cells (and who is cutting them) in place.
   if not op.staged then self.mine[id]=nil;self.cellColor[id]=nil end
@@ -748,8 +759,13 @@ function V:split(op: any,now: number)
  local hold=0
  if owned and not self:reduced() and (op.tier>0 or now-(self.heldAt or -10)>=(op.partial and .9 or .3)) then
   -- A gem always gets the long pause.
-  hold=op.tier>0 and HOLD_GEM or op.partial and HOLD_PIECE or heavy and HOLD_HEAVY or HOLD_SPLIT
+  hold=op.geode and HOLD_GEODE or op.tier>0 and HOLD_GEM or op.partial and HOLD_PIECE or heavy and HOLD_HEAVY or HOLD_SPLIT
   self.heldAt=now
+ end
+ -- Opening your sealed gem bounces you straight up as it breaks.
+ if op.geode and owned then
+  local at=center
+  table.insert(self.pending,{at=now+hold,run=function() self:bounce(at) end})
  end
  local gem=op.tier>0 and rgb(DigCube.ORES[op.tier].color) or nil
  local glow=owned and (gem~=nil or not op.partial)
@@ -904,16 +920,161 @@ function V:reveal(e: any,now: number)
    task.delay(.12,function() ctx.beat('Split',e.center,workspace:GetServerTimeNow(),(1+e.tier*.12)*weight) end)
   end
  end
- if e.treasure then
-  -- Jackpot: a treasure pocket pays several rare gems.
-  self:banner(e.center+Vector3.yAxis*e.size*.5,'TREASURE!',Color3.fromRGB(255,214,90),1.5)
-  if not self:reduced() and ctx.effects then
-   for i=1,2 do task.delay(i*.14,function() ctx.effects.ImpactParticles(e.center+Vector3.yAxis*i*.6,rgb(DigCube.ORES[((e.tier+i-2)%#DigCube.ORES)+1].color),1.2,'GemReward') end) end
-  end
-  if ctx.audio then ctx.audio:play('gem_reveal',e.center,{pitch=1.5,level=1}) end
- else
-  self:banner(e.center+Vector3.yAxis*e.size*.5,TIER_NAMES[e.tier] or 'GEM!',color)
+ if e.treasure and not self:reduced() and ctx.effects then
+  -- Jackpot: a treasure pocket pays several rare gems (no on-screen text).
+  for i=1,2 do task.delay(i*.14,function() ctx.effects.ImpactParticles(e.center+Vector3.yAxis*i*.6,rgb(DigCube.ORES[((e.tier+i-2)%#DigCube.ORES)+1].color),1.2,'GemReward') end) end
  end
+ if e.treasure and ctx.audio then ctx.audio:play('gem_reveal',e.center,{pitch=1.5,level=1}) end
+end
+
+-- Sealed gem cells (owner, Nov 22). When a chunk holds a gem, the server
+-- keeps that one cell until its owner jumps on it. Here it is drawn split
+-- into its pieces, each wiggling a little with anticipation (faster the
+-- longer it waits), with a gem-colored glow showing through the cracks,
+-- tiny glowing motes drifting up and soft god-ray beams standing out of the
+-- cracks, so there is clearly something good inside. Owner is replicated on
+-- the holder ("id:tier:owner;..."); it is kept after the cell leaves the
+-- list, because the opening op can arrive a moment later.
+local GEODE_PIECES=5
+local GEODE_GAP=.93 -- pieces drawn slightly smaller, so the cracks show
+local GEODE_WAIT=.6 -- seconds a vanished geode keeps drawing until its op lands
+local RAY_COUNT=5
+local RAY_FADE=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.35,.7),NumberSequenceKeypoint.new(1,1)})
+function V:clearGeodes()
+ for id in pairs(self.geodes) do self:dropGeode(id) end
+ self.geodes={};self.geodeOwner={}
+end
+function V:dropGeode(id: number)
+ local g=self.geodes[id]
+ if not g then return end
+ g.model:Destroy();self.geodes[id]=nil
+end
+function V:syncGeodes()
+ if not self.holder or not self.cube then return end
+ local list=self.holder:GetAttribute('Geodes')
+ local seen={}
+ if type(list)=='string' then
+  for id,tier,owner in string.gmatch(list,'(%d+):(%d+):(%-?%d+)') do
+   local n=tonumber(id) :: number
+   seen[n]=true
+   self.geodeOwner[n]=tonumber(owner)
+   if not self.geodes[n] and not self.cube.removed[n] and self.cube.cells[n] then self:buildGeode(n,tonumber(tier) or 1) end
+  end
+ end
+ for id,g in pairs(self.geodes) do
+  if not seen[id] and not g.leftAt then g.leftAt=os.clock() end
+ end
+end
+function V:buildGeode(id: number,tier: number)
+ local c=self.cube.cells[id];local o=self.origin
+ local color=rgb(DigCube.ORES[math.clamp(tier,1,#DigCube.ORES)].color)
+ local model=Instance.new('Model');model.Name='DigSealedGem'
+ local polys=DigCube.voronoiSplit(c.poly,GEODE_PIECES,function() return self.random:NextNumber() end)
+ local pieces={}
+ local centers={}
+ for _,poly in ipairs(polys) do
+  local _,mx,mz=middle(poly)
+  local mid=o+Vector3.new(mx,(c.y0+c.y1)*.5+.04,mz)
+  local stone=self:colorAt(c.y1-.01,mx,mz):Lerp(SHARD_DARK,self.random:NextNumber(.05,.22))
+  local inverse=CFrame.new(mid):Inverse()
+  local parts={}
+  for _,w in ipairs(DigCube.polyWedges(DigCube.grown(poly,.02),c.y0+.02,c.y1+.08)) do
+   local part=fxPart(model,'GeodePiece',stone,'WedgePart');part.CastShadow=true
+   local size=Vector3.new(w.size[1],w.size[2],w.size[3])
+   local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+    Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+   local rel=inverse*frame
+   -- Narrower only (wedge X is the vertical extrusion), so the tops stay
+   -- above the real rock and the cracks between them open onto the glow.
+   part.Size=Vector3.new(size.X,size.Y*GEODE_GAP,size.Z*GEODE_GAP)
+   table.insert(parts,{part=part,rel=rel.Rotation+rel.Position*Vector3.new(GEODE_GAP,1,GEODE_GAP)})
+  end
+  table.insert(pieces,{mid=mid,parts=parts,phase=self.random:NextNumber(0,math.pi*2),axis=Vector3.new(self.random:NextNumber(-1,1),0,self.random:NextNumber(-1,1)).Unit})
+  table.insert(centers,{mx,mz})
+ end
+ -- The glow inside, seen only through the cracks: a thin glowing sheet just
+ -- under the pieces' tops (the real rock fills the cell below it).
+ local core={}
+ for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,-.04),c.y1+.005,c.y1+.045)) do
+  local part=fxPart(model,'GeodeGlow',color:Lerp(Color3.new(1,1,1),.15),'WedgePart');part.Material=Enum.Material.Neon
+  part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+  part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+   Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+  table.insert(core,part)
+ end
+ local top=o+Vector3.new(c.cx,c.y1+.1,c.cz)
+ local anchor=fxPart(model,'GeodeTop',color);anchor.Transparency=1
+ anchor.Size=Vector3.new(math.max(.5,c.radius*1.4),.2,math.max(.5,c.radius*1.4));anchor.CFrame=CFrame.new(top)
+ local motes,rays
+ if not self:reduced() then
+  motes=Instance.new('ParticleEmitter');motes.Name='GeodeMotes'
+  motes.Texture='rbxasset://textures/particles/sparkles_main.dds'
+  motes.Color=ColorSequence.new(color:Lerp(Color3.new(1,1,1),.5),color)
+  motes.LightEmission=1;motes.LightInfluence=0;motes.Brightness=1.6
+  motes.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.25,.22),NumberSequenceKeypoint.new(1,0)})
+  motes.Lifetime=NumberRange.new(1.1,1.9);motes.Speed=NumberRange.new(1,2.6);motes.SpreadAngle=Vector2.new(25,25)
+  motes.EmissionDirection=Enum.NormalId.Top;motes.Acceleration=Vector3.new(0,.5,0);motes.Drag=.6
+  motes.Rotation=NumberRange.new(0,360);motes.RotSpeed=NumberRange.new(-90,90)
+  motes.Shape=Enum.ParticleEmitterShape.Box;motes.Rate=12;motes.Parent=anchor
+  -- God rays out of the cracks: points between neighboring pieces.
+  rays={}
+  local points={}
+  for i=1,#centers do
+   for j=i+1,#centers do table.insert(points,{(centers[i][1]+centers[j][1])*.5,(centers[i][2]+centers[j][2])*.5}) end
+  end
+  for k=1,math.min(RAY_COUNT,#points) do
+   local pt=table.remove(points,self.random:NextInteger(1,#points))
+   local base=o+Vector3.new(pt[1],c.y1+.05,pt[2])
+   local a0=Instance.new('Attachment');a0.Parent=anchor;a0.WorldPosition=base
+   local a1=Instance.new('Attachment');a1.Parent=anchor
+   local out=Vector3.new(pt[1]-c.cx,0,pt[2]-c.cz)
+   out=out.Magnitude>.05 and out.Unit or Vector3.xAxis
+   local length=self.random:NextNumber(6,10)
+   a1.WorldPosition=base+(Vector3.yAxis+out*.22).Unit*length
+   local beam=Instance.new('Beam');beam.Attachment0=a0;beam.Attachment1=a1;beam.FaceCamera=true;beam.Segments=6
+   beam.Width0=.22;beam.Width1=1.3+(k%2)*.3;beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=1.2
+   beam.Color=ColorSequence.new(color:Lerp(Color3.new(1,1,1),.45),color);beam.Transparency=RAY_FADE;beam.Parent=anchor
+   table.insert(rays,{beam=beam,phase=k*1.7,base=base,tip=a1,out=out,length=length})
+  end
+ end
+ model.Parent=self.fx
+ self.geodes[id]={model=model,pieces=pieces,rays=rays,core=core,born=os.clock()}
+end
+function V:stepGeodes(now: number)
+ local still=self:reduced()
+ for id,g in pairs(self.geodes) do
+  if g.leftAt and now-g.leftAt>GEODE_WAIT then self:dropGeode(id);continue end
+  local age=now-g.born
+  -- The longer it waits, the more eager the wiggle (up to about 3 s in).
+  local eager=math.clamp(age/3,0,1)
+  local amp=still and 0 or .035+.035*eager
+  local rate=7+6*eager
+  for i,piece in ipairs(g.pieces) do
+   local t=now*rate+piece.phase
+   -- Two detuned waves: a nervous shiver, not a clean sway.
+   local w=math.sin(t)*.7+math.sin(t*1.73+i)*.3
+   local frame=CFrame.new(piece.mid+Vector3.yAxis*(amp*.9*math.max(0,math.sin(t*.5+i))))*CFrame.fromAxisAngle(piece.axis,amp*w)
+   for _,q in ipairs(piece.parts) do q.part.CFrame=frame*q.rel end
+  end
+  local glow=.3-.15*math.sin(now*3.1)
+  for _,part in ipairs(g.core) do part.Transparency=glow end
+  for _,ray in ipairs(g.rays or {}) do
+   local breathe=.5+.5*math.sin(now*1.6+ray.phase)
+   ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.75-.3*breathe),NumberSequenceKeypoint.new(.35,.85-.2*breathe),NumberSequenceKeypoint.new(1,1)})
+   local sway=math.sin(now*.7+ray.phase)*.12
+   ray.tip.WorldPosition=ray.base+(Vector3.yAxis+ray.out*(.22+sway)).Unit*ray.length
+  end
+ end
+end
+-- Straight up when your sealed gem breaks under you (client-owned physics).
+function V:bounce(at: Vector3)
+ local character=Players.LocalPlayer and Players.LocalPlayer.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ if not root or not root:IsA('BasePart') then return end
+ local offset=root.Position-at
+ if Vector3.new(offset.X,0,offset.Z).Magnitude>9 or math.abs(offset.Y)>10 then return end
+ local v=root.AssemblyLinearVelocity
+ root.AssemblyLinearVelocity=Vector3.new(v.X*.25,62,v.Z*.25)
 end
 
 function V:banner(at: Vector3,text: string,color: Color3,big: number?)
@@ -1276,6 +1437,7 @@ function V:update()
  self:stepDust(now)
  self:stepShards(now)
  self:stepLights(now)
+ self:stepGeodes(now)
  self:stepLamp(math.clamp(now-(self.lastStep or now),0,.25))
  self.lastStep=now
  self:stepPad(now)

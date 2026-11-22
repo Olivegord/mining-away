@@ -74,7 +74,7 @@ assert(count>=10,'op count replicates: '..tostring(count))
 local replay=DigCube.build(holder:GetAttribute('Seed'))
 for i=1,math.ceil(count/64) do
  for entry in string.gmatch(holder:GetAttribute('Ops'..i),'[^;]+') do
-  local key,tier=string.match(entry,'^c([%d%.]+)|(%d+)|?[TDPS]?%d*$')
+  local key,tier=string.match(entry,'^c([%d%.]+)|(%d+)|?[TDPSGX]?%d*$')
   assert(key and tier,'op format: '..entry)
   -- A nested stage (flag S) carves part of the chunk but removes no cell.
   if not string.match(entry,'|S%d+$') then for _,id in ipairs(DigCube.parseKey(key)) do DigCube.remove(replay,id) end end
@@ -117,7 +117,10 @@ for _,entry in ipairs(dig.ops) do
  local tier,layer=string.match(entry,'|(%d+)|D(%d+)$')
  if layer then flagged=true;assert(tonumber(tier)>=1,'a new layer pays a gem') end
 end
-assert(flagged or dig.deepest==1,'the first chunk into a new layer is a milestone')
+-- A milestone gem may instead be sealed in its cell (a geode), or opened (G/X).
+local sealedAny=next(dig.geodes)~=nil
+for _,entry in ipairs(dig.ops) do if string.match(entry,'|[GX]$') then sealedAny=true end end
+assert(flagged or sealedAny or dig.deepest==1,'the first chunk into a new layer is a milestone')
 -- Treasure pockets exist, sit deep, and pay several gems.
 local pockets=0
 for id in pairs(dig.cube.treasure) do pockets+=1;assert(dig.cube.cells[id].layer>=3,'treasure sits deep') end
@@ -125,8 +128,26 @@ assert(pockets==DigCube.TREASURES,'treasure pockets: '..pockets)
 local tid=next(dig.cube.treasure)
 local pendingBefore=#dig.pending
 scene.digBreak({ids={tid},key=tostring(tid),cx=dig.cube.cells[tid].cx,cz=dig.cube.cells[tid].cz},p.drones[1],p)
-assert(#dig.pending-pendingBefore==DigCube.TREASURE_GEMS,'a treasure pays several gems')
-assert(string.match(dig.ops[#dig.ops],'|T$'),'treasure break is flagged')
+-- The gem stays sealed in its cell until its owner jumps on it.
+local sealed=dig.geodes[tid]
+assert(sealed and sealed.treasure and sealed.owner==pl.UserId and not dig.cube.removed[tid],'a gem cell stays sealed')
+assert(#dig.pending==pendingBefore,'no gem before the cell is opened')
+assert(string.find(holder:GetAttribute('Geodes') or '',tostring(tid)..':',1,true),'sealed cells replicate')
+local savedRoot=pl.Character.HumanoidRootPart.CFrame
+do
+ local c=dig.cube.cells[tid]
+ -- A drone never picks a sealed cell.
+ local job=scene.digPick(p.drones[1],p)
+ if job then for _,id in ipairs(job.ids) do assert(id~=tid,'drones leave sealed cells alone') end;scene.digDrop(p.drones[1]) end
+ pl.Character:PivotTo(CFrame.new(dig.origin+Vector3.new(c.cx,c.y1+3,c.cz)))
+end
+tick(2)
+assert(dig.geodes[tid]==nil and dig.cube.removed[tid],'standing on it opens the sealed cell')
+assert(string.match(dig.ops[#dig.ops],'^c'..tid..'|%d+|X$'),'treasure opening is flagged X: '..dig.ops[#dig.ops])
+local high=0
+for _,g in ipairs(dig.pending) do if g.high then high+=1 end end
+assert(high==DigCube.TREASURE_GEMS,'a treasure pays several gems, launched high: '..high)
+pl.Character:PivotTo(savedRoot)
 -- Cuts near the player went first.
 local near=0
 for id in pairs(dig.cube.removed) do

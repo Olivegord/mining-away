@@ -1080,6 +1080,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
   chip:SetAttribute('OreLaunchOrigin',position)
   chip:SetAttribute('OreLaunchVelocity',velocity)
   if drop.arc then chip:SetAttribute('CleanCargoArc',true) end
+  if drop.geode then chip:SetAttribute('GeodeGem',true) end
  end
  chip.Parent=pickupFolder
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
@@ -3488,7 +3489,7 @@ do
  holder.Name='DigCube';holder.Parent=root
  local template=Instance.new('Part');template.Name='DigGem';template.Size=Vector3.new(1,1,1)
  scene.dig={origin=origin,holder=holder,template=template,generation=0,recent={},random=Random.new(),
-  dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},ops={},published=0,pending={},csg={},blocks={},dust={},dustAt=0}
+  dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},ops={},published=0,pending={},csg={},blocks={},dust={},dustAt=0,geodes={}}
  -- Collision groups for the clients' loose rubble: it lands on an invisible
  -- floor at the bottom of each hole and touches nothing else (players, the
  -- rock still being carved).
@@ -3511,6 +3512,7 @@ function scene.digReset()
  dig.generation+=1
  local seedValue=dig.random:NextInteger(1,2000000000)
  dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.resetAt=nil;dig.dirty=false;dig.csg={};dig.deepest=1
+ dig.geodes={};dig.holder:SetAttribute('Geodes','')
  for _,dust in ipairs(dig.dust) do dust.part:Destroy() end
  dig.dust={}
  for _,d in pairs(drones) do d.digJob=nil;d.digCell=nil;d.digWarm=nil end
@@ -3695,6 +3697,8 @@ function scene.digPick(d,p)
    if worker.digJob.left[1]==id then table.insert(points,{worker.digJob.cx,worker.digJob.cz}) end
   else dig.claimed[id]=nil end
  end
+ -- Sealed gem cells wait for their owner; no drone cuts them.
+ for id in pairs(dig.geodes or {}) do taken[id]=true end
  local hr=characterRoot(p)
  if not hr then return nil end
  -- Drones only cut near their player: a tapped spot steers the crater only
@@ -3721,14 +3725,16 @@ function scene.digPick(d,p)
  return job
 end
 -- Point the beam at the chunk's center (DigCube.chunkCenter), where every
--- nested stage grows from, on top of the piece being cut: each stage is
--- drawn as a whole cell over the rock, so the beam lands on its top. The
--- drone hovers straight above it.
+-- nested stage grows from: the rock surface there, below any stage already
+-- carved out. The drone hovers straight above it.
 function scene.digAim(job)
  local dig=scene.dig
  local cx,cz,id=DigCube.chunkCenter(dig.cube,job.ids)
  local c=dig.cube.cells[id]
- job.contact=dig.origin+Vector3.new(cx,c.y1,cz)
+ local carved=job.pieces and job.pieces[job.stage]
+ local part=carved and carved.parts and carved.parts[1]
+ local depth=part and (part.y1-part.y0) or 0
+ job.contact=dig.origin+Vector3.new(cx,c.y1-depth,cz)
 end
 -- One piece of a chunk breaks off before the rest: it leaves the rock now
 -- (ops flag P: no gem roll yet) and pays its share of the chunk's rock.
@@ -3807,10 +3813,7 @@ function scene.digBreak(job,d,p)
  local dig=scene.dig;local cube=dig.cube
  scene.digDrop(d);d.digPickAt=0;d.digProgress=0
  local last=job.left or job.ids
- for _,id in ipairs(last) do
-  if DigCube.remove(cube,id) then dig.recent[id]=now end
- end
- -- The gamble: the chunk splits, holds for DigCube.PAUSE, then shows a gem or nothing.
+ -- The gamble: is there a gem in this chunk? (Rolled before anything leaves.)
  local tier=DigCube.gemRoll(cube,job.ids,function() return dig.random:NextNumber() end)
  local layer=cube.cells[job.ids[1]].layer
  -- Jackpots: a treasure pocket pays several rare gems; the first chunk into
@@ -3824,29 +3827,93 @@ function scene.digBreak(job,d,p)
  elseif milestone then
   tier=math.max(tier,DigCube.layerTier(layer));flag='|D'..layer
  end
- table.insert(dig.ops,'c'..DigCube.key(last)..'|'..tier..flag)
- dig.dirty=true
- table.insert(dig.csg,{generation=dig.generation,ids=last})
- scene.digCarveLoop()
+ -- A gem stays sealed in its cell (owner, Nov 22): that one cell is kept,
+ -- cracked and glowing, until its owner jumps on it (scene.digGeodeStep).
+ local sealed=nil
+ if tier>0 then
+  local cx,cz=DigCube.chunkCenter(cube,last)
+  local best,score=nil,-math.huge
+  for _,id in ipairs(last) do
+   local c=cube.cells[id]
+   -- Its ore cell if it has one; else the cell farthest from the middle,
+   -- which the nested stages hollowed least.
+   local value=(c.ore or 0)*1000+((c.cx-cx)^2+(c.cz-cz)^2)
+   if not cube.removed[id] and value>score then best,score=id,value end
+  end
+  sealed=best
+ end
+ local broken={}
+ for _,id in ipairs(last) do
+  if id~=sealed then
+   table.insert(broken,id)
+   if DigCube.remove(cube,id) then dig.recent[id]=now end
+  end
+ end
+ if #broken>0 then
+  table.insert(dig.ops,'c'..DigCube.key(broken)..'|'..(sealed and 0 or tier)..(sealed and '' or flag))
+  dig.dirty=true
+  table.insert(dig.csg,{generation=dig.generation,ids=broken})
+  scene.digCarveLoop()
+ end
  scene.crewBreak(d.owner)
  local volume=DigCube.volume(cube,job.ids)
- local _,lx,lz=DigCube.chunkArea(cube,last)
- local _,floor=DigCube.contact(cube,last)
+ local _,lx,lz=DigCube.chunkArea(cube,#broken>0 and broken or last)
+ local _,floor=DigCube.contact(cube,#broken>0 and broken or last)
  local center=dig.origin+Vector3.new(lx,floor+1,lz)
  -- Rock comes out right away: bigger chunks drop more (less what the
  -- earlier pieces already paid).
  scene.digRock(p,d.owner,last,math.max(1,(job.rock or DigCube.rockDrops(volume))-(job.rockPaid or 0)),center)
- if tier>0 then
-  for i=1,treasure and DigCube.TREASURE_GEMS or 1 do
-   -- Gems burst out with the rock (treasure pockets a few beats apart).
-   table.insert(dig.pending,{at=now+(i-1)*.15,p=p,owner=d.owner,tier=tier,volume=volume,position=center+Vector3.new(0,i*.3,0)})
-  end
+ if sealed then
+  dig.geodes[sealed]={id=sealed,tier=tier,treasure=treasure,owner=d.owner,p=p,volume=volume,at=now}
+  scene.digPublishGeodes()
  end
 end
+-- Sealed gem cells, replicated as "id:tier:owner;..." on the cube holder.
+function scene.digPublishGeodes()
+ local dig=scene.dig
+ local list={}
+ for id,g in pairs(dig.geodes) do table.insert(list,id..':'..g.tier..':'..g.owner) end
+ table.sort(list)
+ dig.holder:SetAttribute('Geodes',table.concat(list,';'))
+end
+-- Its owner standing (or landing) on a sealed cell opens it: the cell breaks
+-- (ops flag G, or X for a treasure pocket), and after a short pause the gem
+-- flies out on a high arc. The client bounces its own player straight up.
+local GEODE_PAUSE=.16
+function scene.digGeodeStep()
+ local dig=scene.dig;local cube=dig.cube
+ local changed=false
+ for id,g in pairs(dig.geodes) do
+  local p=profiles[g.owner]
+  local hr=p and p==g.p and characterRoot(p)
+  local c=cube.cells[id]
+  if cube.removed[id] then dig.geodes[id]=nil;changed=true
+  elseif hr and c then
+   local l=hr.Position-dig.origin
+   local above=l.Y-c.y1
+   -- Standing on it, or in a stage hole cut into it.
+   if math.sqrt((l.X-c.cx)^2+(l.Z-c.cz)^2)<=c.radius+1.2 and above>=1-(c.y1-c.y0) and above<=5.5 then
+    dig.geodes[id]=nil;changed=true
+    if DigCube.remove(cube,id) then dig.recent[id]=now end
+    table.insert(dig.ops,'c'..id..'|'..g.tier..'|'..(g.treasure and 'X' or 'G'))
+    dig.dirty=true
+    table.insert(dig.csg,{generation=dig.generation,ids={id}})
+    scene.digCarveLoop()
+    local at=dig.origin+Vector3.new(c.cx,c.y1+.6,c.cz)
+    for i=1,g.treasure and DigCube.TREASURE_GEMS or 1 do
+     table.insert(dig.pending,{at=now+GEODE_PAUSE+(i-1)*.15,p=p,owner=g.owner,tier=g.tier,volume=g.volume,position=at+Vector3.new(0,i*.3,0),high=true})
+    end
+   end
+  end
+ end
+ if changed then scene.digPublishGeodes() end
+end
 -- Launch one cargo pickup in its arc and land it on the real rock surface.
-function scene.digLaunch(p,owner,cargo,material,stone,rareGem,position,color,nodeId)
+function scene.digLaunch(p,owner,cargo,material,stone,rareGem,position,color,nodeId,high)
  local dig=scene.dig;local profile=data(p)
  local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
+ -- A gem out of a sealed cell flies much higher (owner, Nov 22).
+ if high then vx*=.7;vz*=.7;vy=vy*1.9+6 end
  local guess=position.Y-1
  -- The cube knows its own floor exactly; carving runs a moment behind, so a
  -- raycast would land drops on rock that is about to disappear (floating gems).
@@ -3863,7 +3930,7 @@ function scene.digLaunch(p,owner,cargo,material,stone,rareGem,position,color,nod
  end
  scene.spawnOrePickup(dig.template,{owner=owner,runId=profile.run.id,nodeId=nodeId,
   material=cargo,tierMaterial=material,value=Workshop.saleItem(cargo).cash,
-  stone=stone,rareGem=rareGem,units=1,raw=true,oreArc=true,floor=(floor or guess)+.22,reachBonus=0,modifiers=0},
+  stone=stone,rareGem=rareGem,units=1,raw=true,oreArc=true,floor=(floor or guess)+.22,reachBonus=0,modifiers=0,geode=high==true},
   position,Vector3.new(vx,vy,vz),color)
 end
 -- Plain rock from a chunk, in the stone of its depth (deeper rock sells for
@@ -3923,7 +3990,7 @@ function scene.digDustStep()
   end
  end
 end
-function scene.digGem(p,owner,tier,volume,position)
+function scene.digGem(p,owner,tier,volume,position,high)
  if not healthy(p) then return end
  local ore=DigCube.ORES[tier]
  local material=ore and Workshop.CRYSTAL_BY_MATERIAL[ore.material]
@@ -3931,7 +3998,7 @@ function scene.digGem(p,owner,tier,volume,position)
  local size=math.clamp(volume/250,.6,3)
  local value=math.clamp(math.floor(8*material.value*size+.5),1,1000000)
  local cargo=Workshop.saleCargo(ore.material,value,false,100,0,0,'Original')
- scene.digLaunch(p,owner,cargo,ore.material,false,true,position,Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]),'dig:gem:'..#scene.dig.ops)
+ scene.digLaunch(p,owner,cargo,ore.material,false,true,position,Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]),'dig:gem:'..#scene.dig.ops,high)
  p.dirty=true;p.publishDirty=true
 end
 -- Replicate new chunks at most ten times a second, 64 per attribute so only
@@ -3941,6 +4008,7 @@ function scene.digStep()
  local dig=scene.dig
  if not dig.cube then scene.digReset();return end
  scene.digDustStep()
+ scene.digGeodeStep()
  if dig.dirty and now>=dig.publishAt then
   dig.dirty=false;dig.publishAt=now+.1
   local first=math.floor(dig.published/OPS_PER_ATTRIBUTE)+1
@@ -3955,7 +4023,7 @@ function scene.digStep()
   local gem=dig.pending[i]
   if now>=gem.at then
    table.remove(dig.pending,i)
-   if profiles[gem.owner]==gem.p then scene.digGem(gem.p,gem.owner,gem.tier,gem.volume,gem.position) end
+   if profiles[gem.owner]==gem.p then scene.digGem(gem.p,gem.owner,gem.tier,gem.volume,gem.position,gem.high) end
   end
  end
  if dig.resetAt then
