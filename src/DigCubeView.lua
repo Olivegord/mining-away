@@ -11,9 +11,9 @@
 --  * one ribbon beam per drone with chips and sparks where it touches
 --  * a gem (after the hold) gets the gem burst and a name banner
 --  * a dim lamp on the player down in the pit, the launch pad and tap-to-focus
---  * before each piece breaks it cracks in two stages, like the field rocks:
---    dark seams appear all at once, darker and wider at the second stage,
---    with a crack sound, chips and a jolt (never a creeping line)
+--  * before each piece breaks it cracks in two stages, like the reference
+--    rocks: it darkens under the beam, then pops loose (lifts, tilts, turns)
+--    with its color back, a crack sound, chips and dust. No drawn lines
 -- Nothing here uses Neon.
 local DigCube=require('./DigCube')
 local UIS=game:GetService('UserInputService')
@@ -36,7 +36,7 @@ local function fxPart(parent: Instance,name: string,color: Color3,class: string?
 end
 
 function V.new(ctx: any)
- local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},flashes={},pending={},floors={},cracks={},crackCells={},crackCount=0,jolts={},cube=nil,origin=Vector3.zero,
+ local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},flashes={},pending={},floors={},cracks={},crackCells={},cube=nil,origin=Vector3.zero,
   generation=-1,applied=0,random=Random.new(),connections={},tapAt=0},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
@@ -470,109 +470,131 @@ function V:stepHolds(now: number)
   if now>=e.at then table.remove(self.pending,i);e.run() end
  end
 end
--- Stage cracks, like the field rocks' stages. A field rock stepped down a
--- size, darkened and cracked audibly at each stage of its health; a chunk
--- here comes away in pieces, and before each piece goes it cracks in two
--- steps: at a third of its share of the work its top splits in two along a
--- dark seam, at two thirds into three, each step darker and lifting a little
--- further apart, with a crack sound, chips, a puff and a small jolt. The
--- seams appear all at once at each stage, never creeping. The cracked top is
--- drawn as plates in the rock's own color over a dark base, so the gaps
--- between them read as the cracks.
+-- Stage cracks, the way the reference rocks do it: no drawn lines. A Mining
+-- Away rock darkens while the laser works on it, then cracks: it shrinks a
+-- step and turns, and its color comes back. Here the piece about to break is
+-- drawn as its own prisms over the rock. It darkens with damage, and at each
+-- crack stage (a third and two thirds of its share of the work) it pops
+-- loose: it lifts out of the rock, tilts and turns a little further each
+-- time, casting a real shadow, its color snaps back, and the crack plays with
+-- chips and dust. Then it breaks off as before.
 local CRACK_STEPS=3 -- per piece: two crack stages, then it breaks off
-local CRACK_DARK=Color3.fromRGB(30,25,24)
-local CRACK_SHADE={.1,.25}
-local CRACK_GAP={.15,.24}
-local CRACK_LIFT={.03,.11}
-local CRACK_JOLT=.16
-local CRACK_MAX=420 -- live crack parts
-function V:crackIndex(job: any,progress: number): number
+local CRACK_SHADE=.34 -- darkest just before a crack (the reference's shade curve)
+local CRACK_LIFT={0,.28,.62} -- studs out of the rock at each stage
+local CRACK_TURN={0,.06,.13} -- radians of turn at each stage
+local CRACK_TIP={0,.025,.055} -- radians of tilt at each stage
+local CRACK_JOLT=.2 -- seconds of the pop and settle
+local BLACK=Color3.new(0,0,0)
+function V:crackIndex(job: any,progress: number): (number,number)
  local prev=0
  for k,piece in ipairs(job.pieces) do
   if progress<piece.at then
    local f=(progress-prev)/math.max(piece.at-prev,1e-6)
-   return (k-1)*CRACK_STEPS+math.clamp(math.floor(f*CRACK_STEPS),0,CRACK_STEPS-1)
+   local s=math.clamp(math.floor(f*CRACK_STEPS),0,CRACK_STEPS-1)
+   return (k-1)*CRACK_STEPS+s,f*CRACK_STEPS-s
   end
   prev=piece.at
  end
- return #job.pieces*CRACK_STEPS
+ return #job.pieces*CRACK_STEPS,0
+end
+function V:dropProxy(proxy: any)
+ if proxy.dead then return end
+ proxy.dead=true
+ for _,e in ipairs(proxy.parts) do e.part:Destroy() end
+ for _,id in ipairs(proxy.ids) do if self.crackCells[id]==proxy then self.crackCells[id]=nil end end
 end
 function V:clearCrack(id: number)
- local cell=self.crackCells[id]
- if not cell then return end
- for _,part in ipairs(cell.parts) do part:Destroy() end
- self.crackCount-=#cell.parts;self.crackCells[id]=nil
+ local proxy=self.crackCells[id]
+ if proxy then self:dropProxy(proxy) end
 end
 function V:clearCracks()
- for id in pairs(self.crackCells) do self:clearCrack(id) end
- self.cracks={};self.jolts={}
+ for _,job in pairs(self.cracks) do if job.proxy then self:dropProxy(job.proxy) end end
+ self.cracks={};self.crackCells={}
 end
--- Track a drone's chunk; when its progress crosses a crack stage, draw it.
+-- The piece as its own prisms, slightly grown so they cover the carved rock.
+function V:buildProxy(piece: any): any?
+ local cube=self.cube;local o=self.origin
+ local parts,ids={},{}
+ local area,sx,sz,top=0,0,0,-math.huge
+ for _,id in ipairs(piece.ids) do
+  local c=cube.cells[id]
+  if c and not cube.removed[id] and not self.crackCells[id] then
+   table.insert(ids,id)
+   area+=c.area;sx+=c.cx*c.area;sz+=c.cz*c.area;top=math.max(top,c.y1)
+   local stone=self:colorAt(c.y1-.01,c.cx,c.cz)
+   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,.03),c.y0+.02,c.y1+.03)) do
+    local part=fxPart(self.fx,'DigCrack',stone,'WedgePart')
+    part.CastShadow=true
+    part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+    part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+    table.insert(parts,{part=part,stone=stone})
+   end
+  end
+ end
+ if area<=0 then return nil end
+ local pivot=o+Vector3.new(sx/area,top,sz/area)
+ for _,e in ipairs(parts) do e.base=CFrame.new(pivot):ToObjectSpace(e.part.CFrame) end
+ local proxy={parts=parts,ids=ids,pivot=pivot,step=0,shade=0,joltAt=-10,
+  turn=self.random:NextNumber(.7,1)*(self.random:NextInteger(0,1)*2-1),tipAxis=self.random:NextNumber(0,math.pi*2)}
+ for _,id in ipairs(ids) do self.crackCells[id]=proxy end
+ return proxy
+end
+-- Where the piece sits at its current stage (plus the pop after a crack).
+function V:poseProxy(proxy: any,now: number)
+ local s=proxy.step+1
+ local t=(now-proxy.joltAt)/CRACK_JOLT
+ local pop=t<1 and .32*math.sin(math.pi*math.clamp(t,0,1))*(1-t*.5) or 0
+ local tip=CRACK_TIP[s]
+ local pose=CFrame.new(proxy.pivot+Vector3.yAxis*(CRACK_LIFT[s]+pop))
+  *CFrame.Angles(0,CRACK_TURN[s]*proxy.turn,0)
+  *CFrame.Angles(math.cos(proxy.tipAxis)*tip,0,math.sin(proxy.tipAxis)*tip)
+ for _,e in ipairs(proxy.parts) do e.part.CFrame=pose*e.base end
+end
+function V:shadeProxy(proxy: any,shade: number)
+ if math.abs(shade-proxy.shade)<.01 then return end
+ proxy.shade=shade
+ for _,e in ipairs(proxy.parts) do e.part.Color=e.stone:Lerp(BLACK,shade) end
+end
+-- Called every frame per cutting drone with its chunk's progress.
 function V:crackStage(key: string,progress: number,now: number,tint: Color3,owned: boolean)
  local job=self.cracks[key]
  if not job then
-  job={pieces=DigCube.pieces(self.cube,DigCube.parseKey(string.sub(key,2))),stage=0,angles={}}
+  job={pieces=DigCube.pieces(self.cube,DigCube.parseKey(string.sub(key,2)))}
   self.cracks[key]=job
-  -- A chunk already part-cut when first seen shows its cracks without the hit.
+  -- A chunk already part-cut when first seen starts at its stage, without the hit.
   job.stage=self:crackIndex(job,progress)
-  self:drawCracks(job,job.stage,nil)
  end
  job.seen=now
- local target=self:crackIndex(job,progress)
- if target>job.stage then
-  job.stage=target
-  self:drawCracks(job,target,{now=now,tint=tint,owned=owned})
- end
-end
-function V:drawCracks(job: any,index: number,hit: any?)
+ local index,within=self:crackIndex(job,progress)
  local k=math.floor(index/CRACK_STEPS)+1
  local step=index%CRACK_STEPS
  local piece=job.pieces[k]
- if not piece or step==0 then return end
- local cube=self.cube;local o=self.origin
- local shade,gap,lift=CRACK_SHADE[step],CRACK_GAP[step],CRACK_LIFT[step]
- local area,sx,sz,top=0,0,0,0
- local jolt={}
- for _,id in ipairs(piece.ids) do
-  local c=cube.cells[id]
-  if c and not cube.removed[id] then
-   self:clearCrack(id)
-   if self.crackCount>=CRACK_MAX then break end
-   area+=c.area;sx+=c.cx*c.area;sz+=c.cz*c.area;top=math.max(top,c.y1)
-   local a=job.angles[id]
-   if not a then a={self.random:NextNumber(0,math.pi),self.random:NextNumber(-.4,.4)};job.angles[id]=a end
-   local parts={}
-   local function plate(poly: {{number}},y0: number,y1: number,color: Color3,frame: CFrame?)
-    for _,w in ipairs(DigCube.polyWedges(poly,y0,y1)) do
-     local part=fxPart(self.fx,'DigCrack',color,'WedgePart')
-     part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
-     local cf=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
-      Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
-     part.CFrame=frame and frame*cf or cf
-     table.insert(parts,part)
-    end
-   end
-   -- The dark base, just above the rock, seen through the seams.
-   plate(c.poly,c.y1+.015,c.y1+.035,CRACK_DARK)
-   local stone=self:colorAt(c.y1-.01,c.cx,c.cz)
-   for _,chunk in ipairs(self:crackCell(c.poly,step+1,a[1],a[2])) do
-    local _,px,pz=middle(chunk)
-    local up=lift*self.random:NextNumber(.5,1)
-    local tilt=CFrame.new(o+Vector3.new(px,c.y1,pz))*CFrame.Angles(self.random:NextNumber(-.03,.03)*step,0,self.random:NextNumber(-.03,.03)*step)
-     *CFrame.new(-(o+Vector3.new(px,c.y1,pz)))
-    local before=#parts
-    plate(DigCube.grown(chunk,-gap),c.y1+.03+up,c.y1+.09+up,stone:Lerp(CRACK_DARK,shade+self.random:NextNumber(0,.05)),tilt)
-    for n=before+1,#parts do table.insert(jolt,{part=parts[n],base=parts[n].CFrame}) end
-   end
-   self.crackCells[id]={parts=parts}
-   self.crackCount+=#parts
+ if not piece then return end
+ if job.proxy and (job.proxy.dead or job.piece~=k) then
+  if not job.proxy.dead then self:dropProxy(job.proxy) end
+  job.proxy=nil
+ end
+ if not job.proxy and progress>0 then
+  job.proxy=self:buildProxy(piece);job.piece=k
+  if job.proxy then job.proxy.step=step;self:poseProxy(job.proxy,now) end
+ end
+ local proxy=job.proxy
+ if not proxy then return end
+ -- Darker as the beam works, back to full color at each crack.
+ self:shadeProxy(proxy,CRACK_SHADE*math.clamp(within,0,1)^.88)
+ if index>job.stage then
+  job.stage=index
+  if step>0 and step~=proxy.step then
+   proxy.step=step;proxy.joltAt=now
+   self:crackHit(proxy,step,k,{tint=tint,owned=owned})
   end
  end
- if not hit or area<=0 then return end
- local now=hit.now
- table.insert(self.jolts,{at=now,parts=jolt})
- local point=o+Vector3.new(sx/area,top+.1,sz/area)
- local stone=self:colorAt(top-.01,sx/area,sz/area)
+ self:poseProxy(proxy,now)
+end
+function V:crackHit(proxy: any,step: number,k: number,hit: any)
+ local point=proxy.pivot+Vector3.yAxis*(CRACK_LIFT[step+1]+.1)
+ local stone=proxy.parts[1] and proxy.parts[1].stone or STONE_LIGHT
  local volume=hit.owned and 1 or .55
  local ctx=self.ctx
  if ctx.crack then ctx.crack:playCrack(point) end
@@ -583,28 +605,18 @@ function V:drawCracks(job: any,index: number,hit: any?)
  local serverNow=workspace:GetServerTimeNow()
  local rock=self.holder and self.holder:FindFirstChild('Rock')
  local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
- if ctx.impact and surface then ctx.impact:chips(serverNow,point,Vector3.yAxis,surface,1+2*step,point.Y-4) end
- self:puff(point,stone,.45+.2*step,1+step)
- if ctx.effects then ctx.effects.Pulse(point,hit.tint:Lerp(BEAM_CORE,.35),.22,1.4+.9*step,.2,Vector3.yAxis,.78) end
- if hit.owned and ctx.beat then ctx.beat('Split',point,serverNow,.16+.1*step) end
+ if ctx.impact and surface then ctx.impact:chips(serverNow,point,Vector3.yAxis,surface,2+2*step,point.Y-4) end
+ self:puff(point,stone,.5+.2*step,1+step)
+ if ctx.effects then ctx.effects.Pulse(point,hit.tint:Lerp(BEAM_CORE,.35),.22,1.6+.9*step,.2,Vector3.yAxis,.78) end
+ if hit.owned and ctx.beat then ctx.beat('Split',point,serverNow,.18+.1*step) end
 end
 function V:stepCracks(now: number)
- for i=#self.jolts,1,-1 do
-  local j=self.jolts[i]
-  local t=(now-j.at)/CRACK_JOLT
-  if t>=1 then
-   for _,e in ipairs(j.parts) do if e.part.Parent then e.part.CFrame=e.base end end
-   table.remove(self.jolts,i)
-  else
-   -- Pop up, then settle back onto the rock.
-   local y=.22*math.sin(math.pi*t)*(1-t)
-   for _,e in ipairs(j.parts) do if e.part.Parent then e.part.CFrame=e.base+Vector3.yAxis*y end end
-  end
- end
  for key,job in pairs(self.cracks) do
   if now-(job.seen or now)>2 then
    self.cracks[key]=nil
-   for _,piece in ipairs(job.pieces) do for _,id in ipairs(piece.ids) do self:clearCrack(id) end end
+   if job.proxy then self:dropProxy(job.proxy) end
+  elseif job.proxy and not job.proxy.dead and now-job.proxy.joltAt<CRACK_JOLT then
+   self:poseProxy(job.proxy,now)
   end
  end
 end
