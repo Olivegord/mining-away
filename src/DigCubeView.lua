@@ -689,15 +689,16 @@ function V:breakCloud(op: any,e: any,big: boolean)
  debris.EmissionDirection=Enum.NormalId.Top;debris.Acceleration=Vector3.new(0,-48,0);debris.Drag=.6
  debris.Rotation=NumberRange.new(0,360);debris.RotSpeed=NumberRange.new(-260,260)
  debris:Emit(math.floor((10+6*bulk)*k))
- -- Dust: a big lit cloud that rises a little and hangs before it thins out.
+ -- Dust: a few small puffs in the rock's own tone that hang a moment. Kept
+ -- small and not lightened: big pale clouds washed over the whole dig.
  local dust=emitter('Dust')
- EnergyDisc.configure(dust,(2.4+.5*bulk)*k,.35,.45,2.1,.3)
- dust.LightEmission=0;dust.LightInfluence=.85;dust.Brightness=1.15
- dust.Color=ColorSequence.new(e.color:Lerp(Color3.fromRGB(255,248,232),.45))
- dust.Lifetime=NumberRange.new(1.6,2.6);dust.Speed=NumberRange.new(2,6);dust.SpreadAngle=Vector2.new(80,80)
- dust.EmissionDirection=Enum.NormalId.Top;dust.Acceleration=Vector3.new(0,1.6,0);dust.Drag=2.2
- dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.25),NumberSequenceKeypoint.new(.5,.45),NumberSequenceKeypoint.new(1,1)})
- dust:Emit(math.floor((6+2*bulk)*k))
+ EnergyDisc.configure(dust,(1+.2*bulk)*k,.5,.5,1.5,.3)
+ dust.LightEmission=0;dust.LightInfluence=1;dust.Brightness=1
+ dust.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.15))
+ dust.Lifetime=NumberRange.new(1,1.6);dust.Speed=NumberRange.new(2,5);dust.SpreadAngle=Vector2.new(70,70)
+ dust.EmissionDirection=Enum.NormalId.Top;dust.Acceleration=Vector3.new(0,1,0);dust.Drag=2.4
+ dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.6,.6),NumberSequenceKeypoint.new(1,1)})
+ dust:Emit(math.floor((3+bulk)*k))
  -- Sparks in the beam's color: bright, quick, they carry the glow.
  local sparks=emitter('Sparks')
  EnergyDisc.configure(sparks,.75*k,.05,1,0,.35)
