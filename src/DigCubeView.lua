@@ -823,7 +823,7 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
   beam=self:newBeam(tint,player~=nil and source:GetAttribute('Owner')==player.UserId)
   self.beams[id]=beam
  end
- beam.seen=now
+ beam.seen=os.clock() -- the step functions run on os.clock; `now` here is server time
  if beam.tint~=tint then beam.tint=tint;beam.sparks.Color=ColorSequence.new(tint:Lerp(BEAM_CORE,.3),tint) end
  local key=source:GetAttribute('DigOp')
  -- Remember which cells each drone is cutting (and the beam's color), and
@@ -837,7 +837,7 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  end
  -- Stage cracks on the chunk this drone is cutting.
  if type(key)=='string' and key~='' and (source:GetAttribute('HP') or 1)>0 then
-  self:crackStage(key,source:GetAttribute('DigProgress') or 0,now,tint,beam.mine)
+  self:crackStage(key,source:GetAttribute('DigProgress') or 0,os.clock(),tint,beam.mine)
  end
  -- Only over the cube, alive and not in a menu pause.
  local l=from-self.origin
