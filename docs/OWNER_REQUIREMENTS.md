@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — terraced stages, darker rubble near the beam, a pause that reads as tension
+
+After `d3f37c7` ("very good"): (1) for the stages, make sure previous stages are preserved so there is more depth; (2) rubble closest to the beam should be darker; (3) the rock pause feels good but can read as lag: research what to do visually with the pause so it reads as tension, not lag.
+
 ## November 22 — instant pause, no floating cells, pulsing outline, gem blast, shallower stages, rubble away from the beam
 
 After `c4c2708`: no delay before the client pause on the gem break ("the client pause is the pause"). Gem cells can float, but regular cells must not. The rock mining outlines must pulse while being mined. Sealed gem cells need more glowy particles and a much better explosion with LOTS more particles, some that linger and some that go quick; reuse effects. Then: make each deeper stage cut a little more shallow, and when the rock breaks, make the little physics rocks point slightly away from where the beam was, so it is clear what cracked it.

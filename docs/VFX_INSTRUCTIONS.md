@@ -1,5 +1,26 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — terraced stages, scorched rubble, a freeze that reads as tension
+
+Owner on `d3f37c7`. Built in `aa36f3b`.
+
+- **Terraces:** each stage cuts its whole cell one step down (0.22 of the layer; 0.34 when there is only one stage) and deepens everything the earlier stages opened by another step. The first hole stays as a deeper pit inside the second. `piece.centerDepth` is the deepest terrace, where the beam aims. The final piece is the rock under and around the terraces.
+- **Scorched rubble:** pieces darken toward the shard dark by up to 0.6 extra, falling off as exp(−distance/2.6) from the beam's point.
+- **Research on a pause reading as tension rather than lag:**
+  - Sakurai shakes the hit object during hit-stop: biggest at the start, shrinking toward the end ([Source Gaming translation](https://sourcegaming.info/2015/11/11/thoughts-on-hitstop-sakurais-famitsu-column-vol-490-1/), [GoNintendo summary of his 8 techniques](https://www.gonintendo.com/contents/13581-sakurai-s-latest-game-dev-video-features-8-hit-stop-techniques)).
+  - Freeze both sides of the hit together, or it looks like a hiccup or lag ([bugnet hit pause guide](https://bugnet.io/blog/how-to-use-hit-pause-to-make-impacts-feel-powerful), [game juice hit-stop article](https://gamejuice.pages.dev/articles/hit-stop-frame-trick)).
+  - Pair the freeze frame with an impact cue on the same frame ([bugnet](https://bugnet.io/blog/how-to-use-hit-pause-to-make-impacts-feel-powerful)).
+  - Medium hits around 5–8 frames; past about 20 frames starts to feel like a bug ([bugnet](https://bugnet.io/blog/how-to-use-hit-pause-to-make-impacts-feel-powerful)).
+  - These are practitioner guides, not studies. For a broader survey see [Pichlmair & Johansen](https://arxiv.org/abs/2011.09201) and [Lin et al.](https://faculty.washington.edu/zkwen/articles/lin22features.pdf).
+- **What the 12-frame freeze does now:**
+  - The sealed cell stays on screen and shakes hard, then settles, while its pieces strain 0.18 studs apart (`V:tenseGeode`).
+  - The crack glow and halo blaze and the rays flare wider and longer.
+  - A deep crack and split sound play on the first frame.
+  - The camera punches in 4° (in the first fifth of the freeze) with a tremble that decays as (1−u)^1.5.
+  - A gem-tinted grade (saturation −0.3, contrast +0.18, brightness −0.03) holds over the world. No full-screen flash: the owner rejected those.
+  - Flash, rubble, the blast and the bounce come at the release. Reduced Motion drops the camera motion.
+- `hitStop.freeze(duration,{tint=,onFrame=})` is the API for any later use.
+
 ## November 22 — instant gem pause, pulsing outline, gem blast, rubble away from the beam
 
 Owner on `c4c2708`. Built in `d3f37c7`.

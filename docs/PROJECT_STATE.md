@@ -1,5 +1,9 @@
 # Shared project context
 
+## November 22 — terraced stages, scorched rubble, tension during the freeze
+
+Owner follow-up on `d3f37c7`. Built in `aa36f3b`, installed (Studio save 484, canonical sha256 `056b81b0…`). Not published. Stages are terraced (earlier pits kept deeper inside later ones). Rubble is darker near the beam. The sealed gem freeze adds shake on the cell, blazing cracks and rays, a first-frame sound, a camera punch-in with tremble and a tinted contrast grade, based on hit-stop research (sources in [VFX instructions](VFX_INSTRUCTIONS.md)). Dig, pickup and beam suites pass. Not seen in Play.
+
 ## November 22 — instant gem pause, no floating cells, pulsing outline, gem blast
 
 Owner follow-up on `c4c2708`. Built in `d3f37c7`, installed (Studio save 483, canonical sha256 `cf191e70…`). Not published.
