@@ -36,7 +36,7 @@ local function fxPart(parent: Instance,name: string,color: Color3,class: string?
 end
 
 function V.new(ctx: any)
- local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},flashes={},pending={},floors={},cracks={},crackCells={},cube=nil,origin=Vector3.zero,
+ local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
   generation=-1,applied=0,random=Random.new(),connections={},tapAt=0},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
@@ -124,7 +124,7 @@ function V:sync()
    if not entry then break end
    self.applied+=1
    local key=string.match(entry,'^c([%d%.]+)')
-   if key then for _,id in ipairs(DigCube.parseKey(key)) do DigCube.remove(self.cube,id) end end
+   if key and not string.match(entry,'|S%d+$') then for _,id in ipairs(DigCube.parseKey(key)) do DigCube.remove(self.cube,id) end end
   end
   self:buildPad()
   self:clearSparkles()
@@ -137,9 +137,16 @@ function V:sync()
   self.applied+=1
   local key,tier,flag,depth=string.match(s,'^c([%d%.]+)|?(%d*)|?(%a?)(%d*)$')
   if key then
-   local op={kind='c',cells=DigCube.parseKey(key),tier=tonumber(tier) or 0,treasure=flag=='T',partial=flag=='P',stage=flag=='P' and tonumber(depth) or nil,layer=flag=='D' and tonumber(depth) or nil}
+   local staged=flag=='S'
+   local op={kind='c',cells=DigCube.parseKey(key),tier=tonumber(tier) or 0,treasure=flag=='T',partial=staged or flag=='P',
+    staged=staged,stage=(staged or flag=='P') and tonumber(depth) or nil,layer=flag=='D' and tonumber(depth) or nil}
+   -- The rock that breaks here: a nested stage's shell, or what is left of
+   -- the cells after the last stage (the same shapes the server carved).
+   local pieces=DigCube.pieces(self.cube,op.cells)
+   local piece=staged and pieces[op.stage] or pieces[#pieces]
+   op.parts=piece and piece.shell or nil
    -- Out of the cube first, so shards land on the floor the break leaves.
-   for _,id in ipairs(op.cells) do DigCube.remove(self.cube,id) end
+   if not staged then for _,id in ipairs(op.cells) do DigCube.remove(self.cube,id) end end
    self:split(op,now)
   end
  end
@@ -191,6 +198,9 @@ local SHARD_GAP=.9 -- pieces start slightly apart, so the cracks between them sh
 local SHARD_FADE=.45
 local SHARD_LIFE=1.25 -- seconds of tumbling before a loose piece fades
 local RUBBLE=PhysicalProperties.new(2.6,.8,.12,1,1)
+local RUBBLE_REST=1.15 -- seconds the pile rests before the bottom pieces start to go
+local RUBBLE_STEP=.07 -- one piece every this many seconds, lowest first
+local RUBBLE_VANISH=.18 -- each shrinks away this fast
 -- The part of a convex polygon on the side (v-c).n <= 0.
 local function cutPoly(poly: {{number}},cx: number,cz: number,nx: number,nz: number): {{number}}
  local out={}
@@ -257,12 +267,16 @@ function V:shards(op: any,now: number,center: Vector3)
  local made={}
  local lo,hi=Vector3.new(math.huge,0,math.huge),Vector3.new(-math.huge,0,-math.huge)
  local floorY=math.huge
- for _,id in ipairs(op.cells) do
-  local c=cube.cells[id]
-  if c and #self.frags<SHARD_MAX then
-   lo=Vector3.new(math.min(lo.X,c.minX),0,math.min(lo.Z,c.minZ));hi=Vector3.new(math.max(hi.X,c.maxX),0,math.max(hi.Z,c.maxZ))
+ for _,c in ipairs(self:opParts(op)) do
+  if #self.frags<SHARD_MAX then
+   for _,v in ipairs(c.poly) do
+    lo=Vector3.new(math.min(lo.X,v[1]),0,math.min(lo.Z,v[2]));hi=Vector3.new(math.max(hi.X,v[1]),0,math.max(hi.Z,v[2]))
+   end
    floorY=math.min(floorY,c.y0)
-   local polys=#self.frags<SHARD_CUT and self:crackCell(c.poly,c.area>14 and 3 or 2) or {c.poly}
+   -- Each part breaks into Voronoi pieces of its own, like the rock itself.
+   local area=DigCube.polyArea(c.poly)
+   local count=#self.frags<SHARD_CUT and math.clamp(math.floor(area/2.2+.5),1,6) or 1
+   local polys=DigCube.voronoiSplit(c.poly,count,function() return self.random:NextNumber() end)
    for _,poly in ipairs(polys) do
     local _,mx,mz=middle(poly)
     local mid=o+Vector3.new(mx,(c.y0+c.y1)*.5,mz)
@@ -297,7 +311,8 @@ function V:shards(op: any,now: number,center: Vector3)
       T=.24+math.sqrt(2*drop/GRAVITY)*1.15,hop=self.random:NextNumber(.35,.95),
       wait=self.random:NextNumber(.3,.7),born=now,pos=mid,out=out,floor=o.Y+c.y0}
      if loose then
-      f.loose=true;f.life=SHARD_LIFE+self.random:NextNumber(0,.35)
+      -- Loose pieces stay physical until their turn to go (bottom first).
+      f.loose=true;f.life=8
       local primary=parts[1].part
       for i=2,#parts do
        local weld=Instance.new('WeldConstraint');weld.Part0=primary;weld.Part1=parts[i].part;weld.Parent=primary
@@ -317,7 +332,12 @@ function V:shards(op: any,now: number,center: Vector3)
   local floor=fxPart(self.fx,'DigRubbleFloor',SHARD_DARK);floor.Transparency=1;floor.CanCollide=true
   floor.CollisionGroup='DigRubbleFloor';floor.Size=size
   floor.CFrame=CFrame.new(o.X+(lo.X+hi.X)*.5,o.Y+floorY-1,o.Z+(lo.Z+hi.Z)*.5)
-  table.insert(self.floors,{part=floor,untilAt=now+SHARD_LIFE+3})
+  table.insert(self.floors,{part=floor,untilAt=now+RUBBLE_REST+RUBBLE_STEP*#made+2})
+ end
+ -- Bottom up, one by one: once the pile has landed, the lowest piece goes
+ -- first, then the next lowest, so the rest sink and fall into the hole.
+ if loose and #made>0 then
+  table.insert(self.sinks,{frags=made,nextAt=now+RUBBLE_REST})
  end
  -- Rock dust the server already dropped here claims these pieces.
  for _,entry in pairs(self.dust) do
@@ -354,7 +374,29 @@ function V:settle(f: any)
  f.settledAt=os.clock()
 end
 
+function V:stepSinks(now: number)
+ for i=#self.sinks,1,-1 do
+  local sink=self.sinks[i]
+  if now>=sink.nextAt then
+   local lowest,lowY=nil,math.huge
+   for _,f in ipairs(sink.frags) do
+    if not f.dead and not f.vanishing and not (f.keeper and f.dust and not f.dust.goneAt) then
+     local y=f.parts[1] and f.parts[1].part.Position.Y or math.huge
+     if y<lowY then lowest,lowY=f,y end
+    end
+   end
+   if not lowest then table.remove(self.sinks,i)
+   else
+    lowest.vanishing=true
+    if lowest.loose and not lowest.settled then self:settle(lowest) end
+    lowest.settledAt=now;lowest.fadeT=RUBBLE_VANISH
+    sink.nextAt=now+RUBBLE_STEP
+   end
+  end
+ end
+end
 function V:stepShards(now: number)
+ self:stepSinks(now)
  for i=#self.floors,1,-1 do
   local floor=self.floors[i]
   if now>=floor.untilAt then floor.part:Destroy();table.remove(self.floors,i) end
@@ -404,7 +446,7 @@ function V:stepShards(now: number)
     -- The pebble left to collect.
     k=f.k*(1-.55*math.clamp(age/SHARD_FADE,0,1))
    elseif age>0 then
-    local fade=math.clamp(age/SHARD_FADE,0,1)
+    local fade=math.clamp(age/(f.fadeT or SHARD_FADE),0,1)
     k=f.k*(1-.75*fade);clear=fade*fade
     if fade>=1 then self:dropShard(f);table.remove(self.frags,i);continue end
    end
@@ -431,19 +473,28 @@ end
 --    pop. The shards (the real rock) stand in for the two opening halves.
 -- A piece that breaks before the last is the old crack beat (seam burst):
 -- chips, two sparks, a lighter particle burst and the small ring.
-local HOLD_PIECE,HOLD_SPLIT,HOLD_HEAVY=2/60,3/60,5/60
+local HOLD_PIECE,HOLD_SPLIT,HOLD_HEAVY,HOLD_GEM=2/60,3/60,5/60,9/60
 local FLASH=Color3.fromRGB(255,249,216)
 local FLASH_FADE=.2
 -- Every break lights the whole segment that is coming out in the color of
 -- the drone that cut it (white-hot if unknown), so it is clear exactly what
 -- is being removed; it holds through the frame pause, then fades over the
 -- rubble.
+-- The rock a break takes out, as {poly,y0,y1} parts.
+function V:opParts(op: any): {any}
+ if op.parts then return op.parts end
+ local out={}
+ for _,id in ipairs(op.cells) do
+  local c=self.cube.cells[id]
+  if c then table.insert(out,{poly=c.poly,y0=c.y0,y1=c.y1}) end
+ end
+ return out
+end
 function V:flash(op: any,now: number,holdUntil: number,color: Color3)
  local o=self.origin
  local parts={}
- for n,id in ipairs(op.cells) do
-  if n>10 then break end
-  local c=self.cube.cells[id]
+ for n,c in ipairs(self:opParts(op)) do
+  if n>16 then break end
   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,.06),c.y0+.02,c.y1+.08)) do
    local part=fxPart(self.fx,'DigBreakFlash',color,'WedgePart');part.Transparency=.12
    part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
@@ -478,7 +529,7 @@ end
 -- loose: it lifts out of the rock, tilts and turns a little further each
 -- time, casting a real shadow, its color snaps back, and the crack plays with
 -- chips and dust. Then it breaks off as before.
-local CRACK_STEPS=3 -- per piece: two crack stages, then it breaks off
+local CRACK_STEPS=2 -- per stage: one crack, then it breaks out
 local CRACK_SHADE=.34 -- darkest just before a crack (the reference's shade curve)
 local CRACK_LIFT={0,.28,.62} -- studs out of the rock at each stage
 local CRACK_TURN={0,.06,.13} -- radians of turn at each stage
@@ -512,17 +563,20 @@ function V:clearCracks()
  self.cracks={};self.crackCells={}
 end
 -- The piece as its own prisms, slightly grown so they cover the carved rock.
-function V:buildProxy(piece: any,owned: boolean): any?
+function V:buildProxy(piece: any,owned: boolean,chunk: {number}): any?
  local cube=self.cube;local o=self.origin
  local parts,ids={},{}
  local model=Instance.new('Model');model.Name='DigCrackPiece'
  local area,sx,sz,top=0,0,0,-math.huge
- for _,id in ipairs(piece.ids) do
-  local c=cube.cells[id]
-  if c and not cube.removed[id] and not self.crackCells[id] then
-   table.insert(ids,id)
-   area+=c.area;sx+=c.cx*c.area;sz+=c.cz*c.area;top=math.max(top,c.y1)
-   local stone=self:colorAt(c.y1-.01,c.cx,c.cz)
+ for _,id in ipairs(chunk) do
+  if not cube.removed[id] and not self.crackCells[id] then table.insert(ids,id) end
+ end
+ if #ids==0 then model:Destroy();return nil end
+ for _,c in ipairs(piece.shell or piece.parts) do
+  local a,mx,mz=middle(c.poly)
+  if a>.02 then
+   area+=a;sx+=mx*a;sz+=mz*a;top=math.max(top,c.y1)
+   local stone=self:colorAt(c.y1-.01,mx,mz)
    for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,.03),c.y0+.02,c.y1+.03)) do
     local part=fxPart(model,'DigCrack',stone,'WedgePart')
     part.CastShadow=true
@@ -570,7 +624,8 @@ end
 function V:crackStage(key: string,progress: number,now: number,tint: Color3,owned: boolean)
  local job=self.cracks[key]
  if not job then
-  job={pieces=DigCube.pieces(self.cube,DigCube.parseKey(string.sub(key,2)))}
+  job={ids=DigCube.parseKey(string.sub(key,2))}
+  job.pieces=DigCube.pieces(self.cube,job.ids)
   self.cracks[key]=job
   -- A chunk already part-cut when first seen starts at its stage, without the hit.
   job.stage=self:crackIndex(job,progress)
@@ -586,7 +641,7 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
   job.proxy=nil
  end
  if not job.proxy then
-  job.proxy=self:buildProxy(piece,owned);job.piece=k
+  job.proxy=self:buildProxy(piece,owned,job.ids);job.piece=k
   if job.proxy then job.proxy.step=step;self:poseProxy(job.proxy,now) end
  end
  local proxy=job.proxy
@@ -636,28 +691,38 @@ function V:stepCracks(now: number)
 end
 function V:split(op: any,now: number)
  local cube=self.cube;local o=self.origin
- local first=cube.cells[op.cells[1]]
- if not first then return end
- local _,cx,cz=DigCube.chunkArea(cube,op.cells)
- local bulk=DigCube.volume(cube,op.cells)^(1/3)
- local center=o+Vector3.new(cx,(first.y0+first.y1)*.5,cz)
+ local parts=self:opParts(op)
+ if #parts==0 then return end
+ local area,cx,cz,volume,top,bottom=0,0,0,0,-math.huge,math.huge
+ for _,q in ipairs(parts) do
+  local a,mx,mz=middle(q.poly)
+  area+=a;cx+=mx*a;cz+=mz*a;volume+=a*(q.y1-q.y0)
+  top=math.max(top,q.y1);bottom=math.min(bottom,q.y0)
+ end
+ if area<=0 then return end
+ cx/=area;cz/=area
+ local bulk=math.max(volume,.5)^(1/3)
+ local center=o+Vector3.new(cx,(top+bottom)*.5,cz)
  local owned,beam=false,nil
  for _,id in ipairs(op.cells) do
   self:clearCrack(id)
-  if self.mine[id] then owned=true;self.mine[id]=nil end
-  beam=beam or self.cellColor[id];self.cellColor[id]=nil
+  if self.mine[id] then owned=true end
+  beam=beam or self.cellColor[id]
+  -- A nested stage leaves the chunk's cells (and who is cutting them) in place.
+  if not op.staged then self.mine[id]=nil;self.cellColor[id]=nil end
  end
  local strength=math.clamp(bulk*.36,.9,2.45)
  local heavy=owned and strength>=1.35
  local hold=0
- if owned and not self:reduced() and now-(self.heldAt or -10)>=(op.partial and .9 or .3) then
-  hold=op.partial and HOLD_PIECE or heavy and HOLD_HEAVY or HOLD_SPLIT
+ if owned and not self:reduced() and (op.tier>0 or now-(self.heldAt or -10)>=(op.partial and .9 or .3)) then
+  -- A gem always gets the long pause.
+  hold=op.tier>0 and HOLD_GEM or op.partial and HOLD_PIECE or heavy and HOLD_HEAVY or HOLD_SPLIT
   self.heldAt=now
  end
  self:flash(op,now,now+hold+.04,beam and beam:Lerp(FLASH,.3) or FLASH)
  self:shards(op,now+hold,center)
- local info={center=center,point=o+Vector3.new(cx,first.y1,cz),ground=o.Y+first.y0,bulk=bulk,strength=strength,owned=owned,heavy=heavy,
-  color=self:colorAt(first.y1-.01,cx,cz),beam=beam}
+ local info={center=center,point=o+Vector3.new(cx,top,cz),ground=o.Y+bottom,bulk=bulk,strength=strength,owned=owned,heavy=heavy,
+  color=self:colorAt(top-.01,cx,cz),beam=beam}
  if hold>0 then table.insert(self.pending,{at=now+hold,run=function() self:burst(op,info) end})
  else self:burst(op,info) end
 end
@@ -673,9 +738,14 @@ function V:breakCloud(op: any,e: any,big: boolean)
  if self:reduced() or (self.clouds or 0)>=8 then return end
  local cube=self.cube;local o=self.origin
  local cells={}
- for _,id in ipairs(op.cells) do
-  local c=cube.cells[id]
-  if c and #cells<CLOUD_CELLS then table.insert(cells,c) end
+ for _,q in ipairs(self:opParts(op)) do
+  if #cells>=CLOUD_CELLS then break end
+  local minX,maxX,minZ,maxZ=math.huge,-math.huge,math.huge,-math.huge
+  for _,v in ipairs(q.poly) do minX=math.min(minX,v[1]);maxX=math.max(maxX,v[1]);minZ=math.min(minZ,v[2]);maxZ=math.max(maxZ,v[2]) end
+  local _,mx,mz=middle(q.poly)
+  if maxX-minX>.2 and maxZ-minZ>.2 then
+   table.insert(cells,{minX=minX,maxX=maxX,minZ=minZ,maxZ=maxZ,y0=q.y0,y1=q.y1,cx=mx,cz=mz})
+  end
  end
  if #cells==0 then return end
  local holder=Instance.new('Folder');holder.Name='DigBreakCloud';holder.Parent=self.fx
@@ -781,7 +851,7 @@ function V:burst(op: any,e: any)
   ctx.audio:play('crystal_release_tink',point,{level=volume})
  end
  -- A gem bursts out with the rock, not after it.
- if op.tier>0 then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk},os.clock()) end
+ if op.tier>0 then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk,owned=e.owned,op=op},os.clock()) end
  if not lively then return end
  self:breakCloud(op,{color=vivid,beam=beam,bulk=e.bulk},true)
  -- Combo counter and the camera hit, shared with the field rocks.
@@ -816,11 +886,18 @@ function V:reveal(e: any,now: number)
    task.delay(.09,function() ctx.effects.ImpactParticles(e.center+Vector3.yAxis*.6,light,k,'GemReward') end)
   end
   if ctx.impact then
-   ctx.impact:fireworks(e.center,e.ground,color,1.3+e.tier*.15,serverNow,8)
-   ctx.impact:fireworks(e.center,e.ground,light,1.1+e.tier*.1,serverNow,6)
+   ctx.impact:fireworks(e.center,e.ground,color,(1.3+e.tier*.15)*2.2,serverNow,14)
+   ctx.impact:fireworks(e.center,e.ground,light,(1.1+e.tier*.1)*2,serverNow,10)
   end
   self:puff(e.center,color,1.2,14)
-  if ctx.beat then ctx.beat(e.tier>=3 and 'HeavySplit' or 'Split',e.center,serverNow,math.min(1.2,.6+e.tier*.12)) end
+  -- The rock's own break particles again, in the gem's colors.
+  if e.op then self:breakCloud(e.op,{color=color,beam=light,bulk=math.max(3,e.size or 3)},true) end
+  -- An impact you feel: a heavy shake, then a second hit a beat later.
+  if ctx.beat then
+   local weight=e.owned==false and .6 or 1
+   ctx.beat('HeavySplit',e.center,serverNow,(1.5+e.tier*.2)*weight)
+   task.delay(.12,function() ctx.beat('Split',e.center,workspace:GetServerTimeNow(),(1+e.tier*.12)*weight) end)
+  end
  end
  if e.treasure then
   -- Jackpot: a treasure pocket pays several rare gems.

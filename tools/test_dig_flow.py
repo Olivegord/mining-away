@@ -74,33 +74,34 @@ assert(count>=10,'op count replicates: '..tostring(count))
 local replay=DigCube.build(holder:GetAttribute('Seed'))
 for i=1,math.ceil(count/64) do
  for entry in string.gmatch(holder:GetAttribute('Ops'..i),'[^;]+') do
-  local key,tier=string.match(entry,'^c([%d%.]+)|(%d+)|?[TDP]?%d*$')
+  local key,tier=string.match(entry,'^c([%d%.]+)|(%d+)|?[TDPS]?%d*$')
   assert(key and tier,'op format: '..entry)
-  for _,id in ipairs(DigCube.parseKey(key)) do DigCube.remove(replay,id) end
+  -- A nested stage (flag S) carves part of the chunk but removes no cell.
+  if not string.match(entry,'|S%d+$') then for _,id in ipairs(DigCube.parseKey(key)) do DigCube.remove(replay,id) end end
  end
 end
--- Chunks come away in pieces: partial breaks (flag P) carry no gem, and
--- every chunk of more than one cell ends with a final break.
+-- Chunks break in nested stages first (flag S, no gem), then the final break.
 local partial,final=0,0
 for _,entry in ipairs(dig.ops) do
- if string.match(entry,'|P%d+$') then partial+=1;assert(string.match(entry,'|0|P%d+$'),'a partial break carries no gem: '..entry) else final+=1 end
+ if string.match(entry,'|S%d+$') then partial+=1;assert(string.match(entry,'|0|S%d+$'),'a stage carries no gem: '..entry) else final+=1 end
 end
-assert(partial>=3 and final>=3,'chunks break off in pieces: '..partial..' partial, '..final..' final')
+assert(partial>=3 and final>=3,'chunks break in stages: '..partial..' stages, '..final..' final')
 do
  local sample=DigCube.build(7)
  local seed=DigCube.pick(sample,{random=function() return .5 end})
  local ids=DigCube.chunk(sample,seed,1.9,nil,function() return .9 end)
  local pieces=DigCube.pieces(sample,ids)
- local seen,n,last=0,{},0
- for _,piece in ipairs(pieces) do
-  assert(#piece.ids>=1 and piece.at>last,'pieces are non-empty and in order')
+ local last=0
+ local thick=sample.cells[ids[1]].y1-sample.cells[ids[1]].y0
+ for k,piece in ipairs(pieces) do
+  assert(#piece.parts>=1 and piece.at>last,'stages are non-empty and in order')
   last=piece.at
-  for _,id in ipairs(piece.ids) do assert(not n[id],'a cell is in one piece');n[id]=true;seen+=1 end
+  if k<#pieces then for _,part in ipairs(piece.parts) do assert(part.y1-part.y0<thick,'a stage is shallower than the layer') end end
  end
- assert(seen==#ids and last==1 and #pieces>=2 and #pieces<=4,'pieces cover the chunk: '..#pieces..' for '..#ids..' cells')
+ assert(pieces[#pieces].final and #pieces[#pieces].ids==#ids and last==1 and #pieces>=2 and #pieces<=3,'stages end in the chunk itself: '..#pieces)
 end
 local server=DigCube.build(holder:GetAttribute('Seed'))
-for i=1,count do for _,id in ipairs(DigCube.parseKey(string.match(dig.ops[i],'^c([%d%.]+)'))) do DigCube.remove(server,id) end end
+for i=1,count do if not string.match(dig.ops[i],'|S%d+$') then for _,id in ipairs(DigCube.parseKey(string.match(dig.ops[i],'^c([%d%.]+)'))) do DigCube.remove(server,id) end end end
 assert(replay.removedCount==server.removedCount and replay.removedCount>0,'replicated chunks match the server')
 -- Depth milestones: the first chunk into a new layer is flagged and pays a gem.
 local flagged=false
@@ -160,8 +161,9 @@ scene.digDrop(d1)
 local corner=far
 pl.Character:PivotTo(CFrame.new(corner+Vector3.new(0,3,0)))
 local seen={};for id in pairs(dig.cube.removed) do seen[id]=true end
-local before=#dig.ops
-for _=1,500 do tick(10);if #dig.ops>=before+5 then break end end
+-- Wait for removed cells, not ops: nested stages publish ops without removing cells.
+local function freshCount() local f=0;for id in pairs(dig.cube.removed) do if not seen[id] then f+=1 end end;return f end
+for _=1,900 do tick(10);if freshCount()>=5 then break end end
 local moved,fresh=0,0
 for id in pairs(dig.cube.removed) do
  if not seen[id] then fresh+=1;local c=dig.cube.cells[id];if (c.cx-W*.85)^2+(c.cz-W*.85)^2<24*24 then moved+=1 end end

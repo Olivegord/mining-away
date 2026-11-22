@@ -3578,9 +3578,30 @@ function scene.digCarve(job)
   wedges[id]=list
   return list
  end
+ -- Nested-stage shapes: wedges per part, with their bounds.
+ local stageParts={}
+ for _,part in ipairs(job.parts or {}) do
+  local lo,hi=Vector3.new(math.huge,part.y0,math.huge),Vector3.new(-math.huge,part.y1,-math.huge)
+  for _,v in ipairs(part.poly) do lo=Vector3.new(math.min(lo.X,v[1]),lo.Y,math.min(lo.Z,v[2]));hi=Vector3.new(math.max(hi.X,v[1]),hi.Y,math.max(hi.Z,v[2])) end
+  local list={}
+  for _,w in ipairs(DigCube.partWedges(cube,{part})) do
+   local p=Instance.new('WedgePart');p.Anchored=true;p.CanCollide=false
+   p.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+   p.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+    Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+   table.insert(list,p);table.insert(made,p)
+  end
+  table.insert(stageParts,{lo=lo,hi=hi,wedges=list})
+ end
  for i=#dig.blocks,1,-1 do
   local block=dig.blocks[i]
   local negatives={}
+  for _,sp in ipairs(stageParts) do
+   if block.hi.X>sp.lo.X-.5 and block.lo.X<sp.hi.X+.5 and block.hi.Y>sp.lo.Y-.1 and block.lo.Y<sp.hi.Y+.6
+    and block.hi.Z>sp.lo.Z-.5 and block.lo.Z<sp.hi.Z+.5 then
+    for _,w in ipairs(sp.wedges) do table.insert(negatives,w) end
+   end
+  end
   for _,id in ipairs(job.ids) do
    local c=cube.cells[id]
    if block.hi.X>c.minX-.5 and block.lo.X<c.maxX+.5 and block.hi.Y>c.y0-.1 and block.lo.Y<c.y1+.6
@@ -3614,9 +3635,11 @@ function scene.digCarveLoop()
   while #dig.csg>0 do
    -- Take everything queued for this cube in one pass: pieces break often,
    -- and one cut per block keeps the rock in step with the breaks.
-   local job={generation=dig.csg[1].generation,ids={}}
+   local job={generation=dig.csg[1].generation,ids={},parts={}}
    while #dig.csg>0 and dig.csg[1].generation==job.generation do
-    for _,id in ipairs(table.remove(dig.csg,1).ids) do table.insert(job.ids,id) end
+    local item=table.remove(dig.csg,1)
+    for _,id in ipairs(item.ids) do table.insert(job.ids,id) end
+    for _,part in ipairs(item.parts or {}) do table.insert(job.parts,part) end
    end
    local ok,err=pcall(scene.digCarve,job)
    if not ok and not dig.carveWarned then dig.carveWarned=true;(warn or print)('[DigCube] carve failed: '..tostring(err)) end
@@ -3706,30 +3729,24 @@ function scene.digAim(job)
 end
 -- One piece of a chunk breaks off before the rest: it leaves the rock now
 -- (ops flag P: no gem roll yet) and pays its share of the chunk's rock.
+-- One nested stage of a chunk breaks out (a Voronoi cell around its middle,
+-- shallower than the layer): it is carved now, the cells themselves stay
+-- until the final break (ops flag S<stage>; every client recomputes the
+-- shape from the chunk key) and it pays its share of the chunk's rock.
 function scene.digChip(job,d,p)
  local dig=scene.dig;local cube=dig.cube
  job.stage+=1
  local piece=job.pieces[job.stage]
- local gone={}
- for _,id in ipairs(piece.ids) do
-  gone[id]=true
-  if DigCube.remove(cube,id) then dig.recent[id]=now end
-  if dig.claimed[id]==d.id then dig.claimed[id]=nil end
- end
- local left={}
- for _,id in ipairs(job.left) do if not gone[id] then table.insert(left,id) end end
- job.left=left
- d.digCell=left[1]
- table.insert(dig.ops,'c'..DigCube.key(piece.ids)..'|0|P'..job.stage)
+ table.insert(dig.ops,'c'..DigCube.key(job.ids)..'|0|S'..job.stage)
  dig.dirty=true
- table.insert(dig.csg,{generation=dig.generation,ids=piece.ids})
+ table.insert(dig.csg,{generation=dig.generation,ids={},parts=piece.parts})
  scene.digCarveLoop()
  local share=math.floor(job.rock*piece.at)-job.rockPaid
  if share>0 then
   job.rockPaid+=share
-  local _,px,pz=DigCube.chunkArea(cube,piece.ids)
-  local _,floor=DigCube.contact(cube,piece.ids)
-  scene.digRock(p,d.owner,piece.ids,share,dig.origin+Vector3.new(px,floor+1,pz))
+  local _,px,pz=DigCube.chunkArea(cube,job.ids)
+  local floor=piece.parts[1] and piece.parts[1].y0 or cube.cells[job.ids[1]].y0
+  scene.digRock(p,d.owner,job.ids,share,dig.origin+Vector3.new(px,floor+1,pz))
  end
  scene.digAim(job)
 end

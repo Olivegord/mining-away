@@ -18,6 +18,7 @@
 -- seeds at random, weighted toward depth, toward the player, away from each
 -- other and toward recent cuts: organic pits that deepen and merge.
 local D={}
+local halfPlaneOf: (poly: {{number}},cx: number,cz: number,nx: number,nz: number) -> {{number}}
 D.WIDTH=88
 D.LAYERS=10
 D.GAP=0 -- seamless: no crack lines until a drone cuts
@@ -560,28 +561,174 @@ function D.chunkHp(cube: any,ids: {number},cutSize: number?): number
  -- Bigger cuts take longer but move more rock per second than small ones.
  return hp/math.sqrt(math.max(.5,cutSize or 1))
 end
--- A chunk breaks off in pieces, like the field rocks shrinking a band at a
--- time: the cells nearest its middle go first, then the rock around them.
--- Each piece is {ids, at}: it breaks once the chunk's damage reaches `at`
--- (its share of the chunk's work, cumulative; the last piece is 1).
-function D.pieces(cube: any,ids: {number}): {any}
- local _,cx,cz=D.chunkArea(cube,ids)
- local order=table.clone(ids)
- local function far(id: number): number local c=cube.cells[id];return (c.cx-cx)^2+(c.cz-cz)^2 end
- table.sort(order,function(a,b) local da,db=far(a),far(b);if da==db then return a<b end;return da<db end)
- local count=#order<=2 and #order or #order<=5 and 3 or 4
- local total=0
- for _,id in ipairs(order) do total+=cube.cells[id].hp end
+-- A chunk breaks in nested stages before its real cells go (owner, Nov 22):
+-- first a small Voronoi cell around its middle, then a bigger one turned a
+-- little, each shallower than the layer, then the actual cells. A stage cell
+-- is the Voronoi cell of the chunk's center among a ring of sites, clipped to
+-- the chunk's cells. Each entry is {at, parts={{poly,y0,y1}}, ids}: it breaks
+-- once the chunk's damage reaches `at`; the last one (final=true, ids=the
+-- chunk) is what is left of the cells once the last stage is out.
+D.STAGE_SITES=6
+local function hashIds(ids: {number}): number
+ local h=0
+ for _,id in ipairs(ids) do h=(h*31+id)%1000003 end
+ return h
+end
+-- Keep the part of convex `poly` inside convex `cell` (both counter- or clockwise).
+local function clipConvex(poly: {{number}},cell: {{number}}): {{number}}
+ local n=#cell
+ local mx,mz=0,0
+ for _,v in ipairs(cell) do mx+=v[1];mz+=v[2] end
+ mx/=n;mz/=n
+ local out=poly
+ for k=1,n do
+  local a,b=cell[k],cell[k%n+1]
+  local nx,nz=b[2]-a[2],-(b[1]-a[1])
+  if (mx-a[1])*nx+(mz-a[2])*nz>0 then nx,nz=-nx,-nz end
+  out=halfPlaneOf(out,a[1],a[2],nx,nz)
+  if #out<3 then return {} end
+ end
+ return out
+end
+-- The Voronoi cell of (cx,cz) among a ring of sites about 2r away.
+local function stageCell(cx: number,cz: number,r: number,angle: number,seed: number): {{number}}
+ local R=D.rng(seed)
+ local poly={{cx-6*r,cz-6*r},{cx+6*r,cz-6*r},{cx+6*r,cz+6*r},{cx-6*r,cz+6*r}}
+ for i=1,D.STAGE_SITES do
+  local a=angle+(i-1)*2*math.pi/D.STAGE_SITES+R(-.3,.3)
+  local d=2*r*R(.85,1.2)
+  local px,pz=cx+math.cos(a)*d,cz+math.sin(a)*d
+  local nx,nz=px-cx,pz-cz
+  local l=math.sqrt(nx*nx+nz*nz)
+  poly=halfPlaneOf(poly,(cx+px)*.5,(cz+pz)*.5,nx/l,nz/l)
+ end
+ return poly
+end
+local function polyArea(poly: {{number}}): number
+ local a=0
+ for k=1,#poly do local p,q=poly[k],poly[k%#poly+1];a+=p[1]*q[2]-q[1]*p[2] end
+ return math.abs(a)*.5
+end
+D.polyArea=polyArea
+-- What is left of convex `cell` outside convex `hole`, as convex pieces.
+local function outside(cell: {{number}},hole: {{number}}): {{{number}}}
+ local n=#hole
+ local mx,mz=0,0
+ for _,v in ipairs(hole) do mx+=v[1];mz+=v[2] end
+ mx/=n;mz/=n
+ local rest=cell
  local out={}
- local done,index=0,1
- for k=1,count do
-  local piece={ids={},at=1}
-  -- Even shares of the work, at least one cell each, leaving one for every later piece.
-  while index<=#order-(count-k) and (#piece.ids==0 or k==count or done+cube.cells[order[index]].hp*.5<=total*k/count) do
-   table.insert(piece.ids,order[index]);done+=cube.cells[order[index]].hp;index+=1
+ for k=1,n do
+  local a,b=hole[k],hole[k%n+1]
+  local nx,nz=b[2]-a[2],-(b[1]-a[1])
+  if (mx-a[1])*nx+(mz-a[2])*nz>0 then nx,nz=-nx,-nz end
+  local piece=halfPlaneOf(rest,a[1],a[2],-nx,-nz)
+  if #piece>=3 and polyArea(piece)>.04 then table.insert(out,piece) end
+  rest=halfPlaneOf(rest,a[1],a[2],nx,nz)
+  if #rest<3 then break end
+ end
+ return out
+end
+function D.pieces(cube: any,ids: {number}): {any}
+ local area,cx,cz=D.chunkArea(cube,ids)
+ local first=cube.cells[ids[1]]
+ local thick=first.y1-first.y0
+ local seed=hashIds(ids)
+ local radius=math.sqrt(area/math.pi)
+ local stages=area<9 and 1 or 2
+ local base=(seed*.6180339887)%1*math.pi*2
+ local out={}
+ local last,lastDepth
+ for k=1,stages do
+  local size=stages==1 and .5 or (k==1 and .38 or .66)
+  local depth=thick*(stages==1 and .45 or (k==1 and .3 or .6))
+  -- Each stage turned a little from the one before.
+  local poly=stageCell(cx,cz,radius*size,base+k*.45,seed+k*7919)
+  local parts,shell={},{}
+  for _,id in ipairs(ids) do
+   local c=cube.cells[id]
+   local q=clipConvex(poly,c.poly)
+   if #q>=3 and polyArea(q)>.04 then
+    table.insert(parts,{poly=q,y0=c.y1-depth,y1=c.y1})
+    -- The rock this stage newly takes out: its shape minus the last stage's.
+    if last then
+     for _,r in ipairs(outside(q,last)) do table.insert(shell,{poly=r,y0=c.y1-depth,y1=c.y1}) end
+     local inner=clipConvex(q,last)
+     if #inner>=3 and polyArea(inner)>.04 then table.insert(shell,{poly=inner,y0=c.y1-depth,y1=c.y1-lastDepth}) end
+    else
+     table.insert(shell,{poly=q,y0=c.y1-depth,y1=c.y1})
+    end
+   end
   end
-  piece.at=k==count and 1 or done/math.max(total,1e-6)
-  table.insert(out,piece)
+  if #parts>0 then
+   table.insert(out,{stage=k,at=stages==1 and .4 or (k==1 and .25 or .55),parts=parts,shell=shell,ids={}})
+   last,lastDepth=poly,depth
+  end
+ end
+ -- The actual cells: the floor under the last stage, and the rim around it.
+ local parts={}
+ for _,id in ipairs(ids) do
+  local c=cube.cells[id]
+  if last then
+   table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1-lastDepth})
+   for _,q in ipairs(outside(c.poly,last)) do table.insert(parts,{poly=q,y0=c.y1-lastDepth,y1=c.y1}) end
+  else
+   table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1})
+  end
+ end
+ table.insert(out,{stage=#out+1,at=1,parts=parts,shell=parts,ids=table.clone(ids),final=true})
+ return out
+end
+-- A convex polygon cut into about n Voronoi cells (sites placed at random
+-- inside it), each convex. For rubble that breaks like the rock it came from.
+function D.voronoiSplit(poly: {{number}},n: number,random: () -> number): {{{number}}}
+ if n<=1 or polyArea(poly)<1 then return {poly} end
+ local minX,maxX,minZ,maxZ=math.huge,-math.huge,math.huge,-math.huge
+ for _,v in ipairs(poly) do minX=math.min(minX,v[1]);maxX=math.max(maxX,v[1]);minZ=math.min(minZ,v[2]);maxZ=math.max(maxZ,v[2]) end
+ local inside=function(x: number,z: number): boolean
+  local sign=0
+  for k=1,#poly do
+   local a,b=poly[k],poly[k%#poly+1]
+   local c=(b[1]-a[1])*(z-a[2])-(b[2]-a[2])*(x-a[1])
+   if c~=0 then
+    local sg=c>0 and 1 or -1
+    if sign==0 then sign=sg elseif sg~=sign then return false end
+   end
+  end
+  return true
+ end
+ local sites={}
+ for _=1,n*12 do
+  if #sites>=n then break end
+  local x,z=minX+(maxX-minX)*random(),minZ+(maxZ-minZ)*random()
+  if inside(x,z) then table.insert(sites,{x,z}) end
+ end
+ if #sites<2 then return {poly} end
+ local out={}
+ for i,a in ipairs(sites) do
+  local cell=poly
+  for j,b in ipairs(sites) do
+   if i~=j then
+    local nx,nz=b[1]-a[1],b[2]-a[2]
+    local l=math.sqrt(nx*nx+nz*nz)
+    if l>1e-6 then cell=halfPlaneOf(cell,(a[1]+b[1])*.5,(a[2]+b[2])*.5,nx/l,nz/l) end
+    if #cell<3 then break end
+   end
+  end
+  if #cell>=3 and polyArea(cell)>.03 then table.insert(out,cell) end
+ end
+ return #out>0 and out or {poly}
+end
+-- Wedges filling a list of {poly,y0,y1} parts, grown a little so neighbors
+-- overlap when subtracted (like prismWedges).
+function D.partWedges(cube: any,parts: {any}): {any}
+ local out={}
+ for _,part in ipairs(parts) do
+  local y1=part.y1+(part.y1>=cube.height-.01 and .5 or .03)
+  for _,w in ipairs(D.polyWedges(D.grown(part.poly,D.CARVE_OVERLAP*.5),part.y0-.03,y1)) do
+   w.size[2]+=.16;w.size[3]+=.16
+   table.insert(out,w)
+  end
  end
  return out
 end
@@ -712,7 +859,7 @@ function D.outline(cube: any,ids: {number})
  return edges,cx,cz
 end
 -- Keep the part of a convex polygon where (v-c).n <= 0.
-local function halfPlane(poly: {{number}},cx: number,cz: number,nx: number,nz: number): {{number}}
+function halfPlaneOf(poly: {{number}},cx: number,cz: number,nx: number,nz: number): {{number}}
  local out={}
  local n=#poly
  for k=1,n do
@@ -738,7 +885,7 @@ function D.split(cube: any,ids: {number})
  local result={cx=cx,cz=cz,nx=nx,nz=nz,y0=first.y0,y1=first.y1,layer=first.layer,a={},b={},chords={}}
  for _,id in ipairs(ids) do
   local poly=cube.cells[id].poly
-  local A=halfPlane(poly,cx,cz,nx,nz);local B=halfPlane(poly,cx,cz,-nx,-nz)
+  local A=halfPlaneOf(poly,cx,cz,nx,nz);local B=halfPlaneOf(poly,cx,cz,-nx,-nz)
   if #A>=3 then table.insert(result.a,A) end
   if #B>=3 then table.insert(result.b,B) end
   if #A>=3 and #B>=3 then
