@@ -500,7 +500,7 @@ end
 function V:dropProxy(proxy: any)
  if proxy.dead then return end
  proxy.dead=true
- for _,e in ipairs(proxy.parts) do e.part:Destroy() end
+ proxy.model:Destroy()
  for _,id in ipairs(proxy.ids) do if self.crackCells[id]==proxy then self.crackCells[id]=nil end end
 end
 function V:clearCrack(id: number)
@@ -512,9 +512,10 @@ function V:clearCracks()
  self.cracks={};self.crackCells={}
 end
 -- The piece as its own prisms, slightly grown so they cover the carved rock.
-function V:buildProxy(piece: any): any?
+function V:buildProxy(piece: any,owned: boolean): any?
  local cube=self.cube;local o=self.origin
  local parts,ids={},{}
+ local model=Instance.new('Model');model.Name='DigCrackPiece'
  local area,sx,sz,top=0,0,0,-math.huge
  for _,id in ipairs(piece.ids) do
   local c=cube.cells[id]
@@ -523,7 +524,7 @@ function V:buildProxy(piece: any): any?
    area+=c.area;sx+=c.cx*c.area;sz+=c.cz*c.area;top=math.max(top,c.y1)
    local stone=self:colorAt(c.y1-.01,c.cx,c.cz)
    for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,.03),c.y0+.02,c.y1+.03)) do
-    local part=fxPart(self.fx,'DigCrack',stone,'WedgePart')
+    local part=fxPart(model,'DigCrack',stone,'WedgePart')
     part.CastShadow=true
     part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
     part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
@@ -532,10 +533,19 @@ function V:buildProxy(piece: any): any?
    end
   end
  end
- if area<=0 then return nil end
+ if area<=0 then model:Destroy();return nil end
+ model.Parent=self.fx
  local pivot=o+Vector3.new(sx/area,top,sz/area)
  for _,e in ipairs(parts) do e.base=CFrame.new(pivot):ToObjectSpace(e.part.CFrame) end
- local proxy={parts=parts,ids=ids,pivot=pivot,step=0,shade=0,joltAt=-10,
+ -- The old pulsing outline: your own crew's piece breathes a soft outline in
+ -- the rock's tone toward white, like a field rock under attack.
+ local highlight
+ if owned then
+  highlight=Instance.new('Highlight');highlight.Name='DigTarget';highlight.DepthMode=Enum.HighlightDepthMode.Occluded
+  highlight.FillTransparency=1;highlight.OutlineColor=parts[1].stone:Lerp(Color3.new(1,1,1),.66)
+  highlight.OutlineTransparency=.5;highlight.Adornee=model;highlight.Parent=model
+ end
+ local proxy={parts=parts,ids=ids,pivot=pivot,step=0,shade=0,joltAt=-10,model=model,highlight=highlight,since=os.clock(),
   turn=self.random:NextNumber(.7,1)*(self.random:NextInteger(0,1)*2-1),tipAxis=self.random:NextNumber(0,math.pi*2)}
  for _,id in ipairs(ids) do self.crackCells[id]=proxy end
  return proxy
@@ -575,12 +585,16 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
   if not job.proxy.dead then self:dropProxy(job.proxy) end
   job.proxy=nil
  end
- if not job.proxy and progress>0 then
-  job.proxy=self:buildProxy(piece);job.piece=k
+ if not job.proxy then
+  job.proxy=self:buildProxy(piece,owned);job.piece=k
   if job.proxy then job.proxy.step=step;self:poseProxy(job.proxy,now) end
  end
  local proxy=job.proxy
  if not proxy then return end
+ if proxy.highlight then
+  local wave=.5+.5*math.cos((now-proxy.since)*7.5)
+  proxy.highlight.OutlineTransparency=.5-.43*wave
+ end
  -- Darker as the beam works, back to full color at each crack.
  self:shadeProxy(proxy,CRACK_SHADE*math.clamp(within,0,1)^.88)
  if index>job.stage then
@@ -648,75 +662,82 @@ function V:split(op: any,now: number)
  else self:burst(op,info) end
 end
 -- The break's own particles, bigger and longer-lived than the shared
--- cocktail, emitted from the whole volume of the rock that broke (a box the
--- size of the piece), so they come from exactly where it broke: chunky
--- debris in the rock's tone, a dust cloud that hangs and drifts, bright
--- sparks in the beam's color and slow glitter that lingers.
+-- cocktail. Each broken cell emits from a box the size of that cell, so the
+-- particles start exactly in the rock that broke (one box over the whole
+-- chunk put some of them in rock that did not break). The little spinning
+-- rectangles linger longest; the round dust bursts out and stops almost at
+-- once under heavy drag; beam-colored sparks and a little glitter on top.
 local SQUARE='rbxasset://textures/particles/SquareParticle.png'
+local CLOUD_CELLS=8
 function V:breakCloud(op: any,e: any,big: boolean)
  if self:reduced() or (self.clouds or 0)>=8 then return end
  local cube=self.cube;local o=self.origin
- local lo,hi=Vector3.new(math.huge,math.huge,math.huge),Vector3.new(-math.huge,-math.huge,-math.huge)
+ local cells={}
  for _,id in ipairs(op.cells) do
   local c=cube.cells[id]
-  if c then
-   lo=Vector3.new(math.min(lo.X,c.minX),math.min(lo.Y,c.y0),math.min(lo.Z,c.minZ))
-   hi=Vector3.new(math.max(hi.X,c.maxX),math.max(hi.Y,c.y1),math.max(hi.Z,c.maxZ))
-  end
+  if c and #cells<CLOUD_CELLS then table.insert(cells,c) end
  end
- if lo.X>hi.X then return end
- local box=fxPart(self.fx,'DigBreakCloud',e.color);box.Transparency=1
- box.Size=Vector3.new(math.max(.5,hi.X-lo.X),math.max(.5,hi.Y-lo.Y),math.max(.5,hi.Z-lo.Z))
- box.Position=o+(lo+hi)*.5
+ if #cells==0 then return end
+ local holder=Instance.new('Folder');holder.Name='DigBreakCloud';holder.Parent=self.fx
  self.clouds=(self.clouds or 0)+1
- box.Destroying:Connect(function() self.clouds-=1 end)
+ holder.Destroying:Connect(function() self.clouds-=1 end)
  local k=big and 1 or .65
  local bulk=math.clamp(e.bulk,1.5,5)
- local function emitter(name: string): ParticleEmitter
-  local p=Instance.new('ParticleEmitter');p.Name=name;p.Enabled=false;p.Rate=0
-  p.Shape=Enum.ParticleEmitterShape.Box;p.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
-  p.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward;p.LockedToPart=false
-  p.Parent=box
-  return p
+ local share=1/#cells
+ local function count(n: number): number
+  -- Spread across the cells, at least one each when there is any to give.
+  local x=n*k*share
+  return math.floor(x)+(self.random:NextNumber()<x%1 and 1 or 0)
  end
- -- Debris: chunky square bits in the rock's tone, thrown up and falling.
- local debris=emitter('Debris');debris.Texture=SQUARE
- debris.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.25),e.color:Lerp(SHARD_DARK,.45))
- debris.LightEmission=0;debris.LightInfluence=1;debris.Brightness=1.2
- debris.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.55*k,.2),NumberSequenceKeypoint.new(.8,.45*k,.15),NumberSequenceKeypoint.new(1,0)})
- debris.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.75,0),NumberSequenceKeypoint.new(1,1)})
- debris.Lifetime=NumberRange.new(.9,1.6);debris.Speed=NumberRange.new(10,22);debris.SpreadAngle=Vector2.new(55,55)
- debris.EmissionDirection=Enum.NormalId.Top;debris.Acceleration=Vector3.new(0,-48,0);debris.Drag=.6
- debris.Rotation=NumberRange.new(0,360);debris.RotSpeed=NumberRange.new(-260,260)
- debris:Emit(math.floor((10+6*bulk)*k))
- -- Dust: a few small puffs in the rock's own tone that hang a moment. Kept
- -- small and not lightened: big pale clouds washed over the whole dig.
- local dust=emitter('Dust')
- EnergyDisc.configure(dust,(1+.2*bulk)*k,.5,.5,1.5,.3)
- dust.LightEmission=0;dust.LightInfluence=1;dust.Brightness=1
- dust.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.15))
- dust.Lifetime=NumberRange.new(1,1.6);dust.Speed=NumberRange.new(2,5);dust.SpreadAngle=Vector2.new(70,70)
- dust.EmissionDirection=Enum.NormalId.Top;dust.Acceleration=Vector3.new(0,1,0);dust.Drag=2.4
- dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.6,.6),NumberSequenceKeypoint.new(1,1)})
- dust:Emit(math.floor((3+bulk)*k))
- -- Sparks in the beam's color: bright, quick, they carry the glow.
- local sparks=emitter('Sparks')
- EnergyDisc.configure(sparks,.75*k,.05,1,0,.35)
- sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=2.2
- sparks.Color=ColorSequence.new(e.beam:Lerp(BEAM_CORE,.35),e.beam)
- sparks.Lifetime=NumberRange.new(.45,.9);sparks.Speed=NumberRange.new(14,28);sparks.SpreadAngle=Vector2.new(70,70)
- sparks.EmissionDirection=Enum.NormalId.Top;sparks.Acceleration=Vector3.new(0,-30,0);sparks.Drag=1.5
- sparks:Emit(math.floor((10+4*bulk)*k))
- -- Glitter that lingers: slow falling bright flecks, the last thing to go.
- local glitter=emitter('Glitter')
- EnergyDisc.configure(glitter,.32*k,.1,1,.4,.4)
- glitter.LightEmission=.8;glitter.LightInfluence=0;glitter.Brightness=1.8
- glitter.Color=ColorSequence.new(e.beam:Lerp(BEAM_CORE,.6),e.color:Lerp(BEAM_CORE,.5))
- glitter.Lifetime=NumberRange.new(2.2,3.4);glitter.Speed=NumberRange.new(3,8);glitter.SpreadAngle=Vector2.new(85,85)
- glitter.EmissionDirection=Enum.NormalId.Top;glitter.Acceleration=Vector3.new(0,-2.2,0);glitter.Drag=2.6
- glitter.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.1),NumberSequenceKeypoint.new(.8,.25),NumberSequenceKeypoint.new(1,1)})
- glitter:Emit(math.floor((8+3*bulk)*k))
- task.delay(3.6,function() box:Destroy() end)
+ for _,c in ipairs(cells) do
+  local box=fxPart(holder,'Cell',e.color);box.Transparency=1
+  box.Size=Vector3.new(math.max(.4,(c.maxX-c.minX)*.8),math.max(.4,(c.y1-c.y0)*.8),math.max(.4,(c.maxZ-c.minZ)*.8))
+  box.Position=o+Vector3.new(c.cx,(c.y0+c.y1)*.5,c.cz)
+  local function emitter(name: string): ParticleEmitter
+   local p=Instance.new('ParticleEmitter');p.Name=name;p.Enabled=false;p.Rate=0
+   p.Shape=Enum.ParticleEmitterShape.Box;p.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+   p.LockedToPart=false;p.Parent=box
+   return p
+  end
+  -- Debris: little rectangles in the rock's tone, spinning and drifting down
+  -- slowly. These linger longest.
+  local debris=emitter('Debris');debris.Texture=SQUARE
+  debris.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.2),e.color:Lerp(SHARD_DARK,.45))
+  debris.LightEmission=0;debris.LightInfluence=1;debris.Brightness=1.2
+  debris.Squash=NumberSequence.new(-.35) -- a little longer than wide
+  debris.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.5*k,.18),NumberSequenceKeypoint.new(.85,.42*k,.14),NumberSequenceKeypoint.new(1,0)})
+  debris.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.8,.05),NumberSequenceKeypoint.new(1,1)})
+  debris.Lifetime=NumberRange.new(2.8,4.2);debris.Speed=NumberRange.new(9,18);debris.SpreadAngle=Vector2.new(60,60)
+  debris.EmissionDirection=Enum.NormalId.Top;debris.Acceleration=Vector3.new(0,-14,0);debris.Drag=1.6
+  debris.Rotation=NumberRange.new(0,360);debris.RotSpeed=NumberRange.new(-320,320)
+  debris:Emit(count(12+6*bulk))
+  -- Dust: round puffs in the rock's tone that burst out and stop at once.
+  local dust=emitter('Dust')
+  EnergyDisc.configure(dust,(1+.2*bulk)*k,.5,.5,1.5,.3)
+  dust.LightEmission=0;dust.LightInfluence=1;dust.Brightness=1
+  dust.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.15))
+  dust.Lifetime=NumberRange.new(.9,1.4);dust.Speed=NumberRange.new(12,20);dust.SpreadAngle=Vector2.new(75,75)
+  dust.EmissionDirection=Enum.NormalId.Top;dust.Acceleration=Vector3.zero;dust.Drag=14
+  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.6,.6),NumberSequenceKeypoint.new(1,1)})
+  dust:Emit(count(3+bulk))
+  -- Sparks in the beam's color: bright and quick; they carry the glow.
+  local sparks=emitter('Sparks')
+  EnergyDisc.configure(sparks,.75*k,.05,1,0,.35)
+  sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=2.2
+  sparks.Color=ColorSequence.new(e.beam:Lerp(BEAM_CORE,.35),e.beam)
+  sparks.Lifetime=NumberRange.new(.45,.9);sparks.Speed=NumberRange.new(14,28);sparks.SpreadAngle=Vector2.new(70,70)
+  sparks.EmissionDirection=Enum.NormalId.Top;sparks.Acceleration=Vector3.new(0,-30,0);sparks.Drag=1.5
+  sparks:Emit(count(10+4*bulk))
+  -- A little glitter, gone before the rectangles.
+  local glitter=emitter('Glitter')
+  EnergyDisc.configure(glitter,.3*k,.1,1,.4,.4)
+  glitter.LightEmission=.8;glitter.LightInfluence=0;glitter.Brightness=1.8
+  glitter.Color=ColorSequence.new(e.beam:Lerp(BEAM_CORE,.6),e.color:Lerp(BEAM_CORE,.5))
+  glitter.Lifetime=NumberRange.new(1.1,1.8);glitter.Speed=NumberRange.new(3,8);glitter.SpreadAngle=Vector2.new(85,85)
+  glitter.EmissionDirection=Enum.NormalId.Top;glitter.Acceleration=Vector3.new(0,-2.2,0);glitter.Drag=2.6
+  glitter:Emit(count(6+2*bulk))
+ end
+ task.delay(4.5,function() holder:Destroy() end)
 end
 function V:burst(op: any,e: any)
  local ctx=self.ctx

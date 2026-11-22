@@ -428,7 +428,10 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local ignition=predicted and deadline or sample.since or now
  local launchTail=visible and beam.vfx and not sample.paused and now-ignition<.18
  local wantsVFX=charging or (reference and launchTail) or (not reference and visible)
- if wantsVFX and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint)
+ if wantsVFX and not beam.vfx then
+  beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint)
+  -- Mining charges have no black void, core or ink (owner, Nov 22).
+  if beam.vfx and sample.isMining then beam.vfx.light=true end
  elseif reference and not wantsVFX and beam.vfx then BeamVFX.destroy(beam.vfx);beam.vfx=nil end
  if beam.vfx then
   BeamVFX.style(beam.vfx,sample.isMining and style or 'Combat',tint)

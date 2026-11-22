@@ -129,7 +129,7 @@ local function addDetail(r)
  local limit=B.limits.details-(priority and 0 or B.limits.reservedDetails)
  if r.detail or not r.wantDetail or details>=limit then return end
  r.detail=true;details+=1;r.paths={};r.stars={}
- if r.style=='Orbital' or r.style=='Singularity' or r.style=='Cutter' then
+ if (r.style=='Orbital' or r.style=='Singularity' or r.style=='Cutter') and not r.light then
   local orb=Instance.new('Part');orb.Name='ChargedDarkCore';orb.Shape=Enum.PartType.Ball
   orb.Material=Enum.Material.SmoothPlastic;orb.Color=DARK
   orb.Anchored=true;orb.CanCollide=false;orb.CanTouch=false;orb.CanQuery=false;orb.CastShadow=false
@@ -138,7 +138,12 @@ local function addDetail(r)
  for i=1,4 do
   local p=pair(r.root,i<=2 and 'OrbitRibbon' or i==3 and 'EdgeFilament' or 'DarkCut',r.color,i<=2 and ARC or i==3 and EDGE or INK)
   if i>=3 then p.beam.Segments=1 end
-  if i==4 then p.beam.Color=ColorSequence.new(Color3.fromRGB(22,15,37));p.beam.LightEmission=0;p.beam.Brightness=1 end
+  if i==4 then
+   -- Light mode (mining charges, owner Nov 22): no black parts in the charge.
+   if r.light then p.beam.Color=ColorSequence.new(r.color:Lerp(WHITE,.5));p.beam.LightEmission=.6
+   else p.beam.Color=ColorSequence.new(Color3.fromRGB(22,15,37));p.beam.LightEmission=0 end
+   p.beam.Brightness=1
+  end
   r.paths[i]=p;r.all[#r.all+1]=p.beam
  end
  r.plane=PlaneBurst.create(r.root,r.color)
@@ -306,9 +311,9 @@ acquireRich=function(r)
   return
  end
  h.glass=visualPart(folder,'ChromaticRelease',Enum.Material.Neon,B.GLITCH_PAIRS[1][1],Enum.PartType.Ball)
- for i=1,4 do h.blotches[i]=visualPart(folder,'GlitchBlotch'..i,Enum.Material.Neon,BLACK,Enum.PartType.Ball) end
+ for i=1,4 do h.blotches[i]=visualPart(folder,'GlitchBlotch'..i,Enum.Material.Neon,r.light and r.color:Lerp(WHITE,.3) or BLACK,Enum.PartType.Ball) end
  h.split=visualPart(folder,'GlitchSplit',Enum.Material.Neon,B.GLITCH_SPLIT[1],Enum.PartType.Ball)
- h.core=visualPart(folder,'ChargeOriginCore',Enum.Material.SmoothPlastic,DARK,Enum.PartType.Ball)
+ h.core=visualPart(folder,'ChargeOriginCore',r.light and Enum.Material.Neon or Enum.Material.SmoothPlastic,r.light and r.color:Lerp(WHITE,.55) or DARK,Enum.PartType.Ball)
  h.rim=visualPart(folder,'ChargeOriginRim',Enum.Material.Neon,VIOLET,Enum.PartType.Ball)
  -- Soft dark circle behind everything, and a soft colored glow on the core.
  h.void=EnergyDisc.sprite(h.glass,'ChargeVoid');h.void.image.Image=SOFT_GLOW
@@ -320,8 +325,8 @@ acquireRich=function(r)
  end
  for i=1,2 do
   local edge=richPath(r,'SlashEdge'..i,WHITE,ARC)
-  local ink=richPath(r,'SlashInk'..i,DARK,ARC)
-  ink.beam.LightEmission=0
+  local ink=richPath(r,'SlashInk'..i,r.light and r.color or DARK,ARC)
+  ink.beam.LightEmission=r.light and .5 or 0
   h.sweeps[i]={edge=edge,ink=ink}
  end
  for i=1,3 do
@@ -536,7 +541,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  h.scale=k;h.duration=duration
  if h.tint~=r.color then
   h.tint=r.color
-  h.vapor.Color=ColorSequence.new(r.color:Lerp(DARK,.35));h.sparks.Color=ColorSequence.new(r.color)
+  h.vapor.Color=ColorSequence.new(r.color:Lerp(r.light and WHITE or DARK,.35));h.sparks.Color=ColorSequence.new(r.color)
   h.rim.Color=r.color:Lerp(VIOLET,.5)
   for _,item in ipairs(h.comets) do item.halo.beam.Color=ColorSequence.new(r.color:Lerp(CYAN,.5)) end
   for _,item in ipairs(h.bolts) do item.halo.beam.Color=ColorSequence.new(r.color:Lerp(WHITE,.25)) end
@@ -562,13 +567,15 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  if pop then voidSize=voidSize+(k*snap*(9.5+2.5*B.popSize(pop,u))*(1-.35*implode)-voidSize)*glitching end
  local voidAt,voidGrow=B.voidPlacement(focus,toward,eye.Magnitude,to.Y,k)
  h.voidOffset=voidAt-focus;h.voidGrow=voidGrow
- EnergyDisc.place(h.void,voidAt,voidSize*voidGrow,BLACK,.78*intro)
+ -- Light mode keeps the circle but glows in the beam's color instead of black.
+ if r.light then EnergyDisc.place(h.void,voidAt,voidSize*voidGrow*.7,r.color:Lerp(WHITE,.35),.35*intro)
+ else EnergyDisc.place(h.void,voidAt,voidSize*voidGrow,BLACK,.78*intro) end
  -- Core: small and dark with a bright rim; it swells black before the glitch.
  local swell=full and math.sin(math.pi*clamp((q-.58)/(start-.58))) or 0
  local coreRadius=k*snap*(.16+.16*build+.62*swell)*(1+.3*beat)
  local alive=intro*calm
  h.core.CFrame=CFrame.new(focus);h.core.Size=Vector3.one*coreRadius*2
- h.core.Color=swell>.2 and BLACK or DARK
+ h.core.Color=r.light and r.color:Lerp(WHITE,.55+.3*swell) or swell>.2 and BLACK or DARK
  h.core.Transparency=1-alive
  h.rim.CFrame=CFrame.new(focus-toward*coreRadius*.2);h.rim.Size=Vector3.one*coreRadius*(2.5+.2*math.sin(now*9))
  h.rim.Transparency=1-alive*(.45-.3*swell)

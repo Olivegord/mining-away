@@ -1660,6 +1660,7 @@ local function renderDrone(d,dt,now)
    beamSince=s:GetAttribute('MineBreakBeamSince') or now;breakAt=finalAt;breakUntil=finalUntil
   end
  end
+ local digBeam=false
  if pickupView and pickupView.dig then
   pickupView.dig:droneBeam(s,d.emitter.Position,now,d.cubeLook and d.cubeLook.color)
   -- Digging drones use this same mining beam (charge-up, startup, contact)
@@ -1672,9 +1673,10 @@ local function renderDrone(d,dt,now)
    -- under DigMining instead, so that is what switches its beam on.
    active=alive and s:GetAttribute('DigMining')==true and s:GetAttribute('WorkPaused')~=true
    if active then charging=false end
+   digBeam=true
   end
  end
- presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
+ presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,dig=digBeam,
   contact=active,
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,

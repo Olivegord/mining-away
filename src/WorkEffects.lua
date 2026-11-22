@@ -99,7 +99,7 @@ local function drawSpheres(record,now,strength,charge,pulse,color)
   sphere.part.Size=Vector3.one*math.max(.01,size)
   sphere.part.CFrame=record.anchor.CFrame*CFrame.new(0,0,-.08)
   sphere.part.Color=sphere.index==1 and color:Lerp(WHITE,.18) or color
-  local opacity=({.30,.10,.025})[sphere.index]
+  local opacity=(record.bright and {.62,.34,.16} or {.30,.10,.025})[sphere.index]
   sphere.part.Transparency=1-math.clamp(strength,0,1)*opacity
  end
 end
@@ -178,6 +178,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if not visible then
   if fx then
    fx.sparks.Enabled=false;fx.glow.Enabled=false;fx.impact.Enabled=false
+   if fx.light then fx.light.Enabled=false end
    if fx.contact then fx.contact.Transparency=1 end
    if fx.inner then fx.inner.Transparency=1 end
    for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
@@ -225,6 +226,18 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   end
   beam.work=fx;self.miningBeams[beam]=true;self.miningCount+=1
  end
+ -- Dig Cube beams (owner, Nov 22): the three circles, the energy at the drone
+ -- end, the chips and a light at the rock end must all read in the bright
+ -- daylight, so they are larger and denser there.
+ local dig=sample.dig==true
+ if fx.bright~=dig then
+  fx.bright=dig;fx.scale=dig and 2.6 or nil
+  if dig and not fx.light then
+   local light=Instance.new('PointLight');light.Name='DigContactLight';light.Shadows=false
+   light.Range=9;light.Brightness=2.2;light.Enabled=false;light.Parent=fx.tip
+   fx.light=light
+  end
+ end
  if fx.key~=sample.key or fx.life~=sample.life then
   -- World-space particles stay at the old contact and finish their own lifetimes.
   fx.key=sample.key;fx.life=sample.life
@@ -245,8 +258,13 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local strength=charging and (.25+.75*q) or width
  drawSpheres(fx,now,strength,q,pulse,beam.tint or WHITE)
  local continuous=sample.style~='Percussion'
- fx.sparks.Rate=2;fx.sparks.Enabled=working
- fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=working
+ fx.sparks.Rate=dig and 7 or 2;fx.sparks.Enabled=working or (dig and charging)
+ fx.glow.Rate=dig and (charging and 4 or 2.5) or (charging and 1.5 or .8);fx.glow.Enabled=working or (dig and charging)
+ if fx.light then
+  fx.light.Enabled=dig and working
+  fx.light.Color=beam.tint or WHITE
+  fx.light.Brightness=2+.8*pulse
+ end
  local resonance=sample.style=='Resonance'
  local stoneColor=sample.stoneColor
  local impactColor=stoneColor or sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
@@ -262,7 +280,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.impact.Drag=resonance and 5 or 4
  -- Keep the large discs readable when an entire pinned field lights up.
  local crowded=self.miningCount>8
- fx.impact.Rate=continuous and (crowded and 3 or (ink or resonance) and 4 or 6) or 0
+ fx.impact.Rate=continuous and (crowded and 3 or (ink or resonance) and 4 or dig and 11 or 6) or 0
  fx.impact.Enabled=working and continuous
  if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
  if fx.accents and working then
@@ -278,6 +296,11 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   if sample.since and now>=sample.since and now-sample.since<.15 then
    fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
    if fx.accents then for i,e in ipairs(fx.accents) do e:Emit(i==1 and 3 or 2) end end
+   -- The first hit on the rock: an extra burst of energy at the beam's end.
+   if dig and point then
+    fx.impact:Emit(14);fx.sparks:Emit(6)
+    self:burst(point,normal or Vector3.yAxis,beam.tint or WHITE,16,now)
+   end
   end
  end
  if sample.pulseSerial~=fx.pulseSerial then
@@ -290,10 +313,10 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   if fx.contact then
    local bite=math.max(0,1-(now-(fx.biteAt or -100))/.13)^2
    fx.contact.CFrame=CFrame.new(point+normal*.05)
-   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse+.26*bite)
+   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse+.26*bite)*(dig and 2.2 or 1)
    fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.68-.05*pulse-.15*bite) or 1
    if fx.inner then
-    fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse+.15*bite)
+    fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse+.15*bite)*(dig and 2.2 or 1)
     fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25+.53*bite);fx.inner.Transparency=working and (.45-.15*bite) or 1
    end
   end
