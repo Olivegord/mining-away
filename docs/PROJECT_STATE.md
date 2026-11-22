@@ -1,5 +1,9 @@
 # Shared project context
 
+## November 22 — sealed gem anticipation and full-game hit-stop
+
+Owner follow-up on `a77a01b`. Built in `c4c2708`, installed (Studio save 482, canonical sha256 `ac368f8e…`). Not published. A tight fast shiver, short shifting rays in every direction, a lower gem arc, opening only when landing from a jump, and a new client full-game hit-stop for the opening. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Dig, pickup and beam suites pass (the beam suite also compiles the client bundle, which caught a 200-local overflow). Not seen in Play.
+
 ## November 22 — sealed gem cells you jump on
 
 Owner follow-up on `3365b45`. Built in `a77a01b`, installed (Studio save 481, canonical sha256 `ddee85dc…`). Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md).

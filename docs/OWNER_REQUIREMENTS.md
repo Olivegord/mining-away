@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — sealed gem anticipation looks bad: tighter shiver, rays all around, jump to open, full-game pause
+
+After `a77a01b`: the anticipation "looks REALLY bad right now". Pieces should have much less displacement but vibrate faster; god rays should come from all directions, shift, and be shorter; the gem arc much less tall; the player needs some vertical velocity, so you actually have to jump; and the opening must use the client-side full game pause, not just a pause of the rock breaking.
+
 ## November 22 — sealed gem cells you jump on; progressive holes back; no combo or gem text
 
 After `3365b45`: bring back the stages with the progressive holes ("i kind of liked it") and the physics rubble of the previous pass. Remove all on-screen text for combos and gems. Gem opening: if a cell contains a gem, keep THAT cell without breaking it, split into its pieces, each wiggling a little with anticipation, with tiny glowing particles coming out and god-ray beams showing there is something cool inside. When the player jumps on it: a pause of some milliseconds, then it breaks and the gem flies out; the player is bounced straight up; the gem has a much higher arc and a longer, thicker trail.

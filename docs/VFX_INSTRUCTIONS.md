@@ -1,5 +1,16 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — sealed gem: shiver, short rays, jump to open, full-game hit-stop
+
+Owner on `a77a01b`. Built in `c4c2708`; replaces the wiggle, rays and arc of the entry below.
+
+- **Shiver:** pieces jitter with `math.noise` at 30–44 rad/s, tilting 0.007–0.014 rad (growing over 3 s), with a tiny vertical jitter. No sway or lift.
+- **Rays:** 9 short rays (2.2–4 studs, width 0.14→0.75). Each starts from a point on the cell top, points anywhere from flat to straight up, lives 0.9–1.8 s, fades in and out, turns a little, then returns in a new direction.
+- **Arc:** high launch is vx, vz ×0.8 and vy ×1.25 + 2.
+- **Jump to open:** the owner's root must be moving down at least `GEODE_LANDING` (8 studs/s) over the cell; standing or walking on it does nothing.
+- **Full-game hit-stop (`Client.lua` `hitStop.freeze`):** the world presentation step (drones, beams, rocks, pickups), the dig/crew/sale step, camera shake and the command view are skipped. Every `ParticleEmitter` gets TimeScale 0. Loose dig rubble, local presentation parts and the player's root are anchored and their velocities restored afterwards. Animations are held and the camera is held (Scriptable). The sealed opening freezes 12 frames (`HOLD_GEODE`), then breaks and bounces the player; the server launches the gem 0.2 s after the landing (`GEODE_PAUSE`). Purely local; the server keeps running.
+- The client bundle is at Luau's 200-local limit at top level. New Client.lua state must go inside an existing table or closure, never a new top-level local (`test_beam_vfx.py` catches it).
+
 ## November 22 — sealed gem cells, progressive holes back, no text
 
 Owner on `3365b45`. Built in `a77a01b`; supersedes the "whole growing stage cells" entry below (stages are progressive holes again, as in `cfae949`).
