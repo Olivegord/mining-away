@@ -1,5 +1,20 @@
 # Shared project context
 
+## November 22 — break particles at the break, light charge, readable beam ends, pulsing outline
+
+Owner: break particles appeared in seemingly random positions; the little spinning rectangles should linger longest; the round dust needs heavy drag; remove the black fade from the charge; the beam needs a light, the legacy three circles, and chipping and energy particles at the right ends; extra energy particles when a beam first hits; bring back the old pulsing outline for Voronoi cells. Built in `e1a9b90`, installed and saved. Not published.
+
+- **Break particles (`DigCubeView:breakCloud`):** each broken cell (up to 8) emits from a box 0.8× its own size. One bounding box over the whole chunk had put particles in rock that did not break. Debris rectangles are 2.8–4.2 s, gravity -14, drag 1.6, spin ±320°/s, slightly elongated. Dust is 12–20 speed with drag 14, so it stops almost at once. Glitter is 1.1–1.8 s. Beam-colored sparks are unchanged.
+- **Charge:** `BeamVFX` light mode (`r.light`, set by Presentation for every mining charge, field drones included). The void disc glows in the beam color instead of black. Core, ink slashes, glitch blotches and the DarkCut ribbon take the beam's tint, and there is no dark orb.
+- **Beam ends (`WorkEffects:mining` with `sample.dig`):**
+  - The three `MiningSphere`s are 2.6× larger at opacity 0.62/0.34/0.16.
+  - Drone-end energy rates are 7 / 2.5 (4 while charging), and they also show while charging.
+  - Contact sparks are at 11/s, and the two-ball contact glow is 2.2× larger.
+  - A `DigContactLight` PointLight (beam color, range 9) sits at the rock end.
+  - The first hit emits 14 extra contact discs, 6 origin sparks and a 16-spark work burst.
+- **Outline:** the piece being cut is a `DigCrackPiece` Model. For your own crew it carries the old `Highlight` (Occluded, no fill, outline in the rock's tone toward white, transparency 0.5−0.43·wave at 7.5 rad/s), shown from lock-on.
+- Play check (agent-started, stopped): 4 outlines, 2 contact lights, 6 visible spheres, no dark charge cores. Studio reconnected twice during this pass and stayed in Edit.
+
 ## November 22 — sight only while charging, charge-up back, bigger break particles, music at the start
 
 Owner: remove the red sight lines and show the red targeting laser only right before a drone fires; restore the charging-up effect; make the rock-break particles bigger and more visible, with some lingering, appearing where the break actually happens; start a random music track at the beginning (for testing). Built in `25ef015`, `28c1011` and `4974cff`, installed (Studio Edit, saved). Not published.
