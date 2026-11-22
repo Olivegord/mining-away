@@ -226,15 +226,18 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   end
   beam.work=fx;self.miningBeams[beam]=true;self.miningCount+=1
  end
- -- Dig Cube beams (owner, Nov 22): the three circles, the energy at the drone
- -- end, the chips and a light at the rock end must all read in the bright
- -- daylight, so they are larger and denser there.
+ -- Dig Cube beams: the three circles, the energy at the drone end, the chips
+ -- and a light at the rock end must read in the bright daylight. Nov 22 they
+ -- were made much larger and denser; with a whole crew cutting that piled up
+ -- into noise (owner, Nov 22: "visually confusing"), so the particles are
+ -- moderate and the contact light, which lights the rock instead of covering
+ -- it, carries the glow.
  local dig=sample.dig==true
  if fx.bright~=dig then
-  fx.bright=dig;fx.scale=dig and 2.6 or nil
+  fx.bright=dig;fx.scale=dig and 1.7 or nil
   if dig and not fx.light then
    local light=Instance.new('PointLight');light.Name='DigContactLight';light.Shadows=false
-   light.Range=9;light.Brightness=2.2;light.Enabled=false;light.Parent=fx.tip
+   light.Range=12;light.Brightness=3;light.Enabled=false;light.Parent=fx.tip
    fx.light=light
   end
  end
@@ -258,12 +261,12 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local strength=charging and (.25+.75*q) or width
  drawSpheres(fx,now,strength,q,pulse,beam.tint or WHITE)
  local continuous=sample.style~='Percussion'
- fx.sparks.Rate=dig and 7 or 2;fx.sparks.Enabled=working or (dig and charging)
- fx.glow.Rate=dig and (charging and 4 or 2.5) or (charging and 1.5 or .8);fx.glow.Enabled=working or (dig and charging)
+ fx.sparks.Rate=dig and 3.5 or 2;fx.sparks.Enabled=working or (dig and charging)
+ fx.glow.Rate=dig and (charging and 2.5 or 1.4) or (charging and 1.5 or .8);fx.glow.Enabled=working or (dig and charging)
  if fx.light then
   fx.light.Enabled=dig and working
   fx.light.Color=beam.tint or WHITE
-  fx.light.Brightness=2+.8*pulse
+  fx.light.Brightness=dig and 3+1.2*pulse or 2+.8*pulse
  end
  local resonance=sample.style=='Resonance'
  local stoneColor=sample.stoneColor
@@ -280,7 +283,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.impact.Drag=resonance and 5 or 4
  -- Keep the large discs readable when an entire pinned field lights up.
  local crowded=self.miningCount>8
- fx.impact.Rate=continuous and (crowded and 3 or (ink or resonance) and 4 or dig and 11 or 6) or 0
+ fx.impact.Rate=continuous and (crowded and 3 or (ink or resonance) and 4 or dig and 5 or 6) or 0
  fx.impact.Enabled=working and continuous
  if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
  if fx.accents and working then
@@ -298,8 +301,8 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
    if fx.accents then for i,e in ipairs(fx.accents) do e:Emit(i==1 and 3 or 2) end end
    -- The first hit on the rock: an extra burst of energy at the beam's end.
    if dig and point then
-    fx.impact:Emit(14);fx.sparks:Emit(6)
-    self:burst(point,normal or Vector3.yAxis,beam.tint or WHITE,16,now)
+    fx.impact:Emit(5);fx.sparks:Emit(3)
+    self:burst(point,normal or Vector3.yAxis,beam.tint or WHITE,12,now)
    end
   end
  end
@@ -313,10 +316,10 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   if fx.contact then
    local bite=math.max(0,1-(now-(fx.biteAt or -100))/.13)^2
    fx.contact.CFrame=CFrame.new(point+normal*.05)
-   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse+.26*bite)*(dig and 2.2 or 1)
+   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse+.26*bite)*(dig and 1.6 or 1)
    fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.68-.05*pulse-.15*bite) or 1
    if fx.inner then
-    fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse+.15*bite)*(dig and 2.2 or 1)
+    fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse+.15*bite)*(dig and 1.6 or 1)
     fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25+.53*bite);fx.inner.Transparency=working and (.45-.15*bite) or 1
    end
   end

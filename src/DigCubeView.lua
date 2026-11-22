@@ -22,7 +22,6 @@ local V={}
 V.__index=V
 local BEAM_CORE=Color3.fromRGB(255,250,235)
 local HOT=Color3.fromRGB(222,128,62)
-local STONE_LIGHT=Color3.fromRGB(188,177,164) -- RockFinish.StoneLight
 local GRAVITY=70
 local TIER_NAMES={'AMBER!','RUBY!','QUARTZ!','VIOLET!','DIAMOND!'}
 
@@ -490,20 +489,53 @@ function V:opParts(op: any): {any}
  end
  return out
 end
-function V:flash(op: any,now: number,holdUntil: number,color: Color3)
+-- `glow`: your own full breaks and gems glow (Neon, caught by the bloom) so
+-- the piece that comes out is the brightest thing on screen for a moment.
+-- Stage breaks and other players' breaks stay a plain, softer flash.
+function V:flash(op: any,now: number,holdUntil: number,color: Color3,glow: boolean?)
  local o=self.origin
  local parts={}
+ local base=glow and .05 or .3
  for n,c in ipairs(self:opParts(op)) do
   if n>16 then break end
   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,.06),c.y0+.02,c.y1+.08)) do
-   local part=fxPart(self.fx,'DigBreakFlash',color,'WedgePart');part.Transparency=.12
+   local part=fxPart(self.fx,'DigBreakFlash',color,'WedgePart');part.Transparency=base
+   if glow then part.Material=Enum.Material.Neon end
    part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
    part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
    table.insert(parts,part)
   end
  end
- table.insert(self.flashes,{parts=parts,holdUntil=holdUntil,untilAt=holdUntil+FLASH_FADE})
+ table.insert(self.flashes,{parts=parts,base=base,holdUntil=holdUntil,untilAt=holdUntil+FLASH_FADE})
+end
+-- Light does the popping instead of more particles: a short colored point
+-- light where something breaks lights up the pit walls around it. Pooled.
+local LIGHT_MAX=6
+function V:lightFlash(at: Vector3,color: Color3,range: number,brightness: number,life: number)
+ if self:reduced() then return end
+ self.lights=self.lights or {}
+ local entry
+ if #self.lights>=LIGHT_MAX then entry=table.remove(self.lights,1)
+ else
+  local anchor=fxPart(self.fx,'DigBreakLight',color);anchor.Transparency=1;anchor.Size=Vector3.one*.05
+  local light=Instance.new('PointLight');light.Shadows=false;light.Parent=anchor
+  entry={anchor=anchor,light=light}
+ end
+ entry.anchor.Position=at;entry.light.Color=color;entry.light.Range=range;entry.light.Enabled=true
+ entry.peak=brightness;entry.at=os.clock();entry.life=life;entry.light.Brightness=brightness
+ table.insert(self.lights,entry)
+end
+function V:stepLights(now: number)
+ for _,entry in ipairs(self.lights or {}) do
+  local t=(now-entry.at)/entry.life
+  if t>=1 then
+   if entry.light.Enabled then entry.light.Enabled=false end
+  else
+   -- A fast attack is the flash itself; the light then eases out.
+   entry.light.Brightness=entry.peak*(1-t)^2
+  end
+ end
 end
 function V:stepHolds(now: number)
  for i=#self.flashes,1,-1 do
@@ -513,7 +545,7 @@ function V:stepHolds(now: number)
    table.remove(self.flashes,i)
   elseif now>f.holdUntil then
    local fade=(now-f.holdUntil)/FLASH_FADE
-   for _,part in ipairs(f.parts) do part.Transparency=.12+.88*fade*fade end
+   for _,part in ipairs(f.parts) do part.Transparency=f.base+(1-f.base)*fade*fade end
   end
  end
  for i=#self.pending,1,-1 do
@@ -563,7 +595,7 @@ function V:clearCracks()
  self.cracks={};self.crackCells={}
 end
 -- The piece as its own prisms, slightly grown so they cover the carved rock.
-function V:buildProxy(piece: any,owned: boolean,chunk: {number}): any?
+function V:buildProxy(piece: any,owned: boolean,chunk: {number},tint: Color3?): any?
  local cube=self.cube;local o=self.origin
  local parts,ids={},{}
  local model=Instance.new('Model');model.Name='DigCrackPiece'
@@ -591,12 +623,12 @@ function V:buildProxy(piece: any,owned: boolean,chunk: {number}): any?
  model.Parent=self.fx
  local pivot=o+Vector3.new(sx/area,top,sz/area)
  for _,e in ipairs(parts) do e.base=CFrame.new(pivot):ToObjectSpace(e.part.CFrame) end
- -- The old pulsing outline: your own crew's piece breathes a soft outline in
- -- the rock's tone toward white, like a field rock under attack.
+ -- The old pulsing outline: your own crew's piece breathes an outline in
+ -- the color of the beam cutting it, so beam and target read as one thing.
  local highlight
  if owned then
   highlight=Instance.new('Highlight');highlight.Name='DigTarget';highlight.DepthMode=Enum.HighlightDepthMode.Occluded
-  highlight.FillTransparency=1;highlight.OutlineColor=parts[1].stone:Lerp(Color3.new(1,1,1),.66)
+  highlight.FillTransparency=1;highlight.OutlineColor=(tint or parts[1].stone):Lerp(Color3.new(1,1,1),.35)
   highlight.OutlineTransparency=.5;highlight.Adornee=model;highlight.Parent=model
  end
  local proxy={parts=parts,ids=ids,pivot=pivot,step=0,shade=0,joltAt=-10,model=model,highlight=highlight,since=os.clock(),
@@ -641,14 +673,14 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
   job.proxy=nil
  end
  if not job.proxy then
-  job.proxy=self:buildProxy(piece,owned,job.ids);job.piece=k
+  job.proxy=self:buildProxy(piece,owned,job.ids,tint);job.piece=k
   if job.proxy then job.proxy.step=step;self:poseProxy(job.proxy,now) end
  end
  local proxy=job.proxy
  if not proxy then return end
  if proxy.highlight then
   local wave=.5+.5*math.cos((now-proxy.since)*7.5)
-  proxy.highlight.OutlineTransparency=.5-.43*wave
+  proxy.highlight.OutlineTransparency=.32-.3*wave
  end
  -- Darker as the beam works, back to full color at each crack.
  self:shadeProxy(proxy,CRACK_SHADE*math.clamp(within,0,1)^.88)
@@ -663,21 +695,20 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
 end
 function V:crackHit(proxy: any,step: number,k: number,hit: any)
  local point=proxy.pivot+Vector3.yAxis*(CRACK_LIFT[step+1]+.1)
- local stone=proxy.parts[1] and proxy.parts[1].stone or STONE_LIGHT
  local volume=hit.owned and 1 or .55
  local ctx=self.ctx
  if ctx.crack then ctx.crack:playCrack(point) end
  if ctx.audio then
   ctx.audio:play('crystal_impact',point,{pitch=.72+.09*step+.04*k+self.random:NextNumber(-.03,.03),level=volume*(.32+.14*step)})
  end
- if self:reduced() then return end
+ -- A crack is a small beat: the piece pops loose (the motion is the effect),
+ -- a crack sound, a couple of chips. No ring or dust; those belong to breaks.
+ if self:reduced() or not hit.owned then return end
  local serverNow=workspace:GetServerTimeNow()
  local rock=self.holder and self.holder:FindFirstChild('Rock')
  local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
- if ctx.impact and surface then ctx.impact:chips(serverNow,point,Vector3.yAxis,surface,2+2*step,point.Y-4) end
- self:puff(point,stone,.5+.2*step,1+step)
- if ctx.effects then ctx.effects.Pulse(point,hit.tint:Lerp(BEAM_CORE,.35),.22,1.6+.9*step,.2,Vector3.yAxis,.78) end
- if hit.owned and ctx.beat then ctx.beat('Split',point,serverNow,.18+.1*step) end
+ if ctx.impact and surface then ctx.impact:chips(serverNow,point,Vector3.yAxis,surface,1+step,point.Y-4) end
+ if ctx.beat then ctx.beat('Split',point,serverNow,.14+.08*step) end
 end
 function V:stepCracks(now: number)
  for key,job in pairs(self.cracks) do
@@ -719,7 +750,9 @@ function V:split(op: any,now: number)
   hold=op.tier>0 and HOLD_GEM or op.partial and HOLD_PIECE or heavy and HOLD_HEAVY or HOLD_SPLIT
   self.heldAt=now
  end
- self:flash(op,now,now+hold+.04,beam and beam:Lerp(FLASH,.3) or FLASH)
+ local gem=op.tier>0 and rgb(DigCube.ORES[op.tier].color) or nil
+ local glow=owned and (gem~=nil or not op.partial)
+ self:flash(op,now,now+hold+.04,gem and gem:Lerp(FLASH,.2) or beam and beam:Lerp(FLASH,.3) or FLASH,glow)
  self:shards(op,now+hold,center)
  local info={center=center,point=o+Vector3.new(cx,top,cz),ground=o.Y+bottom,bulk=bulk,strength=strength,owned=owned,heavy=heavy,
   color=self:colorAt(top-.01,cx,cz),beam=beam}
@@ -730,8 +763,8 @@ end
 -- cocktail. Each broken cell emits from a box the size of that cell, so the
 -- particles start exactly in the rock that broke (one box over the whole
 -- chunk put some of them in rock that did not break). The little spinning
--- rectangles linger longest; the round dust bursts out and stops almost at
--- once under heavy drag; beam-colored sparks and a little glitter on top.
+-- rectangles linger longest.
+-- Two layers only: the rock's rectangles and sparks in the beam's color.
 local SQUARE='rbxasset://textures/particles/SquareParticle.png'
 local CLOUD_CELLS=8
 function V:breakCloud(op: any,e: any,big: boolean)
@@ -780,68 +813,46 @@ function V:breakCloud(op: any,e: any,big: boolean)
   debris.Lifetime=NumberRange.new(2.8,4.2);debris.Speed=NumberRange.new(9,18);debris.SpreadAngle=Vector2.new(60,60)
   debris.EmissionDirection=Enum.NormalId.Top;debris.Acceleration=Vector3.new(0,-14,0);debris.Drag=1.6
   debris.Rotation=NumberRange.new(0,360);debris.RotSpeed=NumberRange.new(-320,320)
-  debris:Emit(count(12+6*bulk))
-  -- Dust: round puffs in the rock's tone that burst out and stop at once.
-  local dust=emitter('Dust')
-  EnergyDisc.configure(dust,(1+.2*bulk)*k,.5,.5,1.5,.3)
-  dust.LightEmission=0;dust.LightInfluence=1;dust.Brightness=1
-  dust.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.15))
-  dust.Lifetime=NumberRange.new(.9,1.4);dust.Speed=NumberRange.new(12,20);dust.SpreadAngle=Vector2.new(75,75)
-  dust.EmissionDirection=Enum.NormalId.Top;dust.Acceleration=Vector3.zero;dust.Drag=14
-  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.6,.6),NumberSequenceKeypoint.new(1,1)})
-  dust:Emit(count(3+bulk))
-  -- Sparks in the beam's color: bright and quick; they carry the glow.
+  debris:Emit(count(7+3*bulk))
+  -- Sparks in the beam's color: bright and quick; they carry the glow. No
+  -- dust or glitter on top: one rock color and one beam color read clearly.
   local sparks=emitter('Sparks')
   EnergyDisc.configure(sparks,.75*k,.05,1,0,.35)
-  sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=2.2
+  sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=2.6
   sparks.Color=ColorSequence.new(e.beam:Lerp(BEAM_CORE,.35),e.beam)
-  sparks.Lifetime=NumberRange.new(.45,.9);sparks.Speed=NumberRange.new(14,28);sparks.SpreadAngle=Vector2.new(70,70)
+  sparks.Lifetime=NumberRange.new(.4,.8);sparks.Speed=NumberRange.new(14,28);sparks.SpreadAngle=Vector2.new(70,70)
   sparks.EmissionDirection=Enum.NormalId.Top;sparks.Acceleration=Vector3.new(0,-30,0);sparks.Drag=1.5
-  sparks:Emit(count(10+4*bulk))
-  -- A little glitter, gone before the rectangles.
-  local glitter=emitter('Glitter')
-  EnergyDisc.configure(glitter,.3*k,.1,1,.4,.4)
-  glitter.LightEmission=.8;glitter.LightInfluence=0;glitter.Brightness=1.8
-  glitter.Color=ColorSequence.new(e.beam:Lerp(BEAM_CORE,.6),e.color:Lerp(BEAM_CORE,.5))
-  glitter.Lifetime=NumberRange.new(1.1,1.8);glitter.Speed=NumberRange.new(3,8);glitter.SpreadAngle=Vector2.new(85,85)
-  glitter.EmissionDirection=Enum.NormalId.Top;glitter.Acceleration=Vector3.new(0,-2.2,0);glitter.Drag=2.6
-  glitter:Emit(count(6+2*bulk))
+  sparks:Emit(count(8+3*bulk))
  end
  task.delay(4.5,function() holder:Destroy() end)
 end
+-- One clear beat per break, in two colors: the rock's (rubble, debris) and
+-- the cutting drone's beam (flash, light, sparks, ring). Every layer that
+-- repeated another (a second spark firework, a second particle burst, the
+-- tumbling stand-in pieces on top of the real rubble, dust, glitter) is gone.
+-- Your own breaks get the light, the ring and the camera hit; other players'
+-- breaks play smaller and without them, so your own crew's work stands out.
 function V:burst(op: any,e: any)
  local ctx=self.ctx
  local now=workspace:GetServerTimeNow()
  local point,ground,strength=e.point,e.ground,e.strength
  local volume=e.owned and 1 or .62
- -- Particles much lighter than the rock: in the rock's own color the burst
- -- disappears against the pit. Pieces are darker, like the shards. Some of
- -- the sparks take the color of the drone's beam.
  local vivid=e.color:Lerp(Color3.fromRGB(255,246,226),.62)
- local dark=e.color:Lerp(SHARD_DARK,.4)
  local beam=e.beam or vivid
  local lively=not self:reduced()
- local rock=self.holder and self.holder:FindFirstChild('Rock')
- local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
+ local gem=op.tier>0
  if op.partial then
-  -- Each piece of a chunk cracks a step higher, building to the full split.
-  self:breakCloud(op,{color=vivid,beam=beam,bulk=e.bulk},false)
+  -- A stage of a chunk breaks: a step toward the full split, kept small.
   if ctx.audio then
    ctx.audio:play('crystal_impact',point,{pitch=.88+.14*(op.stage or 1)+self.random:NextNumber(-.03,.03),level=volume*.9,rockSize=e.bulk})
    ctx.audio:play('crystal_release_tink',point,{level=volume*.5,pitch=1+.1*(op.stage or 1)})
   end
   if lively then
-   if ctx.impact then
-    if surface then ctx.impact:chips(now,point,Vector3.yAxis,surface,4,ground) end
-    ctx.impact:fireworks(point,ground,vivid,strength*2.2,now,4)
-    ctx.impact:fireworks(point,ground,beam,strength*2.2,now,4)
+   self:breakCloud(op,{color=vivid,beam=beam,bulk=e.bulk},false)
+   if e.owned then
+    self:lightFlash(e.center,beam,10+2*e.bulk,4,.3)
+    if ctx.beat then ctx.beat('Split',point,now,.45) end
    end
-   if ctx.effects then
-    ctx.effects.ImpactParticles(point,vivid,strength*1.5,'CrystalBreak',nil,vivid,nil,.8)
-    ctx.effects.ImpactParticles(point,beam,strength*1.2,'CrystalBreak',nil,beam,nil,.5)
-    ctx.effects.Pulse(point+Vector3.yAxis*.1,beam,.3,2.6*strength,.24,Vector3.yAxis,.78)
-   end
-   if ctx.beat then ctx.beat('Split',point,now,.55*volume) end
   end
   return
  end
@@ -850,51 +861,44 @@ function V:burst(op: any,e: any)
   ctx.audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
   ctx.audio:play('crystal_release_tink',point,{level=volume})
  end
- -- A gem bursts out with the rock, not after it.
- if op.tier>0 then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk,owned=e.owned,op=op},os.clock()) end
+ -- A gem bursts out with the rock, not after it, and its color takes over.
+ if gem then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk,owned=e.owned,op=op},os.clock()) end
  if not lively then return end
- self:breakCloud(op,{color=vivid,beam=beam,bulk=e.bulk},true)
+ if not gem then self:breakCloud(op,{color=vivid,beam=beam,bulk=e.bulk},e.owned) end
  -- Combo counter and the camera hit, shared with the field rocks.
  if ctx.splitBeat then ctx.splitBeat(point,strength,now,false,e.owned,nil)
  elseif ctx.beat then ctx.beat(e.heavy and 'HeavySplit' or 'Split',point,now,math.clamp(strength*.58,.6,1.35)*volume) end
- if ctx.impact then
-  ctx.impact:fireworks(point,ground,vivid,strength*2.4,now,8)
-  ctx.impact:fireworks(point,ground,beam,strength*2.4,now,7)
-  ctx.impact:breakPieces(point,ground,dark,strength,now,e.owned,surface and surface.Material or nil)
- end
+ if not e.owned or gem then return end
+ self:lightFlash(e.center,beam,14+3*e.bulk,7,.45)
  if ctx.effects then
-  ctx.effects.Pulse(Vector3.new(point.X,ground+.085,point.Z),vivid,strength*.55,strength*6.6,.58)
-  ctx.effects.ImpactParticles(point,vivid,strength*1.5,'CrystalBreak',nil,vivid,nil,1.3)
+  ctx.effects.Pulse(Vector3.new(point.X,ground+.085,point.Z),beam:Lerp(BEAM_CORE,.3),strength*.55,strength*6.6,.58)
   ctx.effects.ImpactParticles(point,beam,strength*1.2,'CrystalBreak',nil,beam,nil,.8)
  end
 end
 
--- A gem: a burst of particles in its own color on top of the rock break.
+-- A gem: the one thing that should outshine everything else. Its color
+-- takes over the break (flash, light, particles, ring), a strong light
+-- lingers on the pit walls, and the camera hits twice. One burst of each
+-- kind; no repeats.
 function V:reveal(e: any,now: number)
  local ctx=self.ctx
  local color=rgb(DigCube.ORES[e.tier].color)
  local light=color:Lerp(Color3.new(1,1,1),.4)
  local serverNow=workspace:GetServerTimeNow()
+ local weight=e.owned==false and .6 or 1
  if ctx.audio then ctx.audio:play('gem_reveal',e.center,{pitch=1+e.tier*.08,level=1}) end
  if not self:reduced() then
   local k=1+e.tier*.2
+  self:lightFlash(e.center,color,(20+e.tier*3)*weight,10*weight,1.4)
   if ctx.effects then
    ctx.effects.ImpactParticles(e.center,color,k,'GemReward')
-   ctx.effects.ImpactParticles(e.center,light,k*1.1,'CrystalBreak',nil,color)
-   ctx.effects.Pulse(Vector3.new(e.center.X,e.ground+.1,e.center.Z),color,.6,4+e.tier*1.8,.55)
-   ctx.effects.Pulse(e.center,light,.4,2.5+e.tier,.35)
-   task.delay(.09,function() ctx.effects.ImpactParticles(e.center+Vector3.yAxis*.6,light,k,'GemReward') end)
+   ctx.effects.Pulse(Vector3.new(e.center.X,e.ground+.1,e.center.Z),color,.6,(4+e.tier*1.8)*weight,.55)
   end
-  if ctx.impact then
-   ctx.impact:fireworks(e.center,e.ground,color,(1.3+e.tier*.15)*2.2,serverNow,14)
-   ctx.impact:fireworks(e.center,e.ground,light,(1.1+e.tier*.1)*2,serverNow,10)
-  end
-  self:puff(e.center,color,1.2,14)
-  -- The rock's own break particles again, in the gem's colors.
-  if e.op then self:breakCloud(e.op,{color=color,beam=light,bulk=math.max(3,e.size or 3)},true) end
+  if ctx.impact then ctx.impact:fireworks(e.center,e.ground,light,(1.3+e.tier*.15)*2.2*weight,serverNow,e.owned==false and 6 or 12) end
+  -- The rock's own break particles, in the gem's colors.
+  if e.op then self:breakCloud(e.op,{color=color,beam=light,bulk=math.max(3,e.size or 3)},e.owned~=false) end
   -- An impact you feel: a heavy shake, then a second hit a beat later.
   if ctx.beat then
-   local weight=e.owned==false and .6 or 1
    ctx.beat('HeavySplit',e.center,serverNow,(1.5+e.tier*.2)*weight)
    task.delay(.12,function() ctx.beat('Split',e.center,workspace:GetServerTimeNow(),(1+e.tier*.12)*weight) end)
   end
@@ -939,8 +943,8 @@ end
 -- Digging beams are drawn by the field mining beam (Presentation), so they
 -- charge up and start like every other drone's: beamTarget hands it a
 -- hidden landing plate at the drone's cut. This view adds, where the beam
--- touches the rock, sparks in the beam's own color, rock chips and a small
--- ring; and under every drone over the cube a red targeting line, straight
+-- touches the rock, sparks in the beam's own color; and under every drone
+-- over the cube a red targeting line, straight
 -- down along its beam, ending in a soft dot that tightens and brightens
 -- while the drone charges and pulses while it cuts.
 local SIGHT=Color3.fromRGB(255,56,72)
@@ -989,7 +993,7 @@ function V:newBeam(color: Color3,mine: boolean)
  sparks.Color=ColorSequence.new(color:Lerp(BEAM_CORE,.3),color)
  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(65,65)
  sparks.Speed=NumberRange.new(6,13);sparks.Lifetime=NumberRange.new(.2,.42);sparks.Drag=2
- sparks.Acceleration=Vector3.new(0,-26,0);sparks.Rate=mine and 30 or 12;sparks.Enabled=false;sparks.Parent=b
+ sparks.Acceleration=Vector3.new(0,-26,0);sparks.Rate=mine and 14 or 4;sparks.Enabled=false;sparks.Parent=b
  return {root=root,a=a,b=b,core=core,glow=glow,gui=gui,halo=halo,dot=dot,sparks=sparks,mine=mine,tint=color,on=false}
 end
 function V:hideBeam(beam: any)
@@ -1064,20 +1068,11 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  end
  beam.gui.Size=UDim2.new(size,0,size,0);beam.dot.ImageTransparency=core;beam.halo.ImageTransparency=halo
  beam.core.Transparency=locked and SIGHT_FADE or SIGHT_GLOW
- -- Where the beam touches the rock: beam-colored sparks, chips, a ring.
+ -- Where the beam touches the rock: a steady stream of beam-colored sparks.
+ -- The contact glow and light come from the mining beam itself; the old
+ -- extra chips and rings every few frames only added noise.
  local sparking=cutting and not self:reduced()
  if beam.sparks.Enabled~=sparking then beam.sparks.Enabled=sparking end
- if cutting and now>=(beam.chipAt or 0) and not self:reduced() then
-  beam.chipAt=now+.23+(now%.07)
-  local serverNow=workspace:GetServerTimeNow()
-  local rock=self.holder and self.holder:FindFirstChild('Rock')
-  local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
-  if self.ctx.impact and surface then self.ctx.impact:chips(serverNow,tip,Vector3.yAxis,surface,1,tip.Y-4) end
-  if self.ctx.effects and now>=(beam.pulseAt or 0) then
-   beam.pulseAt=now+.45
-   self.ctx.effects.Pulse(tip+Vector3.yAxis*.1,tint:Lerp(BEAM_CORE,.4),.19,1.65,.18,Vector3.yAxis,.78)
-  end
- end
 end
 function V:stepBeams(now: number)
  for id,beam in pairs(self.beams) do
@@ -1127,10 +1122,41 @@ function V:stepDust(now: number)
  end
 end
 
--- A dim warm lamp on the player while they are down in the cube, just
--- enough to keep the pit walls from going flat. Kept low: a bright lamp on
--- bright rock washed the whole pit out.
-function V:stepLamp()
+-- Down in the pit the light changes: the open-sky fill drops and the
+-- exposure comes down a little, so the pit reads as a shaded hole and the
+-- beams, gems and break lights are the bright things in it. Client-local;
+-- the authored daylight is restored when the player climbs out (and on
+-- teardown). A dim warm lamp on the player keeps the walls near them from
+-- going flat.
+local PIT_FILL=.55 -- ambient light kept at full depth
+local PIT_EXPOSURE=-.35 -- exposure change at full depth
+function V:stepPitLight(depth: number,dt: number)
+ local lighting=game:GetService('Lighting')
+ local was=self.pitDepth or 0
+ local target=self:reduced() and 0 or depth
+ local shade=was+(target-was)*math.clamp(dt*2.5,0,1)
+ if math.abs(shade-target)<.002 then shade=target end
+ if shade==was and (shade==0 or self.pitBase) then return end
+ if not self.pitBase then
+  if shade<=0 then return end
+  self.pitBase={ambient=lighting.Ambient,outdoor=lighting.OutdoorAmbient,exposure=lighting.ExposureCompensation}
+ end
+ self.pitDepth=shade
+ local base=self.pitBase
+ local fill=1-(1-PIT_FILL)*shade
+ lighting.Ambient=base.ambient:Lerp(Color3.new(0,0,0),1-fill)
+ lighting.OutdoorAmbient=base.outdoor:Lerp(Color3.new(0,0,0),1-fill)
+ lighting.ExposureCompensation=base.exposure+PIT_EXPOSURE*shade
+ if shade<=0 then self:restorePitLight() end
+end
+function V:restorePitLight()
+ local base=self.pitBase
+ if not base then return end
+ local lighting=game:GetService('Lighting')
+ lighting.Ambient=base.ambient;lighting.OutdoorAmbient=base.outdoor;lighting.ExposureCompensation=base.exposure
+ self.pitBase=nil;self.pitDepth=0
+end
+function V:stepLamp(dt: number)
  if not self.cube then return end
  local character=Players.LocalPlayer and Players.LocalPlayer.Character
  local root=character and character:FindFirstChild('HumanoidRootPart')
@@ -1139,9 +1165,11 @@ function V:stepLamp()
   local l=root.Position-self.origin
   local W=self.cube.width
   if l.X>=-2 and l.X<=W+2 and l.Z>=-2 and l.Z<=W+2 then
-   depth=math.clamp((self.cube.height+3-l.Y)/(self.cube.height*.6),0,1)
+   -- 0 on the ground beside the pit, 1 about twelve studs down and below.
+   depth=math.clamp((self.cube.height+1-l.Y)/12,0,1)
   end
  end
+ self:stepPitLight(depth,dt)
  local lamp=self.lamp
  if depth<=0 then
   if lamp then lamp.Enabled=false end
@@ -1154,7 +1182,7 @@ function V:stepLamp()
   lamp.Parent=root;self.lamp=lamp
  end
  lamp.Enabled=true
- lamp.Brightness=.15+.4*depth
+ lamp.Brightness=.15+.5*depth
 end
 
 function V:stepPad(now: number)
@@ -1246,13 +1274,16 @@ function V:update()
  self:stepSplits(now)
  self:stepDust(now)
  self:stepShards(now)
- self:stepLamp()
+ self:stepLights(now)
+ self:stepLamp(math.clamp(now-(self.lastStep or now),0,.25))
+ self.lastStep=now
  self:stepPad(now)
 end
 
 function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
   if self.lamp then self.lamp:Destroy() end
+ self:restorePitLight()
  self.fx:Destroy()
 end
 return V
