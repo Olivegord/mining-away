@@ -127,7 +127,9 @@ function W:energyBloom()
  local existing=lighting:FindFirstChild('MiningEnergyBloom')
  local bloom=existing or Instance.new('BloomEffect');bloom.Name='MiningEnergyBloom'
  -- A little under the original (.5, 20, 1.25): cut much lower, bright effects went flat.
- bloom.Enabled=true;bloom.Intensity=.4;bloom.Size=16;bloom.Threshold=1.3;bloom.Parent=lighting
+ -- Threshold above the lit world, below Neon gems and light-emitting beams,
+ -- so only the glowing things glow.
+ bloom.Enabled=true;bloom.Intensity=.55;bloom.Size=20;bloom.Threshold=1.2;bloom.Parent=lighting
  self.bloom=bloom;self.ownsBloom=existing==nil
 end
 function W:burst(position,normal,color,count,now)

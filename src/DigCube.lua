@@ -29,7 +29,11 @@ D.LEAD=2 -- the crater aims this many layers below its current floor
 D.APEX_RADIUS=9 -- studs around the focus that set the current floor
 D.CROWD_RADIUS=7
 D.RECENT_TIME=20
-D.CENTER={140,4,20} -- bottom center in world space (on the flat plane east of the hub)
+D.GROUND=3.8 -- top of the ground plate around the cube
+D.HEIGHT=44 -- every cube is this deep; its layers vary in thickness inside it
+-- Bottom center in world space. The cube is sunk into a pit in the ground
+-- east of the hub, its top flush with the ground, so drones mine down into it.
+D.CENTER={140,D.GROUND-D.HEIGHT,20}
 D.HP_SCALE=.2
 D.HARDNESS_PER_LAYER=.4 -- the bottom layer takes about 4.6x the work of the top
 D.MINE_RADIUS=16 -- studs: drones only cut chunks this close to their player, so you move to keep digging
@@ -68,7 +72,7 @@ D.LAYER_HUES={
  {122,126,216},{88,162,216},{80,184,168},{126,198,114},{204,208,98},
 }
 D.LAYER_SHIFT=.5 -- how far a layer's second tone leans toward the next hue
-D.LAYER_MUTE=.34 -- share of neutral stone mixed into every hue
+D.LAYER_MUTE=.5 -- share of neutral stone mixed into every hue (the rock stays below the beams and gems)
 D.LAYER_VALUE=.8 -- overall brightness of the rock
 local STONE_TONE={132,124,120}
 local function mix(a: {number},b: {number},t: number): {number}
@@ -281,6 +285,9 @@ function D.build(seed: number)
  local top=0
  local thick={}
  for L=1,D.LAYERS do thick[L]=R(3.6,5.2);top+=thick[L] end
+ -- Scale the layers to the fixed depth so the top always meets the ground.
+ for L=1,D.LAYERS do thick[L]*=D.HEIGHT/top end
+ top=D.HEIGHT
  cube.height=top
  local oreNoiseSeed=math.floor(R(1,1000000))
  local sizeSeed=math.floor(R(1,1000000))

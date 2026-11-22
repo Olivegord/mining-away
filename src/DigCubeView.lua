@@ -11,8 +11,10 @@
 --  * one ribbon beam per drone with chips and sparks where it touches
 --  * a gem (after the hold) gets the gem burst and a name banner
 --  * a dim lamp on the player down in the pit, the launch pad and tap-to-focus
--- Nothing is drawn on the rock before it breaks (no target marks or crack
--- lines) and nothing here uses Neon.
+--  * before each piece breaks it cracks in two stages, like the field rocks:
+--    dark seams appear all at once, darker and wider at the second stage,
+--    with a crack sound, chips and a jolt (never a creeping line)
+-- Nothing here uses Neon.
 local DigCube=require('./DigCube')
 local UIS=game:GetService('UserInputService')
 local Players=game:GetService('Players')
@@ -34,7 +36,7 @@ local function fxPart(parent: Instance,name: string,color: Color3,class: string?
 end
 
 function V.new(ctx: any)
- local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},flashes={},pending={},floors={},cube=nil,origin=Vector3.zero,
+ local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},flashes={},pending={},floors={},cracks={},crackCells={},crackCount=0,jolts={},cube=nil,origin=Vector3.zero,
   generation=-1,applied=0,random=Random.new(),connections={},tapAt=0},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
@@ -75,7 +77,7 @@ end
 function V:buildPad()
  if self.pad then self.pad:Destroy() end
  local W=self.cube.width
- local at=self.origin+Vector3.new(-5,0,W*.5)
+ local at=self.origin+Vector3.new(-5,self.cube.height,W*.5) -- on the ground beside the pit
  local pad=Instance.new('Part');pad.Name='DigLaunchPad'
  pad.Shape=Enum.PartType.Cylinder;pad.Size=Vector3.new(.5,7,7)
  pad.CFrame=CFrame.new(at+Vector3.new(0,.25,0))*CFrame.Angles(0,0,math.rad(90))
@@ -112,6 +114,7 @@ function V:sync()
  if generation~=self.generation then
   for _,f in ipairs(self.frags) do self:dropShard(f) end
   self.frags={};self.mine={};self.cellColor={}
+  self:clearCracks()
   self.generation=generation;self.origin=origin
   self.cube=DigCube.build(seed)
   -- Cuts made before this client saw the cube play no effects.
@@ -219,9 +222,9 @@ local function middle(poly: {{number}}): (number,number,number)
  return math.abs(area)*.5,cx/(3*area),cz/(3*area)
 end
 -- Two or three chunky convex pieces of a cell outline.
-function V:crackCell(poly: {{number}},pieces: number): {{{number}}}
+function V:crackCell(poly: {{number}},pieces: number,fixed: number?,twist: number?): {{{number}}}
  local _,cx,cz=middle(poly)
- local angle=self.random:NextNumber(0,math.pi)
+ local angle=fixed or self.random:NextNumber(0,math.pi)
  local nx,nz=math.cos(angle),math.sin(angle)
  local a,b=cutPoly(poly,cx,cz,nx,nz),cutPoly(poly,cx,cz,-nx,-nz)
  local out={}
@@ -229,7 +232,7 @@ function V:crackCell(poly: {{number}},pieces: number): {{{number}}}
  if pieces>=3 and #out==2 then
   local big=middle(out[1])>middle(out[2]) and 1 or 2
   local _,px,pz=middle(out[big])
-  local turn=angle+math.pi*.5+self.random:NextNumber(-.4,.4)
+  local turn=angle+math.pi*.5+(twist or self.random:NextNumber(-.4,.4))
   local mx,mz=math.cos(turn),math.sin(turn)
   local c,d=cutPoly(out[big],px,pz,mx,mz),cutPoly(out[big],px,pz,-mx,-mz)
   if #c>=3 and #d>=3 then table.remove(out,big);table.insert(out,c);table.insert(out,d) end
@@ -467,6 +470,144 @@ function V:stepHolds(now: number)
   if now>=e.at then table.remove(self.pending,i);e.run() end
  end
 end
+-- Stage cracks, like the field rocks' stages. A field rock stepped down a
+-- size, darkened and cracked audibly at each stage of its health; a chunk
+-- here comes away in pieces, and before each piece goes it cracks in two
+-- steps: at a third of its share of the work its top splits in two along a
+-- dark seam, at two thirds into three, each step darker and lifting a little
+-- further apart, with a crack sound, chips, a puff and a small jolt. The
+-- seams appear all at once at each stage, never creeping. The cracked top is
+-- drawn as plates in the rock's own color over a dark base, so the gaps
+-- between them read as the cracks.
+local CRACK_STEPS=3 -- per piece: two crack stages, then it breaks off
+local CRACK_DARK=Color3.fromRGB(30,25,24)
+local CRACK_SHADE={.1,.25}
+local CRACK_GAP={.15,.24}
+local CRACK_LIFT={.03,.11}
+local CRACK_JOLT=.16
+local CRACK_MAX=420 -- live crack parts
+function V:crackIndex(job: any,progress: number): number
+ local prev=0
+ for k,piece in ipairs(job.pieces) do
+  if progress<piece.at then
+   local f=(progress-prev)/math.max(piece.at-prev,1e-6)
+   return (k-1)*CRACK_STEPS+math.clamp(math.floor(f*CRACK_STEPS),0,CRACK_STEPS-1)
+  end
+  prev=piece.at
+ end
+ return #job.pieces*CRACK_STEPS
+end
+function V:clearCrack(id: number)
+ local cell=self.crackCells[id]
+ if not cell then return end
+ for _,part in ipairs(cell.parts) do part:Destroy() end
+ self.crackCount-=#cell.parts;self.crackCells[id]=nil
+end
+function V:clearCracks()
+ for id in pairs(self.crackCells) do self:clearCrack(id) end
+ self.cracks={};self.jolts={}
+end
+-- Track a drone's chunk; when its progress crosses a crack stage, draw it.
+function V:crackStage(key: string,progress: number,now: number,tint: Color3,owned: boolean)
+ local job=self.cracks[key]
+ if not job then
+  job={pieces=DigCube.pieces(self.cube,DigCube.parseKey(string.sub(key,2))),stage=0,angles={}}
+  self.cracks[key]=job
+  -- A chunk already part-cut when first seen shows its cracks without the hit.
+  job.stage=self:crackIndex(job,progress)
+  self:drawCracks(job,job.stage,nil)
+ end
+ job.seen=now
+ local target=self:crackIndex(job,progress)
+ if target>job.stage then
+  job.stage=target
+  self:drawCracks(job,target,{now=now,tint=tint,owned=owned})
+ end
+end
+function V:drawCracks(job: any,index: number,hit: any?)
+ local k=math.floor(index/CRACK_STEPS)+1
+ local step=index%CRACK_STEPS
+ local piece=job.pieces[k]
+ if not piece or step==0 then return end
+ local cube=self.cube;local o=self.origin
+ local shade,gap,lift=CRACK_SHADE[step],CRACK_GAP[step],CRACK_LIFT[step]
+ local area,sx,sz,top=0,0,0,0
+ local jolt={}
+ for _,id in ipairs(piece.ids) do
+  local c=cube.cells[id]
+  if c and not cube.removed[id] then
+   self:clearCrack(id)
+   if self.crackCount>=CRACK_MAX then break end
+   area+=c.area;sx+=c.cx*c.area;sz+=c.cz*c.area;top=math.max(top,c.y1)
+   local a=job.angles[id]
+   if not a then a={self.random:NextNumber(0,math.pi),self.random:NextNumber(-.4,.4)};job.angles[id]=a end
+   local parts={}
+   local function plate(poly: {{number}},y0: number,y1: number,color: Color3,frame: CFrame?)
+    for _,w in ipairs(DigCube.polyWedges(poly,y0,y1)) do
+     local part=fxPart(self.fx,'DigCrack',color,'WedgePart')
+     part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+     local cf=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+      Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+     part.CFrame=frame and frame*cf or cf
+     table.insert(parts,part)
+    end
+   end
+   -- The dark base, just above the rock, seen through the seams.
+   plate(c.poly,c.y1+.015,c.y1+.035,CRACK_DARK)
+   local stone=self:colorAt(c.y1-.01,c.cx,c.cz)
+   for _,chunk in ipairs(self:crackCell(c.poly,step+1,a[1],a[2])) do
+    local _,px,pz=middle(chunk)
+    local up=lift*self.random:NextNumber(.5,1)
+    local tilt=CFrame.new(o+Vector3.new(px,c.y1,pz))*CFrame.Angles(self.random:NextNumber(-.03,.03)*step,0,self.random:NextNumber(-.03,.03)*step)
+     *CFrame.new(-(o+Vector3.new(px,c.y1,pz)))
+    local before=#parts
+    plate(DigCube.grown(chunk,-gap),c.y1+.03+up,c.y1+.09+up,stone:Lerp(CRACK_DARK,shade+self.random:NextNumber(0,.05)),tilt)
+    for n=before+1,#parts do table.insert(jolt,{part=parts[n],base=parts[n].CFrame}) end
+   end
+   self.crackCells[id]={parts=parts}
+   self.crackCount+=#parts
+  end
+ end
+ if not hit or area<=0 then return end
+ local now=hit.now
+ table.insert(self.jolts,{at=now,parts=jolt})
+ local point=o+Vector3.new(sx/area,top+.1,sz/area)
+ local stone=self:colorAt(top-.01,sx/area,sz/area)
+ local volume=hit.owned and 1 or .55
+ local ctx=self.ctx
+ if ctx.crack then ctx.crack:playCrack(point) end
+ if ctx.audio then
+  ctx.audio:play('crystal_impact',point,{pitch=.72+.09*step+.04*k+self.random:NextNumber(-.03,.03),level=volume*(.32+.14*step)})
+ end
+ if self:reduced() then return end
+ local serverNow=workspace:GetServerTimeNow()
+ local rock=self.holder and self.holder:FindFirstChild('Rock')
+ local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
+ if ctx.impact and surface then ctx.impact:chips(serverNow,point,Vector3.yAxis,surface,1+2*step,point.Y-4) end
+ self:puff(point,stone,.45+.2*step,1+step)
+ if ctx.effects then ctx.effects.Pulse(point,hit.tint:Lerp(BEAM_CORE,.35),.22,1.4+.9*step,.2,Vector3.yAxis,.78) end
+ if hit.owned and ctx.beat then ctx.beat('Split',point,serverNow,.16+.1*step) end
+end
+function V:stepCracks(now: number)
+ for i=#self.jolts,1,-1 do
+  local j=self.jolts[i]
+  local t=(now-j.at)/CRACK_JOLT
+  if t>=1 then
+   for _,e in ipairs(j.parts) do if e.part.Parent then e.part.CFrame=e.base end end
+   table.remove(self.jolts,i)
+  else
+   -- Pop up, then settle back onto the rock.
+   local y=.22*math.sin(math.pi*t)*(1-t)
+   for _,e in ipairs(j.parts) do if e.part.Parent then e.part.CFrame=e.base+Vector3.yAxis*y end end
+  end
+ end
+ for key,job in pairs(self.cracks) do
+  if now-(job.seen or now)>2 then
+   self.cracks[key]=nil
+   for _,piece in ipairs(job.pieces) do for _,id in ipairs(piece.ids) do self:clearCrack(id) end end
+  end
+ end
+end
 function V:split(op: any,now: number)
  local cube=self.cube;local o=self.origin
  local first=cube.cells[op.cells[1]]
@@ -476,6 +617,7 @@ function V:split(op: any,now: number)
  local center=o+Vector3.new(cx,(first.y0+first.y1)*.5,cz)
  local owned,beam=false,nil
  for _,id in ipairs(op.cells) do
+  self:clearCrack(id)
   if self.mine[id] then owned=true;self.mine[id]=nil end
   beam=beam or self.cellColor[id];self.cellColor[id]=nil
  end
@@ -692,6 +834,10 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
    self.cellColor[cell]=tint
    if beam.mine then self.mine[cell]=true end
   end
+ end
+ -- Stage cracks on the chunk this drone is cutting.
+ if type(key)=='string' and key~='' and (source:GetAttribute('HP') or 1)>0 then
+  self:crackStage(key,source:GetAttribute('DigProgress') or 0,now,tint,beam.mine)
  end
  -- Only over the cube, alive and not in a menu pause.
  local l=from-self.origin
@@ -912,6 +1058,7 @@ function V:update()
  self:stepSparkles(now)
  self:stepBeams(now)
  self:stepHolds(now)
+ self:stepCracks(now)
  self:stepSplits(now)
  self:stepDust(now)
  self:stepShards(now)

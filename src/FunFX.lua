@@ -52,6 +52,12 @@ local function attach(part,body,offset)
 end
 -- Paint a cube drone's local render clone. Returns a small record for stepCube.
 Fun.CUBE_VIEW_SCALE=.56
+-- Drone bodies are muted toward gray; their glowing belly, trail and beam
+-- keep the full color.
+local function muted(c)
+ local l=c.R*.3+c.G*.59+c.B*.11
+ return c:Lerp(Color3.new(l,l,l),.45)
+end
 function Fun.paintCube(view,body,id)
  local color=Fun.colorFor(id)
  -- Render the cube smaller than its 3.4-stud gameplay hull so the fleet frames
@@ -60,9 +66,9 @@ function Fun.paintCube(view,body,id)
  local s=body.Size
  local emitter=view:FindFirstChild('Emmiter')
  if emitter and emitter:IsA('BasePart') then emitter.CFrame=body.CFrame*CFrame.new(0,-s.Y*.5,0) end
- body.Color=color;body.Material=Enum.Material.SmoothPlastic;body.Reflectance=0
+ body.Color=muted(color);body.Material=Enum.Material.SmoothPlastic;body.Reflectance=0
  -- A lighter cap gives the cube a lit top and a darker underside: instant depth.
- local cap=bare(view,'FunCap',Vector3.new(s.X*.86,.08,s.Z*.86),color:Lerp(WHITE,.45))
+ local cap=bare(view,'FunCap',Vector3.new(s.X*.86,.08,s.Z*.86),muted(color):Lerp(WHITE,.45))
  attach(cap,body,CFrame.new(0,s.Y*.5+.035,0))
  -- The glowing belly the laser comes out of.
  local glow=bare(view,'FunGlow',Vector3.new(s.X*.62,.06,s.Z*.62),color:Lerp(WHITE,.25),Enum.Material.Neon)
@@ -160,11 +166,34 @@ function Fun.fieldMotes(parent,world)
   end
  end
 end
--- A gentle saturation lift so the palette pops. Client-local, removable.
+-- The play grade (client-local, on top of the authored washed daylight):
+-- the world and the drones sit a step below the authored saturation so the
+-- glowing things (beams, gems, the drones' bellies) are the most colorful on
+-- screen. Those are Neon or light-emitting, so they also carry the bloom.
 function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end
  local grade=Instance.new('ColorCorrectionEffect');grade.Name='FunColorPop'
- grade.Saturation=.04;grade.Contrast=.04;grade.Brightness=-.02;grade.Parent=lighting
+ grade.Saturation=-.16;grade.Contrast=.03;grade.Brightness=0;grade.Parent=lighting
+end
+-- Depth of field for play: sharp from the camera out well past the player,
+-- so the whole dig and the crew stay crisp, with only the far walls and
+-- skyline softly blurred. Steps aside while a menu blurs the world itself.
+function Fun.focus()
+ local lighting=game:GetService('Lighting')
+ local dof=lighting:FindFirstChild('PlayFocus') or Instance.new('DepthOfFieldEffect')
+ dof.Name='PlayFocus';dof.NearIntensity=0;dof.FarIntensity=.22;dof.FocusDistance=30;dof.InFocusRadius=60
+ dof.Parent=lighting
+ return dof
+end
+function Fun.stepFocus(dof,camera,subject)
+ if not dof or not dof.Parent or not camera then return end
+ local lighting=dof.Parent
+ local pack=lighting:FindFirstChild('PackWorldBlur')
+ local menu=lighting:FindFirstChild('FleetDepthOfField')~=nil or (pack and pack:IsA('DepthOfFieldEffect') and pack.FarIntensity>0)
+ if dof.Enabled==(menu==true) then dof.Enabled=not menu end
+ local distance=subject and (camera.CFrame.Position-subject).Magnitude or 30
+ dof.FocusDistance=math.clamp(distance,8,120)
+ dof.InFocusRadius=math.max(55,distance*1.6)
 end
 return Fun

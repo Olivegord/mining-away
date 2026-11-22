@@ -13,6 +13,14 @@ local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';local
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 Presentation.Fun.colorPop()
+do
+ local playFocus=Presentation.Fun.focus()
+ RunService.RenderStepped:Connect(function()
+  local character=player.Character
+  local root=character and character:FindFirstChild('HumanoidRootPart')
+  Presentation.Fun.stepFocus(playFocus,workspace.CurrentCamera,root and root.Position)
+ end)
+end
 -- Ambient field motes stay off: a quiet world lets the breaks pop.
 local rockDamage=RockDamage.new()
 -- Startup is silent. The established cut and contact cues remain spatial.
@@ -1915,7 +1923,7 @@ end)
 if profile then pickupView.sales:receiveProfile(profile) end
 pickupView.crew=CrewView.new({gui=safeRoot,player=player,world=world,localFX=localFX,command=command,audio=soundscape,
  presentation=presentation,reduced=CrystalImpactView.reducedMotion,hidden=menusVisible,profile=function() return profile end})
-pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,presentation=presentation,
+pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,crack=crystalAudio,presentation=presentation,
  beat=cameraBeat,splitBeat=rockDamage.splitBeat,reduced=CrystalImpactView.reducedMotion,impact=rockDamage.feedback,effects=RoleVisuals,
  fractures=function(name) local folder=command.Parent:FindFirstChild('CrystalFractures');return folder and folder:FindFirstChild(name) end})
 RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function() pickupView.sales:update();pickupView.crew:update();pickupView.dig:update() end)
