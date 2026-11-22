@@ -1,5 +1,16 @@
 # Shared project context
 
+## November 22 — nested Voronoi stages, sinking Voronoi rubble, impactful gem breaks
+
+Owner: keep the gem-break pause and add colored particles and more screenshake (impactful). A chunk should break as a small Voronoi cell, then a bigger recalculated one, then the actual cell, with the in-between cells shallower than the layer and each turned slightly differently. Each final cell's break pieces should themselves be Voronoi cells with physics, deleted one by one from the bottom up so the rock seems to fall into the hole. Built in `578ded8`, installed and saved. Not published.
+
+- **`DigCube.pieces`** now returns nested stages: one stage for chunks under 9 sq studs, otherwise two. Stage k is the Voronoi cell of the chunk center among 6 ring sites (sizes 0.38 and 0.66 of the chunk radius), clipped to the chunk's cells. Depths are 0.3 and 0.6 of the layer, and each stage is turned 0.45 rad from the last. Work shares are 0.25 and 0.55. The final entry is the floor under the last stage plus the rim around it (convex pieces). Each entry has `parts` (carved) and `shell` (newly removed rock, for visuals). New helpers: `partWedges`, `voronoiSplit`, `polyArea`.
+- **Server:** `digChip` carves the stage parts and publishes `c<chunk>|0|S<k>` without removing cells or claims, and pays the rock share. The carve loop merges stage parts. Cells are removed only at the final break.
+- **Client:** `S` ops are recomputed from the chunk key and leave the cells (and who is cutting them). Flash, rubble, break cloud and split center all use the shell parts. The pop-loose piece and its pulsing outline follow each stage's shell; `CRACK_STEPS` is now 2, one pop per stage.
+- **Rubble:** each shell part is split into Voronoi pieces (1–6 by area) with physics. After 1.15 s the lowest live piece settles and shrinks away over 0.18 s, then the next lowest every 0.07 s, so the pile sinks into the hole.
+- **Gems:** always the 9-frame pause for your own breaks. The reveal adds the break cloud in gem colors, about 2× fireworks, and a `HeavySplit` shake at 1.5 + 0.2 × tier with a `Split` follow-up 0.12 s later.
+- `tools/test_dig_flow.py` was updated for `S` ops (replay skips them; the walking check waits for removed cells). Both dig tests pass. Play (agent-started, stopped, no script errors): 40 stages, 16 final breaks and 5 gems in about 26 s.
+
 ## November 22 — break particles at the break, light charge, readable beam ends, pulsing outline
 
 Owner: break particles appeared in seemingly random positions; the little spinning rectangles should linger longest; the round dust needs heavy drag; remove the black fade from the charge; the beam needs a light, the legacy three circles, and chipping and energy particles at the right ends; extra energy particles when a beam first hits; bring back the old pulsing outline for Voronoi cells. Built in `e1a9b90`, installed and saved. Not published.
