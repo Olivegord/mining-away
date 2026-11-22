@@ -140,9 +140,15 @@ do
  local job=scene.digPick(p.drones[1],p)
  if job then for _,id in ipairs(job.ids) do assert(id~=tid,'drones leave sealed cells alone') end;scene.digDrop(p.drones[1]) end
  pl.Character:PivotTo(CFrame.new(dig.origin+Vector3.new(c.cx,c.y1+3,c.cz)))
+ -- Standing on it does nothing; you have to land on it from a jump.
+ pl.Character.HumanoidRootPart.AssemblyLinearVelocity=Vector3.zero
+ tick(2)
+ assert(dig.geodes[tid] and not dig.cube.removed[tid],'standing on a sealed cell does not open it')
+ pl.Character.HumanoidRootPart.AssemblyLinearVelocity=Vector3.new(0,-20,0)
 end
 tick(2)
-assert(dig.geodes[tid]==nil and dig.cube.removed[tid],'standing on it opens the sealed cell')
+pl.Character.HumanoidRootPart.AssemblyLinearVelocity=Vector3.zero
+assert(dig.geodes[tid]==nil and dig.cube.removed[tid],'landing on it from a jump opens the sealed cell')
 assert(string.match(dig.ops[#dig.ops],'^c'..tid..'|%d+|X$'),'treasure opening is flagged X: '..dig.ops[#dig.ops])
 local high=0
 for _,g in ipairs(dig.pending) do if g.high then high+=1 end end

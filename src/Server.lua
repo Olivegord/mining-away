@@ -3876,10 +3876,11 @@ function scene.digPublishGeodes()
  table.sort(list)
  dig.holder:SetAttribute('Geodes',table.concat(list,';'))
 end
--- Its owner standing (or landing) on a sealed cell opens it: the cell breaks
+-- Its owner landing on a sealed cell from a jump opens it: the cell breaks
 -- (ops flag G, or X for a treasure pocket), and after a short pause the gem
 -- flies out on a high arc. The client bounces its own player straight up.
-local GEODE_PAUSE=.16
+local GEODE_PAUSE=.2 -- the client's full-game freeze is 12 frames
+local GEODE_LANDING=8 -- downward speed (studs/s) that counts as landing from a jump
 function scene.digGeodeStep()
  local dig=scene.dig;local cube=dig.cube
  local changed=false
@@ -3891,8 +3892,11 @@ function scene.digGeodeStep()
   elseif hr and c then
    local l=hr.Position-dig.origin
    local above=l.Y-c.y1
-   -- Standing on it, or in a stage hole cut into it.
-   if math.sqrt((l.X-c.cx)^2+(l.Z-c.cz)^2)<=c.radius+1.2 and above>=1-(c.y1-c.y0) and above<=5.5 then
+   -- Landing on it from a jump (owner, Nov 22: you actually have to jump;
+   -- walking or standing on it does nothing), or into a stage hole cut in it.
+   local velocity=hr.AssemblyLinearVelocity
+   local falling=velocity~=nil and velocity.Y<=-GEODE_LANDING
+   if falling and math.sqrt((l.X-c.cx)^2+(l.Z-c.cz)^2)<=c.radius+1.2 and above>=1-(c.y1-c.y0) and above<=5.5 then
     dig.geodes[id]=nil;changed=true
     if DigCube.remove(cube,id) then dig.recent[id]=now end
     table.insert(dig.ops,'c'..id..'|'..g.tier..'|'..(g.treasure and 'X' or 'G'))
@@ -3913,7 +3917,8 @@ function scene.digLaunch(p,owner,cargo,material,stone,rareGem,position,color,nod
  local dig=scene.dig;local profile=data(p)
  local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
  -- A gem out of a sealed cell flies much higher (owner, Nov 22).
- if high then vx*=.7;vz*=.7;vy=vy*1.9+6 end
+ -- (Nov 22 follow-up: "much less tall" than the first x1.9+6.)
+ if high then vx*=.8;vz*=.8;vy=vy*1.25+2 end
  local guess=position.Y-1
  -- The cube knows its own floor exactly; carving runs a moment behind, so a
  -- raycast would land drops on rock that is about to disappear (floating gems).

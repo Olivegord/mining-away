@@ -11,6 +11,62 @@ local world=workspace:WaitForChild('MiningAway')
 local command=RS:WaitForChild('MiningAway'):WaitForChild('Command')
 local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';localFX.Parent=workspace
 local soundscape=Soundscape.new(localFX)
+-- Full-game hit-stop (owner, Nov 22: opening a sealed gem must use a client
+-- side full game pause, not only a held rock). For a few frames everything
+-- this client draws stops: the world presentation (drones, beams, rocks,
+-- pickups), the Dig Cube's effects and loose rubble, every particle, your
+-- character (anchored, animations held) and the camera. Then it all resumes
+-- with its velocities. Purely local; the server keeps running.
+local hitStop=(function()
+local hitStop={untilAt=0,active=false}
+local function frozen() return hitStop.active end
+local function releaseHitStop()
+ if not hitStop.active then return end
+ hitStop.active=false
+ for emitter,scale in pairs(hitStop.emitters) do if emitter.Parent then emitter.TimeScale=scale end end
+ for part,v in pairs(hitStop.parts) do
+  if part.Parent then part.Anchored=false;part.AssemblyLinearVelocity=v[1];part.AssemblyAngularVelocity=v[2] end
+ end
+ for track,speed in pairs(hitStop.tracks) do pcall(function() track:AdjustSpeed(speed) end) end
+ local camera=workspace.CurrentCamera
+ if camera and hitStop.cameraType then camera.CameraType=hitStop.cameraType end
+ hitStop.emitters,hitStop.parts,hitStop.tracks,hitStop.cameraType=nil,nil,nil,nil
+end
+local function freezeGame(duration)
+ if hitStop.active then hitStop.untilAt=math.max(hitStop.untilAt,os.clock()+duration);return end
+ hitStop.active=true;hitStop.untilAt=os.clock()+duration
+ hitStop.emitters,hitStop.parts,hitStop.tracks={},{},{}
+ for _,v in ipairs(workspace:GetDescendants()) do
+  if v:IsA('ParticleEmitter') then hitStop.emitters[v]=v.TimeScale;v.TimeScale=0 end
+ end
+ local function hold(part)
+  if part:IsA('BasePart') and not part.Anchored and not hitStop.parts[part] then
+   hitStop.parts[part]={part.AssemblyLinearVelocity,part.AssemblyAngularVelocity};part.Anchored=true
+  end
+ end
+ local digFX=workspace:FindFirstChild('DigCubeFX')
+ for _,folder in ipairs({digFX,localFX}) do
+  if folder then for _,v in ipairs(folder:GetDescendants()) do hold(v) end end
+ end
+ local character=player.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ if root then hold(root) end
+ local humanoid=character and character:FindFirstChildOfClass('Humanoid')
+ local animator=humanoid and humanoid:FindFirstChildOfClass('Animator')
+ if animator then
+  for _,track in ipairs(animator:GetPlayingAnimationTracks()) do hitStop.tracks[track]=track.Speed;track:AdjustSpeed(0) end
+ end
+ local camera=workspace.CurrentCamera
+ if camera then hitStop.cameraType=camera.CameraType;hitStop.cameraFrame=camera.CFrame;camera.CameraType=Enum.CameraType.Scriptable end
+end
+RunService:BindToRenderStep('MiningAwayHitStop',Enum.RenderPriority.First.Value,function()
+ if not hitStop.active then return end
+ if os.clock()>=hitStop.untilAt then releaseHitStop();return end
+ local camera=workspace.CurrentCamera
+ if camera and hitStop.cameraFrame then camera.CFrame=hitStop.cameraFrame end
+end)
+return {frozen=frozen,freeze=freezeGame}
+end)()
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 Presentation.Fun.colorPop()
 do
@@ -86,6 +142,7 @@ RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera
  previousShake=CFrame.new();shakeCamera=nil
 end)
 RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camera.Value+2,function()
+ if hitStop.frozen() then return end
  local camera=workspace.CurrentCamera
  local now=workspace:GetServerTimeNow()
  for source,name in pairs(roleAudio) do
@@ -1768,6 +1825,7 @@ local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=r
 local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)
 local chargerView=ChargerView.new(world,localFX,CrystalImpactView.reducedMotion)
 RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Camera.Value+1,function(dt)
+ if hitStop.frozen() then return end
  local now=workspace:GetServerTimeNow()
  for _,r in pairs(resources) do
   if r.dirty then rockDamage.feedback:requestBreakHold(r,now,requestCrystalHold) end
@@ -1909,10 +1967,13 @@ end)
 if profile then pickupView.sales:receiveProfile(profile) end
 pickupView.crew=CrewView.new({gui=safeRoot,player=player,world=world,localFX=localFX,command=command,audio=soundscape,
  presentation=presentation,reduced=CrystalImpactView.reducedMotion,hidden=menusVisible,profile=function() return profile end})
-pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,crack=crystalAudio,presentation=presentation,
+pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,crack=crystalAudio,presentation=presentation,freeze=hitStop.freeze,
  beat=cameraBeat,splitBeat=rockDamage.splitBeat,reduced=CrystalImpactView.reducedMotion,impact=rockDamage.feedback,effects=RoleVisuals,
  fractures=function(name) local folder=command.Parent:FindFirstChild('CrystalFractures');return folder and folder:FindFirstChild(name) end})
-RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function() pickupView.sales:update();pickupView.crew:update();pickupView.dig:update() end)
+RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function()
+ if hitStop.frozen() then return end
+ pickupView.sales:update();pickupView.crew:update();pickupView.dig:update()
+end)
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
@@ -1970,7 +2031,7 @@ local commandView=CommandView.new({parent=localFX,resources=resourceIndex,drones
   return touch and touch.active and touch.input.Position or nil
  end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
-connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
+connect(RunService.RenderStepped,function(dt) if not hitStop.frozen() then commandView:update(dt,workspace:GetServerTimeNow()) end end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
  local ok,state=pcall(Http.JSONDecode,Http,gui.Parent:GetAttribute('MA_CommandState') or '')
  if not ok or type(state)~='table' then return end

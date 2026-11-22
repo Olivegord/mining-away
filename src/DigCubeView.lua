@@ -479,7 +479,7 @@ end
 -- A piece that breaks before the last is the old crack beat (seam burst):
 -- chips, two sparks, a lighter particle burst and the small ring.
 local HOLD_PIECE,HOLD_SPLIT,HOLD_HEAVY,HOLD_GEM=2/60,3/60,5/60,9/60
-local HOLD_GEODE=10/60 -- the beat after you land on a sealed gem
+local HOLD_GEODE=12/60 -- the full-game freeze after you land on a sealed gem
 local FLASH=Color3.fromRGB(255,249,216)
 local FLASH_FADE=.2
 -- Every break lights the whole segment that is coming out in the color of
@@ -762,7 +762,10 @@ function V:split(op: any,now: number)
   hold=op.geode and HOLD_GEODE or op.tier>0 and HOLD_GEM or op.partial and HOLD_PIECE or heavy and HOLD_HEAVY or HOLD_SPLIT
   self.heldAt=now
  end
- -- Opening your sealed gem bounces you straight up as it breaks.
+ -- Opening your sealed gem: the whole game freezes for the hold (the client
+ -- hit-stop: world, drones, particles, you and the camera), then it breaks
+ -- and bounces you straight up.
+ if op.geode and owned and hold>0 and self.ctx.freeze then self.ctx.freeze(hold) end
  if op.geode and owned then
   local at=center
   table.insert(self.pending,{at=now+hold,run=function() self:bounce(at) end})
@@ -931,14 +934,14 @@ end
 -- keeps that one cell until its owner jumps on it. Here it is drawn split
 -- into its pieces, each wiggling a little with anticipation (faster the
 -- longer it waits), with a gem-colored glow showing through the cracks,
--- tiny glowing motes drifting up and soft god-ray beams standing out of the
--- cracks, so there is clearly something good inside. Owner is replicated on
+-- tiny glowing motes drifting up and short god-ray beams bursting out in
+-- every direction, so there is clearly something good inside. Owner is replicated on
 -- the holder ("id:tier:owner;..."); it is kept after the cell leaves the
 -- list, because the opening op can arrive a moment later.
 local GEODE_PIECES=5
 local GEODE_GAP=.93 -- pieces drawn slightly smaller, so the cracks show
 local GEODE_WAIT=.6 -- seconds a vanished geode keeps drawing until its op lands
-local RAY_COUNT=5
+local RAY_COUNT=9
 local RAY_FADE=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.35,.7),NumberSequenceKeypoint.new(1,1)})
 function V:clearGeodes()
  for id in pairs(self.geodes) do self:dropGeode(id) end
@@ -1016,53 +1019,62 @@ function V:buildGeode(id: number,tier: number)
   motes.EmissionDirection=Enum.NormalId.Top;motes.Acceleration=Vector3.new(0,.5,0);motes.Drag=.6
   motes.Rotation=NumberRange.new(0,360);motes.RotSpeed=NumberRange.new(-90,90)
   motes.Shape=Enum.ParticleEmitterShape.Box;motes.Rate=12;motes.Parent=anchor
-  -- God rays out of the cracks: points between neighboring pieces.
+  -- God rays bursting out in every direction (owner, Nov 22): short, each
+  -- living a second or two, fading out and coming back pointing elsewhere.
   rays={}
-  local points={}
-  for i=1,#centers do
-   for j=i+1,#centers do table.insert(points,{(centers[i][1]+centers[j][1])*.5,(centers[i][2]+centers[j][2])*.5}) end
-  end
-  for k=1,math.min(RAY_COUNT,#points) do
-   local pt=table.remove(points,self.random:NextInteger(1,#points))
-   local base=o+Vector3.new(pt[1],c.y1+.05,pt[2])
-   local a0=Instance.new('Attachment');a0.Parent=anchor;a0.WorldPosition=base
+  for k=1,RAY_COUNT do
+   local a0=Instance.new('Attachment');a0.Parent=anchor
    local a1=Instance.new('Attachment');a1.Parent=anchor
-   local out=Vector3.new(pt[1]-c.cx,0,pt[2]-c.cz)
-   out=out.Magnitude>.05 and out.Unit or Vector3.xAxis
-   local length=self.random:NextNumber(6,10)
-   a1.WorldPosition=base+(Vector3.yAxis+out*.22).Unit*length
-   local beam=Instance.new('Beam');beam.Attachment0=a0;beam.Attachment1=a1;beam.FaceCamera=true;beam.Segments=6
-   beam.Width0=.22;beam.Width1=1.3+(k%2)*.3;beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=1.2
+   local beam=Instance.new('Beam');beam.Attachment0=a0;beam.Attachment1=a1;beam.FaceCamera=true;beam.Segments=4
+   beam.Width0=.14;beam.Width1=.75;beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=1.2
    beam.Color=ColorSequence.new(color:Lerp(Color3.new(1,1,1),.45),color);beam.Transparency=RAY_FADE;beam.Parent=anchor
-   table.insert(rays,{beam=beam,phase=k*1.7,base=base,tip=a1,out=out,length=length})
+   table.insert(rays,{beam=beam,from=a0,tip=a1,born=-10,life=1})
   end
  end
+ local center=o+Vector3.new(c.cx,c.y1+.05,c.cz)
  model.Parent=self.fx
- self.geodes[id]={model=model,pieces=pieces,rays=rays,core=core,born=os.clock()}
+ self.geodes[id]={model=model,pieces=pieces,rays=rays,core=core,born=os.clock(),center=center,radius=c.radius}
 end
 function V:stepGeodes(now: number)
  local still=self:reduced()
  for id,g in pairs(self.geodes) do
   if g.leftAt and now-g.leftAt>GEODE_WAIT then self:dropGeode(id);continue end
   local age=now-g.born
-  -- The longer it waits, the more eager the wiggle (up to about 3 s in).
+  -- A fast, tight shiver (owner, Nov 22: less displacement, faster), a
+  -- little stronger the longer it waits.
   local eager=math.clamp(age/3,0,1)
-  local amp=still and 0 or .035+.035*eager
-  local rate=7+6*eager
+  local amp=still and 0 or .007+.007*eager
   for i,piece in ipairs(g.pieces) do
-   local t=now*rate+piece.phase
-   -- Two detuned waves: a nervous shiver, not a clean sway.
-   local w=math.sin(t)*.7+math.sin(t*1.73+i)*.3
-   local frame=CFrame.new(piece.mid+Vector3.yAxis*(amp*.9*math.max(0,math.sin(t*.5+i))))*CFrame.fromAxisAngle(piece.axis,amp*w)
+   local t=now*(30+14*eager)
+   local rx=math.noise(t,i*3.1,.5)*2;local rz=math.noise(i*1.7,t,.25)*2
+   local dy=math.noise(t,.75,i*2.3)*amp*1.5
+   local frame=CFrame.new(piece.mid+Vector3.yAxis*dy)*CFrame.Angles(rx*amp,0,rz*amp)
    for _,q in ipairs(piece.parts) do q.part.CFrame=frame*q.rel end
   end
   local glow=.3-.15*math.sin(now*3.1)
   for _,part in ipairs(g.core) do part.Transparency=glow end
   for _,ray in ipairs(g.rays or {}) do
-   local breathe=.5+.5*math.sin(now*1.6+ray.phase)
-   ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.75-.3*breathe),NumberSequenceKeypoint.new(.35,.85-.2*breathe),NumberSequenceKeypoint.new(1,1)})
-   local sway=math.sin(now*.7+ray.phase)*.12
-   ray.tip.WorldPosition=ray.base+(Vector3.yAxis+ray.out*(.22+sway)).Unit*ray.length
+   local u=(now-ray.born)/ray.life
+   if u>=1 then
+    -- A new ray: any direction from flat out to straight up, from a point
+    -- on the cell's top.
+    ray.born=now+self.random:NextNumber(0,.35);ray.life=self.random:NextNumber(.9,1.8);u=-1
+    local az=self.random:NextNumber(0,math.pi*2);local el=math.rad(self.random:NextNumber(-5,85))
+    ray.dir=Vector3.new(math.cos(az)*math.cos(el),math.sin(el),math.sin(az)*math.cos(el))
+    ray.spin=self.random:NextNumber(-.5,.5)
+    ray.length=self.random:NextNumber(2.2,4)
+    local off=self.random:NextNumber(0,g.radius*.6)
+    ray.base=g.center+Vector3.new(math.cos(az)*off,0,math.sin(az)*off)
+   end
+   if u<0 then ray.beam.Enabled=false
+   else
+    ray.beam.Enabled=true
+    local env=math.sin(math.pi*u)
+    local dir=CFrame.Angles(0,ray.spin*u,0):VectorToWorldSpace(ray.dir)
+    ray.from.WorldPosition=ray.base
+    ray.tip.WorldPosition=ray.base+dir*ray.length*(.7+.3*env)
+    ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1-.6*env),NumberSequenceKeypoint.new(.4,1-.4*env),NumberSequenceKeypoint.new(1,1)})
+   end
   end
  end
 end
