@@ -165,7 +165,8 @@ function Soundscape.new(effectParent)
   voices=0,closed=false,musicMuted=false,effectsMuted=false,combat=false,menu=false,
   loops={},loopCount=0,active={},cueVoices={},droneStates={},
   nextMusicSample=0,nextMusicCheck=0,musicRetryAt=0,lastMusicVolume=-1,random=Random.new()},Soundscape)
- self.musicDirector=MusicDirector.new(Random.new(),os.clock())
+ -- A random track starts right away (owner request for testing, Nov 22).
+ self.musicDirector=MusicDirector.new(Random.new(),os.clock(),{'Amber','Ruby','Quartz','Violet','Diamond','Sell'})
  self.musicGroup=group(folder,'Music',0)
  local music=Instance.new('Sound');music.Name='BackgroundMusic';music.Volume=0
  music.Looped=false;music.SoundGroup=self.musicGroup;music.Parent=folder

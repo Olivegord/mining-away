@@ -2,11 +2,18 @@
 local Music = {}
 Music.__index = Music
 
-function Music.new(random, now)
- return setmetatable({
+-- opening: optional track contexts; one is picked at random and plays as
+-- soon as it loads (the owner asked for this at the start, for testing).
+function Music.new(random, now, opening)
+ local self=setmetatable({
   random=random, quietUntil=now+random:NextNumber(55,95),
   lastSample=now, workTime=0, saleTimes={}, saleIds={},
  }, Music)
+ if type(opening)=='table' and #opening>0 then
+  self.opening=opening[random:NextInteger(1,#opening)]
+  self.quietUntil=now
+ end
+ return self
 end
 
 function Music:observe(now,field,working)
@@ -43,6 +50,7 @@ end
 
 function Music:eligible(now)
  if now<self.quietUntil then return nil end
+ if self.opening then return self.opening end
  if self.sellUntil and now<=self.sellUntil then return 'Sell' end
  if self.field and self.workAt and now-self.workAt<=12 and self.workTime>=self.workTarget then
   return self.field
@@ -50,6 +58,7 @@ function Music:eligible(now)
 end
 
 function Music:started(context)
+ if context==self.opening then self.opening=nil;return end
  if context=='Sell' then
   -- Keep receipt IDs for dedupe, but require another three fresh sales.
   for _,sale in ipairs(self.saleTimes) do sale.used=true end

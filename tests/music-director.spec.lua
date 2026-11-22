@@ -46,3 +46,12 @@ assert(not director:eligible(450),'a completed sale cue must consume its streak'
 sale(470,'sixth',true)
 assert(director:eligible(470)=='Sell')
 print('PASS field dwell, activity resets, song cooldown, and private sale streak scheduling')
+
+-- A random opening track plays at once, then the normal rules resume.
+do
+ local pick={NextNumber=function(_,minimum) return minimum end,NextInteger=function(_,_,maximum) return maximum end}
+ local opening=Music.new(pick,0,{'Amber','Sell'})
+ assert(opening:eligible(0)=='Sell','the opening track plays at the start')
+ opening:started('Sell')
+ assert(opening:eligible(1)==nil,'only once')
+end
