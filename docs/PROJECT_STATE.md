@@ -1,5 +1,14 @@
 # Shared project context
 
+## November 22 — instant gem pause, no floating cells, pulsing outline, gem blast
+
+Owner follow-up on `c4c2708`. Built in `d3f37c7`, installed (Studio save 483, canonical sha256 `cf191e70…`). Not published.
+
+- The gem pause starts the frame your client sees the landing; the server opens the cell on request.
+- **No floating cells:** `DigCube.diggable` refuses a cut that would leave a cell above with nothing under its middle (`DigCube.supported`), checked against the whole chunk. Sealed gem cells (`cube.sealed`) may float.
+- The outline pulses while mined, the sealed cell glows more, the opening blast is much bigger, stage cuts are shallower, and rubble tips away from the beam.
+- `test_dig_cube.py` checks no cell floats after chunk digging and that a sealed cell may float. `test_dig_flow.py` checks the `DigOpen` request (refused from far away). Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.
+
 ## November 22 — sealed gem anticipation and full-game hit-stop
 
 Owner follow-up on `a77a01b`. Built in `c4c2708`, installed (Studio save 482, canonical sha256 `ac368f8e…`). Not published. A tight fast shiver, short shifting rays in every direction, a lower gem arc, opening only when landing from a jump, and a new client full-game hit-stop for the opening. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Dig, pickup and beam suites pass (the beam suite also compiles the client bundle, which caught a 200-local overflow). Not seen in Play.

@@ -1,5 +1,19 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — instant gem pause, pulsing outline, gem blast, rubble away from the beam
+
+Owner on `c4c2708`. Built in `d3f37c7`.
+
+- **No delay before the pause:** the owner's client detects its own landing (`V:landedOn`: falling at 8 studs/s or more over its sealed cell). It freezes that same frame, plays the break locally and sends `DigOpen`. The server (`scene.digRequestOpen`, owner and a loose 3-stud proximity check) opens the cell at once and launches the gem `GEODE_LAUNCH` 0.12 s later. When the server's op arrives, its effects are skipped (`localOpened`). The server landing check stays as a fallback. `Geodes` is now `id:tier:owner:treasure`.
+- **Outline:** pulses at 9 rad/s, transparency 0.7→0.02 and color toward white, while the beam is on the piece (`DigMining`); steady at 0.55 while charging.
+- **Sealed cell glow:** motes 24/s, quick glints (10/s), a breathing halo about 3.4× the cell radius.
+- **Gem blast (`V:geodeBlast`)**, on top of the gem break:
+  - quick: 60 sparks and 36 streaks (0.2–0.55 s)
+  - lingering: 70 glitter (2.4–4.2 s) and 30 drifting motes
+  - reused: two more `GemReward` waves with rings, a `CrystalBreak` burst, `fireworks` (16) and `breakPieces`
+- **Stages:** cut depths 0.2 and 0.44 of the layer (0.34 for a single stage).
+- **Rubble:** thrown 4–8 studs/s out from the beam's point (the chunk center) and rolled about `up × out`, so the tops tip away from where the beam hit.
+
 ## November 22 — sealed gem: shiver, short rays, jump to open, full-game hit-stop
 
 Owner on `a77a01b`. Built in `c4c2708`; replaces the wiggle, rays and arc of the entry below.

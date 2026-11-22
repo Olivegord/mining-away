@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — instant pause, no floating cells, pulsing outline, gem blast, shallower stages, rubble away from the beam
+
+After `c4c2708`: no delay before the client pause on the gem break ("the client pause is the pause"). Gem cells can float, but regular cells must not. The rock mining outlines must pulse while being mined. Sealed gem cells need more glowy particles and a much better explosion with LOTS more particles, some that linger and some that go quick; reuse effects. Then: make each deeper stage cut a little more shallow, and when the rock breaks, make the little physics rocks point slightly away from where the beam was, so it is clear what cracked it.
+
 ## November 22 — sealed gem anticipation looks bad: tighter shiver, rays all around, jump to open, full-game pause
 
 After `a77a01b`: the anticipation "looks REALLY bad right now". Pieces should have much less displacement but vibrate faster; god rays should come from all directions, shift, and be shorter; the gem arc much less tall; the player needs some vertical velocity, so you actually have to jump; and the opening must use the client-side full game pause, not just a pause of the rock breaking.
