@@ -1,5 +1,15 @@
 # Shared project context
 
+## November 22 — sight only while charging, charge-up back, bigger break particles, music at the start
+
+Owner: remove the red sight lines and show the red targeting laser only right before a drone fires; restore the charging-up effect; make the rock-break particles bigger and more visible, with some lingering, appearing where the break actually happens; start a random music track at the beginning (for testing). Built in `25ef015`, `28c1011` and `4974cff`, installed (Studio Edit, saved). Not published.
+
+- **Sight:** `DigCubeView:droneBeam` shows the red line, glow and dot only while the drone is in `Warmup` on a dig chunk. Then the real beam replaces it.
+- **Charge-up:** it was only 0.30 s (the clamp floor) and almost invisible. The server now charges each chunk for the drone's own warmup, clamped to 0.7–1.1 s, or 1.3 s for the first shot after 6 s without a beam. This is computed once per warm cycle.
+- **Break particles:** `DigCubeView:breakCloud` emits from a box the size of the broken piece: chunky square debris in the rock tone (0.9–1.6 s), a few small dust puffs in the rock's tone, bright beam-colored sparks and glitter that lingers 2.2–3.4 s. The shared fireworks and `CrystalBreak` bursts are scaled up from the dig side only. The first dust version made big pale clouds that fogged the dig, so it was shrunk and kept in the rock's tone (`4974cff`).
+- **Music:** `MusicDirector.new` takes an optional opening list. Soundscape passes all six tracks, so one random track plays as soon as it loads, then the normal quiet/work/sale rules resume. Confirmed in Play ("Deep Ambient" playing at 38.8 s). Remove the opening list when testing is done.
+- `tools/test_audio.py` already failed compiling its generated `pickups.lua` before this change; the music spec passes on its own.
+
 ## November 22 — Dig Cube sunk into the ground, stage cracks, glowing things above a muted world
 
 Owner: make the rocks go into the ground so you mine down; make the cracking stage-based like the old fields; keep the world and drones desaturated relative to beams and gems; tune glow and depth of field. Built in `53ebe40` and `7eddafc`, installed (Studio save 470, canonical sha256 `3ab8e927…`). Not published.
