@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — sealed gem cells you jump on; progressive holes back; no combo or gem text
+
+After `3365b45`: bring back the stages with the progressive holes ("i kind of liked it") and the physics rubble of the previous pass. Remove all on-screen text for combos and gems. Gem opening: if a cell contains a gem, keep THAT cell without breaking it, split into its pieces, each wiggling a little with anticipation, with tiny glowing particles coming out and god-ray beams showing there is something cool inside. When the player jumps on it: a pause of some milliseconds, then it breaks and the gem flies out; the player is bounced straight up; the gem has a much higher arc and a longer, thicker trail.
+
 ## November 22 — lighter DOF, a stage is just a bigger cell, attached effects, old rectangles, bigger gems
 
 After `cfae949` ("nice work"): (1) DOF is too much, tone it down; (2) with the stages of the Voronoi cell getting bigger, the outline of the previous cell is irrelevant to the next: no cutouts, just a cell getting bigger; (3) all effects firmly attached to the drone; (4) restore the old rectangle particles, the new ones are worse; (5) gems overall bigger and brighter.

@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 22 — sealed gem cells you jump on
+
+Owner follow-up on `3365b45`. Built in `a77a01b`, installed (Studio save 481, canonical sha256 `ddee85dc…`). Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md).
+
+- Gems no longer pop out of a break: the gem's cell stays sealed (split, wiggling, glowing, god rays) until its owner stands or lands on it. Then it pauses, breaks, bounces the player up and launches the gem high with a thick trail.
+- Progressive stage holes and the earlier rubble are back. No combo or gem text.
+- `test_dig_flow.py` covers sealing, replication, drones skipping the cell, opening and the high launch. Dig, pickup and beam suites pass. `test_core_gameplay.py` already failed before this change. Not seen in Play: piece wiggle, ray look, bounce feel and whether standing on the cell triggers reliably need a Play check.
+
 ## November 22 — lighter DOF, whole growing stages, attached drone FX, old rectangles, bigger gems
 
 Owner follow-up on `cfae949`. Built in `3365b45`, installed (Studio save 480, canonical sha256 `f288e5c6…`). Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md). `test_dig_flow.py` now keeps the crew working until three chunks fully break. Compile and the dig, pickup and beam suites pass. Not seen in Play.

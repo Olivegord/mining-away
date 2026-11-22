@@ -1,5 +1,14 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — sealed gem cells, progressive holes back, no text
+
+Owner on `3365b45`. Built in `a77a01b`; supersedes the "whole growing stage cells" entry below (stages are progressive holes again, as in `cfae949`).
+
+- **No text:** no combo counter, gem name banners, `+GEM` or `LUCKY x` pop text. The combo still escalates the tink and the shake.
+- **Sealed gem cell (server):** when a chunk's gem roll hits, `scene.digBreak` keeps one cell (its ore cell, else the one farthest from the chunk middle, which the stages hollowed least) and breaks the rest as a plain break. `dig.geodes` is replicated on the holder as `Geodes` = `id:tier:owner;...`; `digPick` treats these cells as taken. `scene.digGeodeStep` opens one when its owner's root is within the cell radius + 1.2 and from 1 stud into the cell to 5.5 above its top: the cell is removed with op flag `G` (`X` for treasure), and the gem(s) launch `GEODE_PAUSE` 0.16 s later with `high` (vx, vz ×0.7, vy ×1.9 + 6) and the `GeodeGem` attribute.
+- **Sealed gem cell (client, `DigCubeView`):** the cell is drawn as 5 Voronoi pieces, narrowed to 0.93 so the cracks show. They wiggle with two detuned waves, getting faster and larger over 3 s. A thin Neon sheet just under the tops glows through the cracks. Glowing sparkle motes rise at 12/s, and 5 god-ray beams stand out of the cracks (6–10 studs, swaying and breathing). Opening: `HOLD_GEODE` 10 frames, then the gem break, and the owner is bounced straight up (62 studs/s, client-side).
+- **Geode gem trail (`PickupView`):** trail half-width 0.6, lifetime 1.1 s, max length 40; sparkle comet 140/s.
+
 ## November 22 — whole growing stage cells, attached drone effects, old rectangles, bigger gems
 
 Owner on `cfae949`. Built in `3365b45`.
