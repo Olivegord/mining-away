@@ -3732,8 +3732,8 @@ function scene.digAim(job)
  local cx,cz,id=DigCube.chunkCenter(dig.cube,job.ids)
  local c=dig.cube.cells[id]
  local carved=job.pieces and job.pieces[job.stage]
- local part=carved and carved.parts and carved.parts[1]
- local depth=part and (part.y1-part.y0) or 0
+ -- The bottom of the deepest terrace, where the stages are centered.
+ local depth=carved and carved.centerDepth or 0
  job.contact=dig.origin+Vector3.new(cx,c.y1-depth,cz)
 end
 -- One piece of a chunk breaks off before the rest: it leaves the rock now

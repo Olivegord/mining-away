@@ -288,7 +288,10 @@ function V:shards(op: any,now: number,center: Vector3)
     local mid=o+Vector3.new(mx,(c.y0+c.y1)*.5,mz)
     -- The rock's own color, a little darker here and there so the pieces
     -- read as separate (and fresh-broken faces look deeper).
-    local color=self:colorAt(c.y1-.01,mx,mz):Lerp(SHARD_DARK,self.random:NextNumber(.06,.3))
+    -- Darker the closer it was to the beam (owner, Nov 22): scorched where
+    -- the beam hit, fading to the plain rock tone a few studs out.
+    local nearBeam=math.exp(-Vector3.new(mid.X-center.X,0,mid.Z-center.Z).Magnitude/2.6)
+    local color=self:colorAt(c.y1-.01,mx,mz):Lerp(SHARD_DARK,math.min(.85,self.random:NextNumber(.06,.2)+.6*nearBeam))
     local inverse=CFrame.new(mid):Inverse()
     local parts={}
     for _,w in ipairs(DigCube.polyWedges(poly,c.y0,c.y1)) do
@@ -764,7 +767,8 @@ function V:split(op: any,now: number)
   if self.mine[id] then owned=true end
   if op.geode then
    owned=self.geodeOwner[id]~=nil and Players.LocalPlayer~=nil and self.geodeOwner[id]==Players.LocalPlayer.UserId
-   self:dropGeode(id)
+   -- Your own stays on screen through the freeze (it shakes); others go now.
+   if not owned or self:reduced() then self:dropGeode(id) elseif self.geodes[id] then self.geodes[id].opening=true end
   end
   beam=beam or self.cellColor[id]
   -- A nested stage leaves the chunk's cells (and who is cutting them) in place.
@@ -781,21 +785,42 @@ function V:split(op: any,now: number)
  -- Opening your sealed gem: the whole game freezes for the hold (the client
  -- hit-stop: world, drones, particles, you and the camera), then it breaks
  -- and bounces you straight up.
- if op.geode and owned and hold>0 and self.ctx.freeze then self.ctx.freeze(hold) end
- if op.geode and owned then
-  local at=center
-  table.insert(self.pending,{at=now+hold,run=function() self:bounce(at) end})
- end
  local gem=op.tier>0 and rgb(DigCube.ORES[op.tier].color) or nil
+ local tense=op.geode and owned and hold>0
+ if tense then
+  -- The freeze reads as tension, not lag: the sealed cell keeps shaking
+  -- (hard at first, settling), its cracks blaze up, the rays flare, a deep
+  -- crack sounds on the very first frame, and the camera punches in.
+  local id=op.cells[1]
+  if self.ctx.audio then
+   self.ctx.audio:play('crystal_impact',center,{pitch=.55,level=1.1,rockSize=4})
+   self.ctx.audio:play('crystal_split',center,{pitch=.8,level=.8,rockSize=4})
+  end
+  if self.ctx.freeze then
+   self.ctx.freeze(hold,{tint=gem,onFrame=function(u) self:tenseGeode(id,u) end})
+  end
+ end
+ if op.geode and owned then
+  local at=center;local id=op.cells[1]
+  table.insert(self.pending,{at=now+hold,run=function() self:dropGeode(id);self:bounce(at) end})
+ end
  local glow=owned and (gem~=nil or not op.partial)
- self:flash(op,now,now+hold+.04,gem and gem:Lerp(FLASH,.2) or beam and beam:Lerp(FLASH,.3) or FLASH,glow)
+ local flashColor=gem and gem:Lerp(FLASH,.2) or beam and beam:Lerp(FLASH,.3) or FLASH
+ if tense then
+  -- Flash and rubble come with the break, after the freeze.
+  table.insert(self.pending,{at=now+hold,run=function() self:flash(op,os.clock(),os.clock()+.04,flashColor,glow) end})
+ else
+  self:flash(op,now,now+hold+.04,flashColor,glow)
+ end
  -- Loose physics rubble only for the final cut (owner, Nov 22); a nested
  -- stage is just its outline growing (the flash over its shell).
  -- Rubble flies out from where the beam was: the chunk's center (the
  -- drone's contact point).
  if not op.partial then
   local bx,bz=DigCube.chunkCenter(cube,op.cells)
-  self:shards(op,now+hold,o+Vector3.new(bx,center.Y,bz))
+  local from=o+Vector3.new(bx,center.Y,bz)
+  if tense then table.insert(self.pending,{at=now+hold,run=function() self:shards(op,os.clock(),from) end})
+  else self:shards(op,now+hold,from) end
  end
  local info={center=center,point=o+Vector3.new(cx,top,cz),ground=o.Y+bottom,bulk=bulk,strength=strength,owned=owned,heavy=heavy,
   color=self:colorAt(top-.01,cx,cz),beam=beam}
@@ -1078,7 +1103,7 @@ function V:stepGeodes(now: number)
  local still=self:reduced()
  for id,g in pairs(self.geodes) do
   if g.leftAt and now-g.leftAt>GEODE_WAIT then self:dropGeode(id);continue end
-  if self:landedOn(id,g) then continue end
+  if g.opening or self:landedOn(id,g) then continue end
   local age=now-g.born
   -- A fast, tight shiver (owner, Nov 22: less displacement, faster), a
   -- little stronger the longer it waits.
@@ -1125,7 +1150,7 @@ end
 local LANDING_SPEED=8
 function V:landedOn(id: number,g: any): boolean
  local player=Players.LocalPlayer
- if g.leftAt or not player or self.geodeOwner[id]~=player.UserId then return false end
+ if g.leftAt or g.opening or self.localOpened[id] or not player or self.geodeOwner[id]~=player.UserId then return false end
  local character=player.Character
  local root=character and character:FindFirstChild('HumanoidRootPart')
  local c=self.cube.cells[id]
@@ -1194,6 +1219,34 @@ function V:geodeBlast(at: Vector3,ground: number,color: Color3,light: Color3,tie
  if ctx.impact then
   ctx.impact:fireworks(at,ground,color,(1.4+tier*.15)*2.4*weight,serverNow,16)
   ctx.impact:breakPieces(at,ground,color:Lerp(SHARD_DARK,.35),2*weight,serverNow,true,nil)
+ end
+end
+-- The sealed cell during the full-game freeze (u: 0 at the landing, 1 at
+-- the break). Sakurai's hit-stop shake: biggest at the start, shrinking to
+-- the end. The pieces also strain apart a little, the glow under them goes
+-- full and every ray flares wider, so the stillness around it is clearly
+-- holding its breath.
+function V:tenseGeode(id: number,u: number)
+ local g=self.geodes[id]
+ if not g then return end
+ local amp=.11*(1-u)^1.2+.015
+ local t=os.clock()*60
+ for i,piece in ipairs(g.pieces) do
+  local out=Vector3.new(piece.mid.X-g.center.X,0,piece.mid.Z-g.center.Z)
+  out=out.Magnitude>.05 and out.Unit or Vector3.zero
+  local jitter=Vector3.new(math.noise(t,i*1.3,.1),math.noise(i*2.1,t,.6)*.6,math.noise(.4,i*.9,t))*amp
+  local frame=CFrame.new(piece.mid+out*(.18*u)+jitter)*CFrame.Angles(math.noise(t,i,.9)*amp*.5,0,math.noise(i,.2,t)*amp*.5)
+  for _,q in ipairs(piece.parts) do q.part.CFrame=frame*q.rel end
+ end
+ for _,part in ipairs(g.core) do part.Transparency=.25*(1-u) end
+ if g.halo then g.halo.ImageTransparency=.5-.4*u end
+ for _,ray in ipairs(g.rays or {}) do
+  if ray.dir and ray.base then
+   ray.beam.Enabled=true
+   ray.beam.Width1=.75*(1+1.2*u)
+   ray.tip.WorldPosition=ray.base+ray.dir*(ray.length or 3)*(1+.5*u)
+   ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35-.3*u),NumberSequenceKeypoint.new(.4,.55-.3*u),NumberSequenceKeypoint.new(1,1)})
+  end
  end
 end
 -- Straight up when your sealed gem breaks under you (client-owned physics).

@@ -30,11 +30,26 @@ local function releaseHitStop()
  for track,speed in pairs(hitStop.tracks) do pcall(function() track:AdjustSpeed(speed) end) end
  local camera=workspace.CurrentCamera
  if camera and hitStop.cameraType then camera.CameraType=hitStop.cameraType end
- hitStop.emitters,hitStop.parts,hitStop.tracks,hitStop.cameraType=nil,nil,nil,nil
+ if camera and hitStop.fov then camera.FieldOfView=hitStop.fov end
+ if hitStop.grade then hitStop.grade:Destroy() end
+ hitStop.emitters,hitStop.parts,hitStop.tracks,hitStop.cameraType,hitStop.fov,hitStop.grade,hitStop.onFrame=nil,nil,nil,nil,nil,nil,nil
 end
-local function freezeGame(duration)
+-- A freeze must read as tension, not lag (owner, Nov 22; research in
+-- docs/VFX_INSTRUCTIONS.md): the hit itself keeps shaking, big at first and
+-- shrinking (opts.onFrame(u), u 0..1 through the freeze), the camera punches
+-- in a few degrees and trembles with the same decay, and the world drops a
+-- little color and gains contrast in the hit's tint while the hit stays lit.
+-- Sound is played by the caller on the first frame. No full-screen flash.
+local function freezeGame(duration,opts)
  if hitStop.active then hitStop.untilAt=math.max(hitStop.untilAt,os.clock()+duration);return end
- hitStop.active=true;hitStop.untilAt=os.clock()+duration
+ opts=opts or {}
+ hitStop.active=true;hitStop.startAt=os.clock();hitStop.duration=duration;hitStop.untilAt=os.clock()+duration
+ hitStop.onFrame=opts.onFrame
+ if opts.tint then
+  local grade=Instance.new('ColorCorrectionEffect');grade.Name='HitStopGrade'
+  grade.Saturation=-.3;grade.Contrast=.18;grade.Brightness=-.03;grade.TintColor=Color3.new(1,1,1):Lerp(opts.tint,.12)
+  grade.Parent=game:GetService('Lighting');hitStop.grade=grade
+ end
  hitStop.emitters,hitStop.parts,hitStop.tracks={},{},{}
  for _,v in ipairs(workspace:GetDescendants()) do
   if v:IsA('ParticleEmitter') then hitStop.emitters[v]=v.TimeScale;v.TimeScale=0 end
@@ -57,13 +72,26 @@ local function freezeGame(duration)
   for _,track in ipairs(animator:GetPlayingAnimationTracks()) do hitStop.tracks[track]=track.Speed;track:AdjustSpeed(0) end
  end
  local camera=workspace.CurrentCamera
- if camera then hitStop.cameraType=camera.CameraType;hitStop.cameraFrame=camera.CFrame;camera.CameraType=Enum.CameraType.Scriptable end
+ if camera then
+  hitStop.cameraType=camera.CameraType;hitStop.cameraFrame=camera.CFrame;camera.CameraType=Enum.CameraType.Scriptable
+  hitStop.fov=camera.FieldOfView
+ end
+ if hitStop.onFrame then pcall(hitStop.onFrame,0) end
 end
 RunService:BindToRenderStep('MiningAwayHitStop',Enum.RenderPriority.First.Value,function()
  if not hitStop.active then return end
  if os.clock()>=hitStop.untilAt then releaseHitStop();return end
+ local u=math.clamp((os.clock()-hitStop.startAt)/hitStop.duration,0,1)
+ if hitStop.onFrame then pcall(hitStop.onFrame,u) end
  local camera=workspace.CurrentCamera
- if camera and hitStop.cameraFrame then camera.CFrame=hitStop.cameraFrame end
+ if camera and hitStop.cameraFrame then
+  local still=CrystalImpactView.reducedMotion()
+  local decay=still and 0 or (1-u)^1.5
+  local t=os.clock()*55
+  local shake=CFrame.new(math.noise(t,.3)*.09*decay,math.noise(.7,t)*.09*decay,0)*CFrame.Angles(0,0,math.noise(t,1.9)*.006*decay)
+  camera.CFrame=hitStop.cameraFrame*shake
+  if hitStop.fov and not still then camera.FieldOfView=hitStop.fov-4*math.min(1,u*5) end
+ end
 end)
 return {frozen=frozen,freeze=freezeGame}
 end)()

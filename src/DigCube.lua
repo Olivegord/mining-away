@@ -661,42 +661,60 @@ function D.pieces(cube: any,ids: {number}): {any}
  local radius=math.sqrt(area/math.pi)
  local stages=area<9 and 1 or 2
  local base=(seed*.6180339887)%1*math.pi*2
+ -- Terraces (owner, Nov 22: keep the earlier stages for more depth): each
+ -- stage cuts its whole cell one step down AND deepens everything the
+ -- earlier stages opened by another step, so the first hole stays as a
+ -- deeper pit inside the next. Steps are shallow (owner: a little more
+ -- shallow); the middle ends at stages*step.
+ local step=thick*(stages==1 and .34 or .22)
  local out={}
- local last,lastDepth
+ local polys={}
  for k=1,stages do
   local size=stages==1 and .5 or (k==1 and .38 or .66)
-  -- A little shallower than first built (owner, Nov 22).
-  local depth=thick*(stages==1 and .34 or (k==1 and .2 or .44))
   -- Each stage turned a little from the one before.
   local poly=stageCell(cx,cz,radius*size,base+k*.45,seed+k*7919)
+  local last=polys[#polys]
+  local prev=step*(k-1) -- depth of the earlier stages' middle before this one
   local parts,shell={},{}
   for _,id in ipairs(ids) do
    local c=cube.cells[id]
    local q=clipConvex(poly,c.poly)
    if #q>=3 and polyArea(q)>.04 then
-    table.insert(parts,{poly=q,y0=c.y1-depth,y1=c.y1})
-    -- The rock this stage newly takes out: its shape minus the last stage's.
+    table.insert(parts,{poly=q,y0=c.y1-step,y1=c.y1})
     if last then
-     for _,r in ipairs(outside(q,last)) do table.insert(shell,{poly=r,y0=c.y1-depth,y1=c.y1}) end
+     -- The ring this stage opens, and the earlier pit one step deeper.
+     for _,r in ipairs(outside(q,last)) do table.insert(shell,{poly=r,y0=c.y1-step,y1=c.y1}) end
      local inner=clipConvex(q,last)
-     if #inner>=3 and polyArea(inner)>.04 then table.insert(shell,{poly=inner,y0=c.y1-depth,y1=c.y1-lastDepth}) end
+     if #inner>=3 and polyArea(inner)>.04 then
+      table.insert(parts,{poly=inner,y0=c.y1-prev-step,y1=c.y1})
+      table.insert(shell,{poly=inner,y0=c.y1-prev-step,y1=c.y1-prev})
+     end
     else
-     table.insert(shell,{poly=q,y0=c.y1-depth,y1=c.y1})
+     table.insert(shell,{poly=q,y0=c.y1-step,y1=c.y1})
     end
    end
   end
   if #parts>0 then
-   table.insert(out,{stage=k,at=stages==1 and .4 or (k==1 and .25 or .55),parts=parts,shell=shell,ids={}})
-   last,lastDepth=poly,depth
+   table.insert(out,{stage=k,at=stages==1 and .4 or (k==1 and .25 or .55),parts=parts,shell=shell,ids={},centerDepth=prev+step})
+   table.insert(polys,poly)
   end
  end
- -- The actual cells: the floor under the last stage, and the rim around it.
+ -- The actual cells: the rock under and around the terraces.
+ local n=#polys
+ local deepest=step*n
  local parts={}
  for _,id in ipairs(ids) do
   local c=cube.cells[id]
-  if last then
-   table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1-lastDepth})
-   for _,q in ipairs(outside(c.poly,last)) do table.insert(parts,{poly=q,y0=c.y1-lastDepth,y1=c.y1}) end
+  if n>0 then
+   table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1-deepest})
+   for _,q in ipairs(outside(c.poly,polys[n])) do table.insert(parts,{poly=q,y0=c.y1-deepest,y1=c.y1}) end
+   -- Each terrace ring: from the bottom up to its own floor.
+   for j=n,2,-1 do
+    local inside=clipConvex(polys[j],c.poly)
+    if #inside>=3 then
+     for _,q in ipairs(outside(inside,polys[j-1])) do table.insert(parts,{poly=q,y0=c.y1-deepest,y1=c.y1-step*(n-j+1)}) end
+    end
+   end
   else
    table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1})
   end
