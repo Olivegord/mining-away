@@ -8,7 +8,9 @@
 -- cell plus its nearest cuttable neighbors in the same layer, grown to the
 -- drone's chunk size. Drones differ: some cut tiny chunks fast, others big
 -- slabs that drop more rock (D.chunkScale), and cut-size upgrades scale it
--- further. Ore is hidden inside: every chunk rolls for a gem when it splits.
+-- further. Ore is hidden inside: the server places secret gems per cell
+-- (D.placeGems) that come out when their cell breaks. Each worker role digs
+-- its own way (D.STYLES); breaks replicate as ops (D.formatOp/D.parseOp).
 --
 -- The rendered rock is real solid geometry carved on the server: each chunk's
 -- cell prisms (D.prismWedges) are subtracted from solid blocks.
@@ -119,6 +121,47 @@ end
 function D.chunkScale(role: string?,droneId: string?,slot: number?): number
  return D.CHUNK_SIZES[D.chunkSize(role,droneId,slot)]
 end
+
+-- Dig roles, shared by the server, the client view and the tests: how each
+-- worker attacks the rock, what it picks, what it breaks and its color.
+-- color = primary attack RGB (beam, projectile, flash, ring, light, role particles, cube belly glow).
+-- beam = BeamVFX style published as MiningStyle while digging (nil = no laser).
+-- kernel: 'beam' | 'shot' | 'slam' | 'volley' | 'pulse'. size: CHUNK_SIZES key | nil (Striker slot) | 'cell' | 'line' | 'cluster'.
+-- pieces: 'terrace' (D.pieces today) | 'none' (one final piece). rockCarry nil = true.
+D.STYLES={
+ Striker={code='L',kernel='beam',pick='cone',pieces='terrace',power=1,color={255,159,24},beam='Cutter',rockCarry=false},
+ Charger={code='C',kernel='slam',pick='cone',size='huge',pieces='terrace',power=1,color={255,92,40},rockCarry=false,
+  slam={hover=7,lift=9,windup=.55,dive=.28,hold=.2,recover=.45,clear=1.05},quake={share=.08,radius=10,every=.5}},
+ Ballcaster={code='B',kernel='shot',pick='small',size='cell',pieces='none',power=1,color={150,84,255},shape='Ball',carveAhead=true,hintBias=4,
+  shot={hover=7,chargeMin=.35,chargeMax=2,chargeDiv=1.4,rested=.4,flight=.26,recover=.15}},
+ Needler={code='N',kernel='shot',pick='near',size='cell',pieces='none',power=1,color={200,255,60},shape='Dart',carveAhead=true,
+  shot={hover=4.5,first=.25,rested=.6,interval=.2,windup=.05,flight=.04,adjacent=.25,deepPower=1.25,deepLayer=3,maxLive=2},
+  near={radius=7,falloff=5,adjacent=6,exposed=2},hints={radius=6,max=12,life=8}},
+ Bubbler={code='U',kernel='beam',pick='cone',size='large',pieces='terrace',power=.95,color={60,232,212},beam='Repair',collect={ready=.25,range=1e6}},
+ Halver={code='H',kernel='beam',pick='wall',size='medium',pieces='terrace',power=.8,color={80,100,255},beam='Lance',rockMul=1.5,wall={edge=4,other=.3}},
+ Gridcutter={code='G',kernel='beam',pick='cone',size='line',pieces='none',power=.9,color={255,60,170},beam='Gridcutter',line={min=3,max=6,width=2}},
+ Singularity={code='Y',kernel='beam',pick='deep',size='huge',pieces='terrace',power=1,color={205,60,255},beam='Singularity',depthPow=2,lead=3},
+ Starforge={code='M',kernel='beam',pick='cone',size='large',pieces='terrace',power=.85,color={255,214,110},beam='Starforge',forge=.4,hintBias=3},
+ Frostbite={code='I',kernel='beam',pick='cone',size='small',pieces='none',power=1,color={150,230,255},beam='Sentry',brittle={life=10,mul=.6,max=48}},
+ Resonator={code='V',kernel='beam',pick='cone',size='medium',pieces='terrace',power=.85,color={80,255,140},beam='Resonance',chain={links=3,budget=.4,maxArea=22,gap=.15}},
+ Ramiel={code='P',kernel='volley',pick='ore',size='cluster',pieces='none',power=1,color={249,22,60},shape='Prism',carveAhead=true,oreBias=6,
+  volley={hover=10,charge=2.6,flight=.06,beamHold=.42,breakDelay=.12,recover=.5,budget=3.3,radius=9,maxCells=6,preferOre=true}},
+ Nomad={code='A',kernel='volley',pick='cone',size='cluster',pieces='none',power=1,color={70,160,255},shape='Nomad',carveAhead=true,
+  volley={hover=16,charge=2.2,flight=.95,breakDelay=0,recover=.4,budget=3.4,radius=5.5,maxCells=7,preferOre=false,blastRadius=4}},
+ -- Pulse laser (owner's reference video): short punchy pulses, each bites a big piece out.
+ Lancer={code='Z',kernel='pulse',pick='cone',size='medium',pieces='terrace',power=1,color={255,236,170},pulse={charge=.45,interval=.7,bite=.36,hover=7}},
+} :: {[string]:any}
+D.STYLES_BY_CODE={} :: {[string]:any} -- code -> style; each style also gets .role=<key>
+for role,style in pairs(D.STYLES) do
+ style.role=role
+ D.STYLES_BY_CODE[style.code]=style
+end
+-- The style for a role name or a one-letter code; unknown roles dig like a Striker.
+function D.style(roleOrCode: string?): any
+ return roleOrCode and (D.STYLES[roleOrCode] or D.STYLES_BY_CODE[roleOrCode]) or D.STYLES.Striker
+end
+D.BRITTLE_BIAS=3;D.DEPTH_BITE=.35;D.SEAL_PER_BREAK=3;D.SEAL_LIVE=4
+D.GEM_P_ORE=.40;D.GEM_P_STONE=.035;D.GEM_VOL=77;D.GEM_VALUE_K=1.4
 
 -- Park-Miller generator: exact in doubles, identical on server and clients.
 function D.rng(seed: number)
@@ -492,16 +535,36 @@ function D.remove(cube: any,id: number)
  return true
 end
 
+-- Two sets read as one (live: either may still grow). Cells claimed by other
+-- drones count as gone in every support check, so two jobs never jointly
+-- leave a cell above them floating (likely with 13 drones at work).
+local function union(a: {[number]:any}?,b: {[number]:any}?): {[number]:any}?
+ if not a then return b end
+ if not b then return a end
+ local x,y=a,b
+ return setmetatable({},{__index=function(_,k) return x[k] or y[k] end})
+end
+
 -- Weighted random choice among cuttable cells. opts:
 --  focusX/focusZ: local point the crew should favor (player or tapped spot)
 --  taken: {[cellId]=true} claimed by other drones; takenPoints: {{x,z}} of those claims
+--   (claimed cells also count as gone when checking what the rest rests on)
 --  recent: {[cellId]=time} of removals; now; random: () -> number
 --  anchorX/anchorZ: the player's local position; only cells within radius
 --  (default D.MINE_RADIUS) of it are cut, so the player has to move along
+--  depthPow: depth preference exponent (default 1: weight DEPTH_PULL^((layer-1)*depthPow))
+--  lead: layers the crater aims below its floor (default D.LEAD)
+--  falloff: studs of the focus preference (default D.FOCUS_FALLOFF)
+--  weight(id,cell,apex): an extra weight multiplier (0 rules a cell out)
+--  gone: {[cellId]=true} treated as removed (never picked, hold nothing up)
 function D.pick(cube: any,opts: any): number?
  local total=0
  local choices,weights={},{}
  local random=opts.random or math.random
+ local depthPow=opts.depthPow or 1
+ local falloff=opts.falloff or D.FOCUS_FALLOFF
+ local weight: ((number,any,number) -> number?)?=opts.weight
+ local gone=union(opts.gone,opts.taken)
  -- The crew carves toward a cone around the focus whose tip sits D.LEAD layers
  -- below the deepest floor reached there. Cells inside the cone are wanted
  -- (deeper first); the rim widens only as far as going deeper needs. Moving
@@ -512,18 +575,18 @@ function D.pick(cube: any,opts: any): number?
    local cell=cube.cells[id]
    if cell.layer>apex and (cell.cx-opts.focusX)^2+(cell.cz-opts.focusZ)^2<=D.APEX_RADIUS*D.APEX_RADIUS then apex=cell.layer end
   end
-  apex=math.min(D.LAYERS,apex+D.LEAD)
+  apex=math.min(D.LAYERS,apex+(opts.lead or D.LEAD))
  end
  for id in pairs(cube.frontier) do
   local cell=cube.cells[id]
   local near=not opts.anchorX or math.sqrt((cell.cx-opts.anchorX)^2+(cell.cz-opts.anchorZ)^2)-cell.radius<=(opts.radius or D.MINE_RADIUS)
-  if near and not (opts.taken and opts.taken[id]) and D.diggable(cube,id) then
-   local w=D.DEPTH_PULL^(cell.layer-1)
+  if near and not (opts.taken and opts.taken[id]) and not (opts.gone and opts.gone[id]) and D.diggable(cube,id,gone) then
+   local w=D.DEPTH_PULL^((cell.layer-1)*depthPow)
    if opts.focusX then
     local d=math.sqrt((cell.cx-opts.focusX)^2+(cell.cz-opts.focusZ)^2)
     local wanted=apex-math.max(0,d-cell.radius)/D.RUN
     if cell.layer>wanted+.5 then w*=.004 end
-    w*=.05+math.exp(-d/D.FOCUS_FALLOFF)
+    w*=.05+math.exp(-d/falloff)
    end
    if opts.takenPoints then
     for _,p in ipairs(opts.takenPoints) do
@@ -536,8 +599,9 @@ function D.pick(cube: any,opts: any): number?
     if not fresh then for _,other in ipairs(D.above(cube,id)) do local t=opts.recent[other];if t and opts.now-t<D.RECENT_TIME then fresh=true;break end end end
     if fresh then w*=2 end
    end
+   if weight then w*=weight(id,cell,apex) or 1 end
    w*=.4+random()
-   total+=w;table.insert(choices,id);table.insert(weights,w)
+   if w>0 then total+=w;table.insert(choices,id);table.insert(weights,w) end
   end
  end
  if total<=0 then return nil end
@@ -548,16 +612,21 @@ end
 
 -- A chunk: the seed plus the closest cuttable same-layer neighbors until the
 -- top face reaches the drone's cut area. cutSize scales the chunk's width.
+-- Depth bite: harder (deeper) layers come away in smaller chunks, area times
+-- (1+HARDNESS_PER_LAYER*(L-1))^-DEPTH_BITE (x0.585 at the bottom layer).
+-- Cells in `taken` (claimed by other drones) count as gone for support.
 function D.chunk(cube: any,seed: number,cutSize: number?,taken: {[number]:any}?,random: (() -> number)?): {number}
  local cut=math.max(.5,cutSize or 1)
  local roll=random and random() or .5
- local target=D.BASE_CUT_AREA*cut*cut*(.75+.5*roll)
  local s=cube.cells[seed]
+ local bite=(1+D.HARDNESS_PER_LAYER*(s.layer-1))^-D.DEPTH_BITE
+ local target=D.BASE_CUT_AREA*cut*cut*(.75+.5*roll)*bite
  local ids={seed};local inside={[seed]=true};local area=s.area
+ local gone=union(inside,taken)
  local open={}
  local function offer(id: number)
   for _,n in ipairs(cube.cells[id].neighbors) do
-   if not inside[n] and not open[n] and not cube.removed[n] and not (taken and taken[n]) and D.diggable(cube,n,inside) then open[n]=true end
+   if not inside[n] and not open[n] and not cube.removed[n] and not (taken and taken[n]) and D.diggable(cube,n,gone) then open[n]=true end
   end
  end
  offer(seed)
@@ -570,7 +639,7 @@ function D.chunk(cube: any,seed: number,cutSize: number?,taken: {[number]:any}?,
   if not best then break end
   -- Re-check against the chunk as it is now: two cells may each hold up the
   -- same cell above alone, but not both go.
-  if not D.diggable(cube,best,inside) then open[best]=nil;continue end
+  if not D.diggable(cube,best,gone) then open[best]=nil;continue end
   local c=cube.cells[best]
   -- Stop when adding this cell overshoots the target by more than it helps.
   if area+c.area*.5>target then break end
@@ -580,11 +649,102 @@ function D.chunk(cube: any,seed: number,cutSize: number?,taken: {[number]:any}?,
  table.sort(ids)
  return ids
 end
-function D.chunkHp(cube: any,ids: {number},cutSize: number?): number
+-- mul(id): an optional per-cell HP multiplier (a brittle cell takes .6).
+function D.chunkHp(cube: any,ids: {number},cutSize: number?,mul: ((number) -> number)?): number
  local hp=0
- for _,id in ipairs(ids) do hp+=cube.cells[id].hp end
+ for _,id in ipairs(ids) do hp+=cube.cells[id].hp*(mul and mul(id) or 1) end
  -- Bigger cuts take longer but move more rock per second than small ones.
  return hp/math.sqrt(math.max(.5,cutSize or 1))
+end
+-- A volley's cluster (Ramiel, Nomad): the seed plus exposed frontier cells
+-- whose centre lies within `radius` (horizontal) of the seed's; ore first
+-- when preferOre, then nearest. A cell joins only while it can be cut with
+-- the cluster (and the claimed cells) gone, the HP sum stays within `budget`
+-- and there are fewer than maxCells. o={radius,maxCells,budget,taken,preferOre,mul}.
+-- The seed always comes first; the rest in the order they joined (not sorted).
+function D.cluster(cube: any,seed: number,o: any?): {number}
+ local opts=o or {}
+ local radius=opts.radius or 6
+ local maxCells=opts.maxCells or 6
+ local budget=opts.budget or math.huge
+ local taken=opts.taken
+ local mul=opts.mul
+ local preferOre=opts.preferOre==true
+ local sealed=cube.sealed
+ local s=cube.cells[seed]
+ local function hpOf(id: number): number return cube.cells[id].hp*(mul and mul(id) or 1) end
+ local ids={seed};local inside={[seed]=true}
+ local gone=union(inside,taken)
+ local hp=hpOf(seed)
+ local list: {{id: number,d: number,ore: boolean}}={}
+ for id in pairs(cube.frontier) do
+  if id~=seed and not cube.removed[id] and not (taken and taken[id]) and not (sealed and sealed[id]) then
+   local c=cube.cells[id]
+   local d=math.sqrt((c.cx-s.cx)^2+(c.cz-s.cz)^2)
+   if d<=radius and D.visible(cube,id) then table.insert(list,{id=id,d=d,ore=c.ore>0}) end
+  end
+ end
+ table.sort(list,function(a: {id: number,d: number,ore: boolean},b: {id: number,d: number,ore: boolean}): boolean
+  if preferOre and a.ore~=b.ore then return a.ore end
+  if a.d~=b.d then return a.d<b.d end
+  return a.id<b.id
+ end)
+ for _,e in ipairs(list) do
+  if #ids>=maxCells then break end
+  local h=hpOf(e.id)
+  if hp+h<=budget and D.diggable(cube,e.id,gone) then
+   table.insert(ids,e.id);inside[e.id]=true;hp+=h
+  end
+ end
+ return ids
+end
+-- A Gridcutter line: from the seed, walk same-layer neighbours along
+-- sign*axis, each step taking the neighbour that advances least while its
+-- centre stays within `width` of the axis line through the seed and it can
+-- be cut with the line (and the claimed cells) gone. Fewer than `min` cells:
+-- also walk back from the seed (prepended, so the list stays contiguous).
+-- At most `max` cells, in walk order. o={axis='x'|'z',sign=1|-1,min,max,width,taken}.
+function D.line(cube: any,seed: number,o: any?): {number}
+ local opts=o or {}
+ local alongX=opts.axis~='z'
+ local sign=(opts.sign or 1)<0 and -1 or 1
+ local minN=opts.min or 3
+ local maxN=opts.max or 6
+ local width=opts.width or 2
+ local taken=opts.taken
+ local sealed=cube.sealed
+ local s=cube.cells[seed]
+ local ids={seed};local inside={[seed]=true}
+ local gone=union(inside,taken)
+ local function along(c: any): number return alongX and c.cx or c.cz end
+ local function across(c: any): number return alongX and c.cz or c.cx end
+ local axisLine=across(s)
+ local function walk(dir: number,front: boolean)
+  local cur=s
+  while #ids<maxN do
+   local best,bestAdvance=nil,math.huge
+   for _,n in ipairs(cur.neighbors) do
+    if not inside[n] and not cube.removed[n] and not (taken and taken[n]) and not (sealed and sealed[n]) then
+     local c=cube.cells[n]
+     local advance=dir*(along(c)-along(cur))
+     if advance>0 and advance<bestAdvance and math.abs(across(c)-axisLine)<=width and D.diggable(cube,n,gone) then
+      best,bestAdvance=n,advance
+     end
+    end
+   end
+   if not best then break end
+   inside[best]=true
+   if front then table.insert(ids,1,best) else table.insert(ids,best) end
+   cur=cube.cells[best]
+  end
+ end
+ walk(sign,false)
+ if #ids<minN then walk(-sign,true) end
+ return ids
+end
+function D.cellVolume(cube: any,id: number): number
+ local c=cube.cells[id]
+ return c.area*(c.y1-c.y0)
 end
 -- A chunk breaks in nested stages before its real cells go (owner, Nov 22):
 -- first a small Voronoi cell around its middle, then a bigger one turned a
@@ -654,7 +814,14 @@ local function outside(cell: {{number}},hole: {{number}}): {{{number}}}
  end
  return out
 end
-function D.pieces(cube: any,ids: {number}): {any}
+-- mode: 'terrace' (default: the nested stages above) or 'none' (one final
+-- piece of whole cells). Every part carries cell=<id> of the cell it is cut from.
+function D.pieces(cube: any,ids: {number},mode: string?): {any}
+ if mode=='none' then
+  local P={}
+  for i,id in ipairs(ids) do local c=cube.cells[id];P[i]={poly=c.poly,y0=c.y0,y1=c.y1,cell=id} end
+  return {{stage=1,at=1,parts=P,shell=P,ids=table.clone(ids),final=true}}
+ end
  local area=D.chunkArea(cube,ids)
  local cx,cz=D.chunkCenter(cube,ids)
  local first=cube.cells[ids[1]]
@@ -682,17 +849,17 @@ function D.pieces(cube: any,ids: {number}): {any}
    local c=cube.cells[id]
    local q=clipConvex(poly,c.poly)
    if #q>=3 and polyArea(q)>.04 then
-    table.insert(parts,{poly=q,y0=c.y1-step,y1=c.y1})
+    table.insert(parts,{poly=q,y0=c.y1-step,y1=c.y1,cell=id})
     if last then
      -- The ring this stage opens, and the earlier pit one step deeper.
-     for _,r in ipairs(outside(q,last)) do table.insert(shell,{poly=r,y0=c.y1-step,y1=c.y1}) end
+     for _,r in ipairs(outside(q,last)) do table.insert(shell,{poly=r,y0=c.y1-step,y1=c.y1,cell=id}) end
      local inner=clipConvex(q,last)
      if #inner>=3 and polyArea(inner)>.04 then
-      table.insert(parts,{poly=inner,y0=c.y1-prev-step,y1=c.y1})
-      table.insert(shell,{poly=inner,y0=c.y1-prev-step,y1=c.y1-prev})
+      table.insert(parts,{poly=inner,y0=c.y1-prev-step,y1=c.y1,cell=id})
+      table.insert(shell,{poly=inner,y0=c.y1-prev-step,y1=c.y1-prev,cell=id})
      end
     else
-     table.insert(shell,{poly=q,y0=c.y1-step,y1=c.y1})
+     table.insert(shell,{poly=q,y0=c.y1-step,y1=c.y1,cell=id})
     end
    end
   end
@@ -708,17 +875,17 @@ function D.pieces(cube: any,ids: {number}): {any}
  for _,id in ipairs(ids) do
   local c=cube.cells[id]
   if n>0 then
-   table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1-deepest})
-   for _,q in ipairs(outside(c.poly,polys[n])) do table.insert(parts,{poly=q,y0=c.y1-deepest,y1=c.y1}) end
+   table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1-deepest,cell=id})
+   for _,q in ipairs(outside(c.poly,polys[n])) do table.insert(parts,{poly=q,y0=c.y1-deepest,y1=c.y1,cell=id}) end
    -- Each terrace ring: from the bottom up to its own floor.
    for j=n,2,-1 do
     local inside=clipConvex(polys[j],c.poly)
     if #inside>=3 then
-     for _,q in ipairs(outside(inside,polys[j-1])) do table.insert(parts,{poly=q,y0=c.y1-deepest,y1=c.y1-step*(n-j+1)}) end
+     for _,q in ipairs(outside(inside,polys[j-1])) do table.insert(parts,{poly=q,y0=c.y1-deepest,y1=c.y1-step*(n-j+1),cell=id}) end
     end
    end
   else
-   table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1})
+   table.insert(parts,{poly=c.poly,y0=c.y0,y1=c.y1,cell=id})
   end
  end
  table.insert(out,{stage=#out+1,at=1,parts=parts,shell=parts,ids=table.clone(ids),final=true})
@@ -866,6 +1033,37 @@ function D.gemRoll(cube: any,ids: {number},random: () -> number): number
  local t=(deepest-1)/math.max(1,D.LAYERS-1)
  return math.clamp(math.floor(1+t*4.2+(random()*1.4-.7)),1,#D.ORES)
 end
+-- Secret gems, placed per cell by the server when it builds a cube (never
+-- replicated): {[id]={tier,count,treasure}}. A cell's chance grows with its
+-- volume (clamped), so gems per volume dug are the same for every drone and
+-- every crack size. Ore cells hold their own ore; plain cells a tier by
+-- depth. Treasure pockets always hold TREASURE_GEMS gems of a rich tier.
+-- About 0.098 per cell, 1.27 per 1000 cubic studs.
+function D.placeGems(cube: any,random: () -> number): {[number]:any}
+ local gems={}
+ local ores=#D.ORES
+ for id,c in ipairs(cube.cells) do
+  if cube.treasure and cube.treasure[id] then
+   gems[id]={tier=math.max(3,math.min(ores,D.layerTier(c.layer)+1)),count=D.TREASURE_GEMS,treasure=true}
+  else
+   local v=c.area*(c.y1-c.y0)
+   local p=math.clamp(v/D.GEM_VOL,.5,1.6)*(c.ore>0 and D.GEM_P_ORE or D.GEM_P_STONE)
+   if random()<p then
+    local tier=c.ore
+    if tier<=0 then
+     local t=(c.layer-1)/math.max(1,D.LAYERS-1)
+     tier=math.clamp(math.floor(1+t*4.2+random()*1.4-.7),1,ores)
+    end
+    gems[id]={tier=tier,count=1,treasure=false}
+   end
+  end
+ end
+ return gems
+end
+-- Value scale of a gem from the volume of the cell that held it.
+function D.gemSize(volume: number): number
+ return D.GEM_VALUE_K*math.clamp(volume/D.GEM_VOL,.75,1.35)
+end
 local function contains(poly: {{number}},x: number,z: number): boolean
  local sign=0
  local n=#poly
@@ -907,6 +1105,58 @@ function D.parseKey(s: string): {number}
  local ids={}
  for part in string.gmatch(s,'%d+') do table.insert(ids,tonumber(part) :: number) end
  return ids
+end
+-- Op grammar v2, one parser for the server, the clients and the tests:
+-- c<ids>[~<code>]|<tier>[|<flag>[<arg>]], ids dot-separated, code one
+-- uppercase letter (STYLES code). Flags and the cells each op removes:
+--  ''           final break: all cells
+--  S<k>         terrace stage k: none
+--  K            crack-seal, the cells became sealed geodes (tier = gem tier): none
+--  E<ids>       final break whose listed cells sealed (K ops follow): the cells minus those
+--  C<n>         sequence break n (Gridcutter line cell, Resonator chain link; 1 cell): all
+--  G / X        geode opened (X = treasure), sent without a code: all
+--  T, D<n>, P<k> legacy, still parsed: all
+-- The DigOp drone attribute is c<ids>~<code> with no tier (not an op).
+D.OP_PATTERN='^c([%d%.]+)~?(%u?)|(%d+)|?(%u?)([%d%.]*)$'
+function D.formatOp(ids: {number},code: string?,tier: number?,flag: string?,arg: (string | number)?): string
+ return 'c'..D.key(ids)..(code and code~='' and '~'..code or '')..'|'..tostring(math.floor(tier or 0))
+  ..(flag and flag~='' and '|'..flag..tostring(arg or '') or '')
+end
+local FINAL_FLAGS={['']=true,C=true,G=true,X=true,T=true,D=true,P=true}
+function D.parseOp(s: string): any?
+ if type(s)~='string' then return nil end
+ local key,code,tier,flag,arg=string.match(s,D.OP_PATTERN)
+ if not key then return nil end
+ local cells=D.parseKey(key)
+ if #cells==0 then return nil end
+ local op={cells=cells,code=code~='' and code or nil,tier=tonumber(tier) or 0,flag=flag,arg=arg,removes={},
+  sealed=flag=='K',staged=flag=='S',geode=flag=='G' or flag=='X',treasure=flag=='T' or flag=='X'}
+ if flag=='S' then
+  op.stage=tonumber(arg)
+ elseif flag=='E' then
+  local except={}
+  for _,id in ipairs(D.parseKey(arg)) do except[id]=true end
+  op.except=except
+  for _,id in ipairs(cells) do if not except[id] then table.insert(op.removes,id) end end
+ elseif FINAL_FLAGS[flag] then
+  op.removes=table.clone(cells)
+  if flag=='C' then op.seq=tonumber(arg) end
+ elseif flag~='K' then
+  return nil
+ end
+ return op
+end
+-- Remove an op's cells from a cube (a parsed op or its string); returns the
+-- ids actually removed.
+function D.applyOp(cube: any,op: any): {number}
+ local parsed=if type(op)=='string' then D.parseOp(op) else op
+ local removed={}
+ if not parsed then return removed end
+ local removes: {number}=parsed.removes
+ for _,id in ipairs(removes) do
+  if cube.cells[id] and D.remove(cube,id) then table.insert(removed,id) end
+ end
+ return removed
 end
 -- Outer edges of a chunk (between a member and a non-member or the cube side),
 -- ordered by angle around the chunk center so a crack can run around it.
