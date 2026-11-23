@@ -116,7 +116,7 @@ local ColorSequence={new=function(...) return {...} end}
 local ColorSequenceKeypoint={new=function(t,v) return {Time=t,Value=v} end}
 local NumberRange={new=function(a,b) return {Min=a,Max=b or a} end}
 local PhysicalProperties={new=function(...) return {...} end}
-local UDim2={new=function(...) return {...} end,fromScale=function(...) return {...} end,fromOffset=function(...) return {...} end}
+local UDim2={new=function(...) return {...} end,fromScale=function(x,y) return {X={Scale=x},Y={Scale=y}} end,fromOffset=function(...) return {...} end}
 local Enum=setmetatable({},{__index=function(t,k) local e=setmetatable({},{__index=function(_,x) return k..'.'..x end});rawset(t,k,e);return e end})
 local function typeof(x)
  local m=getmetatable(x)
@@ -461,6 +461,44 @@ do -- the test area
  assert(old.dead,'rebuilt once per cube')
  for _,st in ipairs(self.showcase.stations) do RockChunks.destroy(st.rec) end
  print('PASS test area: all nine display rocks animate (ripples, crack pops, slam, pulse, charge, darts); rebuilt per cube')
+end
+do -- jumping on a sealed gem: brighter, long bolts, longer rays, combo crack after the pause
+ local self=view()
+ local id
+ for _,cid in ipairs(self.cube.layers[1].cells) do if self.cube.cells[cid].radius>1.2 then id=cid;break end end
+ self:buildGeode(id,3)
+ local g=self.geodes[id]
+ local lens={}
+ for k,ray in ipairs(g.rays) do ray.dir=v3(0,1,0);ray.base=g.center;ray.length=3 end
+ self:tenseGeode(id,0)
+ for _,part in ipairs(g.core) do assert(part.Transparency==0,'the ore blazes at once') end
+ assert(g.hitLight and g.hitLight.Brightness>=2,'its light floods out')
+ for _,ray in ipairs(g.rays) do assert((ray.tip.WorldPosition-ray.base).Magnitude>=3*2.4-1e-6,'rays shoot out much longer') end
+ local long=self.arcSet.long
+ assert(#long>=1 and #long<=4,'1-4 extra long bolts: '..#long)
+ for _,bolt in ipairs(long) do assert(bolt.length>=11,'long bolts reach far') end
+ -- combo: each landing before touching the ground rings higher
+ local plays={}
+ self.ctx={audio={play=function(_,cue,_,opts) table.insert(plays,{cue=cue,pitch=opts and opts.pitch or 1}) end},freeze=function() end}
+ local function open(cid)
+  self.localOpened[cid]=true
+  local before=#self.pending
+  self:split({kind='c',cells={cid},tier=2,treasure=false,geode=true,partial=false,flag='G',removes={cid},parts=nil},fakeClock)
+  -- run only the opening beat (the crack after the pause)
+  local beat=self.pending[before+1]
+  table.clear(plays);pcall(beat.run)
+  for _,pl in ipairs(plays) do if pl.cue=='crystal_split' then return pl.pitch end end
+  return nil
+ end
+ local others={}
+ for _,cid in ipairs(self.cube.layers[1].cells) do if cid~=id and #others<3 then table.insert(others,cid) end end
+ self.heldAt=-10;fakeClock=5000
+ local p1=open(others[1]);self.heldAt=-10;fakeClock+=1
+ local p2=open(others[2]);self.heldAt=-10;fakeClock+=1
+ local p3=open(others[3])
+ assert(p1 and p2 and p3 and p2>p1 and p3>p2,string.format('midair combo pitches up: %s %s %s',tostring(p1),tostring(p2),tostring(p3)))
+ self.combo=0
+ print(string.format('PASS sealed gem hit: ore blazes, light floods, rays x2.4+, %d long bolts, crack after the pause pitched %.2f -> %.2f -> %.2f for a midair combo',#long,p1,p2,p3))
 end
 assert(RockChunks.live==live0,'every piece removed its chunks: '..RockChunks.live)
 print('PASS DigCubeView pieces: chunks per piece, held until its op, crack pops all through the work, slam/pulse/dart/charge pops, Singularity squeeze, Frostbite ice, chunks removed (doubles; looks NOT verified)')

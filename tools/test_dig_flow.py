@@ -531,18 +531,16 @@ do
  for _,id in ipairs(ids) do assert((id==gem)==(not cube.removed[id]),'the other cells break, the gem cell stays') end
  local e=parsed(dig.ops[n+1])
  assert(e.except[gem] and #e.removes==#ids-1,'E removes the cells minus the sealed one')
- -- Two more seals make four live; the fifth bursts out at once.
+ -- Drones never break a gem open (owner, Nov 22): every gem seals, no cap.
  local g3,g4=freshTop(),freshTop()
  for _,id in ipairs({g3,g4}) do dig.gems[id]={tier=1,count=1,treasure=false};assert(scene.digBreak(oneCell(id,'B',B),d,p)==1,'seal') end
- local live=0;for _,g in pairs(dig.geodes) do if g.owner==pl.UserId then live+=1 end end
- assert(live==DigCube.SEAL_LIVE,'four live geodes: '..live)
  local fifth=freshTop();dig.gems[fifth]={tier=4,count=1,treasure=false}
  local pending=#dig.pending
- assert(scene.digBreak(oneCell(fifth,'B',B),d,p)==0,'over the cap: nothing seals')
- local op=parsed(dig.ops[#dig.ops])
- assert(op.flag=='' and op.tier==4 and op.cells[1]==fifth and op.code=='B','the gem bursts out: a final op with its tier: '..dig.ops[#dig.ops])
- assert(#dig.pending==pending+1 and dig.pending[#dig.pending].tier==4 and dig.pending[#dig.pending].high==false,'its gem is queued in a normal arc')
- assert(cube.removed[fifth] and not dig.geodes[fifth],'no new geode')
+ assert(scene.digBreak(oneCell(fifth,'B',B),d,p)==1,'a fifth live gem still seals')
+ assert(#dig.pending==pending and not cube.removed[fifth] and dig.geodes[fifth],'nothing bursts out on its own')
+ local multi={}
+ for k=1,4 do local id=freshTop();dig.gems[id]={tier=1,count=1,treasure=false};table.insert(multi,id) end
+ assert(scene.digBreak({ids=multi,left=table.clone(multi),key=DigCube.key(multi),code='L',style=L,kernel='beam',cx=0,cz=0,hp=0,maxHp=1,volume=1,volFrac=0,rock=1,rockPaid=0},d,p)==4,'four gems in one break all seal')
  -- A treasure gem still seals, over the cap.
  local tid2=next(cube.treasure)
  assert(dig.gems[tid2] and dig.gems[tid2].treasure,'treasure gem placed')
@@ -586,7 +584,7 @@ do
  scene.digReset()
  assert(Pro.cargoUnits(data(p))==units+owned,'cube reset pays the owner\'s sealed gems: '..Pro.cargoUnits(data(p))..' vs '..(units+owned))
 end
-print('PASS gems: one-cell seal emits K only, multi-cell E<id>+K, fifth live gem bursts out with its tier, treasure always seals, idle/left owners make geodes public, another player opens and is paid, cube reset pays sealed gems')
+print('PASS gems: one-cell seal emits K only, multi-cell E<id>+K, every gem seals (no cap: drones never break one open), treasure always seals, idle/left owners make geodes public, another player opens and is paid, cube reset pays sealed gems')
 
 -- ===== Carve-ahead (spec 3.5.3, 7.2.6) =====
 freshCube()

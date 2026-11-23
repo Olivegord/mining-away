@@ -1338,7 +1338,19 @@ function V:split(op: any,now: number)
  end
  if op.geode and owned then
   local at=center;local id=op.cells[1]
-  table.insert(self.pending,{at=now+hold,run=function() self:dropGeode(id);self:bounce(at) end})
+  -- Jumping from one sealed gem to the next without touching the ground
+  -- is a combo: each crack after the pause rings a step higher (owner,
+  -- Nov 22). stepGeodes resets it once you stand on solid ground.
+  local combo=tense and self:geodeCombo() or 1
+  table.insert(self.pending,{at=now+hold,run=function()
+   self:dropGeode(id);self:bounce(at)
+   local audio=self.ctx.audio
+   local pitch=math.min(2.2,1+.12*(combo-1))
+   if audio then
+    audio:play('crystal_split',at,{pitch=pitch,level=1.5+.08*math.min(combo,6),rockSize=9})
+    audio:play('crystal_release_tink',at,{pitch=pitch*1.05,level=1.1})
+   end
+  end})
  end
  local glow=owned and (gem~=nil or not op.partial)
  -- Gems override the role's color.
@@ -1825,6 +1837,25 @@ function V:stepGeodes(now: number)
   end
  end
 end
+-- Midair combo (owner, Nov 22): the count of sealed gems opened since the
+-- player last stood on the ground (a quarter second on solid footing, or 4 s
+-- with no opening, ends it).
+function V:geodeCombo(): number
+ local now=os.clock()
+ if now-(self.comboAt or -10)>4 then self.combo=0 end
+ self.combo=(self.combo or 0)+1;self.comboAt=now
+ return self.combo
+end
+function V:stepCombo(now: number)
+ if (self.combo or 0)==0 then return end
+ local character=Players.LocalPlayer and Players.LocalPlayer.Character
+ local humanoid=character and character:FindFirstChildOfClass('Humanoid')
+ local grounded=humanoid~=nil and humanoid.FloorMaterial~=Enum.Material.Air
+ if grounded and now-(self.comboAt or 0)>.3 then
+  self.groundSince=self.groundSince or now
+  if now-self.groundSince>.25 then self.combo=0;self.groundSince=nil end
+ else self.groundSince=nil end
+end
 -- Your own landing on your sealed cell, seen here first: the game freezes
 -- this very frame (the freeze is the pause, owner Nov 22), the break plays
 -- locally, and the server is asked to open it (it launches the gem).
@@ -1922,14 +1953,34 @@ function V:tenseGeode(id: number,u: number)
   local frame=CFrame.new(piece.mid+out*(.18*u)+jitter)*CFrame.Angles(math.noise(t,i,.9)*amp,math.noise(i,t,.3)*amp*.6,math.noise(i,.2,t)*amp)
   for _,q in ipairs(piece.parts) do q.part.CFrame=frame*q.rel end
  end
- for _,part in ipairs(g.core) do part.Transparency=.25*(1-u) end
+ -- Hit (owner, Nov 22): the ore blazes brighter at once, its light floods
+ -- the pit, the rays shoot out much longer and 1-4 long bolts fork away.
+ local white=Color3.new(1,1,1)
+ for _,part in ipairs(g.core) do part.Transparency=0;part.Color=(g.color or white):Lerp(white,.35+.25*u) end
+ for _,piece in ipairs(g.pieces) do for _,q in ipairs(piece.parts) do
+  if not q.lit then q.lit=q.part.Color;q.part.Color=q.lit:Lerp(g.color or white,.35) end
+ end end
+ if not g.hitLight then
+  local light=Instance.new('PointLight');light.Name='GeodeHitLight';light.Shadows=false
+  light.Color=(g.color or white):Lerp(white,.3);light.Range=16;light.Brightness=3
+  local holder=g.model and g.model:FindFirstChild('GeodeTop')
+  if holder then light.Parent=holder;g.hitLight=light end
+ end
+ if g.hitLight then g.hitLight.Brightness=3*(1-.3*u) end
  self:arcs(g,u)
- if g.halo then g.halo.ImageTransparency=.5-.4*u end
+ if g.halo then
+  g.halo.ImageTransparency=.15-.15*u
+  local gui=g.halo.Parent
+  if gui and gui:IsA('BillboardGui') then
+   g.haloSize=g.haloSize or gui.Size
+   gui.Size=UDim2.fromScale(g.haloSize.X.Scale*(1.6+.6*u),g.haloSize.Y.Scale*(1.6+.6*u))
+  end
+ end
  for _,ray in ipairs(g.rays or {}) do
   if ray.dir and ray.base then
    ray.beam.Enabled=true
-   ray.beam.Width1=.75*(1+1.2*u)
-   ray.tip.WorldPosition=ray.base+ray.dir*(ray.length or 3)*(1+.5*u)
+   ray.beam.Width1=.75*(1.6+1.4*u)
+   ray.tip.WorldPosition=ray.base+ray.dir*(ray.length or 3)*(2.4+2.1*u)
    ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35-.3*u),NumberSequenceKeypoint.new(.4,.55-.3*u),NumberSequenceKeypoint.new(1,1)})
   end
  end
@@ -1938,7 +1989,8 @@ end
 -- short jagged bolts (about the cell's size, 1.8 to 3.6 studs) that
 -- re-strike every frame or two, from the cell's middle out in all
 -- directions, then crackle on for a moment after the break.
-local ARC_COUNT,ARC_SEGMENTS,ARC_AFTER=5,5,.2
+local ARC_COUNT,ARC_SEGMENTS,ARC_AFTER=5,5,.35
+local LONG_SEGMENTS=10 -- the 1-4 extra long bolts of a hit
 function V:arcs(g: any,u: number)
  if self:reduced() then return end
  local set=self.arcSet
@@ -1959,7 +2011,23 @@ function V:arcs(g: any,u: number)
    end
    bolts[b]={points=points,beams=beams}
   end
-  set={geode=g,anchor=anchor,bolts=bolts,strikeAt=0};self.arcSet=set
+  -- 1-4 extra long bolts, each in its own random direction for this hit.
+  local long={}
+  for _=1,self.random:NextInteger(1,4) do
+   local points={}
+   for i=0,LONG_SEGMENTS do local a=Instance.new('Attachment');a.Parent=anchor;points[i]=a end
+   local beams={}
+   for i=1,LONG_SEGMENTS do
+    local beam=Instance.new('Beam');beam.Attachment0=points[i-1];beam.Attachment1=points[i];beam.FaceCamera=true;beam.Segments=1
+    beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=2.2
+    beam.Color=ColorSequence.new(Color3.new(1,1,1):Lerp(g.color or FLASH,.25))
+    local w=.26*(1-(i-1)/LONG_SEGMENTS)+.05;beam.Width0=w;beam.Width1=w*.85;beam.Parent=anchor
+    beams[i]=beam
+   end
+   local az=self.random:NextNumber(0,math.pi*2);local el=math.rad(self.random:NextNumber(5,55))
+   table.insert(long,{points=points,beams=beams,dir=Vector3.new(math.cos(az)*math.cos(el),math.sin(el),math.sin(az)*math.cos(el)),length=self.random:NextNumber(11,19)})
+  end
+  set={geode=g,anchor=anchor,bolts=bolts,long=long,strikeAt=0};self.arcSet=set
  end
  local now=os.clock()
  set.untilAt=now+ARC_AFTER
@@ -1980,6 +2048,20 @@ function V:arcs(g: any,u: number)
   end
   for _,beam in ipairs(bolt.beams) do beam.Enabled=on end
  end
+ -- The long bolts keep their direction and re-kink every strike, reaching
+ -- further as the freeze builds.
+ for _,bolt in ipairs(set.long or {}) do
+  local side=bolt.dir:Cross(Vector3.yAxis);side=side.Magnitude>.05 and side.Unit or Vector3.xAxis
+  local up=side:Cross(bolt.dir).Unit
+  local length=bolt.length*(.75+.25*u)
+  local from=g.center+Vector3.yAxis*.3
+  for i=0,LONG_SEGMENTS do
+   local f=i/LONG_SEGMENTS
+   local kink=(i==0) and 0 or .9*math.sin(f*math.pi)+.2
+   bolt.points[i].WorldPosition=from+bolt.dir*length*f+side*self.random:NextNumber(-kink,kink)+up*self.random:NextNumber(-kink,kink)
+  end
+  for _,beam in ipairs(bolt.beams) do beam.Enabled=true end
+ end
 end
 function V:stepArcs(now: number)
  local set=self.arcSet
@@ -1989,7 +2071,9 @@ function V:stepArcs(now: number)
  if now>=set.strikeAt then
   set.strikeAt=now+1/30
   local fade=(set.untilAt-now)/ARC_AFTER
-  for _,bolt in ipairs(set.bolts) do
+  local all=table.clone(set.bolts)
+  for _,bolt in ipairs(set.long or {}) do table.insert(all,bolt) end
+  for _,bolt in ipairs(all) do
    local on=self.random:NextNumber()<fade
    for i=0,#bolt.points do
     if i>0 then bolt.points[i].WorldPosition+=Vector3.new(self.random:NextNumber(-.15,.15),self.random:NextNumber(-.15,.15),self.random:NextNumber(-.15,.15)) end
@@ -2668,6 +2752,7 @@ function V:update()
  self:stepShards(now)
  self:stepLights(now)
  self:stepGeodes(now)
+ self:stepCombo(now)
  self:stepArcs(now)
  self:stepShots(now)
  self:stepFrost(now)

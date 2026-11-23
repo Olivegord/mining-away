@@ -49,6 +49,14 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
   - Owner follow-up, "less color is not exactly applied":
     - The tint now goes by rank, not radius (small pieces had every chunk within the old radius). Only the 3 chunks nearest the hit take color: full, 60%, 30%, at most 35%.
     - A colored role shade (Ballcaster purple, Starforge orange, Frostbite ice) reaches only the 5 nearest chunks. Darkening still covers the whole piece.
+- **Gems are only opened by jumping (owner, Nov 22):**
+  - Drones never break a gem open. Every gem found seals for its owner; the per-break (`SEAL_PER_BREAK`) and per-player (`SEAL_LIVE`) caps no longer apply. Only a cell already carved away (never a gem cell in practice) bursts out.
+  - The first-break-into-a-layer gem only picks a cell that is still whole. If every cell was carved ahead, the next break in that layer gets it.
+- **The hit (`V:tenseGeode`, `V:arcs`):**
+  - During the freeze, the ore blazes at once: the core is fully lit and lightened, the pieces are tinted toward the gem, a 16-stud point light shines, and the halo is brighter and 1.6–2.2× larger.
+  - 1–4 extra long lightning bolts (11–19 studs, 10 kinked segments) each fork out in their own random direction and keep crackling 0.35 s after the break.
+  - The god rays stretch to 2.4–4.5× their length and get wider.
+- **Crack after the pause, midair combo (`V:geodeCombo`, `V:stepCombo`):** when the freeze ends, a crack (`crystal_split`) and a tink play. Each gem you open before standing on solid ground (0.25 s grounded, or 4 s without an opening, ends it) rings 12% higher, up to 2.2×, and a little louder.
 - **Darker baseline (`FunFX.colorPop`, client only):** owner: darker, still pastel, so drones and gems pop. Changes relative to the authored lighting, applied once:
   - sun brightness ×0.68, ambient ×0.7, outdoor ambient ×0.66;
   - atmosphere haze ×0.55, density ×0.85, color ×0.82;

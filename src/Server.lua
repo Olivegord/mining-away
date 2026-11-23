@@ -4417,8 +4417,8 @@ function scene.digPulseStep(d,p,job,dt)
 end
 -- The last piece of a job breaks. Gems (spec §2): the cells breaking now
 -- that hold a secret gem reveal it; a gem cell seals (stays, cracked and
--- glowing, until its owner jumps on it) up to SEAL_PER_BREAK per break and
--- SEAL_LIVE per owner, otherwise it bursts out at once. Treasure always
+-- glowing, until its owner jumps on it): every one, no cap (owner, Nov 22:
+-- drones never break gems open). Treasure always
 -- seals. Ops: the break ('', E<sealed ids> or C<seq>), then one K per
 -- sealed cell. Returns how many cells sealed.
 function scene.digBreak(job,d,p)
@@ -4442,17 +4442,22 @@ function scene.digBreak(job,d,p)
  end
  -- The first break into a new layer always pays: its farthest cell (not
  -- already carved ahead) holds a gem of that layer's tier.
+ -- Only a cell that is still whole: every gem seals for its owner to jump
+ -- on (owner, Nov 22). If all were carved ahead, the next break in the
+ -- layer gets it.
  if layer>(dig.deepest or 1) then
-  dig.deepest=layer
   if #found==0 then
-   local best,score=cells[1],-math.huge
+   local best,score=nil,-math.huge
    for _,id in ipairs(cells) do
     local c=cube.cells[id]
-    local s=(c.cx-cx)^2+(c.cz-cz)^2-(dig.carved[id] and 1e9 or 0)
-    if s>score then best,score=id,s end
+    local s=(c.cx-cx)^2+(c.cz-cz)^2
+    if not dig.carved[id] and s>score then best,score=id,s end
    end
-   table.insert(found,{id=best,tier=DigCube.layerTier(layer),count=1,treasure=false})
-  end
+   if best then
+    dig.deepest=layer
+    table.insert(found,{id=best,tier=DigCube.layerTier(layer),count=1,treasure=false})
+   end
+  else dig.deepest=layer end
  end
  -- Starforge: a chance at one tier up for every gem it finds.
  if style.forge then
@@ -4470,12 +4475,15 @@ function scene.digBreak(job,d,p)
   dig.gems[g.id]=nil
   local c=cube.cells[g.id]
   local volume=DigCube.cellVolume(cube,g.id)
-  if not dig.carved[g.id] and (g.treasure or (#sealed<DigCube.SEAL_PER_BREAK and live<DigCube.SEAL_LIVE)) then
+  -- Owner, Nov 22: drones never break a gem open; the player jumps on it.
+  -- Every gem seals (no per-break or per-player cap). Only a cell already
+  -- carved away (never a gem cell in practice) bursts out.
+  if not dig.carved[g.id] then
    table.insert(sealed,g.id);sealedSet[g.id]=g.tier;live+=1
    dig.geodes[g.id]={id=g.id,tier=g.tier,treasure=g.treasure,count=g.count,owner=d.owner,p=p,at=now,volume=volume}
    cube.sealed=cube.sealed or {};cube.sealed[g.id]=true
   else
-   -- Over the cap: the gem bursts out right away, in a normal arc.
+   -- Its cell is already cut: the gem bursts out right away.
    immediate=math.max(immediate,g.tier)
    local top=dig.origin+Vector3.new(c.cx,c.y1+.6,c.cz)
    for k=1,g.count do

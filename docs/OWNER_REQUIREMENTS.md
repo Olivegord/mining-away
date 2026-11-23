@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — gems only by jumping; a hit that feels great; darker map; less color
+
+Make sure drones don't randomly break the ores: the player has to jump on them. When the player hits one: make the ore brighter, lightning extending out in 1–4 random directions extra long, longer god rays, overall feel really good. A crack noise AFTER the pause, pitched up to signify combos when jumping between rocks midair. Earlier in this pass: the map overall darker (keep the pastel look, but don't wash out the bright effects; drones and gems should pop); less color on the chunk effects (only the few segments nearest the beam colored); chunk effects stepped at about 8 fps; some particles (the circular ones) stay near the beam on big breaks; chunks jump and twist at each stage; break effects spread over many-cell breaks; rock effects as animations, not editable meshes.
+
 ## November 22 — rubble in sync with the break; one look per drone type; deforming rock
 
 "lets work on rock breaking gameplay!" (1) There is still a delay between the rock bits spawning and the rock breaking event ("lag"). (2) Make each drone (type) visually different: they all look the same; remove the individual per-drone color so all drones of a type look exactly the same. (3) Cooler rock breaking effects using mesh animation: rework the rock mesh system so rocks do cool events (the rocks are very low poly). For the laser, a pulsing ripple from the origin; for other drone attacks, random points displaced at perfect angles so rock chunks pop out.
