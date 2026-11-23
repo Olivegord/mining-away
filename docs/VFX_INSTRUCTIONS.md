@@ -57,11 +57,12 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
   - 1–4 extra long lightning bolts (11–19 studs, 10 kinked segments) each fork out in their own random direction and keep crackling 0.35 s after the break.
   - The god rays stretch to 2.4–4.5× their length and get wider.
 - **Crack after the pause, midair combo (`V:geodeCombo`, `V:stepCombo`):** when the freeze ends, a crack (`crystal_split`) and a tink play. Each gem you open before standing on solid ground (0.25 s grounded, or 4 s without an opening, ends it) rings 12% higher, up to 2.2×, and a little louder.
-- **Darker baseline (`FunFX.colorPop`, client only):** owner: darker, still pastel, so drones and gems pop. The first pass was too mild against the authored brightness 2.6, haze 1.1 and bloom. Changes relative to the authored lighting:
-  - sun brightness ×0.55, ambient ×0.6, outdoor ambient ×0.55, environment diffuse ×0.7;
-  - atmosphere haze ×0.45, density ×0.8, color ×0.75;
-  - grade saturation −0.12, contrast +0.12, brightness −0.04.
-  - Sun brightness and haze are held: a later change from elsewhere becomes the new base and is darkened again. Ambient is set once, because the pit lamp drives it in the pit.
+- **Darker baseline (`FunFX.colorPop`, client only):** owner: "even darker, ambient down, revert the color changes, still pastel but very dark, sun at sunset". Changes relative to the authored lighting:
+  - sun brightness ×0.5, ambient ×0.3, outdoor ambient ×0.28, environment diffuse ×0.5;
+  - atmosphere haze ×0.45, density ×0.8, its color unchanged;
+  - `ClockTime` 17.7 (sunset);
+  - the grade is back to the original (saturation −0.16, contrast +0.03).
+  - Sun brightness, haze and clock time are held: a later change from elsewhere is darkened again. Ambient is set once, because the pit lamp drives it in the pit.
   - Emissive things (Neon, beams, particles, lights, gems) are unaffected, so they stand out more. The authored place lighting is unchanged.
 - **Tests:**
   - `test_rock_chunks.py`: exact 3D doubles, running RockChunks, the real DigCubeView pieces and the test area.

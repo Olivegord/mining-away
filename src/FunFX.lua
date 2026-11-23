@@ -294,7 +294,9 @@ end
 -- surface, while Neon, beams, particles, lights and gems (emissive) keep
 -- their full strength, so the drones' glows and the gems pop. Relative to
 -- the authored values, applied once.
-Fun.DARKEN={sun=.55,ambient=.6,outdoor=.55,haze=.45,density=.8,air=.75,diffuse=.7}
+-- Owner follow-up: "even darker. ambient should be down ... revert the color
+-- changes. so still pastel but very dark. sun at like sunset".
+Fun.DARKEN={sun=.5,ambient=.3,outdoor=.28,haze=.45,density=.8,diffuse=.5,clock=17.7}
 function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end
@@ -320,15 +322,22 @@ function Fun.colorPop()
   object:GetPropertyChangedSignal(property):Connect(function() pcall(apply) end)
  end
  pcall(hold,lighting,'Brightness',d.sun)
+ -- The sun low, at sunset: long shadows and a warm low light.
+ pcall(function()
+  lighting.ClockTime=d.clock
+  lighting:GetPropertyChangedSignal('ClockTime'):Connect(function()
+   if math.abs(lighting.ClockTime-d.clock)>1e-3 then lighting.ClockTime=d.clock end
+  end)
+ end)
  for _,air in ipairs(lighting:GetChildren()) do
   if air:IsA('Atmosphere') then
    pcall(hold,air,'Haze',d.haze)
-   pcall(function() air.Density=air.Density*d.density;air.Color=dim(air.Color,d.air) end)
+   pcall(function() air.Density=air.Density*d.density end)
   end
  end
  local grade=Instance.new('ColorCorrectionEffect');grade.Name='FunColorPop'
- -- Still pastel (a little desaturated), with more contrast against the glow.
- grade.Saturation=-.12;grade.Contrast=.12;grade.Brightness=-.04;grade.Parent=lighting
+ -- The original play grade (the color changes were reverted).
+ grade.Saturation=-.16;grade.Contrast=.03;grade.Brightness=0;grade.Parent=lighting
 end
 -- Depth of field for play: sharp from the camera out well past the player,
 -- so the whole dig and the crew stay crisp, with only the far walls and
