@@ -307,7 +307,13 @@ def find_baselines(installed, target, commits, scratch):
     for commit in commits:
         if len(baselines) == len(target['sources']):
             break
-        payload = payload_at(commit, scratch)
+        try:
+            payload = payload_at(commit, scratch)
+        except (OSError, ImportError, AssertionError) as error:
+            # A commit whose build cannot run (e.g. it read a file outside src/) was never
+            # installed, so it cannot be what Studio has. The exact-match rule is unchanged.
+            print(f'Note: skipping baseline {commit[:7]} (does not build: {type(error).__name__}).')
+            continue
         for path, entry in payload['sources'].items():
             if path not in baselines and path in installed['sources'] and installed['sources'][path]['fp'] == fingerprint(entry['source']):
                 baselines[path], origin[path] = entry['source'], commit
