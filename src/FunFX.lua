@@ -537,7 +537,7 @@ end
 -- sun brightness and exposure and less fill, a neutral early-afternoon sun,
 -- a little contrast so shapes read. Emissive things (beams, gems, glowing
 -- parts) are unaffected, so they still pop.
-Fun.DARKEN={sun=.8,ambient=.82,outdoor=.76,haze=.7,density=.9,diffuse=.9,clock=14.2,shadow=.32,exposure=-.05,contrast=.07,saturation=-.05}
+Fun.DARKEN={sun=.72,ambient=.8,outdoor=.74,haze=.7,density=.9,diffuse=.9,clock=14.2,shadow=.32,exposure=-.12,contrast=.08,saturation=-.04}
 function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end

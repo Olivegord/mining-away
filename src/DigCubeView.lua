@@ -989,7 +989,7 @@ function V:buildProxy(piece: any,owned: boolean,chunk: {number},code: string?): 
   primary=V.primaryColor(code),hit=Vector3.zero,pops=0,sig=SIG[code or 'L'],
   vibAxis=CFrame.Angles(0,self.random:NextNumber(0,math.pi*2),0).LookVector,
   normal=plane and Vector3.new(plane.nx,0,plane.nz) or nil,radius=math.sqrt(area/math.pi),thick=top-bottom,
-  planeAt=plane and o+Vector3.new(plane.cx,top+.08,plane.cz) or nil}
+  planeAt=plane and o+Vector3.new(plane.cx,top-.1,plane.cz) or nil}
  if pfx.ball then
   -- Bubbler: a glassy bubble grows inside the piece as it is worked.
   local ball=fxPart(aux,'DigBubble',V.primaryColor(code),'Part')
@@ -1274,7 +1274,7 @@ do
    local d=dist(tile,h)
    local heat=math.clamp((front-d)/1.8,0,1)
    if heat<=0 then return nil end
-   local col=tile.stone:Lerp(MOLTEN,.6*heat)
+   local col=tile.stone:Lerp(MOLTEN,.52*heat)
    if d<1.3 then col=col:Lerp(WHITEHOT,.4*heat) end
    return Vector3.new(0,-.6*heat*e,0),CFrame.Angles(.06*heat*math.sin(tile.cx*3),0,.06*heat*math.cos(tile.cz*3)),col
   end
@@ -1772,7 +1772,7 @@ function V:breakCloud(op: any,e: any,big: boolean)
   local sparks=Instance.new('ParticleEmitter');sparks.Name='Sparks';sparks.Enabled=false;sparks.Rate=0
   sparks.Shape=Enum.ParticleEmitterShape.Box;sparks.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
   sparks.LockedToPart=false;sparks.Parent=box
-  EnergyDisc.configure(sparks,.75*k,.05,1,0,.35)
+  EnergyDisc.configure(sparks,.5*k,.05,1,0,.35)
   sparks.LightEmission=.7;sparks.LightInfluence=0;sparks.Brightness=1.5
   sparks.Color=ColorSequence.new(e.primary:Lerp(BEAM_CORE,.35),e.accent)
   sparks.Lifetime=NumberRange.new(.4,.8);sparks.Speed=NumberRange.new(14,28);sparks.SpreadAngle=Vector2.new(70,70)
@@ -3148,7 +3148,7 @@ function V:buildShowcase()
    if sig then
     -- A stand-in for a worked piece, so the gallery runs the real process.
     station.proxy={code=def.code,sig=sig,hit=Vector3.zero,thick=1.6,radius=2.7,primary=V.primaryColor(def.code),model=root,
-     pivot=pivot,owned=true,mesh=rec,normal=def.code=='H' and Vector3.xAxis or nil,planeAt=pivot+Vector3.new(0,.08,0)}
+     pivot=pivot,owned=true,mesh=rec,normal=def.code=='H' and Vector3.xAxis or nil,planeAt=pivot+Vector3.new(0,-.1,0)}
     if sig.build then sig.build(self,station.proxy) end
    end
   end

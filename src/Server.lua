@@ -6395,7 +6395,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local digCrew: any=type(payload)=='table' and payload.dig==true
   if digCrew and type(payload.crew)=='table' then
    local named={}
-   for _,name in ipairs(payload.crew) do if type(name)=='string' and DigCube.STYLES[name] and RoleConfig.StudioRoles[name] and #named<5 then table.insert(named,name) end end
+   for _,name in ipairs(payload.crew) do if type(name)=='string' and Config.DigCube.STYLES[name] and RoleConfig.StudioRoles[name] and #named<5 then table.insert(named,name) end end
    if #named>0 then digCrew=named end
   end
   p.testFleet=action=='RoleLoadout' and roleTestFleet(p,nil,digCrew) or randomTestFleet(p);rebuildFleet(p);logistics:refresh(p)
