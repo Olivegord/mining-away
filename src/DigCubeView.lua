@@ -15,6 +15,9 @@
 --  * before each piece breaks it cracks in two stages, like the reference
 --    rocks: it darkens under the beam, then pops loose (lifts, tilts, turns)
 --    with its color back, a crack sound, chips and dust. No drawn lines
+--  * every worker digs its own way (DigCube.STYLES): the op's role code picks
+--    the piece's treatment while it is worked, its rubble and its break beat
+--    (ROLE_FX below); the Lancer fires short pulse lasers (pulseShot)
 -- Nothing here uses Neon.
 local DigCube=require('./DigCube')
 local UIS=game:GetService('UserInputService')
@@ -26,6 +29,82 @@ local HOT=Color3.fromRGB(222,128,62)
 local GRAVITY=70
 
 local function rgb(t: {number}) return Color3.fromRGB(t[1],t[2],t[3]) end
+
+-- Statics shared with the client glue (Client.lua): a role's dig style and
+-- its primary attack color (beam, projectile, flash, ring, belly glow).
+V.PRIMARY={} :: {[string]:Color3}
+function V.style(role: any): any
+ return DigCube.style(type(role)=='string' and role or nil)
+end
+function V.primaryColor(role: any): Color3
+ local style=V.style(role)
+ local color=V.PRIMARY[style.code]
+ if not color then color=rgb(style.color);V.PRIMARY[style.code]=color end
+ return color
+end
+
+-- Per-role client treatment, by style code (spec §4.3, §4.4, §12):
+--  proxy: the piece while it is worked. tone/cap: shade toward tone up to cap,
+--   by `within` the crack step (default), the charge (src='progress') or its
+--   last 30% (src='late'); slam/pulse: a jolt down on each hit; tremble,
+--   jitter, vibrate: shakes; lift: extra rise with progress; ball: a growing
+--   bubble; halves: the final piece slides apart; flat: no tilt or turn;
+--   compress: shrinks toward the pivot; light: a heat glow; ice: Ice from there.
+--  carve: the server carves the hole ahead (B, N, P, A): the proxy covers more
+--   and a static collision copy holds the player up until the break.
+--  rubble: per/min/max pieces by area (or halves/grid), up/out/spin ranges,
+--   dark base, near (darker by the hit), dcap, scorch tone, count (per break),
+--   seed (thrown from the seed cell top) and the extras.
+--  contact: the own-break contact (nil = the projectile/pulse effect carries
+--   it); sounds; light; hold class; streak lift/speed multipliers.
+local C3=Color3.fromRGB
+local ROLE_FX={
+ L={proxy={},
+  rubble={per=2.2,min=1,max=6,up={10,15},out={4,8},spin={4,8},dark={.06,.2},near=.6,dcap=.85},
+  contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
+ C={proxy={tone=C3(90,72,58),cap=.4,slam=true},
+  rubble={per=3.6,min=1,max=4,up={5,8},out={10,16},spin={2,4},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3},
+  contact='Charger',sounds={{cue='breaker_fracture',pitch=.9},{cue='crystal_split',rock=9}},light=true,hold='heavy',lift=.7,speed=1.3},
+ B={proxy={tone=C3(25,12,45),cap=.55,src='progress',tremble=.03},carve=true,
+  rubble={per=4,min=2,max=4,up={18,26},out={2,5},spin={8,14},dark={.3,.4},near=.6,dcap=.9,scorch=C3(38,18,58)},
+  sounds={{cue='crystal_split',pitch=.9}},hold='split',lift=1.4,speed=1},
+ N={proxy={jitter={.01,.04}},carve=true,
+  rubble={per=2.2,min=1,max=3,up={8,12},out={2,5},spin={6,10},dark={.05,.1},near=.15,dcap=.3},
+  sounds={{cue='crystal_split',pitch=1.25,level=.7}},hold='piece',lift=1,speed=1},
+ U={proxy={cap=.1,lift={.1,.4},ball=true},
+  rubble={per=2.2,min=1,max=5,up={4,6},out={1,3},spin={2,4},dark={.02,.06},near=.1,dcap=.2,scorch=C3(200,240,245),float=.7},
+  contact='Bubbler',sounds={{cue='crystal_split',pitch=.8}},light=true,hold='split',lift=1,speed=.8},
+ H={proxy={halves=true},
+  rubble={halves=true,per=5,min=1,max=3,up={8,11},out={6,10},spin={3,5},dark={.06,.2},near=.6,dcap=.85},
+  contact='Halver',sounds={{cue='crystal_split'}},light=true,hold='heavy',lift=.9,speed=1.1},
+ G={proxy={flat=true},
+  rubble={grid=1.8,up={9,13},out={2,5},spin={1,3},dark={.1,.2},near=.3,dcap=.5},
+  contact='Gridcutter',sounds={{cue='crystal_electric',pitch=.85,seq=.06}},light=true,hold='piece',lift=1,speed=1},
+ Y={proxy={tone=C3(20,8,40),cap=.55,compress=.1},
+  rubble={per=2.2,min=1,max=6,up={14,20},out={1,3},spin={6,10},dark={.2,.3},near=.6,dcap=.9,scorch=C3(20,8,32),implode=.12},
+  contact='Singularity',sounds={{cue='crystal_impact',pitch=.76}},light=true,hold='heavy',lift=1.3,speed=.6},
+ M={proxy={tone=C3(255,120,40),cap=.6,pow=1.5,light=true},
+  rubble={per=2.2,min=1,max=5,up={6,9},out={3,6},spin={2,4},dark={.06,.2},near=.6,dcap=.85,molten=C3(255,150,60)},
+  contact='Starforge',sounds={{cue='tool_sizzle',pitch=.87}},light=true,hold='split',lift=.8,speed=1},
+ I={proxy={tone=C3(190,235,255),cap=1,pow=1,ice=.5},
+  rubble={per=1.2,min=2,max=8,count=24,up={9,13},out={6,10},spin={8,14},dark={.3,.4},near=0,dcap=.4,scorch=C3(190,235,255),glass=true,friction=.05},
+  contact='Frostbite',sounds={{cue='crystal_snap',pitch=1.31},{cue='crystal_split',pitch=1.15}},light=true,hold='split',lift=1,speed=1.2},
+ V={proxy={vibrate={.01,.06}},
+  rubble={per=2.2,min=1,max=5,up={13,17},out={1,3},spin={1,2},dark={.06,.2},near=.6,dcap=.85,jitter=.12},
+  contact='Resonator',sounds={{cue='coil_hit',pitch=1.19,seq=.12}},light=true,hold='split',lift=1,speed=1},
+ P={proxy={tone=C3(12,6,10),cap=.9,src='late'},carve=true,
+  rubble={per=1.6,min=1,max=6,count=30,up={12,16},out={6,10},spin={6,10},dark={.7,.8},near=.2,dcap=.9,scorch=C3(12,6,10),seed=true},
+  sounds={{cue='crystal_split',rock=9}},hold='heavy',lift=1.2,speed=1.1},
+ A={proxy={},carve=true,
+  rubble={per=3,min=1,max=4,count=30,up={16,22},out={8,13},spin={6,12},dark={.1,.2},near=.5,dcap=.8,scorch=C3(30,26,24),seed=true},
+  sounds={{cue='crystal_split',rock=9}},hold='heavy',lift=1.5,speed=1.2},
+ Z={proxy={pulse=true},
+  rubble={per=2.2,min=1,max=5,up={11,15},out={5,9},spin={4,8},dark={.1,.2},near=.5,dcap=.85,scorch=C3(60,40,20)},
+  sounds={{cue='crystal_split',pitch=1.1}},hold='split',lift=1.1,speed=1.1},
+}
+V.ROLE_FX=ROLE_FX
+-- SpecialistContact plays its own cue; the break's sounds come from ROLE_FX.
+local MUTE={play=function() end}
 local function fxPart(parent: Instance,name: string,color: Color3,class: string?): BasePart
  local p=Instance.new((class or 'Part') :: any) :: BasePart
  p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false
@@ -35,12 +114,16 @@ local function fxPart(parent: Instance,name: string,color: Color3,class: string?
 end
 
 function V.new(ctx: any)
- local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
-  generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={},localOpened={}},V)
+ local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},cellCode={},cellAccent={},cutStage={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
+  generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={},localOpened={},sealedIds={},chains={},frost={},hints={},shots={}},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
  self:watch()
  table.insert(self.connections,ctx.world.ChildAdded:Connect(function(child) if child.Name=='DigCube' then self:watch() end end))
+ -- Needler hints (gem cells near its breaks) for this player: markers soon.
+ if Players.LocalPlayer then
+  table.insert(self.connections,Players.LocalPlayer:GetAttributeChangedSignal('DigHints'):Connect(function() self.sparkleAt=0 end))
+ end
  table.insert(self.connections,UIS.InputBegan:Connect(function(input,processed) self:inputBegan(input,processed) end))
  table.insert(self.connections,UIS.InputEnded:Connect(function(input,processed) self:inputEnded(input,processed) end))
  return self
@@ -62,8 +145,10 @@ function V:watch()
  table.insert(self.connections,holder.AttributeChanged:Connect(function(name)
   if name=='Generation' or name=='OpCount' or string.sub(name,1,3)=='Ops' then self:sync() end
   if name=='Geodes' then self:syncGeodes() end
+  if name=='Brittle' then self:syncBrittle() end
  end))
  self:sync()
+ self:syncBrittle()
 end
 
 function V:reduced(): boolean
@@ -113,8 +198,10 @@ function V:sync()
  local count=holder:GetAttribute('OpCount') or 0
  if generation~=self.generation then
   for _,f in ipairs(self.frags) do self:dropShard(f) end
-  self.frags={};self.mine={};self.cellColor={}
+  self.frags={};self.mine={};self.cellColor={};self.cellCode={};self.cellAccent={};self.cutStage={}
+  self.sealedIds={};self.chains={}
   self:clearCracks()
+  self:clearFrost()
   self.generation=generation;self.origin=origin
   self.cube=DigCube.build(seed)
   -- Cuts made before this client saw the cube play no effects.
@@ -123,13 +210,18 @@ function V:sync()
    local entry=self:opAt(self.applied+1)
    if not entry then break end
    self.applied+=1
-   local key=string.match(entry,'^c([%d%.]+)')
-   if key and not string.match(entry,'|S%d+$') then for _,id in ipairs(DigCube.parseKey(key)) do DigCube.remove(self.cube,id) end end
+   local op=DigCube.parseOp(entry)
+   if op then
+    if op.staged then self:markStage(op) end
+    self:markSealed(op)
+    DigCube.applyOp(self.cube,op)
+   end
   end
   self:buildPad()
   self:clearSparkles()
   self:clearGeodes()
   self:syncGeodes()
+  self:syncBrittle()
   return
  end
  local now=os.clock()
@@ -137,25 +229,78 @@ function V:sync()
   local s=self:opAt(self.applied+1)
   if not s then break end
   self.applied+=1
-  local key,tier,flag,depth=string.match(s,'^c([%d%.]+)|?(%d*)|?(%a?)(%d*)$')
-  if key then
-   local staged=flag=='S'
-   -- G: a sealed gem cell opened by its owner (X: a treasure pocket one).
-   local op={kind='c',cells=DigCube.parseKey(key),tier=tonumber(tier) or 0,treasure=flag=='T' or flag=='X',partial=staged or flag=='P',
-    staged=staged,stage=(staged or flag=='P') and tonumber(depth) or nil,layer=flag=='D' and tonumber(depth) or nil,geode=flag=='G' or flag=='X'}
-   -- The rock that breaks here: a nested stage's shell, or what is left of
-   -- the cells after the last stage (the same shapes the server carved).
-   local pieces=DigCube.pieces(self.cube,op.cells)
-   local piece=staged and pieces[op.stage] or pieces[#pieces]
-   op.parts=piece and piece.shell or nil
-   -- A sealed cell breaks whole (it was never cut as its own chunk).
-   if op.geode then op.parts=nil end
+  -- One parser for the server, the clients and the tests (DigCube op grammar v2).
+  local op=DigCube.parseOp(s)
+  if op then
+   op.kind='c';op.partial=op.staged
+   -- The rock that breaks here, cut the way the role cuts (its pieces mode):
+   -- a nested stage's shell, or what is left of the cells after the last
+   -- stage (the same shapes the server carved). Sealed and opened cells,
+   -- and sequence breaks, go whole.
+   local pieces=DigCube.pieces(self.cube,op.cells,self:opMode(op))
+   if op.staged then
+    local piece=pieces[op.stage or 1]
+    op.parts=piece and piece.shell or nil
+    self:markStage(op)
+   elseif op.geode or op.sealed then
+    op.parts=nil
+   else
+    local final=pieces[#pieces]
+    local parts=final and final.parts or {}
+    if op.except then
+     local kept={}
+     for _,part in ipairs(parts) do if not op.except[part.cell] then table.insert(kept,part) end end
+     parts=kept
+    end
+    op.parts=parts
+   end
+   self:markSealed(op)
    -- Out of the cube first, so shards land on the floor the break leaves.
-   if not staged then for _,id in ipairs(op.cells) do DigCube.remove(self.cube,id) end end
+   for _,id in ipairs(DigCube.applyOp(self.cube,op)) do self:cellGone(id) end
+   if op.sealed then self:sealBeat(op,now)
    -- A sealed cell this client already opened on landing: its break played.
-   if not (op.geode and self.localOpened[op.cells[1]]) then self:split(op,now) end
+   elseif not (op.geode and self.localOpened[op.cells[1]]) then self:split(op,now) end
   end
  end
+end
+-- How an op's rock comes apart: sequence breaks, seals and opened geodes go
+-- as whole cells; otherwise the role's pieces mode (terrace without a code).
+function V:opMode(op: any): string
+ if op.flag=='C' or op.sealed or op.geode then return 'none' end
+ local style=op.code and DigCube.STYLES_BY_CODE[op.code]
+ return style and style.pieces or 'terrace'
+end
+-- The role that broke it: the op's code, else the code last seen cutting
+-- one of its cells, else a Striker.
+function V:opStyle(op: any): any
+ if op.code and DigCube.STYLES_BY_CODE[op.code] then return DigCube.STYLES_BY_CODE[op.code] end
+ for _,id in ipairs(op.cells) do
+  local code=self.cellCode[id]
+  if code and DigCube.STYLES_BY_CODE[code] then return DigCube.STYLES_BY_CODE[code] end
+ end
+ return DigCube.STYLES.Striker
+end
+-- Cells that sealed into geodes (K) stay in the cube until they open, but
+-- are never cut again: no proxy is built over them, even from a drone's
+-- DigOp that still names them for a frame after the seal.
+function V:markSealed(op: any)
+ if op.sealed then
+  for _,id in ipairs(op.cells) do self.sealedIds[id]=true end
+ elseif op.geode then
+  for _,id in ipairs(op.cells) do self.sealedIds[id]=nil end
+ end
+end
+-- A terrace stage that broke stays broken: its proxy never comes back.
+function V:markStage(op: any)
+ local key=DigCube.key(op.cells)
+ self.cutStage[key]=math.max(self.cutStage[key] or 0,op.stage or 1)
+end
+-- A cell left the cube: its hint marker and frost go with it.
+function V:cellGone(id: number)
+ local hint=self.hints[id]
+ if hint then hint:Destroy();self.hints[id]=nil end
+ local slab=self.frost[id]
+ if slab and not slab.fadeAt then slab.fadeAt=os.clock() end
 end
 
 -- Sparse, soft particles: a lit dust puff in the rock's color and a few
@@ -222,6 +367,25 @@ local function cutPoly(poly: {{number}},cx: number,cz: number,nx: number,nz: num
  end
  return out
 end
+-- Gridcutter rubble: a convex polygon cut by axis-aligned lines every `step`
+-- studs (cube-local grid), widened until it makes at most `most` pieces.
+local function gridSplit(poly: {{number}},step: number,most: number): {{{number}}}
+ local minX,maxX,minZ,maxZ=math.huge,-math.huge,math.huge,-math.huge
+ for _,v in ipairs(poly) do minX=math.min(minX,v[1]);maxX=math.max(maxX,v[1]);minZ=math.min(minZ,v[2]);maxZ=math.max(maxZ,v[2]) end
+ local s=step
+ while (math.floor(maxX/s)-math.floor(minX/s)+1)*(math.floor(maxZ/s)-math.floor(minZ/s)+1)>most do s*=1.25 end
+ local out={}
+ for gx=math.floor(minX/s),math.floor(maxX/s) do
+  local column=cutPoly(cutPoly(poly,gx*s,0,-1,0),(gx+1)*s,0,1,0)
+  if #column>=3 then
+   for gz=math.floor(minZ/s),math.floor(maxZ/s) do
+    local cell=cutPoly(cutPoly(column,0,gz*s,0,-1),0,(gz+1)*s,0,1)
+    if #cell>=3 and DigCube.polyArea(cell)>.03 then table.insert(out,cell) end
+   end
+  end
+ end
+ return #out>0 and out or {poly}
+end
 local function middle(poly: {{number}}): (number,number,number)
  local area,cx,cz=0,0,0
  local n=#poly
@@ -267,72 +431,115 @@ function V:physicsReady(): boolean
  end
  return self.physics==true
 end
-function V:shards(op: any,now: number,center: Vector3)
+-- `rf` is the breaking role's ROLE_FX rubble: how many pieces, how high and
+-- far they fly, how they spin, how scorched they are and any extras (Halver
+-- halves, Gridcutter grid, Singularity implosion, Starforge molten, Bubbler
+-- float, Resonator jitter). `center` is where the hit came from.
+function V:shards(op: any,now: number,center: Vector3,rf: any?)
  local o=self.origin;local cube=self.cube
+ local fx=rf or ROLE_FX.L.rubble
  local loose=self:physicsReady()
  local made={}
  local lo,hi=Vector3.new(math.huge,0,math.huge),Vector3.new(-math.huge,0,-math.huge)
  local floorY=math.huge
- for _,c in ipairs(self:opParts(op)) do
-  if #self.frags<SHARD_MAX then
-   for _,v in ipairs(c.poly) do
-    lo=Vector3.new(math.min(lo.X,v[1]),0,math.min(lo.Z,v[2]));hi=Vector3.new(math.max(hi.X,v[1]),0,math.max(hi.Z,v[2]))
+ local random=function() return self.random:NextNumber() end
+ local function U(r: {number}): number return self.random:NextNumber(r[1],r[2]) end
+ -- Biggest parts first: the per-break cap keeps the big pieces.
+ local order=table.clone(self:opParts(op))
+ table.sort(order,function(a,b) return DigCube.polyArea(a.poly)>DigCube.polyArea(b.poly) end)
+ local cap=fx.count or 18
+ local plane=fx.halves and DigCube.split(cube,op.cells) or nil
+ local hot=0
+ for i,c in ipairs(order) do
+  if #self.frags>=SHARD_MAX or #made>=cap then break end
+  for _,v in ipairs(c.poly) do
+   lo=Vector3.new(math.min(lo.X,v[1]),0,math.min(lo.Z,v[2]));hi=Vector3.new(math.max(hi.X,v[1]),0,math.max(hi.Z,v[2]))
+  end
+  floorY=math.min(floorY,c.y0)
+  -- Each part breaks into pieces of its own, the way the role cuts.
+  local cut=#self.frags<SHARD_CUT
+  local budget=math.max(1,cap-#made-(#order-i))
+  local pieces={}
+  if plane then
+   -- Halver: each part in two along the chunk's split plane, then a few pieces.
+   for side=-1,1,2 do
+    local half=cutPoly(c.poly,plane.cx,plane.cz,-side*plane.nx,-side*plane.nz)
+    if #half>=3 and DigCube.polyArea(half)>.03 then
+     local n=cut and math.clamp(math.floor(DigCube.polyArea(half)/fx.per+.5),fx.min,fx.max) or 1
+     for _,q in ipairs(DigCube.voronoiSplit(half,n,random)) do table.insert(pieces,{poly=q,side=side}) end
+    end
    end
-   floorY=math.min(floorY,c.y0)
-   -- Each part breaks into Voronoi pieces of its own, like the rock itself.
-   local area=DigCube.polyArea(c.poly)
-   local count=#self.frags<SHARD_CUT and math.clamp(math.floor(area/2.2+.5),1,6) or 1
-   local polys=DigCube.voronoiSplit(c.poly,count,function() return self.random:NextNumber() end)
-   for _,poly in ipairs(polys) do
-    local _,mx,mz=middle(poly)
-    local mid=o+Vector3.new(mx,(c.y0+c.y1)*.5,mz)
-    -- The rock's own color, a little darker here and there so the pieces
-    -- read as separate (and fresh-broken faces look deeper).
-    -- Darker the closer it was to the beam (owner, Nov 22): scorched where
-    -- the beam hit, fading to the plain rock tone a few studs out.
-    local nearBeam=math.exp(-Vector3.new(mid.X-center.X,0,mid.Z-center.Z).Magnitude/2.6)
-    local color=self:colorAt(c.y1-.01,mx,mz):Lerp(SHARD_DARK,math.min(.85,self.random:NextNumber(.06,.2)+.6*nearBeam))
-    local inverse=CFrame.new(mid):Inverse()
-    local parts={}
-    for _,w in ipairs(DigCube.polyWedges(poly,c.y0,c.y1)) do
-     local part=fxPart(self.fx,'DigShard',color,'WedgePart');part.CastShadow=true
-     local size=Vector3.new(w.size[1],w.size[2],w.size[3])
-     local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
-      Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
-     local rel=inverse*frame
-     part.Size=size*SHARD_GAP;part.CFrame=CFrame.new(mid)*(rel.Rotation+rel.Position*SHARD_GAP)
-     table.insert(parts,{part=part,size=size,rel=rel})
-    end
-    if #parts>0 then
-     local height=c.y1-c.y0
-     local out=Vector3.new(mid.X-center.X,0,mid.Z-center.Z)
-     local far=out.Magnitude
+  elseif fx.grid then
+   for _,q in ipairs(cut and gridSplit(c.poly,fx.grid,12) or {c.poly}) do table.insert(pieces,{poly=q}) end
+  else
+   local n=cut and math.clamp(math.floor(DigCube.polyArea(c.poly)/fx.per+.5),fx.min,fx.max) or 1
+   for _,q in ipairs(DigCube.voronoiSplit(c.poly,math.min(n,math.max(budget,fx.min)),random)) do table.insert(pieces,{poly=q}) end
+  end
+  for _,piece in ipairs(pieces) do
+   if #made>=cap or #self.frags>=SHARD_MAX then break end
+   local poly=piece.poly
+   local _,mx,mz=middle(poly)
+   local mid=o+Vector3.new(mx,(c.y0+c.y1)*.5,mz)
+   -- The rock's own color, a little darker here and there so the pieces
+   -- read as separate (and fresh-broken faces look deeper).
+   -- Darker the closer it was to the hit (owner, Nov 22): scorched where
+   -- the beam hit, fading to the plain rock tone a few studs out (Halver:
+   -- along its cut).
+   local near
+   if plane then near=.6*math.exp(-math.abs((mx-plane.cx)*plane.nx+(mz-plane.cz)*plane.nz)/1.6)
+   else near=fx.near*math.exp(-Vector3.new(mid.X-center.X,0,mid.Z-center.Z).Magnitude/2.6) end
+   local color=self:colorAt(c.y1-.01,mx,mz):Lerp(fx.scorch or SHARD_DARK,math.min(fx.dcap,U(fx.dark)+near))
+   local k=SHARD_GAP*(fx.implode and .75 or 1)
+   local inverse=CFrame.new(mid):Inverse()
+   local parts={}
+   for _,w in ipairs(DigCube.polyWedges(poly,c.y0,c.y1)) do
+    local part=fxPart(self.fx,'DigShard',color,'WedgePart');part.CastShadow=true
+    if fx.glass then part.Material=Enum.Material.Glass end
+    local size=Vector3.new(w.size[1],w.size[2],w.size[3])
+    local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+    local rel=inverse*frame
+    part.Size=size*k;part.CFrame=CFrame.new(mid)*(rel.Rotation+rel.Position*k)
+    table.insert(parts,{part=part,size=size,rel=rel})
+   end
+   if #parts>0 then
+    local height=c.y1-c.y0
+    local out
+    if plane then out=Vector3.new(plane.nx,0,plane.nz)*piece.side
+    else
+     out=Vector3.new(mid.X-center.X,0,mid.Z-center.Z)
      local a=self.random:NextNumber(0,math.pi*2)
-     out=far>.3 and out.Unit or Vector3.new(math.cos(a),0,math.sin(a))
-     -- Tips away from the beam's point (the hand-animated fallback too).
-     local axis=Vector3.yAxis:Cross(out)+Vector3.new(self.random:NextNumber(-.3,.3),self.random:NextNumber(-.2,.2),self.random:NextNumber(-.3,.3))
-     local rest=height*.5*SHARD_GAP*self.random:NextNumber(.45,.85)
-     local landY=math.min(mid.Y,o.Y+c.y0+rest)
-     local drop=mid.Y-landY
-     local f={parts=parts,k=SHARD_GAP,scale=SHARD_GAP,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
-      turn=self.random:NextNumber(.6,1.8),
-      from=mid,land=Vector3.new(mid.X,landY,mid.Z)+out*self.random:NextNumber(.1,.9),
-      at=now, -- all at once, the moment the pause ends (owner, Nov 22)
-      T=.24+math.sqrt(2*drop/GRAVITY)*1.15,hop=self.random:NextNumber(.35,.95),
-      wait=self.random:NextNumber(.3,.7),born=now,pos=mid,out=out,floor=o.Y+c.y0}
-     if loose then
-      -- Loose pieces stay physical until their turn to go (bottom first).
-      f.loose=true;f.life=8
-      local primary=parts[1].part
-      for i=2,#parts do
-       local weld=Instance.new('WeldConstraint');weld.Part0=primary;weld.Part1=parts[i].part;weld.Parent=primary
-      end
-      for _,q in ipairs(parts) do
-       q.part.CollisionGroup='DigRubble';q.part.CustomPhysicalProperties=RUBBLE;q.part.CanCollide=true
-      end
-     end
-     table.insert(self.frags,f);table.insert(made,f)
+     out=out.Magnitude>.3 and out.Unit or Vector3.new(math.cos(a),0,math.sin(a))
     end
+    -- Tips away from the hit (the hand-animated fallback too).
+    local axis=Vector3.yAxis:Cross(out)+Vector3.new(self.random:NextNumber(-.3,.3),self.random:NextNumber(-.2,.2),self.random:NextNumber(-.3,.3))
+    local rest=height*.5*SHARD_GAP*self.random:NextNumber(.45,.85)
+    local landY=math.min(mid.Y,o.Y+c.y0+rest)
+    local drop=mid.Y-landY
+    -- All at once, the moment the pause ends (owner, Nov 22); an implosion
+    -- or a jitter plays first, held in place.
+    local delay=(fx.implode or fx.jitter or 0)
+    local f={parts=parts,k=k,scale=k,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
+     turn=self.random:NextNumber(.6,1.8),
+     from=mid,land=Vector3.new(mid.X,landY,mid.Z)+out*self.random:NextNumber(.1,.9),
+     at=now+delay,pre=delay>0,center=center,fx=fx,
+     T=.24+math.sqrt(2*drop/GRAVITY)*1.15,hop=self.random:NextNumber(.35,.95),
+     wait=self.random:NextNumber(.3,.7),born=now,pos=mid,out=out,floor=o.Y+c.y0}
+    -- Starforge: the rock by the hit comes out molten and cools.
+    if fx.molten and near>.3 and hot<20 then
+     hot+=1;f.hot={from=fx.molten,to=color,at=now}
+     for _,q in ipairs(parts) do q.part.Color=fx.molten end
+    end
+    if loose then
+     -- Loose pieces stay physical until their turn to go (bottom first).
+     -- Welded at the release (releaseShard), so a held pre-pose is exact.
+     f.loose=true;f.life=8
+     local physical=fx.friction and PhysicalProperties.new(2.6,fx.friction,.12,1,1) or RUBBLE
+     for _,q in ipairs(parts) do
+      q.part.CollisionGroup='DigRubble';q.part.CustomPhysicalProperties=physical;q.part.CanCollide=true
+     end
+    end
+    table.insert(self.frags,f);table.insert(made,f)
    end
   end
  end
@@ -384,6 +591,41 @@ function V:settle(f: any)
  f.settledAt=os.clock()
 end
 
+-- Cracks free: welded into one piece, a small pop up and out, a spin, then
+-- gravity. Thrown and tipped away from where the hit came from (owner, Nov
+-- 22), so it is clear what cracked it: out from that point, rolling outward
+-- about the axis across that direction, plus a little tumble. An upward pop
+-- first, so it reads as knocked loose (owner, Nov 22). The role's ranges.
+function V:releaseShard(f: any)
+ f.released=true
+ local fx=f.fx or ROLE_FX.L.rubble
+ local parts=f.parts
+ local primary=parts[1].part
+ for n=2,#parts do
+  local weld=Instance.new('WeldConstraint');weld.Part0=primary;weld.Part1=parts[n].part;weld.Parent=primary
+ end
+ for _,q in ipairs(parts) do q.part.Anchored=false end
+ local r=self.random
+ primary.CFrame+=Vector3.yAxis*.12
+ primary.AssemblyLinearVelocity=f.out*r:NextNumber(fx.out[1],fx.out[2])+Vector3.yAxis*r:NextNumber(fx.up[1],fx.up[2])
+ local roll=Vector3.yAxis:Cross(f.out)
+ local w=fx.spin[2]*.25
+ primary.AssemblyAngularVelocity=roll*r:NextNumber(fx.spin[1],fx.spin[2])+Vector3.new(r:NextNumber(-w,w),r:NextNumber(-w,w),r:NextNumber(-w,w))
+ if fx.float then f.floatUntil=os.clock()+fx.float end
+end
+-- Held in place before the release: a Singularity piece pulls toward the
+-- middle (it starts smaller), a Resonator piece shivers.
+function V:prePose(f: any,now: number)
+ local fx=f.fx
+ local e=math.clamp((now-f.born)/math.max(f.at-f.born,.01),0,1)
+ local pos=f.from
+ if fx.implode then pos=f.from:Lerp(Vector3.new(f.center.X,f.from.Y,f.center.Z),.4*(1-(1-e)^2)) end
+ if fx.jitter and not self:reduced() then
+  pos+=Vector3.new(self.random:NextNumber(-.08,.08),self.random:NextNumber(-.04,.04),self.random:NextNumber(-.08,.08))
+ end
+ local frame=CFrame.new(pos)
+ for _,q in ipairs(f.parts) do q.part.CFrame=frame*(q.rel.Rotation+q.rel.Position*f.k) end
+end
 function V:stepSinks(now: number)
  for i=#self.sinks,1,-1 do
   local sink=self.sinks[i]
@@ -417,20 +659,21 @@ function V:stepShards(now: number)
   local k=f.k
   local clear=0
   local frame
+  if f.hot then
+   -- Molten rock cooling to its scorched tone.
+   local u=math.clamp((now-f.hot.at)/1.6,0,1)
+   local color=f.hot.from:Lerp(f.hot.to,u)
+   for _,q in ipairs(f.parts) do q.part.Color=color end
+   if u>=1 then f.hot=nil end
+  end
   if f.loose and not f.settled then
    local primary=f.parts[1].part
-   if t>=0 and not f.released then
-    -- Cracks free: a small pop up and out, a random spin, then gravity.
-    f.released=true
-    for _,q in ipairs(f.parts) do q.part.Anchored=false end
-    -- Thrown and tipped away from where the beam hit (owner, Nov 22), so
-    -- it is clear what cracked it: out from the beam's point, rolling
-    -- outward about the axis across that direction, plus a little tumble.
-    -- An upward pop first, so it reads as knocked loose (owner, Nov 22).
-    primary.CFrame+=Vector3.yAxis*.12
-    primary.AssemblyLinearVelocity=f.out*self.random:NextNumber(4,8)+Vector3.yAxis*self.random:NextNumber(10,15)
-    local roll=Vector3.yAxis:Cross(f.out)
-    primary.AssemblyAngularVelocity=roll*self.random:NextNumber(4,8)+Vector3.new(self.random:NextNumber(-2,2),self.random:NextNumber(-2,2),self.random:NextNumber(-2,2))
+   if t<0 and f.pre then self:prePose(f,now) end
+   if t>=0 and not f.released then self:releaseShard(f) end
+   -- Bubbler: the pieces float up for a moment before they fall.
+   if f.floatUntil and now<f.floatUntil and primary.Parent then
+    local v=primary.AssemblyLinearVelocity
+    primary.AssemblyLinearVelocity=Vector3.new(v.X*.9,2.5,v.Z*.9)
    end
    f.pos=primary.Position
    if primary.Position.Y<f.floor-8 or not primary.Parent then self:dropShard(f);table.remove(self.frags,i);continue end
@@ -479,16 +722,13 @@ function V:stepShards(now: number)
  end
 end
 
--- A break plays the field rocks' whole break, in the same order:
---  * a frame pause first (your own breaks only): the piece flashes hot and
---    holds for a few frames before anything moves (ImpactFreeze held a field
---    rock one or two frames; held a little longer here so it is felt)
---  * then, together: split, impact and tink sounds; the combo counter and
---    camera hit; eight spark streaks and embers; the ground shock ring; the
---    break particle burst; eight tumbling pieces that tink as they land; the
---    pop. The shards (the real rock) stand in for the two opening halves.
--- A piece that breaks before the last is the old crack beat (seam burst):
--- chips, two sparks, a lighter particle burst and the small ring.
+-- A break plays one beat, the breaking role's (ROLE_FX):
+--  * a frame pause first (your own breaks only): the piece flashes in the
+--    role's color and holds for the role's few frames before anything moves
+--  * then, together: the role's sounds, the camera hit, up to five 3D streak
+--    boxes, the role's contact (ring and particles) and a dim light; the
+--    shards (the real rock) fly the role's way.
+-- A piece that breaks before the last (a terrace stage) is a small beat.
 -- Shorter (owner, Nov 22: the pause was too long): about 5-8 frames is a
 -- medium hit; past ~20 reads as a bug.
 local HOLD_PIECE,HOLD_SPLIT,HOLD_HEAVY,HOLD_GEM=1/60,2/60,3/60,6/60
@@ -505,7 +745,7 @@ function V:opParts(op: any): {any}
  local out={}
  for _,id in ipairs(op.cells) do
   local c=self.cube.cells[id]
-  if c then table.insert(out,{poly=c.poly,y0=c.y0,y1=c.y1}) end
+  if c then table.insert(out,{poly=c.poly,y0=c.y0,y1=c.y1,cell=id}) end
  end
  return out
 end
@@ -577,12 +817,13 @@ end
 -- Stage cracks, the way the reference rocks do it: no drawn lines. A Mining
 -- Away rock darkens while the laser works on it, then cracks: it shrinks a
 -- step and turns, and its color comes back. Here the piece about to break is
--- drawn as its own prisms over the rock. It darkens with damage, and at each
--- crack stage (a third and two thirds of its share of the work) it pops
--- loose: it lifts out of the rock, tilts and turns a little further each
--- time, casting a real shadow, its color snaps back, and the crack plays with
--- chips and dust. Then it breaks off as before.
+-- drawn as its own prisms over the rock. It darkens with damage, and late in
+-- its share of the work (CRACK_POP) it pops loose: it lifts out of the rock,
+-- tilts and turns a little, casting a real shadow, its color snaps back, and
+-- the crack plays with chips. Then it strains (a growing jitter) until it
+-- breaks off. Each role works it its own way (ROLE_FX proxy).
 local CRACK_STEPS=2 -- per stage: one crack, then it breaks out
+local CRACK_POP=.85 -- the crack comes late in each piece's share of the work, so it strains, then breaks
 local CRACK_SHADE=.34 -- darkest just before a crack (the reference's shade curve)
 local CRACK_LIFT={0,.28,.62} -- studs out of the rock at each stage
 local CRACK_TURN={0,.06,.13} -- radians of turn at each stage
@@ -594,8 +835,10 @@ function V:crackIndex(job: any,progress: number): (number,number)
  for k,piece in ipairs(job.pieces) do
   if progress<piece.at then
    local f=(progress-prev)/math.max(piece.at-prev,1e-6)
-   local s=math.clamp(math.floor(f*CRACK_STEPS),0,CRACK_STEPS-1)
-   return (k-1)*CRACK_STEPS+s,f*CRACK_STEPS-s
+   -- One crack per piece, late (CRACK_POP): darkens, pops loose, strains.
+   local s=f>=CRACK_POP and 1 or 0
+   local within=s==0 and f/CRACK_POP or (f-CRACK_POP)/(1-CRACK_POP)
+   return (k-1)*CRACK_STEPS+s,within
   end
   prev=piece.at
  end
@@ -605,6 +848,7 @@ function V:dropProxy(proxy: any)
  if proxy.dead then return end
  proxy.dead=true
  proxy.model:Destroy()
+ if proxy.aux then proxy.aux:Destroy() end
  for _,id in ipairs(proxy.ids) do if self.crackCells[id]==proxy then self.crackCells[id]=nil end end
 end
 function V:clearCrack(id: number)
@@ -616,31 +860,57 @@ function V:clearCracks()
  self.cracks={};self.crackCells={}
 end
 -- The piece as its own prisms, slightly grown so they cover the carved rock.
-function V:buildProxy(piece: any,owned: boolean,chunk: {number}): any?
+-- Roles whose hole the server carves ahead (ROLE_FX carve) grow it further
+-- and add an invisible static copy the player stands on until the break.
+function V:buildProxy(piece: any,owned: boolean,chunk: {number},code: string?): any?
  local cube=self.cube;local o=self.origin
+ local fx=ROLE_FX[code or 'L'] or ROLE_FX.L
+ local pfx=fx.proxy
  local parts,ids={},{}
  local model=Instance.new('Model');model.Name='DigCrackPiece'
- local area,sx,sz,top=0,0,0,-math.huge
+ local area,sx,sz,top,bottom=0,0,0,-math.huge,math.huge
  for _,id in ipairs(chunk) do
-  if not cube.removed[id] and not self.crackCells[id] then table.insert(ids,id) end
+  if not cube.removed[id] and not self.crackCells[id] and not self.sealedIds[id] and not self.geodes[id] then table.insert(ids,id) end
  end
  if #ids==0 then model:Destroy();return nil end
+ local grow=fx.carve and .32 or .03
+ -- Halver: the final piece in two halves along the chunk's split plane.
+ local plane=pfx.halves and piece.final and DigCube.split(cube,chunk) or nil
+ local shapes={}
  for _,c in ipairs(piece.shell or piece.parts) do
+  if plane then
+   for side=-1,1,2 do
+    local half=cutPoly(c.poly,plane.cx,plane.cz,-side*plane.nx,-side*plane.nz)
+    if #half>=3 then table.insert(shapes,{poly=half,y0=c.y0,y1=c.y1,side=side}) end
+   end
+  else
+   table.insert(shapes,c)
+  end
+ end
+ local aux=nil
+ for _,c in ipairs(shapes) do
   local a,mx,mz=middle(c.poly)
   if a>.02 then
-   area+=a;sx+=mx*a;sz+=mz*a;top=math.max(top,c.y1)
+   area+=a;sx+=mx*a;sz+=mz*a;top=math.max(top,c.y1);bottom=math.min(bottom,c.y0)
    local stone=self:colorAt(c.y1-.01,mx,mz)
-   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,.03),c.y0+.02,c.y1+.03)) do
+   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,grow),c.y0+.02,c.y1+.03)) do
     local part=fxPart(model,'DigCrack',stone,'WedgePart')
     part.CastShadow=true
     part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
     part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
      Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
-    table.insert(parts,{part=part,stone=stone})
+    table.insert(parts,{part=part,stone=stone,size=part.Size,side=c.side})
+    if fx.carve then
+     -- The carved-ahead hole is held shut for players until the break.
+     if not aux then aux=Instance.new('Folder');aux.Name='DigCrackHold' end
+     local hold=fxPart(aux,'DigCrackFloor',stone,'WedgePart')
+     hold.Transparency=1;hold.CanCollide=true;hold.CanQuery=false;hold.CanTouch=false;hold.CollisionGroup='Default'
+     hold.Size=part.Size;hold.CFrame=part.CFrame
+    end
    end
   end
  end
- if area<=0 then model:Destroy();return nil end
+ if area<=0 then model:Destroy();if aux then aux:Destroy() end;return nil end
  model.Parent=self.fx
  local pivot=o+Vector3.new(sx/area,top,sz/area)
  for _,e in ipairs(parts) do e.base=CFrame.new(pivot):ToObjectSpace(e.part.CFrame) end
@@ -650,44 +920,108 @@ function V:buildProxy(piece: any,owned: boolean,chunk: {number}): any?
  if owned then
   highlight=Instance.new('Highlight');highlight.Name='DigTarget';highlight.DepthMode=Enum.HighlightDepthMode.Occluded
   highlight.FillTransparency=1;highlight.OutlineColor=parts[1].stone:Lerp(Color3.new(1,1,1),.4)
-  highlight.OutlineTransparency=.55
   highlight.OutlineTransparency=.5;highlight.Adornee=model;highlight.Parent=model
  end
  local proxy={parts=parts,ids=ids,pivot=pivot,step=0,shade=0,joltAt=-10,model=model,highlight=highlight,since=os.clock(),outline=highlight and highlight.OutlineColor,
-  turn=self.random:NextNumber(.7,1)*(self.random:NextInteger(0,1)*2-1),tipAxis=self.random:NextNumber(0,math.pi*2)}
+  turn=self.random:NextNumber(.7,1)*(self.random:NextInteger(0,1)*2-1),tipAxis=self.random:NextNumber(0,math.pi*2),
+  fx=pfx,code=code,tone=pfx.tone or BLACK,seed=self.random:NextNumber(1,100),scale=1,progress=0,within=0,
+  vibAxis=CFrame.Angles(0,self.random:NextNumber(0,math.pi*2),0).LookVector,
+  normal=plane and Vector3.new(plane.nx,0,plane.nz) or nil,radius=math.sqrt(area/math.pi),thick=top-bottom}
+ if pfx.ball then
+  -- Bubbler: a glassy bubble grows inside the piece as it is worked.
+  if not aux then aux=Instance.new('Folder');aux.Name='DigCrackHold' end
+  local ball=fxPart(aux,'DigBubble',V.primaryColor(code),'Part')
+  ball.Shape=Enum.PartType.Ball;ball.Material=Enum.Material.Glass;ball.Transparency=.75;ball.Size=Vector3.one*.05
+  ball.CFrame=CFrame.new(pivot-Vector3.yAxis*proxy.thick*.3)
+  proxy.ball=ball;proxy.ballSize=0
+ end
+ if pfx.light then
+  -- Starforge: the piece heats up and glows a little on the pit walls.
+  local light=Instance.new('PointLight');light.Name='DigHeat';light.Shadows=false
+  light.Color=Color3.fromRGB(255,140,60);light.Range=8;light.Brightness=0;light.Parent=parts[1].part
+  proxy.light=light
+ end
+ if aux then aux.Parent=self.fx;proxy.aux=aux end
  for _,id in ipairs(ids) do self.crackCells[id]=proxy end
  return proxy
 end
--- Where the piece sits at its current stage (plus the pop after a crack).
+-- Where the piece sits at its current stage (plus the pop after a crack),
+-- with the role's own motion: a slam or pulse jolting it down, trembles and
+-- jitters, the Bubbler's rise, the Halver halves sliding apart, the
+-- Gridcutter's step down and the Singularity's squeeze. After the pop it
+-- strains (a growing 40 Hz jitter) until it breaks.
 function V:poseProxy(proxy: any,now: number)
+ local fx=proxy.fx or {}
  local s=proxy.step+1
  local t=(now-proxy.joltAt)/CRACK_JOLT
  local pop=t<1 and .32*math.sin(math.pi*math.clamp(t,0,1))*(1-t*.5) or 0
- local tip=CRACK_TIP[s]
- local pose=CFrame.new(proxy.pivot+Vector3.yAxis*(CRACK_LIFT[s]+pop))
-  *CFrame.Angles(0,CRACK_TURN[s]*proxy.turn,0)
+ local lift,turn,tip=CRACK_LIFT[s]+pop,CRACK_TURN[s]*proxy.turn,CRACK_TIP[s]
+ local progress=math.clamp(proxy.progress or 0,0,1)
+ if fx.flat then lift=s>1 and -.06 or 0;turn=0;tip=0 end
+ if fx.lift then lift+=fx.lift[1]+(fx.lift[2]-fx.lift[1])*progress end
+ if fx.slam and proxy.slamAt then
+  local u=now-proxy.slamAt
+  if u>=0 and u<.18 then lift-=.15*math.sin(math.pi*u/.18) end
+ end
+ if fx.pulse and proxy.pulseAt then
+  local u=now-proxy.pulseAt
+  if u>=0 and u<.12 then lift-=.1*math.sin(math.pi*u/.12) end
+ end
+ local shake=Vector3.zero
+ if not self:reduced() then
+  local amp=s>1 and .035*math.clamp(proxy.within or 0,0,1) or 0
+  if fx.jitter then amp+=fx.jitter[1]+(fx.jitter[2]-fx.jitter[1])*progress end
+  if fx.tremble then amp+=fx.tremble*math.clamp((progress-.7)/.3,0,1) end
+  if amp>0 then
+   local q=math.floor(now*40)*.37
+   shake=Vector3.new(math.noise(q,proxy.seed,.1),0,math.noise(proxy.seed,q,.7))*(2*amp)
+  end
+  if fx.vibrate then
+   shake+=proxy.vibAxis*((fx.vibrate[1]+(fx.vibrate[2]-fx.vibrate[1])*progress)*math.sin(now*34*2*math.pi))
+  end
+ end
+ local pose=CFrame.new(proxy.pivot+Vector3.yAxis*lift+shake)
+  *CFrame.Angles(0,turn,0)
   *CFrame.Angles(math.cos(proxy.tipAxis)*tip,0,math.sin(proxy.tipAxis)*tip)
- for _,e in ipairs(proxy.parts) do e.part.CFrame=pose*e.base end
+ local scale=proxy.scale or 1
+ local slide=0
+ if proxy.normal and s>1 then slide=.18*(1-(1-math.clamp(t,0,1))^2) end
+ for _,e in ipairs(proxy.parts) do
+  local base=scale~=1 and (e.base.Rotation+e.base.Position*scale) or e.base
+  if e.side and slide>0 then base=CFrame.new(proxy.normal*(e.side*slide))*base end
+  e.part.CFrame=pose*base
+ end
+ if proxy.ball then proxy.ball.CFrame=CFrame.new(pose.Position-Vector3.yAxis*proxy.thick*.3) end
 end
 function V:shadeProxy(proxy: any,shade: number)
  if math.abs(shade-proxy.shade)<.01 then return end
  proxy.shade=shade
- for _,e in ipairs(proxy.parts) do e.part.Color=e.stone:Lerp(BLACK,shade) end
+ for _,e in ipairs(proxy.parts) do e.part.Color=e.stone:Lerp(proxy.tone,shade) end
 end
--- Called every frame per cutting drone with its chunk's progress.
-function V:crackStage(key: string,progress: number,now: number,tint: Color3,owned: boolean,cutting: boolean?)
+-- Called every frame per cutting drone with its chunk's progress. `key` is
+-- the chunk's ids string, `code` the role's style code (its pieces mode and
+-- ROLE_FX treatment). A terrace stage that already broke (cutStage) never
+-- shows again, even while the progress catches up.
+function V:crackStage(key: string,progress: number,now: number,tint: Color3,owned: boolean,cutting: boolean?,code: string?,source: Instance?)
  local job=self.cracks[key]
+ if job and job.code~=code then
+  if job.proxy then self:dropProxy(job.proxy) end
+  job=nil
+ end
  if not job then
-  job={ids=DigCube.parseKey(string.sub(key,2))}
-  job.pieces=DigCube.pieces(self.cube,job.ids)
+  job={ids=DigCube.parseKey(key),code=code}
+  job.pieces=DigCube.pieces(self.cube,job.ids,DigCube.style(code).pieces)
   self.cracks[key]=job
   -- A chunk already part-cut when first seen starts at its stage, without the hit.
-  job.stage=self:crackIndex(job,progress)
+  job.stage=self:crackIndex(job,math.min(progress,.9999))
  end
  job.seen=now
- local index,within=self:crackIndex(job,progress)
+ -- Full progress keeps the last piece up (popped, straining) until its break op.
+ local index,within=self:crackIndex(job,math.min(progress,.9999))
  local k=math.floor(index/CRACK_STEPS)+1
  local step=index%CRACK_STEPS
+ local cut=self.cutStage[key] or 0
+ if k<=cut then k=cut+1;step=0;within=0;index=(k-1)*CRACK_STEPS end
  local piece=job.pieces[k]
  if not piece then return end
  if job.proxy and (job.proxy.dead or job.piece~=k) then
@@ -695,26 +1029,51 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
   job.proxy=nil
  end
  if not job.proxy then
-  job.proxy=self:buildProxy(piece,owned,job.ids);job.piece=k
+  job.proxy=self:buildProxy(piece,owned,job.ids,code);job.piece=k
   if job.proxy then job.proxy.step=step;self:poseProxy(job.proxy,now) end
  end
  local proxy=job.proxy
  if not proxy then return end
+ local fx=proxy.fx
+ progress=math.clamp(progress,0,1)
+ proxy.progress=progress;proxy.within=within
+ proxy.slamAt=job.slamAt;proxy.pulseAt=job.pulseAt
  if proxy.highlight then
-  -- Pulses while the beam is on it (owner, Nov 22), a quick strong beat
-  -- toward white; steady and faint while the drone only charges.
+  -- Pulses while the drone works on it (owner, Nov 22), a quick strong beat
+  -- toward white; steady and faint while it only charges or travels.
   if cutting then
-   proxy.pulseAt=proxy.pulseAt or now
-   local wave=.5+.5*math.cos((now-proxy.pulseAt)*9)
+   proxy.pulseStart=proxy.pulseStart or now
+   local wave=.5+.5*math.cos((now-proxy.pulseStart)*9)
    proxy.highlight.OutlineTransparency=.7-.68*wave
    proxy.highlight.OutlineColor=proxy.outline:Lerp(Color3.new(1,1,1),.55*wave)
   else
-   proxy.pulseAt=nil
+   proxy.pulseStart=nil
    proxy.highlight.OutlineTransparency=.55;proxy.highlight.OutlineColor=proxy.outline
   end
  end
- -- Darker as the beam works, back to full color at each crack.
- self:shadeProxy(proxy,CRACK_SHADE*math.clamp(within,0,1)^.88)
+ -- Darker as the drone works, back to full color at each crack (or the
+ -- role's own tone and curve: over a charge, or only at its end).
+ local amount
+ if fx.src=='progress' then amount=progress
+ elseif fx.src=='late' then amount=math.clamp((progress-.7)/.3,0,1)
+ else amount=math.clamp(within,0,1)^(fx.pow or .88) end
+ self:shadeProxy(proxy,(fx.cap or CRACK_SHADE)*amount)
+ if proxy.light then proxy.light.Brightness=.9*math.clamp(within,0,1)^1.5 end
+ if fx.ice and progress>=fx.ice and not proxy.iced then
+  proxy.iced=true
+  for _,e in ipairs(proxy.parts) do e.part.Material=Enum.Material.Ice end
+ end
+ if fx.compress then
+  local scale=1-fx.compress*progress
+  if math.abs(scale-proxy.scale)>.01 then
+   proxy.scale=scale
+   for _,e in ipairs(proxy.parts) do e.part.Size=e.size*scale end
+  end
+ end
+ if proxy.ball then
+  local size=2.3*proxy.radius*progress
+  if math.abs(size-proxy.ballSize)>.02 then proxy.ballSize=size;proxy.ball.Size=Vector3.one*math.max(.05,size) end
+ end
  if index>job.stage then
   job.stage=index
   if step>0 and step~=proxy.step then
@@ -741,9 +1100,11 @@ function V:crackHit(proxy: any,step: number,k: number,hit: any)
  if ctx.impact and surface then ctx.impact:chips(serverNow,point,Vector3.yAxis,surface,1+step,point.Y-4) end
  if ctx.beat then ctx.beat('Split',point,serverNow,.14+.08*step) end
 end
+-- A piece nobody is cutting any more goes quickly (its break op normally
+-- clears it first): no outline hangs on after the rock has gone.
 function V:stepCracks(now: number)
  for key,job in pairs(self.cracks) do
-  if now-(job.seen or now)>2 then
+  if now-(job.seen or now)>.3 then
    self.cracks[key]=nil
    if job.proxy then self:dropProxy(job.proxy) end
   elseif job.proxy and not job.proxy.dead and now-job.proxy.joltAt<CRACK_JOLT then
@@ -765,31 +1126,54 @@ function V:split(op: any,now: number)
  cx/=area;cz/=area
  local bulk=math.max(volume,.5)^(1/3)
  local center=o+Vector3.new(cx,(top+bottom)*.5,cz)
- local owned,beam=false,nil
+ -- The role that broke it sets the colors, the rubble and the beat.
+ local style=self:opStyle(op)
+ local fx=ROLE_FX[style.code] or ROLE_FX.L
+ local primary=V.primaryColor(style.code)
+ local owned,accent=false,nil
  for _,id in ipairs(op.cells) do
   self:clearCrack(id)
   if self.mine[id] then owned=true end
   if op.geode then
-   owned=self.geodeOwner[id]~=nil and Players.LocalPlayer~=nil and self.geodeOwner[id]==Players.LocalPlayer.UserId
+   local player=Players.LocalPlayer
+   owned=self.localOpened[id]==true or (self.geodeOwner[id]~=nil and player~=nil and self.geodeOwner[id]==player.UserId)
    -- Your own stays on screen through the freeze (it shakes); others go now.
    if not owned or self:reduced() then self:dropGeode(id) elseif self.geodes[id] then self.geodes[id].opening=true end
   end
-  beam=beam or self.cellColor[id]
-  -- A nested stage leaves the chunk's cells (and who is cutting them) in place.
-  if not op.staged then self.mine[id]=nil;self.cellColor[id]=nil end
+  accent=accent or self.cellAccent[id]
+  -- A nested stage leaves the chunk's cells (and who is cutting them) in
+  -- place; so do the cells that sealed (their K beat still needs them).
+  if not op.staged and not (op.except and op.except[id]) then
+   self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;self.cellAccent[id]=nil
+  end
  end
+ accent=accent or primary
+ -- Resonator chain links pop without a pause of their own. The server
+ -- breaks them itself (neighbour cells, never in a DigOp), so one right
+ -- after your own Resonator break counts as yours.
+ local link=op.flag=='C' and style.code=='V'
+ if link and not owned then owned=self:ownChainLink(op.cells[1],now)
+ elseif style.code=='V' and owned and op.flag~='C' and not op.partial and not op.geode then self:markChain(op.cells,now) end
  local strength=math.clamp(bulk*.36,.9,2.45)
  local heavy=owned and strength>=1.35
  local hold=0
  if owned and not self:reduced() and (op.tier>0 or now-(self.heldAt or -10)>=(op.partial and .9 or .3)) then
-  -- A gem always gets the long pause.
-  hold=op.geode and HOLD_GEODE or op.tier>0 and HOLD_GEM or op.partial and HOLD_PIECE or heavy and HOLD_HEAVY or HOLD_SPLIT
-  self.heldAt=now
+  -- A gem always gets the long pause; otherwise the role's hold class.
+  local class=fx.hold
+  if op.geode then hold=HOLD_GEODE
+  elseif op.tier>0 then hold=HOLD_GEM
+  elseif op.partial then hold=HOLD_PIECE
+  elseif link then hold=0
+  elseif class=='piece' then hold=HOLD_PIECE
+  elseif class=='split' then hold=HOLD_SPLIT
+  elseif class=='heavy' then hold=HOLD_HEAVY
+  else hold=heavy and HOLD_HEAVY or HOLD_SPLIT end
+  if hold>0 then self.heldAt=now end
  end
  -- Opening your sealed gem: the whole game freezes for the hold (the client
  -- hit-stop: world, drones, particles, you and the camera), then it breaks
  -- and bounces you straight up.
- local gem=op.tier>0 and rgb(DigCube.ORES[op.tier].color) or nil
+ local gem=op.tier>0 and rgb(DigCube.ORES[math.clamp(op.tier,1,#DigCube.ORES)].color) or nil
  local tense=op.geode and owned and hold>0
  if tense then
   -- The freeze reads as tension, not lag: the sealed cell keeps shaking
@@ -812,7 +1196,8 @@ function V:split(op: any,now: number)
   table.insert(self.pending,{at=now+hold,run=function() self:dropGeode(id);self:bounce(at) end})
  end
  local glow=owned and (gem~=nil or not op.partial)
- local flashColor=gem and gem:Lerp(FLASH,.2) or beam and beam:Lerp(FLASH,.3) or FLASH
+ -- Gems override the role's color.
+ local flashColor=gem and gem:Lerp(FLASH,.2) or primary:Lerp(FLASH,.3)
  if tense then
   -- Flash and rubble come with the break, after the freeze.
   table.insert(self.pending,{at=now+hold,run=function() self:flash(op,os.clock(),os.clock()+.04,flashColor,glow) end})
@@ -821,30 +1206,79 @@ function V:split(op: any,now: number)
  end
  -- Loose physics rubble only for the final cut (owner, Nov 22); a nested
  -- stage is just its outline growing (the flash over its shell).
- -- Rubble flies out from where the beam was: the chunk's center (the
- -- drone's contact point).
+ -- Rubble flies out from where the hit was: the chunk's center (the
+ -- drone's contact point), or the top of a volley's seed cell.
  if not op.partial then
-  local bx,bz=DigCube.chunkCenter(cube,op.cells)
-  local from=o+Vector3.new(bx,center.Y,bz)
-  if tense then table.insert(self.pending,{at=now+hold,run=function() self:shards(op,os.clock(),from) end})
-  else self:shards(op,now+hold,from) end
+  local from
+  local seed=fx.rubble.seed and cube.cells[op.cells[1]]
+  if seed then from=o+Vector3.new(seed.cx,seed.y1,seed.cz)
+  else
+   local bx,bz=DigCube.chunkCenter(cube,op.cells)
+   from=o+Vector3.new(bx,center.Y,bz)
+  end
+  if tense then table.insert(self.pending,{at=now+hold,run=function() self:shards(op,os.clock(),from,fx.rubble) end})
+  else self:shards(op,now+hold,from,fx.rubble) end
  end
  local info={center=center,point=o+Vector3.new(cx,top,cz),ground=o.Y+bottom,bulk=bulk,strength=strength,owned=owned,heavy=heavy,
-  color=self:colorAt(top-.01,cx,cz),beam=beam}
+  color=self:colorAt(top-.01,cx,cz),primary=primary,accent=accent,fx=fx,link=link}
  if hold>0 then table.insert(self.pending,{at=now+hold,run=function() self:burst(op,info) end})
  else self:burst(op,info) end
 end
--- The break's own particles, bigger and longer-lived than the shared
--- cocktail. Each broken cell emits from a box the size of that cell, so the
--- particles start exactly in the rock that broke (one box over the whole
--- chunk put some of them in rock that did not break). The little spinning
--- rectangles linger longest.
--- The lingering spinning rectangles (owner, Nov 22: back) and sparks in the
--- beam's color. The old field break's tumbling pieces play from `burst`.
+-- Your own Resonator break: its cells and their same-layer neighbours, the
+-- only cells its chain links can be (up to three, .15 s apart), for a
+-- moment. A link op landing in one of them is yours.
+local CHAIN_WINDOW=.8
+function V:markChain(cells: {number},now: number)
+ self:ownChainLink(-1,now) -- drops the expired ones
+ local set={}
+ for _,id in ipairs(cells) do
+  set[id]=true
+  local c=self.cube.cells[id]
+  if c then for _,n in ipairs(c.neighbors) do set[n]=true end end
+ end
+ table.insert(self.chains,{at=now,cells=set})
+end
+function V:ownChainLink(id: number,now: number): boolean
+ local mine=false
+ for i=#self.chains,1,-1 do
+  local chain=self.chains[i]
+  if now-chain.at>=CHAIN_WINDOW then table.remove(self.chains,i)
+  elseif chain.cells[id] then mine=true end
+ end
+ return mine
+end
+-- A cell that sealed into a geode (K): the crack-seal beat. The piece stops,
+-- a gem-colored flash over the cell, a crack and a couple of chips. No
+-- rubble and no streaks; the sealed cell itself comes from syncGeodes.
+function V:sealBeat(op: any,now: number)
+ local ctx=self.ctx
+ local owned=false
+ for _,id in ipairs(op.cells) do
+  self:clearCrack(id)
+  if self.mine[id] then owned=true end
+  self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;self.cellAccent[id]=nil
+ end
+ local c=self.cube.cells[op.cells[1]]
+ if not c then return end
+ local gem=rgb(DigCube.ORES[math.clamp(op.tier,1,#DigCube.ORES)].color)
+ local hold=0
+ if owned and not self:reduced() and now-(self.heldAt or -10)>=.3 then hold=HOLD_PIECE;self.heldAt=now end
+ self:flash(op,now,now+hold+.04,gem:Lerp(FLASH,.2),owned)
+ local point=self.origin+Vector3.new(c.cx,c.y1+.1,c.cz)
+ if ctx.crack then ctx.crack:playCrack(point) end
+ if ctx.audio then ctx.audio:play('crystal_impact',point,{pitch=.8,level=.9*(owned and 1 or .62)}) end
+ if self:reduced() then return end
+ local rock=self.holder and self.holder:FindFirstChild('Rock')
+ local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
+ if ctx.impact and surface then ctx.impact:chips(workspace:GetServerTimeNow(),point,Vector3.yAxis,surface,2,point.Y-4) end
+end
+-- The break's sparks (primary to accent), from a box the size of each broken
+-- cell, so they start exactly in the rock that broke. The spinning
+-- rectangles are gone: the 3D streaks (burst) are the one lingering layer.
 local CLOUD_CELLS=8
 function V:breakCloud(op: any,e: any,big: boolean)
  if self:reduced() or (self.clouds or 0)>=8 then return end
- local cube=self.cube;local o=self.origin
+ local o=self.origin
  local cells={}
  for _,q in ipairs(self:opParts(op)) do
   if #cells>=CLOUD_CELLS then break end
@@ -868,43 +1302,27 @@ function V:breakCloud(op: any,e: any,big: boolean)
   return math.floor(x)+(self.random:NextNumber()<x%1 and 1 or 0)
  end
  for _,c in ipairs(cells) do
-  local box=fxPart(holder,'Cell',e.color);box.Transparency=1
+  local box=fxPart(holder,'Cell',e.primary);box.Transparency=1
   box.Size=Vector3.new(math.max(.4,(c.maxX-c.minX)*.8),math.max(.4,(c.y1-c.y0)*.8),math.max(.4,(c.maxZ-c.minZ)*.8))
   box.Position=o+Vector3.new(c.cx,(c.y0+c.y1)*.5,c.cz)
-  local function emitter(name: string): ParticleEmitter
-   local p=Instance.new('ParticleEmitter');p.Name=name;p.Enabled=false;p.Rate=0
-   p.Shape=Enum.ParticleEmitterShape.Box;p.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
-   p.LockedToPart=false;p.Parent=box
-   return p
-  end
-  -- Debris: little rectangles in the rock's tone, spinning and drifting down
-  -- slowly. These linger longest (restored: owner, Nov 22).
-  local debris=emitter('Debris');debris.Texture='rbxasset://textures/particles/SquareParticle.png'
-  debris.Color=ColorSequence.new(e.color:Lerp(SHARD_DARK,.2),e.color:Lerp(SHARD_DARK,.45))
-  debris.LightEmission=0;debris.LightInfluence=1;debris.Brightness=1.2
-  debris.Squash=NumberSequence.new(-.35) -- a little longer than wide
-  debris.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.5*k,.18),NumberSequenceKeypoint.new(.85,.42*k,.14),NumberSequenceKeypoint.new(1,0)})
-  debris.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.8,.05),NumberSequenceKeypoint.new(1,1)})
-  debris.Lifetime=NumberRange.new(2.8,4.2);debris.Speed=NumberRange.new(9,18);debris.SpreadAngle=Vector2.new(60,60)
-  debris.EmissionDirection=Enum.NormalId.Top;debris.Acceleration=Vector3.new(0,-14,0);debris.Drag=1.6
-  debris.Rotation=NumberRange.new(0,360);debris.RotSpeed=NumberRange.new(-320,320)
-  debris:Emit(count(12+6*bulk))
-  -- Sparks in the beam's color: bright and quick; they carry the glow.
-  local sparks=emitter('Sparks')
+  -- Sparks in the role's colors: bright and quick; they carry the glow.
+  local sparks=Instance.new('ParticleEmitter');sparks.Name='Sparks';sparks.Enabled=false;sparks.Rate=0
+  sparks.Shape=Enum.ParticleEmitterShape.Box;sparks.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+  sparks.LockedToPart=false;sparks.Parent=box
   EnergyDisc.configure(sparks,.75*k,.05,1,0,.35)
   sparks.LightEmission=.7;sparks.LightInfluence=0;sparks.Brightness=1.5
-  sparks.Color=ColorSequence.new(e.beam:Lerp(BEAM_CORE,.35),e.beam)
+  sparks.Color=ColorSequence.new(e.primary:Lerp(BEAM_CORE,.35),e.accent)
   sparks.Lifetime=NumberRange.new(.4,.8);sparks.Speed=NumberRange.new(14,28);sparks.SpreadAngle=Vector2.new(70,70)
   sparks.EmissionDirection=Enum.NormalId.Top;sparks.Acceleration=Vector3.new(0,-30,0);sparks.Drag=1.5
   sparks:Emit(count(8+3*bulk))
  end
- task.delay(4.5,function() holder:Destroy() end)
+ task.delay(1.2,function() holder:Destroy() end)
 end
--- One clear beat per break, in two colors: the rock's (rubble, debris) and
--- the cutting drone's beam (flash, light, sparks, ring). Every layer that
--- repeated another (a second spark firework, a second particle burst, the
--- tumbling stand-in pieces on top of the real rubble, dust, glitter) is gone.
--- Your own breaks get the light, the ring and the camera hit; other players'
+-- One clear beat per break, in the breaking role's way (ROLE_FX): its
+-- sounds, its contact (a ring and particles; none for projectile roles,
+-- whose ring and burst RoleEffectView draws, or the Lancer's pulse), a light,
+-- the 3D streaks (at most five boxes) and the camera hit. Your own breaks
+-- get the light, the contact and the second streak color; other players'
 -- breaks play smaller and without them, so your own crew's work stands out.
 function V:burst(op: any,e: any)
  local ctx=self.ctx
@@ -912,7 +1330,8 @@ function V:burst(op: any,e: any)
  local point,ground,strength=e.point,e.ground,e.strength
  local volume=e.owned and 1 or .62
  local vivid=e.color:Lerp(Color3.fromRGB(255,246,226),.62)
- local beam=e.beam or vivid
+ local primary=e.primary or vivid
+ local fx=e.fx or ROLE_FX.L
  local lively=not self:reduced()
  local gem=op.tier>0
  if op.partial then
@@ -923,33 +1342,69 @@ function V:burst(op: any,e: any)
   end
   if lively then
    if e.owned then
-    self:lightFlash(e.center,beam,10+2*e.bulk,4,.3)
+    self:lightFlash(e.center,primary,10+2*e.bulk,4,.3)
     if ctx.beat then ctx.beat('Split',point,now,.45) end
    end
   end
   return
  end
  if ctx.audio then
-  ctx.audio:play('crystal_split',point,{level=volume,rockSize=e.bulk})
-  ctx.audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
-  ctx.audio:play('crystal_release_tink',point,{level=volume})
+  if fx.sounds=='classic' then
+   ctx.audio:play('crystal_split',point,{level=volume,rockSize=e.bulk})
+   ctx.audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
+   ctx.audio:play('crystal_release_tink',point,{level=volume})
+  else
+   for _,cue in ipairs(fx.sounds) do
+    -- Sequence breaks climb (the Gridcutter zipper, Resonator chain links).
+    ctx.audio:play(cue.cue,point,{pitch=(cue.pitch or 1)+(cue.seq or 0)*(op.seq or 0),level=volume*(cue.level or 1),rockSize=cue.rock or e.bulk})
+   end
+  end
  end
  -- A gem bursts out with the rock, not after it, and its color takes over.
  if gem then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk,owned=e.owned,op=op},os.clock()) end
  if not lively then return end
- if not gem then self:breakCloud(op,{color=vivid,beam=beam,bulk=e.bulk},e.owned) end
- -- The old field break's eight tumbling rectangles (two tink on landing).
- local rock=self.holder and self.holder:FindFirstChild('Rock')
- local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
- if ctx.impact then ctx.impact:breakPieces(point,ground,e.color:Lerp(SHARD_DARK,.4),strength,now,e.owned,surface and surface.Material or nil) end
- -- Combo counter and the camera hit, shared with the field rocks.
- if ctx.splitBeat then ctx.splitBeat(point,strength,now,false,e.owned,nil)
- elseif ctx.beat then ctx.beat(e.heavy and 'HeavySplit' or 'Split',point,now,math.clamp(strength*.58,.6,1.35)*volume) end
+ if not gem and fx.contact then self:breakCloud(op,{primary=primary,accent=e.accent or primary,bulk=e.bulk},e.owned) end
+ -- The 3D streaks (owner: the old rectangles): in the rock's tone, plus two
+ -- in the role's color for your own breaks; at most five, so only the
+ -- streak boxes (no embers). A gem's reveal carries its own.
+ if not gem and ctx.impact then
+  local opts={life=1.3,lift=fx.lift or 1,speed=fx.speed or 1,cap=24}
+  ctx.impact:fireworks(point,ground,vivid,strength*2.4,now,3,opts)
+  if e.owned then ctx.impact:fireworks(point,ground,primary,strength*2.4,now,2,opts) end
+ end
+ -- The camera hit (and the climbing tink of a streak), shared with the
+ -- field rocks; a chain link is a small one.
+ local beat=e.link and strength*.6 or strength
+ if ctx.splitBeat then ctx.splitBeat(point,beat,now,false,e.owned,nil)
+ elseif ctx.beat then ctx.beat(e.heavy and 'HeavySplit' or 'Split',point,now,math.clamp(beat*.58,.6,1.35)*volume) end
  if not e.owned or gem then return end
- self:lightFlash(e.center,beam,14+3*e.bulk,7,.45)
- if ctx.effects then
-  ctx.effects.Pulse(Vector3.new(point.X,ground+.085,point.Z),beam:Lerp(BEAM_CORE,.3),strength*.55,strength*6.6,.58)
-  ctx.effects.ImpactParticles(point,beam,strength*1.2,'CrystalBreak',nil,beam,nil,.8)
+ if fx.light then self:lightFlash(e.center,primary,14+3*e.bulk,7,.45) end
+ local effects=ctx.effects
+ local contact=fx.contact
+ if not effects or not contact then return end
+ local floor=Vector3.new(point.X,ground+.085,point.Z)
+ if contact=='Striker' then
+  effects.Pulse(floor,primary:Lerp(BEAM_CORE,.3),strength*.55,strength*6.6,.58)
+  effects.ImpactParticles(point,primary,strength*1.2,'CrystalBreak',nil,primary,nil,.8)
+ elseif contact=='Charger' then
+  effects.Pulse(floor,primary,strength*.55,strength*8,.58,nil,1.6)
+  effects.ImpactParticles(point,primary,strength*1.2,'Touchdown')
+ elseif contact=='Resonator' and e.link then
+  effects.Pulse(floor,primary,.3,3,.3)
+ elseif effects.SpecialistContact then
+  if contact=='Bubbler' then
+   -- The rubble floats up, then the bubble pops.
+   local at=point+Vector3.yAxis*1.2
+   table.insert(self.pending,{at=os.clock()+.7,run=function() effects.SpecialistContact('Bubbler',at,Vector3.yAxis,false,MUTE,primary) end})
+  else
+   effects.SpecialistContact(contact,point,Vector3.yAxis,false,MUTE,primary)
+  end
+  if contact=='Resonator' then
+   -- Two rings, a beat apart, ringing out across the pit.
+   local accent=e.accent or primary
+   effects.Pulse(floor,accent,.4,10,.45)
+   table.insert(self.pending,{at=os.clock()+.08,run=function() effects.Pulse(floor+Vector3.yAxis*.04,primary,.4,10,.45) end})
+  end
  end
 end
 
@@ -980,7 +1435,7 @@ function V:reveal(e: any,now: number)
   end
   if ctx.impact then ctx.impact:fireworks(e.center,e.ground,light,(1.3+e.tier*.15)*2.2*weight,serverNow,e.owned==false and 6 or 12) end
   -- The rock's own break particles, in the gem's colors.
-  if e.op then self:breakCloud(e.op,{color=color,beam=light,bulk=math.max(3,e.size or 3)},e.owned~=false) end
+  if e.op then self:breakCloud(e.op,{primary=light,accent=color,bulk=math.max(3,e.size or 3)},e.owned~=false) end
   if e.op and e.op.geode then self:geodeBlast(e.center,e.ground,color,light,e.tier,weight,serverNow) end
   -- An impact you feel: a heavy shake, then a second hit a beat later.
   if ctx.beat then
@@ -1026,6 +1481,8 @@ function V:syncGeodes()
    local n=tonumber(id) :: number
    seen[n]=true
    self.geodeOwner[n]=tonumber(owner)
+   -- The sealed cell is no longer being worked: no outline or proxy on it.
+   self:clearCrack(n)
    if not self.geodes[n] and not self.cube.removed[n] and self.cube.cells[n] and not self.localOpened[n] then
     self:buildGeode(n,tonumber(tier) or 1)
     self.geodes[n].tier=tonumber(tier) or 1;self.geodes[n].treasure=treasure=='1'
@@ -1168,7 +1625,9 @@ end
 local LANDING_SPEED=8
 function V:landedOn(id: number,g: any): boolean
  local player=Players.LocalPlayer
- if g.leftAt or g.opening or self.localOpened[id] or not player or self.geodeOwner[id]~=player.UserId then return false end
+ -- Yours, or public (owner 0: its owner left or stopped digging): anyone may open it.
+ local owner=self.geodeOwner[id]
+ if g.leftAt or g.opening or self.localOpened[id] or not player or (owner~=player.UserId and owner~=0) then return false end
  local character=player.Character
  local root=character and character:FindFirstChild('HumanoidRootPart')
  local c=self.cube.cells[id]
@@ -1180,14 +1639,14 @@ function V:landedOn(id: number,g: any): boolean
  self.localOpened[id]=true
  self.ctx.command:FireServer('DigOpen',{id=id})
  DigCube.remove(self.cube,id)
- self:split({kind='c',cells={id},tier=g.tier or 1,treasure=g.treasure==true,geode=true,partial=false},os.clock())
+ self:split({kind='c',cells={id},tier=g.tier or 1,treasure=g.treasure==true,geode=true,partial=false,flag='G',removes={id}},os.clock())
  return true
 end
 -- The sealed cell's explosion (owner, Nov 22: much better, LOTS more
 -- particles, some lingering, some quick). On top of the gem break: quick
--- hot sparks and streaks, two more waves of the gem burst, the old spark
--- fireworks twice, the tumbling rectangles, two more rings, and a cloud of
--- glitter that hangs and drifts for a few seconds.
+-- hot sparks and streaks, two more waves of the gem burst, the 3D streak
+-- fireworks, two more rings, and a cloud of glitter that hangs and drifts
+-- for a few seconds. The real rubble replaced the tumbling stand-ins.
 function V:geodeBlast(at: Vector3,ground: number,color: Color3,light: Color3,tier: number,weight: number,serverNow: number)
  local ctx=self.ctx
  local holder=fxPart(self.fx,'GeodeBlast',color);holder.Transparency=1;holder.Size=Vector3.new(2,1,2);holder.Position=at
@@ -1236,7 +1695,6 @@ function V:geodeBlast(at: Vector3,ground: number,color: Color3,light: Color3,tie
  end
  if ctx.impact then
   ctx.impact:fireworks(at,ground,color,(1.4+tier*.15)*2.4*weight,serverNow,16)
-  ctx.impact:breakPieces(at,ground,color:Lerp(SHARD_DARK,.35),2*weight,serverNow,true,nil)
  end
 end
 -- The sealed cell during the full-game freeze (u: 0 at the landing, 1 at
@@ -1271,9 +1729,10 @@ function V:tenseGeode(id: number,u: number)
  end
 end
 -- Electric arcs out of the sealed cell during the freeze (owner, Nov 22):
--- long jagged bolts that re-strike every frame or two, from the cell's
--- middle out in all directions, then crackle on for a moment after the break.
-local ARC_COUNT,ARC_SEGMENTS,ARC_AFTER=7,7,.4
+-- short jagged bolts (about the cell's size, 1.8 to 3.6 studs) that
+-- re-strike every frame or two, from the cell's middle out in all
+-- directions, then crackle on for a moment after the break.
+local ARC_COUNT,ARC_SEGMENTS,ARC_AFTER=5,5,.2
 function V:arcs(g: any,u: number)
  if self:reduced() then return end
  local set=self.arcSet
@@ -1289,7 +1748,7 @@ function V:arcs(g: any,u: number)
     local beam=Instance.new('Beam');beam.Attachment0=points[i-1];beam.Attachment1=points[i];beam.FaceCamera=true;beam.Segments=1
     beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=1.8
     beam.Color=ColorSequence.new(Color3.new(1,1,1):Lerp(g.color or FLASH,.35))
-    local w=.2*(1-(i-1)/ARC_SEGMENTS)+.04;beam.Width0=w;beam.Width1=w*.8;beam.Parent=anchor
+    local w=.16*(1-(i-1)/ARC_SEGMENTS)+.04;beam.Width0=w;beam.Width1=w*.8;beam.Parent=anchor
     beams[i]=beam
    end
    bolts[b]={points=points,beams=beams}
@@ -1306,11 +1765,11 @@ function V:arcs(g: any,u: number)
   local dir=Vector3.new(math.cos(az)*math.cos(el),math.sin(el),math.sin(az)*math.cos(el))
   local side=dir:Cross(Vector3.yAxis);side=side.Magnitude>.05 and side.Unit or Vector3.xAxis
   local up=side:Cross(dir).Unit
-  local length=self.random:NextNumber(5,9)*(1+.3*u)
+  local length=math.clamp((g.radius or 2)*self.random:NextNumber(.6,1),1.8,3.6)*(1+.2*u)
   local from=g.center+Vector3.yAxis*.2
   for i=0,ARC_SEGMENTS do
    local f=i/ARC_SEGMENTS
-   local kink=(i==0 or i==ARC_SEGMENTS) and 0 or .55*math.sin(f*math.pi)
+   local kink=(i==0 or i==ARC_SEGMENTS) and 0 or .35*math.sin(f*math.pi)
    bolt.points[i].WorldPosition=from+dir*length*f+side*self.random:NextNumber(-kink,kink)+up*self.random:NextNumber(-kink,kink)
   end
   for _,beam in ipairs(bolt.beams) do beam.Enabled=on end
@@ -1327,7 +1786,7 @@ function V:stepArcs(now: number)
   for _,bolt in ipairs(set.bolts) do
    local on=self.random:NextNumber()<fade
    for i=0,#bolt.points do
-    if i>0 then bolt.points[i].WorldPosition+=Vector3.new(self.random:NextNumber(-.25,.25),self.random:NextNumber(-.25,.25),self.random:NextNumber(-.25,.25)) end
+    if i>0 then bolt.points[i].WorldPosition+=Vector3.new(self.random:NextNumber(-.15,.15),self.random:NextNumber(-.15,.15),self.random:NextNumber(-.15,.15)) end
    end
    for _,beam in ipairs(bolt.beams) do beam.Enabled=on end
   end
@@ -1381,11 +1840,20 @@ local SIGHT_HOT=Color3.fromRGB(255,170,176)
 local DOT='rbxasset://textures/ui/VR/circleWhite.png'
 local SIGHT_FADE=NumberSequence.new({NumberSequenceKeypoint.new(0,.92),NumberSequenceKeypoint.new(.45,.5),NumberSequenceKeypoint.new(1,.12)})
 local SIGHT_GLOW=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.5,.88),NumberSequenceKeypoint.new(1,.7)})
+-- The style code a drone digs with: its DigOp's code, else its role's.
+local function digCode(source: Instance): string
+ local key=source:GetAttribute('DigOp')
+ local code=type(key)=='string' and string.match(key,'~(%u)') or nil
+ if code and DigCube.STYLES_BY_CODE[code] then return code end
+ return V.style(source:GetAttribute('Role')).code
+end
 function V:beamTarget(source: Instance): BasePart?
  local id=source:GetAttribute('DroneId')
  local key=source:GetAttribute('DigOp');local point=source:GetAttribute('DigPoint')
  local beam=type(id)=='string' and self.beams[id]
- if not beam or not self.cube or type(key)~='string' or key=='' or typeof(point)~='Vector3' then
+ -- Only beam roles cut with the mining beam; shots, slams, volleys and
+ -- pulses draw their own attack.
+ if not beam or not self.cube or type(key)~='string' or key=='' or typeof(point)~='Vector3' or DigCube.style(digCode(source)).kernel~='beam' then
   if beam and beam.plate then beam.plate.Transparency=1 end
   return nil
  end
@@ -1423,42 +1891,90 @@ function V:newBeam(color: Color3,mine: boolean)
  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(65,65)
  sparks.Speed=NumberRange.new(6,13);sparks.Lifetime=NumberRange.new(.2,.42);sparks.Drag=2
  sparks.Acceleration=Vector3.new(0,-26,0);sparks.Rate=mine and 14 or 4;sparks.Enabled=false;sparks.Parent=b
- return {root=root,a=a,b=b,core=core,glow=glow,gui=gui,halo=halo,dot=dot,sparks=sparks,mine=mine,tint=color,on=false}
+ return {root=root,a=a,b=b,core=core,glow=glow,gui=gui,halo=halo,dot=dot,sparks=sparks,mine=mine,tint=color,edge=color,on=false}
 end
 function V:hideBeam(beam: any)
  if not beam.on then return end
  beam.on=false;beam.core.Enabled=false;beam.glow.Enabled=false;beam.gui.Enabled=false;beam.sparks.Enabled=false
 end
-function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
+-- Every frame per drone. `accent` is the drone's secondary color (its cube
+-- look); the attack color is the role's primary (V.primaryColor).
+function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
  local id=source:GetAttribute('DroneId')
  if type(id)~='string' or not self.cube then return end
- local tint=color or HOT
+ local primary=V.primaryColor(source:GetAttribute('Role'))
+ local edge=accent or primary
  local beam=self.beams[id]
  if not beam then
   local player=Players.LocalPlayer
-  beam=self:newBeam(tint,player~=nil and source:GetAttribute('Owner')==player.UserId)
+  beam=self:newBeam(primary,player~=nil and source:GetAttribute('Owner')==player.UserId)
   self.beams[id]=beam
  end
- beam.seen=os.clock() -- the step functions run on os.clock; `now` here is server time
- if beam.tint~=tint then beam.tint=tint;beam.sparks.Color=ColorSequence.new(tint:Lerp(BEAM_CORE,.3),tint) end
+ local clock=os.clock() -- the step functions run on os.clock; `now` here is server time
+ beam.seen=clock
+ if beam.tint~=primary or beam.edge~=edge then
+  beam.tint=primary;beam.edge=edge;beam.sparks.Color=ColorSequence.new(primary:Lerp(BEAM_CORE,.3),edge)
+ end
  local key=source:GetAttribute('DigOp')
- -- Remember which cells each drone is cutting (and the beam's color), and
+ local ids=type(key)=='string' and string.match(key,'^c([%d%.]+)') or nil
+ local code=digCode(source)
+ local style=DigCube.style(code)
+ local state=source:GetAttribute('State')
+ local digMining=source:GetAttribute('DigMining')==true
+ local alive=(source:GetAttribute('HP') or 1)>0
+ local point=source:GetAttribute('DigPoint')
+ -- The dig this drone was last on, before this frame. The slam or pulse
+ -- that breaks a chunk replicates together with DigOp cleared (digBreak
+ -- drops the job in the same tick), or already with the next job's key.
+ local lastKey,lastPoint=beam.key,beam.lastPoint
+ local recent=ids~=nil or clock-(beam.digAt or -10)<.5
+ -- Remember which cells each drone is cutting (its role and colors), and
  -- which are this player's own: their breaks get the pause and the combo.
- if type(key)=='string' and key~='' and beam.key~=key then
+ if ids and beam.key~=key then
   beam.key=key
-  for _,cell in ipairs(DigCube.parseKey(string.sub(key,2))) do
-   self.cellColor[cell]=tint
+  for _,cell in ipairs(DigCube.parseKey(ids)) do
+   self.cellColor[cell]=primary;self.cellCode[cell]=code;self.cellAccent[cell]=edge
    if beam.mine then self.mine[cell]=true end
   end
  end
- -- Stage cracks on the chunk this drone is cutting.
- if type(key)=='string' and key~='' and (source:GetAttribute('HP') or 1)>0 then
-  self:crackStage(key,source:GetAttribute('DigProgress') or 0,os.clock(),tint,beam.mine,source:GetAttribute('DigMining')==true)
+ if ids then
+  beam.digAt=clock
+  if typeof(point)=='Vector3' then beam.lastPoint=point end
+ end
+ -- Where a slam or pulse seen this frame landed: the chunk it broke when
+ -- the dig cleared or moved on this frame, else the current DigPoint.
+ local moved=ids==nil or (lastKey~=nil and lastKey~=key)
+ local hitPoint=(moved and lastPoint) or (typeof(point)=='Vector3' and point) or nil
+ -- A Charger's slam lands (ImpactSerial) and a Lancer pulse fires
+ -- (MinePulseSerial): the piece jolts down. First sight only records them.
+ local impactSerial=source:GetAttribute('ImpactSerial') or 0
+ local slam=beam.impactSerial~=nil and impactSerial~=beam.impactSerial and code=='C' and recent
+ beam.impactSerial=impactSerial
+ local pulseSerial=source:GetAttribute('MinePulseSerial') or 0
+ local pulse=beam.pulseSerial~=nil and pulseSerial~=beam.pulseSerial and code=='Z' and recent
+  and workspace:GetServerTimeNow()-(source:GetAttribute('MinePulseAt') or 0)<.5
+ beam.pulseSerial=pulseSerial
+ if ids and not moved and (slam or pulse) then
+  -- (a hit that broke the last chunk does not jolt the next one)
+  local job=self.cracks[ids]
+  if job then
+   if slam then job.slamAt=clock end
+   if pulse then job.pulseAt=clock end
+  end
+ end
+ if slam and beam.mine and self.ctx.audio then
+  self.ctx.audio:play('breaker_contact',hitPoint or from,{level=.7})
+ end
+ -- Stage cracks on the chunk this drone is cutting. The outline pulses
+ -- while it works on it: the beam, or any other attack once it is there.
+ if ids and alive then
+  local cutting=digMining or (style.kernel~='beam' and state~='Travel')
+  self:crackStage(ids,source:GetAttribute('DigProgress') or 0,clock,primary,beam.mine,cutting,code,source)
  end
  -- Only over the cube, alive and not in a menu pause.
  local l=from-self.origin
  local W=self.cube.width
- local alive=(source:GetAttribute('HP') or 1)>0 and source:GetAttribute('State')~='Destroyed' and source:GetAttribute('WorkPaused')~=true
+ alive=alive and state~='Destroyed' and source:GetAttribute('WorkPaused')~=true
  if not alive or l.X<-3 or l.X>W+3 or l.Z<-3 or l.Z>W+3 or l.Y<-2 then self:hideBeam(beam);return end
  -- Straight down, like the beam: where it would cut.
  if now>=(beam.rayAt or 0) or not beam.tip then
@@ -1469,22 +1985,22 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
   beam.tip=hit and hit.Position or Vector3.new(from.X,self.origin.Y,from.Z)
  end
  local tip=Vector3.new(from.X,beam.tip.Y,from.Z)
+ if pulse then self:pulseShot(from,hitPoint or tip,primary,edge,beam.mine) end
  if from.Y-tip.Y<.4 then self:hideBeam(beam);return end
- local state=source:GetAttribute('State')
- local cutting=type(key)=='string' and key~='' and source:GetAttribute('DigMining')==true
- local charging=type(key)=='string' and key~='' and state=='Warmup'
+ local locked=ids~=nil
+ local cutting=locked and digMining
+ local charging=locked and (state=='Warmup' or state=='BreakerWindup')
  if not beam.on then beam.on=true end
  -- The red targeting laser shows only while the drone charges, right before
- -- it fires; then the real beam takes its place.
+ -- it fires (or a Charger winds up); then the real attack takes its place.
  local aiming=charging and not cutting
  if beam.core.Enabled~=aiming then beam.core.Enabled=aiming;beam.glow.Enabled=aiming;beam.gui.Enabled=aiming end
  beam.root.CFrame=CFrame.new(tip+Vector3.yAxis*.05)
  beam.a.Position=from-tip
- local locked=type(key)=='string' and key~=''
  local size,core,halo
  if cutting then
-  local pulse=.5+.5*math.sin(now*14)
-  size=.9+.15*pulse;core=.0;halo=.6-.15*pulse
+  local wave=.5+.5*math.sin(now*14)
+  size=.9+.15*wave;core=.0;halo=.6-.15*wave
  elseif charging then
   local start=source:GetAttribute('WarmupStart') or 0
   local length=math.max(.05,source:GetAttribute('WarmupDuration') or .8)
@@ -1497,9 +2013,9 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,color: Color3?)
  end
  beam.gui.Size=UDim2.new(size,0,size,0);beam.dot.ImageTransparency=core;beam.halo.ImageTransparency=halo
  beam.core.Transparency=locked and SIGHT_FADE or SIGHT_GLOW
- -- Where the beam touches the rock: a steady stream of beam-colored sparks.
- -- The contact glow and light come from the mining beam itself; the old
- -- extra chips and rings every few frames only added noise.
+ -- Where the beam touches the rock: a steady stream of sparks in the role's
+ -- color fading to the drone's accent. The contact glow and light come from
+ -- the mining beam itself; the old extra chips and rings only added noise.
  local sparking=cutting and not self:reduced()
  if beam.sparks.Enabled~=sparking then beam.sparks.Enabled=sparking end
 end
@@ -1509,6 +2025,165 @@ function V:stepBeams(now: number)
   if idle>.3 then self:hideBeam(beam) end
   if beam.plate and now-(beam.plateAt or 0)>.3 then beam.plate.Transparency=1 end
   if idle>20 then beam.root:Destroy();if beam.plate then beam.plate:Destroy() end;self.beams[id]=nil end
+ end
+end
+-- The Lancer's pulse laser (owner's reference video, "squash, stretch,
+-- shake"): a thin white needle stabs down, stretches in a few frames to a fat
+-- core (white inside, the role's color around it, a red and a cyan fringe to
+-- either side), shakes sideways while fat, holds, squashes to a hairline and
+-- is gone, all in about a third of a second. Where it lands: a hollow square
+-- shock frame (turned 45 degrees) grows and fades, quick gold sparks, a small
+-- dark crater, and a line of tiny motes lingers and drifts where the beam
+-- was. Kept dim (low light emission, no full-screen flash). At most six shots
+-- live; their parts are pooled and reused.
+local SHOT={MAX=6,LIFE=.34,BUSY=.64,NEEDLE=.035,FAT=.08,HOLD=.2,SQUASH=.3,WIDTH=1.1,HAIR=.03,SHAKE=.12,FRINGE=.12,
+ WHITE=Color3.fromRGB(255,252,240),RED=Color3.fromRGB(255,70,86),CYAN=Color3.fromRGB(70,226,255),
+ GOLD=Color3.fromRGB(255,206,110),SCORCH=Color3.fromRGB(22,24,42)}
+function V:shotRig(): any
+ local root=fxPart(self.fx,'LancerShot',SHOT.WHITE);root.Transparency=1;root.Size=Vector3.one*.05
+ local function attach(): Attachment local a=Instance.new('Attachment');a.Parent=root;return a end
+ local rig={root=root,top=attach(),bottom=attach(),redTop=attach(),redBottom=attach(),cyanTop=attach(),cyanBottom=attach(),at=-10,idle=true}
+ local function ray(name: string,a0: Attachment,a1: Attachment,color: Color3,z: number): Beam
+  local b=Instance.new('Beam');b.Name=name;b.Attachment0=a0;b.Attachment1=a1;b.FaceCamera=true;b.Segments=1
+  b.Color=ColorSequence.new(color);b.LightEmission=.25;b.LightInfluence=0;b.Brightness=1;b.ZOffset=z
+  b.Enabled=false;b.Parent=root
+  return b
+ end
+ rig.core=ray('Core',rig.top,rig.bottom,SHOT.WHITE,.02)
+ rig.mid=ray('Mid',rig.top,rig.bottom,SHOT.WHITE,.01)
+ rig.red=ray('FringeRed',rig.redTop,rig.redBottom,SHOT.RED,0)
+ rig.cyan=ray('FringeCyan',rig.cyanTop,rig.cyanBottom,SHOT.CYAN,0)
+ rig.frame={}
+ for i=1,4 do local side=fxPart(self.fx,'LancerFrame',SHOT.WHITE);side.Transparency=1;side.Size=Vector3.new(.1,.03,.1);rig.frame[i]=side end
+ local crater=fxPart(self.fx,'LancerCrater',SHOT.SCORCH);crater.Shape=Enum.PartType.Cylinder;crater.Transparency=1;crater.Size=Vector3.new(.04,.1,.1)
+ rig.crater=crater
+ local spot=fxPart(self.fx,'LancerSparks',SHOT.GOLD);spot.Transparency=1;spot.Size=Vector3.one*.3
+ local sparks=Instance.new('ParticleEmitter');sparks.Name='Sparks'
+ EnergyDisc.configure(sparks,.24,.05,1,0,.3)
+ sparks.LightEmission=.5;sparks.LightInfluence=0;sparks.Brightness=1.2;sparks.Enabled=false;sparks.Rate=0
+ sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(75,75)
+ sparks.Speed=NumberRange.new(10,20);sparks.Lifetime=NumberRange.new(.14,.32);sparks.Drag=3
+ sparks.Acceleration=Vector3.new(0,-34,0);sparks.Parent=spot
+ rig.spot=spot;rig.sparks=sparks
+ local trail=fxPart(self.fx,'LancerMotes',SHOT.WHITE);trail.Transparency=1;trail.Size=Vector3.one*.2
+ local motes=Instance.new('ParticleEmitter');motes.Name='Motes'
+ EnergyDisc.configure(motes,.13,.2,1,0,.3)
+ motes.LightEmission=.5;motes.LightInfluence=0;motes.Brightness=1;motes.Enabled=false;motes.Rate=0
+ motes.Shape=Enum.ParticleEmitterShape.Box;motes.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+ motes.SpreadAngle=Vector2.new(180,180);motes.Speed=NumberRange.new(.2,.9);motes.Drag=1.2
+ motes.Lifetime=NumberRange.new(1,1.6);motes.Acceleration=Vector3.new(0,.7,0);motes.Parent=trail
+ rig.trail=trail;rig.motes=motes
+ return rig
+end
+function V:pulseShot(from: Vector3,to: Vector3,primary: Color3,accent: Color3?,owned: boolean?)
+ if not self.cube or self:reduced() or (from-to).Magnitude<.5 then return end
+ local now=os.clock()
+ local rig
+ for _,r in ipairs(self.shots) do if now-r.at>=SHOT.BUSY then rig=r;break end end
+ if not rig then
+  if #self.shots<SHOT.MAX then rig=self:shotRig();table.insert(self.shots,rig)
+  else
+   -- All six busy: the oldest one fires again.
+   rig=self.shots[1]
+   for _,r in ipairs(self.shots) do if r.at<rig.at then rig=r end end
+  end
+ end
+ local edge=accent or primary
+ rig.at=now;rig.from=from;rig.to=to;rig.owned=owned==true;rig.idle=false;rig.landed=false;rig.lingered=false
+ rig.mid.Color=ColorSequence.new(primary)
+ for _,side in ipairs(rig.frame) do side.Color=primary end
+ rig.sparks.Color=ColorSequence.new(SHOT.GOLD,primary)
+ rig.motes.Color=ColorSequence.new(primary:Lerp(SHOT.WHITE,.45),edge)
+ rig.primary=primary
+ self:stepShot(rig,now)
+end
+function V:stepShot(rig: any,now: number)
+ local t=now-rig.at
+ if t>=SHOT.BUSY then
+  -- Done: everything hidden until the rig fires again (the motes, already
+  -- emitted in world space, keep drifting).
+  rig.idle=true
+  rig.core.Enabled=false;rig.mid.Enabled=false;rig.red.Enabled=false;rig.cyan.Enabled=false
+  for _,side in ipairs(rig.frame) do side.Transparency=1 end
+  rig.crater.Transparency=1
+  return
+ end
+ local from,to=rig.from,rig.to
+ local ground=to+Vector3.yAxis*.06
+ local on=t<SHOT.LIFE
+ if rig.core.Enabled~=on then rig.core.Enabled=on;rig.mid.Enabled=on;rig.red.Enabled=on;rig.cyan.Enabled=on end
+ if on then
+  -- Needle, stretch, hold (shaking), squash, out.
+  local width,reach=SHOT.HAIR*2,1
+  if t<SHOT.NEEDLE then reach=t/SHOT.NEEDLE
+  elseif t<SHOT.FAT then local u=(t-SHOT.NEEDLE)/(SHOT.FAT-SHOT.NEEDLE);width=width+(SHOT.WIDTH-width)*(1-(1-u)^2)
+  elseif t<SHOT.HOLD then width=SHOT.WIDTH
+  elseif t<SHOT.SQUASH then local u=(t-SHOT.HOLD)/(SHOT.SQUASH-SHOT.HOLD);width=SHOT.HAIR+(SHOT.WIDTH-SHOT.HAIR)*(1-u*u)
+  else width=SHOT.HAIR end
+  local fade=math.clamp((t-SHOT.SQUASH)/(SHOT.LIFE-SHOT.SQUASH),0,1)
+  local dir=(to-from).Unit
+  local camera=workspace.CurrentCamera
+  local look=camera and camera.CFrame.LookVector or Vector3.zAxis
+  local side=dir:Cross(look)
+  side=side.Magnitude>.05 and side.Unit or Vector3.xAxis
+  local shake=Vector3.zero
+  if t>=SHOT.FAT and t<SHOT.HOLD then shake=side*self.random:NextNumber(-SHOT.SHAKE,SHOT.SHAKE) end
+  local top=from+shake
+  local bottom=from:Lerp(to,reach)+shake*.5
+  rig.top.WorldPosition=top;rig.bottom.WorldPosition=bottom
+  local fringe=side*SHOT.FRINGE*math.clamp(width/SHOT.WIDTH,0,1)
+  rig.redTop.WorldPosition=top+fringe;rig.redBottom.WorldPosition=bottom+fringe
+  rig.cyanTop.WorldPosition=top-fringe;rig.cyanBottom.WorldPosition=bottom-fringe
+  rig.core.Width0=width*.55;rig.core.Width1=width*.55
+  rig.mid.Width0=width;rig.mid.Width1=width
+  rig.red.Width0=width*.85;rig.red.Width1=width*.85
+  rig.cyan.Width0=width*.85;rig.cyan.Width1=width*.85
+  if fade~=rig.fade then
+   rig.fade=fade
+   rig.core.Transparency=NumberSequence.new(.05+.95*fade)
+   rig.mid.Transparency=NumberSequence.new(.4+.6*fade)
+   rig.red.Transparency=NumberSequence.new(.62+.38*fade)
+   rig.cyan.Transparency=NumberSequence.new(.62+.38*fade)
+  end
+ end
+ if t>=SHOT.NEEDLE and not rig.landed then
+  -- The needle lands: sparks, and a short dim light for your own.
+  rig.landed=true
+  rig.spot.CFrame=CFrame.new(ground)
+  rig.sparks:Emit(10)
+  if rig.owned then self:lightFlash(ground+Vector3.yAxis*.6,rig.primary,9,3.5,.22) end
+ end
+ if rig.landed then
+  -- The square shock frame grows from 1 to 6 studs and fades over .4 s.
+  local u=math.clamp((t-SHOT.NEEDLE)/.4,0,1)
+  local size=1+5*(1-(1-u)^2)
+  local thick=.1*(1-u)+.04
+  for i,part in ipairs(rig.frame) do
+   if u>=1 then part.Transparency=1
+   else
+    part.Transparency=.3+.7*u
+    part.Size=Vector3.new(size+thick,.03,thick)
+    part.CFrame=CFrame.new(ground)*CFrame.Angles(0,math.pi/4+(i-1)*math.pi/2,0)*CFrame.new(0,0,size*.5)
+   end
+  end
+  -- The small dark crater fades over .6 s.
+  local c=math.clamp((t-SHOT.NEEDLE)/.6,0,1)
+  rig.crater.Transparency=.25+.75*c^1.5
+  rig.crater.Size=Vector3.new(.04,1.2+.5*(1-(1-c)^3),1.2+.5*(1-(1-c)^3))
+  rig.crater.CFrame=CFrame.new(to+Vector3.yAxis*.03)*CFrame.Angles(0,0,math.pi/2)
+ end
+ if t>=SHOT.HOLD and not rig.lingered then
+  -- Motes along the path, as the beam starts to squash; they drift on.
+  rig.lingered=true
+  local length=(to-from).Magnitude
+  rig.trail.Size=Vector3.new(.18,.18,math.max(.2,length))
+  rig.trail.CFrame=CFrame.lookAt(from:Lerp(to,.5),to)
+  rig.motes:Emit(math.clamp(math.floor(length*2),6,16))
+ end
+end
+function V:stepShots(now: number)
+ for _,rig in ipairs(self.shots) do
+  if not rig.idle then self:stepShot(rig,now) end
  end
 end
 
@@ -1655,12 +2330,37 @@ function V:inputEnded(input: InputObject,processed: boolean)
  self:puff(hit.Position+hit.Normal*.2,Color3.fromRGB(255,226,160),.6,5)
 end
 
--- Gold sparkles on the rock surface above each treasure pocket still in the
--- rock: something to spot, tap and dig toward.
 function V:clearSparkles()
  for _,sp in pairs(self.sparkles or {}) do sp.part:Destroy() end
  self.sparkles={}
+ for _,part in pairs(self.hints) do part:Destroy() end
+ self.hints={}
 end
+-- A soft column of sparkles over a cell (no light, no text).
+function V:sparkle(name: string,color: Color3,size: number,rate: number,span: number): BasePart
+ local part=fxPart(self.fx,name,color)
+ part.Transparency=1;part.Size=Vector3.new(span,.2,span)
+ local emitter=Instance.new('ParticleEmitter')
+ emitter.Texture='rbxasset://textures/particles/sparkles_main.dds'
+ emitter.Color=ColorSequence.new(color)
+ emitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,size),NumberSequenceKeypoint.new(1,0)})
+ emitter.Lifetime=NumberRange.new(.7,1.2);emitter.Rate=rate;emitter.Speed=NumberRange.new(2,5)
+ emitter.SpreadAngle=Vector2.new(25,25);emitter.LightEmission=.3
+ emitter.EmissionDirection=Enum.NormalId.Top;emitter.Parent=part
+ return part
+end
+-- Where a cell shows on the rock from above: the first rock surface over
+-- its middle (the cell's own top once it is open).
+function V:surfaceOver(id: number,params: RaycastParams,rock: Instance?): Vector3
+ local c=self.cube.cells[id]
+ local top=self.origin+Vector3.new(c.cx,self.cube.height+8,c.cz)
+ local hit=rock and workspace:Raycast(top,Vector3.new(0,-(self.cube.height+12),0),params)
+ return hit and hit.Position or self.origin+Vector3.new(c.cx,c.y1,c.cz)
+end
+-- Gold sparkles on the rock surface above each treasure pocket still in the
+-- rock: something to spot, tap and dig toward. A Needler's hints (the
+-- player's DigHints, 'id:tier;..') mark gem cells near its breaks with a
+-- smaller sparkle in the gem's own color until they expire or break.
 function V:stepSparkles(now: number)
  if not self.cube or now<(self.sparkleAt or 0) then return end
  self.sparkleAt=now+.8
@@ -1673,23 +2373,80 @@ function V:stepSparkles(now: number)
   if self.cube.removed[id] then
    if sp then sp.part:Destroy();self.sparkles[id]=nil end
   else
-   local c=self.cube.cells[id]
-   local top=self.origin+Vector3.new(c.cx,self.cube.height+8,c.cz)
-   local hit=rock and workspace:Raycast(top,Vector3.new(0,-(self.cube.height+12),0),params)
-   local at=hit and hit.Position or self.origin+Vector3.new(c.cx,self.cube.height,c.cz)
+   local at=self:surfaceOver(id,params,rock)
    if not sp then
-    local part=fxPart(self.fx,'TreasureSparkle',Color3.fromRGB(255,214,90))
-    part.Transparency=1;part.Size=Vector3.new(3,.2,3)
-    local emitter=Instance.new('ParticleEmitter')
-    emitter.Texture='rbxasset://textures/particles/sparkles_main.dds'
-    emitter.Color=ColorSequence.new(Color3.fromRGB(255,222,120))
-    emitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(1,0)})
-    emitter.Lifetime=NumberRange.new(.7,1.2);emitter.Rate=5;emitter.Speed=NumberRange.new(2,5)
-    emitter.SpreadAngle=Vector2.new(25,25);emitter.LightEmission=.3
-    emitter.EmissionDirection=Enum.NormalId.Top;emitter.Parent=part
-    sp={part=part};self.sparkles[id]=sp
+    sp={part=self:sparkle('TreasureSparkle',Color3.fromRGB(255,222,120),.4,5,3)};self.sparkles[id]=sp
    end
    sp.part.CFrame=CFrame.new(at+Vector3.yAxis*.15)
+  end
+ end
+ local list=Players.LocalPlayer and Players.LocalPlayer:GetAttribute('DigHints')
+ local want={}
+ if type(list)=='string' then
+  for id,tier in string.gmatch(list,'(%d+):(%d+)') do want[tonumber(id) :: number]=tonumber(tier) end
+ end
+ for id,part in pairs(self.hints) do
+  if not want[id] or self.cube.removed[id] then part:Destroy();self.hints[id]=nil end
+ end
+ for id,tier in pairs(want) do
+  local c=self.cube.cells[id]
+  if c and not self.cube.removed[id] then
+   local part=self.hints[id]
+   if not part then
+    local ore=DigCube.ORES[math.clamp(tier,1,#DigCube.ORES)]
+    part=self:sparkle('DigHint',rgb(ore.color),.25,4,math.clamp(c.radius,.8,2.5));self.hints[id]=part
+   end
+   part.CFrame=CFrame.new(self:surfaceOver(id,params,rock)+Vector3.yAxis*.12)
+  end
+ end
+end
+
+-- Frostbite leaves the rock around its breaks brittle (the holder's
+-- 'Brittle' list): each brittle cell wears a thin frost slab on its top,
+-- which fades when the cell recovers or breaks.
+local FROST=Color3.fromRGB(200,240,255)
+function V:clearFrost()
+ for _,slab in pairs(self.frost) do slab.model:Destroy() end
+ self.frost={}
+end
+function V:syncBrittle()
+ if not self.holder or not self.cube then return end
+ local list=self.holder:GetAttribute('Brittle')
+ local want={}
+ if type(list)=='string' then for id in string.gmatch(list,'%d+') do want[tonumber(id) :: number]=true end end
+ local now=os.clock()
+ for id,slab in pairs(self.frost) do
+  if not want[id] and not slab.fadeAt then slab.fadeAt=now end
+ end
+ for id in pairs(want) do
+  local slab=self.frost[id]
+  local c=self.cube.cells[id]
+  if slab and slab.fadeAt and not self.cube.removed[id] then
+   slab.fadeAt=nil
+   for _,part in ipairs(slab.parts) do part.Transparency=.6 end
+  elseif not slab and c and not self.cube.removed[id] then
+   local model=Instance.new('Model');model.Name='DigFrost'
+   local parts={}
+   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,.05),c.y1+.005,c.y1+.065)) do
+    local part=fxPart(model,'FrostSlab',FROST,'WedgePart')
+    part.Material=Enum.Material.Ice;part.Transparency=.6
+    part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+    part.CFrame=CFrame.fromMatrix(self.origin+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+    table.insert(parts,part)
+   end
+   model.Parent=self.fx
+   self.frost[id]={model=model,parts=parts}
+  end
+ end
+end
+function V:stepFrost(now: number)
+ for id,slab in pairs(self.frost) do
+  if not slab.fadeAt and self.cube and self.cube.removed[id] then slab.fadeAt=now end
+  if slab.fadeAt then
+   local u=(now-slab.fadeAt)/.4
+   if u>=1 then slab.model:Destroy();self.frost[id]=nil
+   else for _,part in ipairs(slab.parts) do part.Transparency=.6+.4*u end end
   end
  end
 end
@@ -1706,6 +2463,8 @@ function V:update()
  self:stepLights(now)
  self:stepGeodes(now)
  self:stepArcs(now)
+ self:stepShots(now)
+ self:stepFrost(now)
  self:stepLamp(math.clamp(now-(self.lastStep or now),0,.25))
  self.lastStep=now
  self:stepPad(now)
