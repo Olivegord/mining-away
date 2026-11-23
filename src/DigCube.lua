@@ -114,6 +114,11 @@ D.LAYER_HUES={
 D.LAYER_SHIFT=.5 -- how far a layer's second tone leans toward the next hue
 D.LAYER_MUTE=.14 -- share of neutral stone mixed into every hue (the rock stays below the beams and gems)
 D.LAYER_VALUE=.86 -- overall brightness of the rock
+-- Owner, Nov 22 (after the 14 thinner layers): "there should still be ...
+-- color differences between layers!" The depth ramp alone changes too little
+-- from one thin layer to the next, so every other layer is a band a step
+-- darker and a touch warmer: neighbors read apart at a glance.
+D.LAYER_BAND=.14
 local STONE_TONE={150,150,166}
 local function mix(a: {number},b: {number},t: number): {number}
  return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t}
@@ -133,7 +138,9 @@ function D.layerColor(cube: any,L: number,x: number,z: number): {number}
  local t=D.noise3(x/22,L*5.7,z/22,(cube and cube.seed or 1)%100000)
  t=math.clamp((t-.2)/.6,0,1)
  local c=mix(mix(a,b,t),STONE_TONE,D.LAYER_MUTE)
- return {c[1]*D.LAYER_VALUE,c[2]*D.LAYER_VALUE,c[3]*D.LAYER_VALUE}
+ local v=D.LAYER_VALUE
+ if L%2==0 then v*=1-D.LAYER_BAND;c=mix(c,{c[1]*1.06,c[2],c[3]*.94},1) end
+ return {c[1]*v,c[2]*v,c[3]*v}
 end
 -- Layer index holding height y (cube-local).
 function D.layerAt(cube: any,y: number): number

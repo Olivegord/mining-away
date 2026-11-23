@@ -79,10 +79,12 @@ local ROLE_FX={
  -- Owner follow-up: "not every rock should be black. and the splitting rock
  -- effect should only be for select drones". Then: "sometimes the laser
  -- drones STILL turn stuff completely black and cut it in half -> not good".
- -- No Striker chars or splits any more (the big-chunk Lc variant is gone):
- -- every Striker cuts the classic terraces with a light warm scorch.
- L={proxy={tone=C3(112,84,62),cap=.22,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
-  rubble={per=3,min=1,max=4,up={4,7},out={3,6},spin={2,4},dark={.02,.06},near=.1,dcap=.2},
+ -- No Striker chars or splits any more (the big-chunk Lc variant is gone).
+ -- Then: "there should still be blackening of rock". The cut cell darkens
+ -- toward charcoal as the beam works, but only about halfway (never black,
+ -- never split), and rubble near the hit comes away scorched.
+ L={proxy={tone=C3(34,26,24),cap=.5,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
+  rubble={per=3,min=1,max=4,up={4,7},out={3,6},spin={2,4},dark={.06,.16},near=.35,dcap=.45},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
  C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
   rubble={per=3.6,min=1,max=4,up={46,60},out={4,8},spin={1.2,2.6},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3,pattern='ring',
