@@ -50,12 +50,19 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
   end
  end
- local function releaseSparks(point,ground,oreColor,strength,now,count)
+ -- opts (optional; field rocks use the defaults): life scales how long each
+ -- spark lasts, lift how high it rises, speed how fast it flies out, and cap
+ -- is the live-spark limit it stops at (default 32).
+ local function releaseSparks(point,ground,oreColor,strength,now,count,opts)
   local player=Players.LocalPlayer
   local lowFlash=player and player:GetAttribute('ReducedFlashing')==true
   local heading=variation:NextNumber(0,2*math.pi)
+  local life=opts and opts.life or 1
+  local liftScale=opts and opts.lift or 1
+  local speedScale=opts and opts.speed or 1
+  local cap=opts and opts.cap or 32
   for i=1,count or 8 do
-   if #self.sparks>=32 then break end
+   if #self.sparks>=cap then break end
    local streak=i<=5
    local angle=heading+i*2.39996+variation:NextNumber(-.70,.70)
    local direction=Vector3.new(math.cos(angle),0,math.sin(angle))
@@ -67,16 +74,17 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    spark.Transparency=1;spark.Size=Vector3.one*.045;spark.Position=point
    self.sparks[#self.sparks+1]={
     p=spark,at=now+variation:NextNumber(0,streak and .09 or .21),from=point,ground=ground,streak=streak,
-    duration=streak and variation:NextNumber(1.05,1.85) or variation:NextNumber(2.1,3.2),
-    v=direction*variation:NextNumber(streak and 8 or 2.5,streak and 19 or 6),
-    lift=variation:NextNumber(streak and 5.5 or 7.5,streak and 14 or 12),
+    duration=(streak and variation:NextNumber(1.05,1.85) or variation:NextNumber(2.1,3.2))*life,
+    v=direction*variation:NextNumber(streak and 8 or 2.5,streak and 19 or 6)*speedScale,
+    lift=variation:NextNumber(streak and 5.5 or 7.5,streak and 14 or 12)*liftScale,
     drift=drift*variation:NextNumber(.32,.88),phase=variation:NextNumber(0,2*math.pi),frequency=variation:NextNumber(3.8,9.5),
     size=math.sqrt(strength)*variation:NextNumber(streak and .085 or .045,streak and .19 or .085),lowFlash=lowFlash,
    }
   end
  end
  -- The same streak-and-ember sparks for other breakable rock (the Dig Cube).
- function self:fireworks(point,ground,color,strength,now,count) releaseSparks(point,ground,color,strength,now,count) end
+ -- Five or fewer are streak boxes only; opts as releaseSparks.
+ function self:fireworks(point,ground,color,strength,now,count,opts) releaseSparks(point,ground,color,strength,now,count,opts) end
  -- The split's eight tumbling pieces (two tink when they land) and its pop,
  -- exactly as a field rock throws them, for other breakable rock.
  function self:breakPieces(point,ground,stone,strength,now,owned,material)

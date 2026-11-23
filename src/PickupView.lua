@@ -739,7 +739,8 @@ function V:update(dt,now)
      if not inFlight or reducedEffects or r.ribbon.untilAt then finishTrail(self,r,now) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
      -- A gem out of a sealed cell flies high with a long, thick trail.
-     r.ribbon=launchTrail(r.view,r.effectColor,r.physical and .32 or r.geode and .6 or r.rareGem and .3 or .16);r.trailUsed=true;self.trailCount+=1
+     -- The geode test comes first: a geode gem can also be physical cargo, and it keeps its thick trail.
+     r.ribbon=launchTrail(r.view,r.effectColor,r.geode and .6 or r.physical and .32 or r.rareGem and .3 or .16);r.trailUsed=true;self.trailCount+=1
      if r.rareGem then r.ribbon.trail.Lifetime=r.geode and 1.1 or .5 end
      if r.geode then r.ribbon.trail.MaxLength=40 end
     end
