@@ -350,7 +350,7 @@ local function roleTestFleet(p: any,starterOnly: boolean?,digCrew: any)
   -- A small random crew for the Dig Cube (owner, Nov 22: all 14 at once was
   -- far too confusing): the real first miner plus 3 different dig roles.
   -- Only the active types for now (owner: 6 drones or less, DroneCatalog.ACTIVE).
-  local pool={'Lancer','Charger','Ballcaster','Needler','Frostbite'}
+  local pool={'Lancer','Charger','Ballcaster','Needler','Frostbite','Ramiel'}
   order={'Striker'}
   if type(digCrew)=='table' then for _,name in ipairs(digCrew) do if name~='Striker' then table.insert(order,name) end end
   else for _=1,3 do table.insert(order,table.remove(pool,math.random(1,#pool))) end end
@@ -4999,9 +4999,15 @@ local function droneStep(d: any,dt: number)
   return
  end
  if scene.digActive(p) then
-  if not p.digging then p.digging=true;p.player:SetAttribute('MA_Digging',true);leaveField(p) end
+  -- Owner, Nov 22: rocks never block the camera while digging; they turn
+  -- see-through (Invisicam; only the server can set it). Restored on leaving.
+  if not p.digging then p.digging=true;p.player:SetAttribute('MA_Digging',true);leaveField(p)
+   pcall(function() p.cameraMode=p.cameraMode or p.player.DevCameraOcclusionMode;p.player.DevCameraOcclusionMode=Enum.DevCameraOcclusionMode.Invisicam end)
+  end
   scene.digDrone(d,p,dt);return
- elseif p.digging then p.digging=false;p.digLeftAt=now;p.player:SetAttribute('MA_Digging',false);scene.digRelease(p) end
+ elseif p.digging then p.digging=false;p.digLeftAt=now;p.player:SetAttribute('MA_Digging',false);scene.digRelease(p)
+  pcall(function() p.player.DevCameraOcclusionMode=p.cameraMode or Enum.DevCameraOcclusionMode.Zoom;p.cameraMode=nil end)
+ end
  if scene.chargingStation and not d.carrierId and d.stats.batteryCapacity>0 then
   local committed=scene.committedWork(d)
   if d.chargedPin and (d.chargedPin~=p.miningSquare or committed) then d.chargedPin=nil end

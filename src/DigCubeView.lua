@@ -1302,6 +1302,18 @@ do
    return Vector3.new(math.noise(q,i,.2),math.noise(i,q,.6)*.6,math.noise(.3,i,q))*(a*2)
   end
  end}
+ -- Ramiel: the prism beam chars the cluster from the hit outward while it
+ -- charges; at the end the blackened rock rises, held, before the blast.
+ SIG.P={tiles=function(self,proxy,rec,p)
+  local h=proxy.hit or Vector3.zero
+  local front=(rec.radius+1)*math.min(1,p*1.3)
+  local rise=math.clamp((p-.7)/.3,0,1)
+  return function(tile,i)
+   local burnt=math.clamp((front-dist(tile,h))/1.5,0,1)
+   if burnt<=0 then return nil end
+   return Vector3.new(0,.55*rise*rise+.04*math.sin(i*2.1)*rise,0),nil,tile.stone:Lerp(Color3.fromRGB(16,10,14),.82*burnt)
+  end
+ end}
  SIG.Z={ring={amp=.3,speed=20,width=.8,glow=.5},tiles=function(self,proxy,rec,p,now)
   local h=proxy.hit or Vector3.zero
   local n=proxy.hits or 0
@@ -2890,27 +2902,8 @@ function V:stepLamp(dt: number)
   end
  end
  self:stepPitLight(depth,dt)
- -- Owner, Nov 22: "make sure rocks never block the camera when you are
- -- digging, they just become sorta transparent". On the cube the camera
- -- uses Roblox's Invisicam: rock between the camera and you fades to see-
- -- through instead of the camera zooming in. Off the cube it goes back.
- local player=Players.LocalPlayer
- local over=false
- if root and root:IsA('BasePart') then
-  local l=root.Position-self.origin;local W=self.cube.width
-  over=l.X>=-4 and l.X<=W+4 and l.Z>=-4 and l.Z<=W+4 and l.Y<=self.cube.height+14
- end
- if player and over~=(self.invisicam~=nil) then
-  pcall(function()
-   if over then
-    self.invisicam=player.DevCameraOcclusionMode
-    player.DevCameraOcclusionMode=Enum.DevCameraOcclusionMode.Invisicam
-   else
-    player.DevCameraOcclusionMode=self.invisicam or Enum.DevCameraOcclusionMode.Zoom
-    self.invisicam=nil
-   end
-  end)
- end
+ -- (Rock between the camera and you turns see-through while you dig:
+ -- Invisicam, set by the server, which alone may change it.)
  local lamp=self.lamp
  if depth<=0 then
   if lamp then lamp.Enabled=false end
@@ -3123,6 +3116,7 @@ local SHOWCASE={
  {code='N',name='NEEDLER',sub='chips bits out'},
  {code='B',name='BALLCASTER',sub='swells, then pops'},
  {code='I',name='FROSTBITE',sub='freezes it'},
+ {code='P',name='RAMIEL',sub='chars, lifts, blasts'},
 }
 local SHOW_PERIOD=4.4
 local SHOW_WORK=3.2 -- seconds of work; the rest holds the result
@@ -3244,7 +3238,6 @@ function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
   if self.lamp then self.lamp:Destroy() end
  self:restorePitLight()
- if self.invisicam then pcall(function() Players.LocalPlayer.DevCameraOcclusionMode=self.invisicam end);self.invisicam=nil end
  self.fx:Destroy()
 end
 return V

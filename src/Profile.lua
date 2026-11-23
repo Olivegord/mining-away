@@ -651,13 +651,14 @@ local function prestigeChoices(p)
  end
  -- Keep the opening choices, then give each missing flagship a clear route
  -- through the ordinary one-of-three permanent selection.
- if p.run.index>1 and DroneCatalog.ACTIVE.Nomad then
-  if not owned.Nomad then
+ if p.run.index>1 then
+  if not owned.Nomad and DroneCatalog.ACTIVE.Nomad then
    choices[2]={kind='Nomad',name='Nomad',tier=4,job='Sweeps in from the sky and shatters exposed crystals across the field'}
   end
   local first=p.run.index%2==0 and 'Ramiel' or 'Orbiter'
   local second=first=='Ramiel' and 'Orbiter' or 'Ramiel'
-  local kind=not owned[first] and first or not owned[second] and second
+  local function offered(k: string): boolean return not owned[k] and DroneCatalog.ACTIVE[k]==true end
+  local kind=offered(first) and first or offered(second) and second
   if kind then
    choices[3]={kind=kind,name=DroneCatalog.Types[kind].Name,tier=4,job=kind=='Ramiel'
     and 'Unfolds a glass prism for huge mining pulses' or 'Sky laser melts the largest crystal and strikes a neighbor'}

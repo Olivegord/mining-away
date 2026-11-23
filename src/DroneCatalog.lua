@@ -53,7 +53,8 @@ end
 -- of an undertaking before all the game is ready." Only these types are
 -- offered for now; the rest stay in the code, dormant. Saved fleets keep
 -- whatever they already own.
-Catalog.ACTIVE={Blue=true,Red=true,Lancer=true,Needler=true,Ballcaster=true,Frostbite=true}
+-- Owner follow-up: "keep ramiel for now".
+Catalog.ACTIVE={Blue=true,Red=true,Lancer=true,Needler=true,Ballcaster=true,Frostbite=true,Ramiel=true}
 function Catalog.prestigeChoices(seed,index,owned)
  local prime=2147483647
  local state=(seed%prime*48271+index%prime*69621)%prime

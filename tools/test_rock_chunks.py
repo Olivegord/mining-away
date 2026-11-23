@@ -504,7 +504,7 @@ do -- the drone gallery
  local self=view()
  fakeClock=1000
  self:stepShowcase(fakeClock)
- assert(#self.showcase.stations==6,'six display rocks, one per active type')
+ assert(#self.showcase.stations==7,'seven display rocks, one per active type')
  local moved={}
  for f=1,300 do
   fakeClock=1000+f/60
@@ -520,7 +520,7 @@ do -- the drone gallery
  assert(old.dead,'rebuilt once per cube')
  for _,st in ipairs(self.showcase.stations) do RockChunks.destroy(st.rec) end
  for _,st in ipairs(self.showcase.stations) do assert(st.def.code=='L' or (st.proxy and st.proxy.sig==V.SIG[st.def.code]),st.def.name..' runs its real digging style') end
- print('PASS drone gallery: all six display rocks run their type\'s digging style; rebuilt per cube')
+ print('PASS drone gallery: all seven display rocks run their type\'s digging style; rebuilt per cube')
 end
 do -- jumping on a sealed gem: brighter, long bolts, longer rays, combo crack after the pause
  local self=view()
