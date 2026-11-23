@@ -520,7 +520,13 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  end
- if not reference or ink or sample.cube then self.work:mining(beam,sample,point,normal,visible and width or 0,pulse,now) end
+ if not reference or ink or sample.cube then
+  -- A dig role without a laser (sample.noBeam) shows no Striker charge at its emitter either;
+  -- it still passes through so any earlier work effects hide and retire.
+  local workSample=sample
+  if sample.noBeam==true and sample.charging then workSample=table.clone(sample);workSample.charging=false end
+  self.work:mining(beam,workSample,point,normal,visible and width or 0,pulse,now)
+ end
  if glow and sample.resource and sample.resource.cutFeedback then
   sample.resource.cutFeedback:cut(sample.resource,now,beat*math.min(1,width+.25))
   if not ink and beam.contactAccentAt~=sample.since then

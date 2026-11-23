@@ -636,7 +636,8 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
        local reduced=BeamVFX.reduced() or (Players.LocalPlayer and Players.LocalPlayer:GetAttribute('ReducedFlashing')==true)
        local gap=math.min(travel.Magnitude*.14,1.22)
        local groundNormal=node:GetAttribute('PrismGroundNormal')
-       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .88 or 1.52,hold,'Prism',groundNormal)
+       -- A dig shot's contact is a cell that breaks a moment later: no ground scorch over the hole.
+       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .88 or 1.52,hold,'Prism',not dig and groundNormal or nil)
        if typeof(ground)=='Vector3' then RoleVisuals.PrismWave(ground,radius,hold) end
        if onPrism and not dig then onPrism(origin,endpoint,contactAt,hold) end
        if now-contactAt>=.18 then continue end
