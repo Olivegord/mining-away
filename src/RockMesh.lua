@@ -140,9 +140,12 @@ function M.build(shapes: {Shape},split: any,random: () -> number): any?
    local f=mesh:AddTriangle(a,b,c);mesh:SetFaceColors(f,{clear,clear,clear})
   end
   rec.bounds=extent
-  local part=AssetService:CreateMeshPartAsync(Content.fromObject(mesh),{CollisionFidelity=Enum.CollisionFidelity.Box,RenderFidelity=Enum.RenderFidelity.Precise})
+  local part=AssetService:CreateMeshPartAsync(Content.fromObject(mesh),{CollisionFidelity=Enum.CollisionFidelity.Box})
   part.Name='DigRockMesh';part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false
-  part.CastShadow=true;part.Material=Enum.Material.SmoothPlastic;part.Color=WHITE;part.DoubleSided=true
+  part.CastShadow=true;part.Material=Enum.Material.SmoothPlastic;part.Color=WHITE
+  -- Faces wind counterclockwise from outside (front); double-sided only as a guard.
+  pcall(function() part.DoubleSided=true end)
+  pcall(function() part.RenderFidelity=Enum.RenderFidelity.Precise end)
   rec.part=part;rec.mesh=mesh
   return rec
  end)
