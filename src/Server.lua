@@ -349,7 +349,8 @@ local function roleTestFleet(p: any,starterOnly: boolean?,digCrew: any)
  if digCrew then
   -- A small random crew for the Dig Cube (owner, Nov 22: all 14 at once was
   -- far too confusing): the real first miner plus 3 different dig roles.
-  local pool={'Lancer','Charger','Ballcaster','Needler','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Ramiel','Nomad'}
+  -- Only the active types for now (owner: 6 drones or less, DroneCatalog.ACTIVE).
+  local pool={'Lancer','Charger','Ballcaster','Needler','Frostbite'}
   order={'Striker'}
   if type(digCrew)=='table' then for _,name in ipairs(digCrew) do if name~='Striker' then table.insert(order,name) end end
   else for _=1,3 do table.insert(order,table.remove(pool,math.random(1,#pool))) end end

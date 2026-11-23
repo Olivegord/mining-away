@@ -49,10 +49,16 @@ function Catalog.prestigeReward(seed,index)
  error('Prestige reward weights must total 100')
 end
 -- Three distinct weighted choices, stable for a run across reconnects.
+-- Owner, Nov 22: "only work on like 6 drones or less. all 14 is too much
+-- of an undertaking before all the game is ready." Only these types are
+-- offered for now; the rest stay in the code, dormant. Saved fleets keep
+-- whatever they already own.
+Catalog.ACTIVE={Blue=true,Red=true,Lancer=true,Needler=true,Ballcaster=true,Frostbite=true}
 function Catalog.prestigeChoices(seed,index,owned)
  local prime=2147483647
  local state=(seed%prime*48271+index%prime*69621)%prime
- local pool=table.clone(Catalog.PrestigeRewards)
+ local pool={}
+ for _,entry in ipairs(Catalog.PrestigeRewards) do if Catalog.ACTIVE[entry.kind] then table.insert(pool,entry) end end
  local choices={}
  for _=1,3 do
   -- A new mining behavior is a stronger early reward than a fourth identical

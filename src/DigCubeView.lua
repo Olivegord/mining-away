@@ -2890,6 +2890,27 @@ function V:stepLamp(dt: number)
   end
  end
  self:stepPitLight(depth,dt)
+ -- Owner, Nov 22: "make sure rocks never block the camera when you are
+ -- digging, they just become sorta transparent". On the cube the camera
+ -- uses Roblox's Invisicam: rock between the camera and you fades to see-
+ -- through instead of the camera zooming in. Off the cube it goes back.
+ local player=Players.LocalPlayer
+ local over=false
+ if root and root:IsA('BasePart') then
+  local l=root.Position-self.origin;local W=self.cube.width
+  over=l.X>=-4 and l.X<=W+4 and l.Z>=-4 and l.Z<=W+4 and l.Y<=self.cube.height+14
+ end
+ if player and over~=(self.invisicam~=nil) then
+  pcall(function()
+   if over then
+    self.invisicam=player.DevCameraOcclusionMode
+    player.DevCameraOcclusionMode=Enum.DevCameraOcclusionMode.Invisicam
+   else
+    player.DevCameraOcclusionMode=self.invisicam or Enum.DevCameraOcclusionMode.Zoom
+    self.invisicam=nil
+   end
+  end)
+ end
  local lamp=self.lamp
  if depth<=0 then
   if lamp then lamp.Enabled=false end
@@ -3094,19 +3115,14 @@ end
 -- way of breaking rock (the same SIG process the real pieces run), with a
 -- small sign readable only from beside it. Local only: no drones, rewards
 -- or collisions.
+-- Only the six active types (owner: "6 drones or less" for now).
 local SHOWCASE={
  {code='L',name='STRIKER',sub='cuts terraced pits'},
- {code='C',name='CHARGER',sub='stamps a crater'},
  {code='Z',name='LANCER',sub='drills a hole'},
+ {code='C',name='CHARGER',sub='stamps a crater'},
  {code='N',name='NEEDLER',sub='chips bits out'},
  {code='B',name='BALLCASTER',sub='swells, then pops'},
- {code='U',name='BUBBLER',sub='floats it out'},
- {code='H',name='HALVER',sub='splits it in two'},
- {code='G',name='GRIDCUTTER',sub='dices a grid'},
- {code='Y',name='SINGULARITY',sub='spirals it in'},
- {code='M',name='STARFORGE',sub='melts it'},
  {code='I',name='FROSTBITE',sub='freezes it'},
- {code='V',name='RESONATOR',sub='rattles it'},
 }
 local SHOW_PERIOD=4.4
 local SHOW_WORK=3.2 -- seconds of work; the rest holds the result
@@ -3118,7 +3134,7 @@ function V:buildShowcase()
  self.showcase={root=root,stations={}}
  local stone=self:colorAt(self.cube.height-.01)
  for i,def in ipairs(SHOWCASE) do
-  local at=Vector3.new(o.X-9,ground,o.Z-16+(i-1)*7.2)
+  local at=Vector3.new(o.X-9,ground,o.Z+4+(i-1)*8)
   local plinth=fxPart(root,'GalleryPlinth',Color3.fromRGB(96,98,112));plinth.Size=Vector3.new(6.2,1,6.2)
   plinth.CFrame=CFrame.new(at+Vector3.new(0,.5,0));plinth.CastShadow=true
   local pivot=at+Vector3.new(0,2.6,0)
@@ -3228,6 +3244,7 @@ function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
   if self.lamp then self.lamp:Destroy() end
  self:restorePitLight()
+ if self.invisicam then pcall(function() Players.LocalPlayer.DevCameraOcclusionMode=self.invisicam end);self.invisicam=nil end
  self.fx:Destroy()
 end
 return V

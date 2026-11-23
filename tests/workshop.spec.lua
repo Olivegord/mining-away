@@ -271,7 +271,8 @@ test('prestige exposes three stable choices and commits exactly one',function()
   assert(choices[1].kind~=choices[2].kind and choices[2].kind~=choices[3].kind and choices[1].kind~=choices[3].kind)
   for _,entry in ipairs(choices) do observed[entry.kind]=true end
  end
- for _,reward in ipairs(DroneCatalog.PrestigeRewards) do assert(observed[reward.kind]) end
+ -- Only the active types are offered (owner: 6 drones or less for now).
+ for _,reward in ipairs(DroneCatalog.PrestigeRewards) do assert(observed[reward.kind]==(DroneCatalog.ACTIVE[reward.kind] or nil),reward.kind) end
  local p=funded();p.run.quartzEarnings=360
  local preview=P.prestigePreview(p);assert(preview.eligible)
  local oldRun=p.run.id
@@ -432,6 +433,7 @@ test('pack Stars credit once, Star Shop survives reload, and prestige resets bot
  eq(p.run.stars,0);eq(W.selectorWidth(p),30);eq(#p.fleet,4)
 end)
 test('flagship prestige choices unlock one drone and keep both on later runs',function()
+ if not DroneCatalog.ACTIVE.Nomad then return end -- flagships dormant (owner: 6 drones or less for now)
  local p=P.new(44)
  p.run.quartzEarnings=P.milestone(p).earnings
  assert(P.prestigePreview(p).droneChoices[3].kind~='Ramiel')

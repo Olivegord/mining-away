@@ -651,7 +651,7 @@ local function prestigeChoices(p)
  end
  -- Keep the opening choices, then give each missing flagship a clear route
  -- through the ordinary one-of-three permanent selection.
- if p.run.index>1 then
+ if p.run.index>1 and DroneCatalog.ACTIVE.Nomad then
   if not owned.Nomad then
    choices[2]={kind='Nomad',name='Nomad',tier=4,job='Sweeps in from the sky and shatters exposed crystals across the field'}
   end
