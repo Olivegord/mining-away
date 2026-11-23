@@ -46,6 +46,7 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
   - Angles snap to 7.5°. Popped tiles stay out until the break, with an overshoot ease. Halver halves slide, Singularity squeezes, and Frostbite turns to Ice.
   - Updates run at 30 Hz for your own pieces and 12 Hz for others. An idle piece costs almost nothing. Reduced Motion drops the ripples and most pops.
   - Fallback: a missing API or experience setting (Allow Mesh / Image APIs) turns meshes off for the session and the old wedges are drawn. A memory-budget miss falls back for that piece only.
+- **Test area (`V:stepShowcase`):** owner asked to see the effects. Nine display rocks on plinths stand on the open ground west of the dig cube (x≈87, z −14 to 54), on the walk from home. Each loops one effect every 4.5 s with a sign: laser ripple, inward ripple, square ripple, fast ripple, crack pops, slam, pulse, charge, darts. It is local only and rebuilt per cube. If meshes are unavailable, each sign shows `MESH EFFECTS OFF: <error>`, and the Output has a `[RockMesh]` warning.
 - **Tests:**
   - `test_rock_mesh.py`: exact 3D doubles and an EditableMesh double, running RockMesh and the real DigCubeView proxy code.
   - `test_dig_flow.py`: a carve-ahead section.

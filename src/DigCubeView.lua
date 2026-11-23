@@ -2591,8 +2591,128 @@ function V:update()
  self:stepLamp(math.clamp(now-(self.lastStep or now),0,.25))
  self.lastStep=now
  self:stepPad(now)
+ self:stepShowcase(now)
 end
 
+-- Rock mesh test area (owner, Nov 22: "add them to a test area where they
+-- play so i can see them"): a row of display rocks on the open ground west
+-- of the dig cube, on the walk from home, each looping one RockMesh effect
+-- with its name above it. Local only: no drones, rewards or collisions. If
+-- meshes are unavailable the sign says so, with the error.
+local SHOWCASE={
+ {name='LASER RIPPLE',sub='Striker beam',code='L',kind='ripple'},
+ {name='INWARD RIPPLE',sub='Singularity beam',code='Y',kind='ripple'},
+ {name='SQUARE RIPPLE',sub='Gridcutter beam',code='G',kind='ripple'},
+ {name='FAST RIPPLE',sub='Resonator beam',code='V',kind='ripple'},
+ {name='CRACK POPS',sub='every beam: chunks pry up',code='L',kind='crack'},
+ {name='SLAM',sub='Charger: ring + chunks lift',code='C',kind='slam'},
+ {name='PULSE',sub='Lancer: ring + chunk pries',code='Z',kind='pulse'},
+ {name='CHARGE',sub='Ballcaster: shiver + pops',code='B',kind='charge'},
+ {name='DARTS',sub='Needler: one chunk per hit',code='N',kind='darts'},
+}
+local SHOW_PERIOD=4.5
+function V:buildShowcase()
+ local o=self.origin
+ local ground=o.Y+self.cube.height
+ local root=Instance.new('Folder');root.Name='RockMeshShowcase';root.Parent=self.fx
+ self.showcase={root=root,stations={}}
+ local stone=self:colorAt(self.cube.height-.01)
+ for i,def in ipairs(SHOWCASE) do
+  local at=Vector3.new(o.X-9,ground,o.Z-14+(i-1)*8.5)
+  local plinth=fxPart(root,'ShowcasePlinth',Color3.fromRGB(52,50,58));plinth.Size=Vector3.new(6.6,1,6.6)
+  plinth.CFrame=CFrame.new(at+Vector3.new(0,.5,0));plinth.CastShadow=true
+  local pivot=at+Vector3.new(0,2.6,0)
+  local sign=Instance.new('BillboardGui');sign.Name='ShowcaseSign';sign.Adornee=plinth;sign.Size=UDim2.fromOffset(220,64)
+  sign.StudsOffsetWorldSpace=Vector3.new(0,5.4,0);sign.MaxDistance=90;sign.LightInfluence=0;sign.Parent=plinth
+  local title=Instance.new('TextLabel');title.BackgroundTransparency=1;title.Size=UDim2.new(1,0,.55,0);title.Font=Enum.Font.GothamBold
+  title.TextScaled=true;title.TextColor3=V.primaryColor(def.code):Lerp(Color3.new(1,1,1),.35);title.TextStrokeTransparency=.4;title.Text=def.name;title.Parent=sign
+  local sub=Instance.new('TextLabel');sub.BackgroundTransparency=1;sub.Position=UDim2.fromScale(0,.55);sub.Size=UDim2.new(1,0,.45,0);sub.Font=Enum.Font.Gotham
+  sub.TextScaled=true;sub.TextColor3=Color3.fromRGB(230,232,240);sub.TextStrokeTransparency=.5;sub.Text=def.sub;sub.Parent=sign
+  local station={def=def,pivot=pivot,sub=sub,at=-1,pops=0,model=nil}
+  table.insert(self.showcase.stations,station)
+  -- An octagon of rock in three pieces, like a small dug chunk.
+  local poly={}
+  for k=0,7 do local a=k*math.pi/4+math.pi/8;table.insert(poly,{math.cos(a)*2.7,math.sin(a)*2.7}) end
+  local random=Random.new(i*977)
+  local rnd=function() return random:NextNumber() end
+  local shapes={}
+  for n,q in ipairs(DigCube.voronoiSplit(poly,3,rnd)) do
+   table.insert(shapes,{poly=q,y0=-1.6,y1=0,color=stone:Lerp(Color3.new(0,0,0),.06*(n-1)),side=def.code=='H' and (n%2*2-1) or nil})
+  end
+  task.spawn(function()
+   local ok,rec=pcall(RockMesh.build,shapes,DigCube.voronoiSplit,rnd)
+   if not self.showcase or self.showcase.root~=root then if ok and rec then RockMesh.destroy(rec) end;return end
+   if ok and rec then
+    rec.part.Parent=root;rec.part.CFrame=CFrame.new(pivot);station.rec=rec
+   else
+    sub.Text='MESH EFFECTS OFF: '..tostring(ok and RockMesh.lastError or rec)
+    sub.TextColor3=Color3.fromRGB(255,120,120)
+   end
+  end)
+ end
+end
+function V:stepShowcase(now: number)
+ if not self.cube then return end
+ if not self.showcase or self.showcase.generation~=self.generation then
+  if self.showcase then
+   for _,st in ipairs(self.showcase.stations) do if st.rec then RockMesh.destroy(st.rec) end end
+   self.showcase.root:Destroy()
+  end
+  self:buildShowcase();self.showcase.generation=self.generation
+ end
+ local camera=workspace.CurrentCamera
+ if now-(self.showcase.stepAt or -1)<1/30 then return end
+ self.showcase.stepAt=now
+ local reduced=self:reduced()
+ for _,st in ipairs(self.showcase.stations) do
+  local rec=st.rec
+  if rec and not rec.dead and (not camera or (camera.CFrame.Position-st.pivot).Magnitude<160) then
+   local def=st.def
+   local t=now%SHOW_PERIOD
+   local cycle=math.floor(now/SHOW_PERIOD)
+   if cycle~=st.cycle then st.cycle=cycle;st.fired={};st.pops=0;RockMesh.reset(rec) end
+   local function once(key: string,at: number): boolean
+    if t>=at and not st.fired[key] then st.fired[key]=true;return true end
+    return false
+   end
+   local mfx=(ROLE_FX[def.code] and ROLE_FX[def.code].proxy.mesh) or MESH_DEFAULT
+   local state={glowColor=V.primaryColor(def.code):Lerp(Color3.new(1,1,1),.25)}
+   local random=self.random
+   if def.kind=='ripple' and t<3.6 and not reduced then
+    local r=mfx.ripple or MESH_DEFAULT.ripple
+    local beat=.7+.3*math.sin(now*math.pi*2*(r.beat or 2.2))
+    state.ripple={amp=r.amp*1.4*beat,len=r.len,speed=r.speed,square=r.square,glow=r.glow,center=Vector3.zero}
+    if once('pop',3.6) then RockMesh.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockMesh.pop(rec,3,1.1,now,random,'pry') end
+   elseif def.kind=='crack' then
+    if once('a',.6) then RockMesh.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockMesh.pop(rec,2,1.1,now,random,'pry') end
+    if once('b',1.8) then RockMesh.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockMesh.pop(rec,3,1.1,now,random,'pry') end
+    if once('c',3) then RockMesh.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockMesh.pop(rec,3,1.2,now,random,'pry') end
+   elseif def.kind=='slam' then
+    for k,at in ipairs({.5,1.9,3.3}) do
+     if once('s'..k,at) then RockMesh.ring(rec,now,Vector3.zero,.32,15,1.2,.55);RockMesh.pop(rec,3,1.3,now,random,'lift') end
+    end
+   elseif def.kind=='pulse' then
+    for k=1,5 do
+     if once('p'..k,.3+(k-1)*.7) then RockMesh.ring(rec,now,Vector3.zero,.22,20,.8,.85);RockMesh.pop(rec,random:NextInteger(1,2),1,now,random,'pry') end
+    end
+   elseif def.kind=='charge' then
+    local progress=math.clamp(t/3.4,0,1)
+    state.tremble=(mfx.tremble or .05)*progress*progress*1.5
+    local want=math.floor(math.clamp((progress-.25)/.75,0,1)*#rec.tiles*.5)
+    if want>st.pops then st.pops+=1;RockMesh.pop(rec,1,.7+.6*progress,now,random) end
+   elseif def.kind=='darts' then
+    for k=1,12 do
+     if once('d'..k,.2+(k-1)*.28) then
+      local a=random:NextNumber(0,math.pi*2);local r=random:NextNumber(0,2.2)
+      RockMesh.pop(rec,1,.8,now,random,nil,Vector3.new(math.cos(a)*r,0,math.sin(a)*r))
+      RockMesh.ring(rec,now,Vector3.zero,.06,10,.6,.4)
+     end
+    end
+   end
+   RockMesh.step(rec,now,state)
+  end
+ end
+end
 function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
   if self.lamp then self.lamp:Destroy() end

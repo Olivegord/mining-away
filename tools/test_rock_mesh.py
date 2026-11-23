@@ -512,6 +512,36 @@ do -- Singularity squeezes, Frostbite ices
  assert(job2.proxy.mesh.part.Material==Enum.Material.Ice,'Frostbite ices the mesh')
  self2:clearCracks()
 end
+-- The test area: nine looping display rocks west of the cube, each moving.
+do
+ local self=view()
+ local before=RockMesh.live
+ fakeClock=1000
+ self:stepShowcase(fakeClock)
+ assert(#self.showcase.stations==9,'nine display rocks')
+ local moved={}
+ for f=1,300 do
+  fakeClock=1000+f/60
+  self:stepShowcase(fakeClock)
+  for i,st in ipairs(self.showcase.stations) do
+   assert(st.rec and st.rec.part.Parent==self.showcase.root,'station '..i..' has its mesh')
+   for _,v in ipairs(st.rec.verts) do if (v.pos-v.base).Magnitude>.02 then moved[i]=true end end
+  end
+ end
+ for i,st in ipairs(self.showcase.stations) do assert(moved[i],st.def.name..' animates') end
+ assert(self.showcase.stations[1].pivot.X<self.origin.X and self.showcase.stations[1].pivot.Y>self.origin.Y+self.cube.height,'west of the cube, above the ground')
+ -- A new cube rebuilds the row and frees the old meshes.
+ local old=self.showcase.stations[1].rec
+ self.generation=2;self:stepShowcase(fakeClock+.1)
+ assert(old.dead and RockMesh.live==before+9,'rebuilt once per cube')
+ for _,st in ipairs(self.showcase.stations) do RockMesh.destroy(st.rec) end
+ -- Meshes off: the sign says so.
+ RockMesh.failed=true
+ local off=view();off:stepShowcase(fakeClock)
+ assert(string.find(off.showcase.stations[1].sub.Text,'MESH EFFECTS OFF'),'the sign reports meshes off')
+ RockMesh.failed=false
+ print('PASS test area: nine display rocks loop ripple/inward/square/fast ripples, crack pops, slam, pulse, charge, darts; rebuilt per cube; sign shows when meshes are off')
+end
 -- Wedge fallback when meshes are off: posed and shaded as before.
 do
  RockMesh.failed=true

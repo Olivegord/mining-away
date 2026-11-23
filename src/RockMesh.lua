@@ -17,7 +17,7 @@ local AssetService=game:GetService('AssetService')
 local M={}
 M.failed=false
 M.live=0
-M.MAX_LIVE=18
+M.MAX_LIVE=30
 M.MAX_TILES=14
 M.TILE_AREA=3.6 -- square studs per tile
 M.ANGLE_STEP=math.rad(7.5)
@@ -156,6 +156,7 @@ function M.build(shapes: {Shape},split: any,random: () -> number): any?
   local message=tostring(made)
   if not string.find(message,'budget') and not string.find(message,'memory') then M.failed=true end
   M.lastError=message
+  if not M.warned then M.warned=true;(warn or print)('[RockMesh] mesh effects unavailable, using wedges: '..message) end
   return nil
  end
  M.live+=1
@@ -171,6 +172,13 @@ function M.destroy(rec: any)
  if rec.mesh then pcall(function() rec.mesh:Destroy() end) end
 end
 
+-- Back to whole rock: every chunk down, no rings (the showcase loops).
+function M.reset(rec: any)
+ if not rec or rec.dead then return end
+ for _,tile in ipairs(rec.tiles) do tile.lift=0;tile.angle=0;tile.hinge=nil;tile.anim=nil;tile.popped=false end
+ table.clear(rec.rings)
+ rec.dirty=true
+end
 -- Tile colors: the stone toward `tone` by `shade` (darker under the beam).
 function M.shade(rec: any,tone: Color3,shade: number)
  for _,tile in ipairs(rec.tiles) do tile.color=tile.stone:Lerp(tone,shade) end
