@@ -32,7 +32,7 @@ local function releaseHitStop()
  if camera and hitStop.cameraType then camera.CameraType=hitStop.cameraType end
  if camera and hitStop.fov then camera.FieldOfView=hitStop.fov end
  if hitStop.grade then hitStop.grade:Destroy() end
- hitStop.emitters,hitStop.parts,hitStop.tracks,hitStop.cameraType,hitStop.fov,hitStop.grade,hitStop.onFrame=nil,nil,nil,nil,nil,nil,nil
+ hitStop.emitters,hitStop.parts,hitStop.tracks,hitStop.cameraType,hitStop.fov,hitStop.grade,hitStop.onFrame,hitStop.shake,hitStop.punch=nil,nil,nil,nil,nil,nil,nil,nil,nil
 end
 -- A freeze must read as tension, not lag (owner, Nov 22; research in
 -- docs/VFX_INSTRUCTIONS.md): the hit itself keeps shaking, big at first and
@@ -44,15 +44,19 @@ local function freezeGame(duration,opts)
  if hitStop.active then hitStop.untilAt=math.max(hitStop.untilAt,os.clock()+duration);return end
  opts=opts or {}
  hitStop.active=true;hitStop.startAt=os.clock();hitStop.duration=duration;hitStop.untilAt=os.clock()+duration
- hitStop.onFrame=opts.onFrame
+ hitStop.onFrame=opts.onFrame;hitStop.shake=opts.shake;hitStop.punch=opts.punch
  if opts.tint then
   local grade=Instance.new('ColorCorrectionEffect');grade.Name='HitStopGrade'
   grade.Saturation=-.3;grade.Contrast=.18;grade.Brightness=-.03;grade.TintColor=Color3.new(1,1,1):Lerp(opts.tint,.12)
   grade.Parent=game:GetService('Lighting');hitStop.grade=grade
  end
  hitStop.emitters,hitStop.parts,hitStop.tracks={},{},{}
- for _,v in ipairs(workspace:GetDescendants()) do
-  if v:IsA('ParticleEmitter') then hitStop.emitters[v]=v.TimeScale;v.TimeScale=0 end
+ -- A short break pause (opts.light) leaves particles running: scanning the
+ -- whole place for a few frames would itself hitch.
+ if not opts.light then
+  for _,v in ipairs(workspace:GetDescendants()) do
+   if v:IsA('ParticleEmitter') then hitStop.emitters[v]=v.TimeScale;v.TimeScale=0 end
+  end
  end
  local function hold(part)
   if part:IsA('BasePart') and not part.Anchored and not hitStop.parts[part] then
@@ -88,10 +92,11 @@ RunService:BindToRenderStep('MiningAwayHitStop',Enum.RenderPriority.First.Value,
   local still=CrystalImpactView.reducedMotion()
   local decay=still and 0 or 1-.6*u
   local t=os.clock()*55
-  local shake=CFrame.new(math.noise(t,.3)*.09*decay,math.noise(.7,t)*.09*decay,0)*CFrame.Angles(0,0,math.noise(t,1.9)*.006*decay)
+  local amp=hitStop.shake or .09
+  local shake=CFrame.new(math.noise(t,.3)*amp*decay,math.noise(.7,t)*amp*decay,0)*CFrame.Angles(0,0,math.noise(t,1.9)*amp*.066*decay)
   camera.CFrame=hitStop.cameraFrame*shake
   -- Full strength from the first frame; nothing fades in (owner, Nov 22).
-  if hitStop.fov and not still then camera.FieldOfView=hitStop.fov-5 end
+  if hitStop.fov and not still then camera.FieldOfView=hitStop.fov-(hitStop.punch or 5) end
  end
 end)
 return {frozen=frozen,freeze=freezeGame}
@@ -153,12 +158,15 @@ local function comboBreak(now)
  return 1+math.min(combo.count-1,10)*.07
 end
 -- Shared by every rock break (field rocks and the Dig Cube): combo and camera hit.
-rockDamage.splitBeat=function(position,strength,now,prism,owned,mineral)
+-- `big` (optional): the caller's own call on whether this is a big hit; by
+-- default only a large rock is. The combo grows the shake, never its class,
+-- so a streak of small breaks stays a streak of small shakes.
+rockDamage.splitBeat=function(position,strength,now,prism,owned,mineral,big)
+ local heavy=owned and (if big~=nil then big else strength>=1.6)
  if owned and not prism then strength*=comboBreak(now) end
  if prism then
   presentation:crystalKick(position,strength,now,true)
  else
-  local heavy=owned and strength>=1.35
   cameraBeat(heavy and 'HeavySplit' or 'Split',position,now,math.clamp(strength*.58,.60,1.35)*(owned and 1 or .62))
  end
 end
@@ -1976,11 +1984,17 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
     warn(string.format('[DroneVisibility] drone %s in state %s: %s',tostring(d.source:GetAttribute('DroneId')),state,reason))
    end
   end
+  local rig=d.ramiel
   for part in pairs(d.parts) do
    -- Cubes now fly over the avatar's head all the time; a full fade made them
    -- look invisible. They only thin slightly when they cross the view line.
-   if part.Parent then part.LocalTransparencyModifier=reveal
-    and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5))*(d.cubeLook and .4 or 1) or 0 end
+   -- Ramiel: the closed hull and its animated slices are never both drawn
+   -- (owner, Nov 22: the whole pyramid stayed visible over the slab animation).
+   if part.Parent then
+    if rig and (part==rig.closed and rig.closedShown==false or rig.sliceSet[part] and rig.closedShown~=false) then part.LocalTransparencyModifier=1
+    else part.LocalTransparencyModifier=reveal
+     and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5))*(d.cubeLook and .4 or 1) or 0 end
+   end
   end
  end
  pickupView:update(dt,now)

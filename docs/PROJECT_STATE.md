@@ -1,3 +1,7 @@
+## November 22 — shake retune, big-break pauses, char split, rubble never rests, Ramiel hull
+
+Shake is smaller everywhere; heavy shakes only for big attacks (slam, Ramiel, Nomad, Singularity), huge chunks and gems. Big dig breaks get a 2–6 frame light client pause. The Striker breaks with the field rocks' black hinged split; Nomad lifts and hurls its rubble. Rubble shrinks the moment its velocity stops. Ramiel's closed hull no longer draws over its animating slices. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.
+
 # Shared project context
 
 ## November 22 — no floating regular cells

@@ -1,3 +1,7 @@
+## November 22 — less shake, pauses for big breaks, the old char split, rubble never rests, Ramiel hull
+
+"overall, screenshake is too much. tone it down, and reserve large shakes for big attacks. furthermore, most attacks need screenshake! for example the smasher is missing shake." "most rock splitting attacks should use the client side pause, albeit just for a little bit and only big rock formations." "reuse the OLD rock splitting animation in the old fields game loop where the rock turns black, then splits in half with an angle! ... be more creative with how rocks are broken. not everything needs to be the laser." "ramiels animation is broken in that the main pyramid model stays visible. it should immediately cut to the parts." "make sure rubble never 'rests' as soon as it stops moving it instantly starts shrinking ... use velocity for this."
+
 # Owner requirements
 
 ## November 22 — no floating regular cells

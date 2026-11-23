@@ -67,8 +67,12 @@ end
 --   it); sounds; light; hold class; streak lift/speed multipliers.
 local C3=Color3.fromRGB
 local ROLE_FX={
- L={proxy={mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
-  rubble={per=2.2,min=1,max=6,up={10,15},out={4,8},spin={4,8},dark={.06,.2},near=.6,dcap=.85},
+ -- The Striker (the starter miner) brings back the field rocks' break
+ -- (owner, Nov 22: "the rock turns black, then splits in half with an
+ -- angle"): it blackens as the beam works, then the chunk comes away as two
+ -- charred halves hinged at its foot that fall open, then crumble.
+ L={proxy={tone=C3(8,6,6),cap=.82,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
+  rubble={char=true,per=3,min=1,max=4,up={2,5},out={3,6},spin={2,4},dark={.02,.08},near=.1,dcap=.3,charDark=.86},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
  C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
   rubble={per=3.6,min=1,max=4,up={46,60},out={4,8},spin={1.2,2.6},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3,pattern='ring',
@@ -116,13 +120,21 @@ local ROLE_FX={
    {color={C3(255,220,230),C3(255,60,96)},tr={.1,1},size={.5,0},speed={18,34},life={.4,.8},drag=2,accel=-10,spread=180,count=24,light=1}},
   sounds={{cue='crystal_split',rock=9},{cue='ramiel_blast',level=.75}},hold='heavy',lift=1.8,speed=2.2},
  A={proxy={mesh={charge=.45,tremble=.05}},carve=true,
-  rubble={per=3,min=1,max=4,count=30,up={18,26},out={16,26},spin={10,18},dark={.1,.2},near=.5,dcap=.8,scorch=C3(30,26,24),seed=true,pattern='blast'},
+  -- Nomad lifts the broken rock into the air, holds it, and hurls it down
+  -- (not the same blast as Ramiel).
+  rubble={per=3,min=1,max=4,count=30,up={14,18},out={2,5},spin={4,8},dark={.1,.2},near=.5,dcap=.8,scorch=C3(30,26,24),seed=true,pattern='levitate'},
   sounds={{cue='crystal_split',rock=9}},hold='heavy',lift=1.5,speed=1.2},
  Z={proxy={pulse=true,mesh={}},
   rubble={per=2.2,min=1,max=5,up={6,9},out={18,26},spin={4,8},dark={.1,.2},near=.5,dcap=.85,scorch=C3(60,40,20),pattern='jet'},
   sounds={{cue='crystal_split',pitch=1.1}},hold='split',lift=1.1,speed=1.1},
 }
 V.ROLE_FX=ROLE_FX
+for code,fx in pairs(ROLE_FX) do fx.code=code end
+local BIG_ATTACK={C=true,P=true,A=true,Y=true}
+-- Chunk bulk (cube root of its volume, studs): tiny ~4, medium ~6,
+-- large ~7.5, huge ~9. Big formations shake hard; large ones also pause.
+local BIG_BULK=8
+local PAUSE_BULK=6.8
 -- Each type's own way of breaking the rock (filled in below, by V.BURST).
 local SIG={} :: {[string]:any}
 -- SpecialistContact plays its own cue; the break's sounds come from ROLE_FX.
@@ -490,7 +502,8 @@ function V:slamHit(at: Vector3,owned: boolean,wave: boolean)
   ctx.audio:play('crystal_impact',at,{pitch=.58,level=.8*level})
  end
  if wave then self:shockwave(at,owned,false) end
- if owned and ctx.beat then ctx.beat('HeavySplit',at,workspace:GetServerTimeNow(),.9) end
+ -- The smasher's slam is a big attack: felt across the dig, harder when it is yours.
+ if ctx.beat then ctx.beat('Slam',at,workspace:GetServerTimeNow(),owned and 1 or .35) end
 end
 
 -- Rubble: the broken rock itself. Each cell of a broken piece is cracked
@@ -512,13 +525,23 @@ local RUBBLE=PhysicalProperties.new(2.6,.8,.12,1,1)
 local RUBBLE_REST=1.15 -- seconds the pile rests before the bottom pieces start to go
 local RUBBLE_STEP=.07 -- one piece every this many seconds, lowest first
 local RUBBLE_VANISH=.18 -- each shrinks away this fast
+-- A loose piece counts as stopped below these speeds (studs/s, rad/s) held
+-- for STILL_FOR s, checked from STILL_AFTER s after it lets go; it then
+-- shrinks away over STILL_SHRINK s.
+local STILL_SPEED,STILL_SPIN,STILL_FOR,STILL_AFTER,STILL_SHRINK=1.2,1.5,.05,.15,.32
 -- A quick ripple through every break (owner, Nov 22): the pieces by the hit
 -- let go first and the rest follow in a fast wave outward, about 70 studs a
 -- second, with a slight rise just before each one goes. Roles that already
 -- time their pieces by distance (ring, waves, rows) keep their own wave.
 local RIPPLE_DELAY=.014 -- seconds per stud from the hit
 local RIPPLE_LIFT=.14 -- studs a piece rises as the wave reaches it
-local RIPPLE_OWN={ring=true,waves=true,rows=true}
+local RIPPLE_OWN={ring=true,waves=true,rows=true,char=true}
+-- The char split (field rocks' break): the halves fall open around a hinge
+-- at the chunk's foot over CHAR_OPEN s (ease-out cubic), lean a little more,
+-- and crumble into rubble at CHAR_DELAY. Angles per side as the field rocks.
+local CHAR_OPEN,CHAR_DELAY=.24,.42
+local CHAR_ANGLE={.46,.63}
+local CHAR=Color3.new(0,0,0)
 -- Light chips (owner, Nov 22): now and then a much smaller piece breaks off
 -- the top of a chunk and, weighing less, flies far higher than the rest.
 local PEBBLE_CHANCE=.25 -- per piece
@@ -623,7 +646,18 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
  local order=table.clone(self:opParts(op))
  table.sort(order,function(a,b) return DigCube.polyArea(a.poly)>DigCube.polyArea(b.poly) end)
  local cap=fx.count or 18
- local plane=fx.halves and DigCube.split(cube,op.cells) or nil
+ local plane=(fx.halves or fx.char) and DigCube.split(cube,op.cells) or nil
+ local baseY=math.huge
+ for _,c in ipairs(order) do baseY=math.min(baseY,c.y0) end
+ -- Each char half tips over its own outer foot (a shared center hinge
+ -- would sink the outer edges into the pit floor).
+ local reach={[-1]=.5,[1]=.5}
+ if plane and fx.char then
+  for _,c in ipairs(order) do for _,v in ipairs(c.poly) do
+   local d=(v[1]-plane.cx)*plane.nx+(v[2]-plane.cz)*plane.nz
+   reach[1]=math.max(reach[1],d);reach[-1]=math.max(reach[-1],-d)
+  end end
+ end
  local hot=0
  -- One direction for a jet (Lancer), one sweep axis for rows (Gridcutter).
  local ja=self.random:NextNumber(0,math.pi*2)
@@ -667,7 +701,10 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
    if plane then near=.6*math.exp(-math.abs((mx-plane.cx)*plane.nx+(mz-plane.cz)*plane.nz)/1.6)
    else near=fx.near*math.exp(-Vector3.new(mid.X-center.X,0,mid.Z-center.Z).Magnitude/2.6) end
    local color=self:colorAt(c.y1-.01,mx,mz):Lerp(fx.scorch or SHARD_DARK,math.min(fx.dcap,U(fx.dark)+near))
-   local k=SHARD_GAP*(fx.implode and .75 or 1)
+   -- Charred: the split halves are near black, as the field rocks were.
+   if fx.char then color=color:Lerp(CHAR,fx.charDark or .86) end
+   -- (The char halves are drawn whole while they open; they crack on release.)
+   local k=fx.char and .985 or SHARD_GAP*(fx.implode and .75 or 1)
    local inverse=CFrame.new(mid):Inverse()
    local parts={}
    for _,w in ipairs(DigCube.polyWedges(poly,c.y0,c.y1)) do
@@ -701,8 +738,9 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
     -- piece lets go.
     local flat=Vector3.new(mid.X-center.X,0,mid.Z-center.Z)
     local dist=flat.Magnitude
-    local pattern=fx.pattern
-    if pattern=='ring' then delay+=dist*.035          -- a shockwave from the slam
+    local pattern=fx.pattern or (fx.char and 'char' or nil)
+    if pattern=='char' then delay+=CHAR_DELAY+self.random:NextNumber(0,.05)
+    elseif pattern=='ring' then delay+=dist*.035          -- a shockwave from the slam
     elseif pattern=='waves' then delay+=math.floor(dist/1.5)*.12 -- ringing out in steps
     elseif pattern=='rows' then delay+=math.max(0,(flat:Dot(jetAxis)+8))*.045 -- a sweep across
     elseif pattern=='crumble' then delay+=self.random:NextNumber(0,.35)
@@ -715,7 +753,12 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
      from=mid,land=Vector3.new(mid.X,landY,mid.Z)+out*self.random:NextNumber(.1,.9),
      at=now+delay,pre=delay>0,center=center,fx=fx,
      T=.24+math.sqrt(2*drop/GRAVITY)*1.15,hop=self.random:NextNumber(.35,.95),
-     wait=self.random:NextNumber(.3,.7),born=now,pos=mid,out=out,floor=o.Y+c.y0}
+     wait=0,born=now,pos=mid,out=out,floor=o.Y+c.y0}
+    if fx.char and plane and piece.side then
+     local swing=CHAR_ANGLE[piece.side<0 and 1 or 2]
+     local foot=o+Vector3.new(plane.cx,baseY,plane.cz)+out*reach[piece.side]
+     f.char={hinge=foot,axis=Vector3.yAxis:Cross(out).Unit,out=out,angle=swing,gap=math.clamp(reach[piece.side]*.08,.1,.5)}
+    end
     -- Starforge: the rock by the hit comes out molten and cools.
     if fx.molten and near>.3 and hot<20 then
      hot+=1;f.hot={from=fx.molten,to=color,at=now}
@@ -902,8 +945,23 @@ function V:releaseShard(f: any)
 end
 -- Held in place before the release: a Singularity piece pulls toward the
 -- middle (it starts smaller), a Resonator piece shivers.
+function V:charPose(f: any,now: number): any
+ local h=f.char
+ local age=now-f.born
+ local open=1-(1-math.clamp(age/CHAR_OPEN,0,1))^3
+ local settle=math.clamp((age-CHAR_OPEN)/.38,0,1)
+ local angle=open*h.angle+settle*.10
+ if self:reduced() then angle=h.angle;open=1 end
+ return CFrame.new(h.hinge+h.out*(open*h.gap))*CFrame.fromAxisAngle(h.axis,angle)*CFrame.new(-h.hinge)
+end
 function V:prePose(f: any,now: number)
  local fx=f.fx
+ if f.char then
+  -- Both halves fall open around their shared foot, rigid, before they crack.
+  local frame=self:charPose(f,now)*CFrame.new(f.from)
+  for _,q in ipairs(f.parts) do q.part.CFrame=frame*(q.rel.Rotation+q.rel.Position*f.k) end
+  return
+ end
  local e=math.clamp((now-f.born)/math.max(f.at-f.born,.01),0,1)
  local pos=f.from
  if fx.implode then pos=f.from:Lerp(Vector3.new(f.center.X,f.from.Y,f.center.Z),.4*(1-(1-e)^2)) end
@@ -976,7 +1034,19 @@ function V:stepShards(now: number)
    end
    f.pos=primary.Position
    if primary.Position.Y<f.floor-8 or not primary.Parent then self:dropShard(f);table.remove(self.frags,i);continue end
-   if t>=f.life or (f.flyAt and now>=f.flyAt) then self:settle(f) else continue end
+   -- Rubble never rests (owner, Nov 22): the moment a piece stops moving
+   -- (by its velocity, for a couple of frames) it starts shrinking away, so
+   -- nothing lies still and reads as something to pick up. The pebble left
+   -- to collect is the one exception.
+   if t>=STILL_AFTER and not f.floatUntil or f.floatUntil and now>=f.floatUntil+STILL_AFTER then
+    local still=primary.AssemblyLinearVelocity.Magnitude<STILL_SPEED and primary.AssemblyAngularVelocity.Magnitude<STILL_SPIN
+    f.stillSince=still and (f.stillSince or now) or nil
+    if f.stillSince and now-f.stillSince>=STILL_FOR and not (f.keeper and f.dust and not f.dust.goneAt) then
+     self:settle(f);f.vanishing=true;f.settledAt=now;f.fadeT=STILL_SHRINK
+    end
+   end
+   if f.settled then -- (just came to rest above)
+   elseif t>=f.life or (f.flyAt and now>=f.flyAt) then self:settle(f) else continue end
   end
   if f.flyAt and now>=f.flyAt then
    local player=f.dust and f.dust.owner and Players:GetPlayerByUserId(f.dust.owner)
@@ -996,7 +1066,11 @@ function V:stepShards(now: number)
     -- A small jolt up as it cracks free, then it is pushed down and tips over.
     local pos=f.from:Lerp(f.land,q*q)+Vector3.yAxis*(f.hop*4*q*(1-q)*(1-q))+rippleLift(f,now)*(1-q)
     frame=CFrame.new(pos)*CFrame.fromAxisAngle(f.axis,f.turn*(1-(1-q)^2))
+    -- Hand-animated char halves tumble on from where they fell open.
+    if f.char then frame=self:charPose(f,f.at)*frame end
     age=t-f.T-f.wait
+   elseif f.char then
+    frame=self:charPose(f,now)*CFrame.new(f.from);age=-1
    else
     frame=CFrame.new(f.from+rippleLift(f,now));age=-1
    end
@@ -1798,7 +1872,7 @@ function V:crackHit(proxy: any,step: number,k: number,hit: any)
  local rock=self.holder and self.holder:FindFirstChild('Rock')
  local surface=rock and rock:FindFirstChildWhichIsA('BasePart')
  if ctx.impact and surface then ctx.impact:chips(serverNow,point,Vector3.yAxis,surface,1+step,point.Y-4) end
- if ctx.beat then ctx.beat('Split',point,serverNow,.14+.08*step) end
+ if ctx.beat then ctx.beat('Crack',point,serverNow,.7+.3*step) end
 end
 -- A piece nobody is cutting any more goes quickly (its break op normally
 -- clears it first): no outline hangs on after the rock has gone.
@@ -1873,6 +1947,17 @@ function V:split(op: any,now: number)
   elseif class=='heavy' then hold=HOLD_HEAVY
   else hold=heavy and HOLD_HEAVY or HOLD_SPLIT end
   if hold>0 then self.heldAt=now end
+  -- A big rock formation breaking stops the whole game for a moment (the
+  -- client hit-stop, light: a few frames, a small camera punch), like the
+  -- field rocks' pause but only where the rock is big enough to earn it.
+  if self.ctx.freeze and not op.geode and not op.partial and not link and op.tier<=0
+   and (bulk>=PAUSE_BULK or BIG_ATTACK[style.code] and bulk>=PAUSE_BULK-1.5) and os.clock()-(self.pausedAt or -10)>=.5 then
+   local frames=math.clamp(math.floor(2+(bulk-PAUSE_BULK)*1.2+.5),2,5)+(BIG_ATTACK[style.code] and 1 or 0)
+   local pause=frames/60
+   self.pausedAt=os.clock()
+   self.ctx.freeze(pause,{light=true,shake=.035,punch=1.5})
+   hold=math.max(hold,pause);self.heldAt=now
+  end
  end
  -- Opening your sealed gem: the whole game freezes for the hold (the client
  -- hit-stop: world, drones, particles, you and the camera), then it breaks
@@ -2113,7 +2198,7 @@ function V:burst(op: any,e: any)
   if lively then
    if e.owned then
     self:lightFlash(e.center,primary,10+2*e.bulk,4,.3)
-    if ctx.beat then ctx.beat('Split',point,now,.45) end
+    if ctx.beat then ctx.beat('Hit',point,now,1) end
    end
   end
   return
@@ -2162,7 +2247,12 @@ function V:burst(op: any,e: any)
  -- The camera hit (and the climbing tink of a streak), shared with the
  -- field rocks; a chain link is a small one.
  local beat=e.link and strength*.6 or strength
- if ctx.splitBeat then ctx.splitBeat(point,beat,now,false,e.owned,nil)
+ -- Big shakes are for big attacks (the slam, Ramiel, Nomad, the
+ -- Singularity) and huge formations; everything else is a small hit.
+ -- (A medium chunk is about 6 studs on a side, so bulk, not the field
+ -- rocks' strength, decides: nearly every dig break used to shake heavy.)
+ local big=not e.link and (BIG_ATTACK[fx.code or ''] or e.bulk>=BIG_BULK)
+ if ctx.splitBeat then ctx.splitBeat(point,beat,now,false,e.owned,nil,big)
  elseif ctx.beat then ctx.beat(e.heavy and 'HeavySplit' or 'Split',point,now,math.clamp(beat*.58,.6,1.35)*volume) end
  if not e.owned or gem then return end
  if fx.light then self:lightFlash(e.center,primary,14+3*e.bulk,7,.45) end
@@ -2187,7 +2277,10 @@ function V:burst(op: any,e: any)
   if contact=='Bubbler' then
    -- The rubble floats up, then the bubble pops.
    local at=point+Vector3.yAxis*1.2
-   table.insert(self.pending,{at=os.clock()+.7,run=function() effects.SpecialistContact('Bubbler',at,Vector3.yAxis,false,MUTE,primary) end})
+   table.insert(self.pending,{at=os.clock()+.7,run=function()
+    effects.SpecialistContact('Bubbler',at,Vector3.yAxis,false,MUTE,primary)
+    if ctx.beat then ctx.beat('Pop',at,workspace:GetServerTimeNow(),1) end
+   end})
   else
    effects.SpecialistContact(contact,point,Vector3.yAxis,false,MUTE,primary)
   end
@@ -3013,6 +3106,10 @@ function V:pulseShot(from: Vector3,to: Vector3,primary: Color3,accent: Color3?,o
   end
  end
  local edge=accent or primary
+ -- Each lance punch lands with a small jolt when it goes fat.
+ if owned and self.ctx.beat then
+  table.insert(self.pending,{at=now+SHOT.FAT,run=function() self.ctx.beat('Hit',to,workspace:GetServerTimeNow(),1) end})
+ end
  rig.at=now;rig.from=from;rig.to=to;rig.owned=owned==true;rig.idle=false;rig.landed=false;rig.lingered=false
  rig.mid.Color=ColorSequence.new(primary)
  for _,side in ipairs(rig.frame) do side.Color=primary end
