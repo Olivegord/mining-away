@@ -3211,7 +3211,8 @@ local function publishBreakerPhase(d,job)
  model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0));d.publishedAttributes=nil;d.publishedPose=nil
  model:SetAttribute('Position',d.pos);model:SetAttribute('Goal',d.goal);model:SetAttribute('Velocity',d.velocity or Vector3.zero)
  model:SetAttribute('BreakerDiveStart',job.diveStart or d.pos);model:SetAttribute('BreakerImpact',job.impact)
- model:SetAttribute('BreakerPhaseAt',job.phaseAt);model:SetAttribute('BreakerDiveDuration',DroneRoles.BREAKER.diveDuration)
+ model:SetAttribute('BreakerPhaseAt',job.phaseAt);model:SetAttribute('BreakerDiveDuration',job.diveDuration or DroneRoles.BREAKER.diveDuration)
+ model:SetAttribute('BreakerLiftFrom',job.liftFrom or false);model:SetAttribute('BreakerLiftTo',job.liftTo or false);model:SetAttribute('BreakerLiftFor',job.liftFor or 0)
  model:SetAttribute('BreakerContactSerial',d.contactSerial or 0);model:SetAttribute('BreakerContactAt',d.contactAt or 0)
  model:SetAttribute('ImpactSerial',d.impactSerial or 0);model:SetAttribute('ImpactAt',d.impactAt or 0)
  model:SetAttribute('State',d.state);model:SetAttribute('SnapshotAt',now)
@@ -4292,6 +4293,8 @@ function scene.digSlamStep(d,p,job,dt)
   d.state='Travel';d.mining=false;move(d,hover,dt)
   if (d.pos-hover).Magnitude>1.5 then return end
   slam.phase='Windup';slam.phaseAt=now;d.breaker=slam;d.state='BreakerWindup'
+  -- The heavy lift (Feel.heavyLift): published so every client draws the same rise.
+  slam.liftFrom=d.pos;slam.liftTo=job.contact+Vector3.new(0,cfg.lift,0);slam.liftFor=cfg.windup;slam.diveDuration=cfg.dive
   d.warmAt=now;d.digWarmFor=cfg.windup
   scene.digAhead(job,d.stats.miningDPS*style.power*(cfg.windup+cfg.dive+cfg.hold+cfg.recover))
   publishBreakerPhase(d,slam)
@@ -4300,9 +4303,11 @@ function scene.digSlamStep(d,p,job,dt)
  end
  d.breaker=slam;d.mining=false
  if slam.phase=='Windup' then
-  d.state='BreakerWindup';move(d,job.contact+Vector3.new(0,cfg.lift,0),dt)
+  d.state='BreakerWindup'
+  d.pos,d.velocity=Feel.heavyLift(slam.liftFrom or d.pos,slam.liftTo or job.contact+Vector3.new(0,cfg.lift,0),now-slam.phaseAt,cfg.windup)
+  d.goal=d.pos;d.intentGoal=d.pos
   if now-slam.phaseAt<cfg.windup then return end
-  slam.phase='Dive';slam.phaseAt=now;slam.diveStart=d.pos;d.state='BreakerDive'
+  slam.phase='Dive';slam.phaseAt=now;slam.diveStart=d.pos;slam.liftFrom=nil;slam.liftTo=nil;d.state='BreakerDive'
   publishBreakerPhase(d,slam)
   RoleEffects.BreakerPhase(d.pos,job.contact,'Dive',diameter)
   return
@@ -5252,7 +5257,8 @@ local function snapshotDrone(d)
   DoubleBeam=d.stats.doubleBeam==1,TwinThrusters=d.stats.twinThrusters==1,OreDuplicator=d.stats.oreDuplicator==1,
   BeamVariant=d.owned.beamVariant,MiningStyle=d.digging and (Config.DigCube.style(d.role).beam or 'None') or (DroneRoles.isMiner(d.role) and 'Cutter' or 'None'),MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
   RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,
-  BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=DroneRoles.BREAKER.diveDuration,
+  BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=d.breaker and d.breaker.diveDuration or DroneRoles.BREAKER.diveDuration,
+  BreakerLiftFrom=d.breaker and d.breaker.liftFrom or false,BreakerLiftTo=d.breaker and d.breaker.liftTo or false,BreakerLiftFor=d.breaker and d.breaker.liftFor or 0,
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
   DeliveryUnits=units,DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
   CourierDock=d.oreDock or false,CourierDockYaw=d.oreYaw or false,

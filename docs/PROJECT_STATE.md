@@ -1,5 +1,14 @@
 # Shared project context
 
+## November 22 — rock reactions from the attack's physics; old Ramiel, Needler and Ballcaster back
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Built on `codex/rock-reactions`, merged into the integration branch and installed by `tools/studio_apply.py` (see `docs/studio-installed.json`). Not published. Details and the reaction table in [VFX instructions](VFX_INSTRUCTIONS.md).
+
+- **Old effects:** Ramiel (glass rig, 4.94 s charge flare, camera pressure), the yellow Needler and the Ballcaster keep their original bodies and gun recoil on the Dig Cube again.
+- **Breaker (Charger):** hauls up slowly (1.1 s), hangs straining, drops in 0.2 s with a metal clang; every slam bursts a ring of rock slabs and dust out of the surface; its final break launches the rubble highest of all with a dust column instead of sparks.
+- **Rule for every drone:** reactions follow the attack's physics (mass, heat, puncture, charge, pulse, cold, prism); the table is in the VFX instructions.
+- Not seen in Play.
+
 ## November 22 — distinct drones, pastel light, less clutter, a dig loop that pays off
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Built on `codex/distinct-drones`, merged into the integration branch and installed by `tools/studio_apply.py` (last install `ec70fb3`, Team Create save 508 or later; see `docs/studio-installed.json`). Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md).

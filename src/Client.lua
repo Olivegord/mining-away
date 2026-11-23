@@ -1474,6 +1474,11 @@ local function renderDrone(d,dt,now)
   if velocity then
    d.velocity=velocity-d.dockCorrection*(6*correctionTime*(1-correctionTime)/.16)
   elseif dt>0 then d.velocity=(d.pos-previousPosition)/dt end
+ elseif not motionPaused and state=='BreakerWindup' and typeof(s:GetAttribute('BreakerLiftTo'))=='Vector3' then
+  -- The heavy lift: the same curve the server runs (Feel.heavyLift).
+  local liftFrom=s:GetAttribute('BreakerLiftFrom')
+  d.pos,d.velocity=Feel.heavyLift(typeof(liftFrom)=='Vector3' and liftFrom or logical,s:GetAttribute('BreakerLiftTo'),
+   now-(s:GetAttribute('BreakerPhaseAt') or now),s:GetAttribute('BreakerLiftFor') or 1)
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
   -- A powered fall accelerates all the way into the surface. Evaluate the
   -- authoritative stroke directly: destination smoothing here brakes before
@@ -1570,7 +1575,7 @@ local function renderDrone(d,dt,now)
  if docking then desiredBank=0 end
  d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*(cube and 3.5 or 5)))
- local grounded=docking or role=='Courier' and state=='Collect' or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
+ local grounded=docking or role=='Courier' and state=='Collect' or heavyFlight or state=='BreakerWindup' or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local seed=s:GetAttribute('PhaseSeed') or 0
  local hover=cube and not motionPaused and not CrystalImpactView.reducedMotion() and (state=='Follow' or state=='Return' or state=='Idle' or state=='Travel' or state=='Waiting')
  -- A slow, shallow bob; the faster second wave read as jitter and was removed.
@@ -1606,6 +1611,15 @@ local function renderDrone(d,dt,now)
  end
  local visiblePose=CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
   *CFrame.Angles(recallPitch+(d.flightPitch or 0),0,d.bank)*CFrame.Angles(0,ramielRoll,0)
+ -- The breaker hangs at the top of its heavy lift, straining, before the drop.
+ if state=='BreakerWindup' and not motionPaused and not CrystalImpactView.reducedMotion() then
+  local liftFor=s:GetAttribute('BreakerLiftFor') or 0
+  local hang=liftFor>0 and math.clamp(((now-(s:GetAttribute('BreakerPhaseAt') or now))/liftFor-Feel.LIFT_RISE)/(1-Feel.LIFT_RISE),0,1) or 0
+  if hang>0 then
+   visiblePose=visiblePose*CFrame.new(math.noise(now*31,1.3)*.07*hang,math.noise(now*29,4.1)*.05*hang,math.noise(now*33,7.7)*.07*hang)
+    *CFrame.Angles(math.noise(now*23,2.2)*.035*hang,0,math.noise(now*21,5.4)*.035*hang)
+  end
+ end
  local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
  local ramielLatched=false
  local ramielInRange=d.ramiel and BeamVFX.near(visiblePose.Position,d.ramielNeutral and 165 or 185)

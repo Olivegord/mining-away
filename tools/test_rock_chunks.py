@@ -599,9 +599,9 @@ do -- every role comes apart its own way
  end
  assert(#chips>0,'some breaks throw light chips')
  print(string.format('PASS ripple out from the hit (last piece %.0f ms) and %d light chips thrown far higher (mean up %.0f)',far*1000,#chips,up/#chips))
- -- Charger: a ring from the middle, outward and flat
+ -- Charger: a ring from the middle; the weight launches the rock highest of all (owner, Nov 22)
  for _,x in ipairs(charger) do assert(math.abs(x.delay-x.dist*.035)<1e-6,'Charger pieces let go farther out later') end
- assert(mean(charger,function(x) return v3(x.v.X,0,x.v.Z).Magnitude end)>mean(charger,function(x) return x.v.Y end),'Charger throws flat and out')
+ assert(mean(charger,function(x) return x.v.Y end)>40 and mean(charger,function(x) return x.v.Y end)>mean(ball,function(x) return x.v.Y end),'Charger launches its rock higher than any other break')
  -- Ballcaster: straight up
  assert(mean(ball,function(x) return x.v.Y end)>4*mean(ball,function(x) return v3(x.v.X,0,x.v.Z).Magnitude end),'Ballcaster blasts a column up')
  -- Needler: crumbles, no throw

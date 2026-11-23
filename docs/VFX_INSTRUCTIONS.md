@@ -1,5 +1,36 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — reactions from the attack's physics; old Ramiel, Needler and Ballcaster back
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Branch `codex/rock-reactions`.
+
+**Old effects first (`c8bb2e5`).** Since the cube drones (`World.cubeDrone`, every dig drone), Ramiel, the Needler and the Ballcaster were cubes, so the code for Ramiel's glass rig (`DroneConfig.ramielRig`/`poseRamiel`), its charge flare (`RoleEffectView.ramielCharge`) and the guns' slide and recoil (`SpecialDroneMotion`) never ran.
+- Client `registerDrone`: these three keep their original decorated bodies (`DroneConfig.decorate` + `fitBody`) on cube drones. No `FunFX` cube body for them.
+- Ramiel's dig charge is its original 4.94 s (`DigCube.STYLES.Ramiel.volley.charge`), so the glass transformation runs on its filmed beats. Budget 5.4 and 8 cells keep its dig rate.
+- The Needler is the old yellow (255,195,94) again; secondary warm white.
+- Dig shots get their fire/hit camera beats back, and Ramiel its charge shake and beam pressure. Its star light peaks at 5 (range 18), not 9 (23), because of the earlier "flashbang" note. The full-screen release grade stays off (owner rejected full-screen flashes).
+
+**The rule for every drone (use it for new types):** a rock reacts to what the attack physically is, and every stage of the reaction (before, impact, between hits, final break, sound, particles, camera) follows from that.
+
+| Attack | Before the hit | Each hit | Final break | Sound | Particles |
+| --- | --- | --- | --- | --- | --- |
+| Mass (Charger) | the drone hauls up slowly, hangs straining | stamp down + rebound, a ring of rock slabs bursts out, dust rolls out | launched highest of all, slow heavy tumble, wide shockwave, dust column | metal clang, low thud | dust (smoke), heavy squares; no sparks |
+| Heat (Striker) | warmup glow | steady ripple, scorch near the beam | pops near the beam, terraces | crack, split | sparks, glow |
+| Puncture (Needler) | gun cocks | one small chip knocked out per dart | crumbles in place, no throw | small ticks | tiny needles |
+| Energy charge (Ballcaster) | the cell swells, darkens, shivers | — | thrown straight up in a column | split | rising diamonds |
+| Pulse (Lancer) | charge | each pulse drills deeper | everything blown along one line | sharp pulse | long needles |
+| Cold (Frostbite) | ice front spreads | frozen rock shivers | shatters into glass shards | snap | snow diamonds |
+| Prism (Ramiel) | 4.94 s glass charge and flare | the cluster chars black | lifted, held, hurled down | blast | big hanging diamonds |
+
+**Charger (the breaker), built here:**
+- Timing (`DigCube.STYLES.Charger.slam`): hover 7, lift 13.5, windup 1.1 s, dive 0.2 s, hold 0.32 s, recover 0.5 s. One slam still does the whole cycle's work, so the dig rate is unchanged.
+- Lift (`Feel.heavyLift`): smootherstep over the first 80% of the windup (zero speed at both ends), then it hangs. Server and clients evaluate the same curve from `BreakerLiftFrom`/`BreakerLiftTo`/`BreakerLiftFor`. During the hang the client shivers the body (0.07 studs, 0.035 rad). The drop is the existing powered dive (`Feel.powerDive`), now 0.2 s; `BreakerDiveDuration` publishes the dig value.
+- Each slam (`DigCubeView:slamHit`): `metal_land` at pitch 0.52, `breaker_contact`, a low `crystal_impact`; your own slams hit the camera (`HeavySplit` 0.9). The piece stamps down 0.34 studs and rebounds.
+- Shockwave (`V:shockwave`/`V:stepWaves`): 2 rings of rock slabs (raycast onto the rock around the hit, none over dug-out space) burst up as the front passes (12 studs/s), tip outward 24–42° and sink back, on the 8 fps grid; a ring of smoke-texture dust rolls out. The final break: 3 rings to 8.5 studs, 1.6× taller slabs, 15 studs/s, plus a dust column. Other players' waves have fewer slabs and quieter sounds.
+- Final break (`ROLE_FX.C`): rubble up 46–60 studs/s (was 4–7), out 4–8, spin 1.2–2.6 (slow, heavy), streak lift ×2. The spark discs (`breakCloud`) are replaced by the shockwave and dust. Sounds: fracture at 0.78, the big split, a metal clang at 0.5.
+
+Tests: `test_rock_chunks.py` (now checks the Charger launches higher than any other break), `test_dig_cube.py` (new slam timing), dig flow, beam, mining flight and fun FX pass. `test_smooth_animation.py` fails on the untouched integration commit too (pre-existing). Not seen in Play: the look, weight and sound need the owner's eyes.
+
 ## November 22 — one process and one body per type; pastel light; fewer effects
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes the shared darken/crack-pop/terrace progression for every type except the Striker, the cube-plus-trim looks, the late-afternoon darkening, the relief rock variant, the 2.4× role particles and the rock mesh test area below.

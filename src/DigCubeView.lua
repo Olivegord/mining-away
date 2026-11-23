@@ -71,8 +71,8 @@ local ROLE_FX={
   rubble={per=2.2,min=1,max=6,up={10,15},out={4,8},spin={4,8},dark={.06,.2},near=.6,dcap=.85},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
  C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
-  rubble={per=3.6,min=1,max=4,up={4,7},out={14,22},spin={2,4},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3,pattern='ring'},
-  contact='Charger',sounds={{cue='breaker_fracture',pitch=.9},{cue='crystal_split',rock=9}},light=true,hold='heavy',lift=.7,speed=1.3},
+  rubble={per=3.6,min=1,max=4,up={46,60},out={4,8},spin={1.2,2.6},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3,pattern='ring'},
+  contact='Charger',quake=true,sounds={{cue='breaker_fracture',pitch=.78},{cue='crystal_split',rock=9},{cue='metal_land',pitch=.5,level=1.5}},light=true,hold='heavy',lift=2,speed=.8},
  B={proxy={tone=C3(25,12,45),cap=.55,src='progress',tremble=.03,mesh={charge=.25,tremble=.05}},carve=true,
   rubble={per=4,min=2,max=4,up={24,34},out={2,5},spin={10,18},dark={.3,.4},near=.6,dcap=.9,scorch=C3(38,18,58),pattern='column'},
   sounds={{cue='crystal_split',pitch=.9}},hold='split',lift=1.4,speed=1},
@@ -341,6 +341,106 @@ function V:puff(at: Vector3,color: Color3,scale: number,glints: number)
   spark.Parent=anchor;spark:Emit(glints)
  end
  task.delay(1.3,function() anchor:Destroy() end)
+end
+
+-- The Charger's weight (owner, Nov 22: "dropped with a lot of weight and a
+-- metallic sound causing an animated part shockwave"). A slam rings the
+-- rock around the hit: slabs of rock burst up out of the surface as the
+-- front passes, tip outward and sink back, on the chunks' stop-motion grid
+-- (RockChunks.FPS); a ring of dust rolls out along the ground. The final
+-- break sends a wider, taller one with a dust column. Your own slams also
+-- clang (metal) and hit the camera; other players' are smaller and quieter.
+local WAVE_MAX,WAVE_UP=4,.4 -- live waves; seconds each slab is out
+local DUST_TEXTURE='rbxasset://textures/particles/smoke_main.dds'
+function V:shockwave(at: Vector3,owned: boolean,big: boolean)
+ if self:reduced() then return end
+ self.waves=self.waves or {}
+ if #self.waves>=WAVE_MAX then return end
+ local o=self.origin
+ local r=self.random
+ local rock=self.holder and self.holder:FindFirstChild('Rock')
+ local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances=rock and {rock} or {}
+ local reach=big and 8.5 or 5.5
+ local rings=big and 3 or 2
+ local wave={born=os.clock(),speed=big and 15 or 12,slabs={}}
+ for k=1,rings do
+  local f=(k-1)/math.max(1,rings-1)
+  local radius=1.4+(reach-1.4)*f
+  local n=math.floor((owned and 1 or .6)*(6+radius*2))
+  local turn=r:NextNumber(0,math.pi*2)
+  for i=1,n do
+   local a=turn+(i-1)*math.pi*2/n+r:NextNumber(-.15,.15)
+   local dir=Vector3.new(math.cos(a),0,math.sin(a))
+   local flat=at+dir*(radius+r:NextNumber(-.35,.35))
+   -- On the rock around the hit (none where it is already dug away).
+   local hit=rock and workspace:Raycast(flat+Vector3.yAxis*2.5,Vector3.new(0,-6,0),params)
+   if hit and hit.Normal.Y>.6 then
+    local l=hit.Position-o
+    local size=Vector3.new(r:NextNumber(.6,1.05),r:NextNumber(.5,.85),r:NextNumber(.45,.8))*(big and 1.3 or 1)*(1.15-.4*f)
+    local part=fxPart(self.fx,'SlamSlab',self:colorAt(l.Y-.02,l.X,l.Z):Lerp(SHARD_DARK,r:NextNumber(.12,.3)))
+    part.Material=ROCK;part.MaterialVariant=ROCK_VARIANT;part.CastShadow=true;part.Size=size;part.Transparency=1
+    table.insert(wave.slabs,{part=part,dir=dir,base=hit.Position,dist=(hit.Position-at).Magnitude,size=size,
+     height=r:NextNumber(.75,1.1)*(1-.45*f)*(big and 1.6 or 1),tilt=math.rad(r:NextNumber(24,42)),yaw=r:NextNumber(-.5,.5)})
+   end
+  end
+ end
+ table.insert(self.waves,wave)
+ -- Dust rolling out along the ground (a big break also throws a column).
+ local anchor=fxPart(self.fx,'SlamDust',SHARD_DARK);anchor.Transparency=1
+ anchor.Size=Vector3.new(.2,2.4,2.4);anchor.CFrame=CFrame.new(at+Vector3.yAxis*.3)*CFrame.Angles(0,0,math.pi/2)
+ local tone=self:colorAt(at.Y-o.Y-.02,at.X-o.X,at.Z-o.Z):Lerp(Color3.fromRGB(236,226,206),.45)
+ local function dust(name: string,shape: Enum.ParticleEmitterShape,speed: {number},life: {number},size: number,n: number)
+  local e=Instance.new('ParticleEmitter');e.Name=name;e.Enabled=false;e.Rate=0
+  e.Texture=DUST_TEXTURE;e.Shape=shape;e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward;e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Surface
+  e.Color=ColorSequence.new(tone);e.LightEmission=0;e.LightInfluence=1
+  e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,size*.45),NumberSequenceKeypoint.new(1,size)})
+  e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(.6,.65),NumberSequenceKeypoint.new(1,1)})
+  e.Speed=NumberRange.new(speed[1],speed[2]);e.Lifetime=NumberRange.new(life[1],life[2]);e.Drag=5
+  e.Acceleration=Vector3.new(0,1.5,0);e.RotSpeed=NumberRange.new(-40,40);e.Rotation=NumberRange.new(0,360)
+  e.Parent=anchor;e:Emit(n)
+ end
+ dust('RingDust',Enum.ParticleEmitterShape.Cylinder,{14,22},{.6,1.1},big and 3 or 2.2,(owned and 1 or .5)*(big and 30 or 18))
+ if big then dust('ColumnDust',Enum.ParticleEmitterShape.Sphere,{8,16},{1,1.6},3.4,owned and 16 or 8) end
+ task.delay(2,function() anchor:Destroy() end)
+end
+function V:stepWaves()
+ local waves=self.waves
+ if not waves or #waves==0 then return end
+ local fps=RockChunks.FPS
+ for i=#waves,1,-1 do
+  local w=waves[i]
+  -- Stop-motion, like the chunks (owner, Nov 22: "animate them at like 8fps").
+  local t=math.floor((os.clock()-w.born)*fps)/fps
+  local live=false
+  for _,slab in ipairs(w.slabs) do
+   local u=(t-slab.dist/w.speed)/WAVE_UP
+   if u<1 then live=true end
+   if u<=0 or u>=1 then
+    slab.part.Transparency=1
+   else
+    local h=math.sin(math.pi*u^.7)
+    slab.part.Transparency=0
+    slab.part.CFrame=CFrame.lookAt(slab.base,slab.base+slab.dir)*CFrame.new(0,slab.height*h-slab.size.Y*.5,0)
+     *CFrame.Angles(-slab.tilt*h,slab.yaw,0)
+   end
+  end
+  if not live then
+   for _,slab in ipairs(w.slabs) do slab.part:Destroy() end
+   table.remove(waves,i)
+  end
+ end
+end
+-- One slam lands (the impact, before any break it causes).
+function V:slamHit(at: Vector3,owned: boolean,wave: boolean)
+ local ctx=self.ctx
+ local level=owned and 1 or .5
+ if ctx.audio then
+  ctx.audio:play('metal_land',at,{pitch=.52+self.random:NextNumber(-.03,.03),level=1.6*level})
+  ctx.audio:play('breaker_contact',at,{level=level})
+  ctx.audio:play('crystal_impact',at,{pitch=.58,level=.8*level})
+ end
+ if wave then self:shockwave(at,owned,false) end
+ if owned and ctx.beat then ctx.beat('HeavySplit',at,workspace:GetServerTimeNow(),.9) end
 end
 
 -- Rubble: the broken rock itself. Each cell of a broken piece is cracked
@@ -1130,7 +1230,9 @@ function V:poseProxy(proxy: any,now: number)
  if fx.lift then lift+=fx.lift[1]+(fx.lift[2]-fx.lift[1])*progress end
  if fx.slam and proxy.slamAt then
   local u=now-proxy.slamAt
-  if u>=0 and u<.18 then lift-=.15*math.sin(math.pi*u/.18) end
+  -- A heavy stamp: driven well down, then a small rebound.
+  if u>=0 and u<.16 then lift-=.34*math.sin(math.pi*u/.16)
+  elseif u>=.16 and u<.34 then lift+=.07*math.sin(math.pi*(u-.16)/.18) end
  end
  if fx.pulse and proxy.pulseAt then
   local u=now-proxy.pulseAt
@@ -1956,7 +2058,10 @@ function V:burst(op: any,e: any)
  -- A gem bursts out with the rock, not after it, and its color takes over.
  if gem then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk,owned=e.owned,op=op},os.clock()) end
  if not lively then return end
- if not gem and fx.contact then
+ if not gem and fx.quake then
+  -- Weight, not heat: a wide shockwave and dust, no spark discs.
+  self:shockwave(e.point,e.owned,true)
+ elseif not gem and fx.contact then
   op.hub=e.point-self.origin
   self:breakCloud(op,{primary=primary,accent=e.accent or primary,bulk=e.bulk,role=e.role},e.owned)
  end
@@ -2662,9 +2767,8 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
    if pulse then job.pulseAt=clock end
   end
  end
- if slam and beam.mine and self.ctx.audio then
-  self.ctx.audio:play('breaker_contact',hitPoint or from,{level=.7})
- end
+ -- Every slam lands heavy; one that broke its chunk leaves the big wave to the break.
+ if slam then self:slamHit(hitPoint or from,beam.mine,not moved) end
  -- Stage cracks on the chunk this drone is cutting. The outline pulses
  -- while it works on it: the beam, or any other attack once it is there.
  if ids and alive then
@@ -3176,6 +3280,7 @@ function V:update()
  self:stepSplits(now)
  self:stepDust(now)
  self:stepShards(now)
+ self:stepWaves()
  self:stepLights(now)
  self:stepGeodes(now)
  self:stepCombo(now)

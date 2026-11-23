@@ -168,7 +168,7 @@ end
 D.STYLES={
  Striker={code='L',kernel='beam',pick='cone',pieces='terrace',power=1,color={255,159,24},beam='Cutter',rockCarry=false},
  Charger={code='C',kernel='slam',pick='cone',size='huge',pieces='none',early=true,power=1,color={255,92,40},rockCarry=false,
-  slam={hover=7,lift=9,windup=.55,dive=.28,hold=.2,recover=.45,clear=1.05},quake={share=.08,radius=10,every=.5}},
+  slam={hover=7,lift=13.5,windup=1.1,dive=.2,hold=.32,recover=.5,clear=1.05},quake={share=.08,radius=10,every=.5}},
  Ballcaster={code='B',kernel='shot',pick='small',size='cell',pieces='none',power=1,color={150,84,255},shape='Ball',carveAhead=true,hintBias=4,
   shot={hover=7,chargeMin=.35,chargeMax=2,chargeDiv=1.4,rested=.4,flight=.26,recover=.15}},
  Needler={code='N',kernel='shot',pick='near',size='cell',pieces='none',power=1,color={255,195,94},shape='Dart',carveAhead=true,

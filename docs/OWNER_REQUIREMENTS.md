@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — rocks react the way the attack would; old Ramiel, Needler and gunner effects back
+
+"rocks reaction to drones should make more sense! currently the default laser is good because i told you how to tune it. i want you to be able to generalize better. for example the breaker should seem very heavy! it should slowly float up, then get dropped with a lot of weight and a metallic sound causing an animated part shockwave. its final break should launch rocks much higher in the air and have different particles; it should have a different reaction than a constant laser that is slowly burning." And: "bring back old effects. for example ramiel's old chargeup was SOOO cool, along with its old animation. same with the needler, the old yellow gunner. do this step FIRST, then make the effects unique".
+
 ## November 22 — more fun, less clutter, drones that differ; then six drones, keep Ramiel, see-through rock
 
 "make this game more fun and less visually cluttered! visual effects should be used to show things! not be overused. take videos and analyze everything and make sure it all looks good. chief complaint is all drones do the same progression of damage, and look the exact same, they just have different skins. also its not too fun the current game loop, and the lighting and textures are very ugly. it looked better in pastel, but that was too bright." Follow-ups: "only work on like 6 drones or less. all 14 is too much of an undertaking before all the game is ready"; "make sure rocks never block the camera when you are digging, they just become sorta transparent"; "keep ramiel for now".

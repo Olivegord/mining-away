@@ -435,6 +435,18 @@ function F.stage(hp,maxHP,count)
  if maxHP<=0 then return count end
  return math.clamp(math.floor((1-hp/maxHP)*(count+1)+1e-7),0,count)
 end
+-- A heavy weight hauled up (the Charger's windup, owner Nov 22: "the
+-- breaker should seem very heavy, slowly float up, then get dropped"):
+-- slow to start, slower to arrive (smootherstep over the first 80%), then
+-- it hangs at the top until the drop. Server and every client evaluate it
+-- from the same published start, top, time and length.
+F.LIFT_RISE=.8
+function F.heavyLift(from,to,elapsed,duration)
+ local rise=math.max(.01,duration)*F.LIFT_RISE
+ local u=math.clamp(elapsed/rise,0,1)
+ local e=u*u*u*(u*(u*6-15)+10)
+ return from:Lerp(to,e),(to-from)*(30*u*u*(1-u)^2/rise)
+end
 function F.powerDive(start,impact,elapsed,duration)
  local delta=impact-start
  -- A powered weight gains speed all the way down. It has no arrival brake:
