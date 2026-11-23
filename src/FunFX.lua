@@ -209,6 +209,7 @@ function Fun.paintCube(view,body,id,primary,role)
  motes.Speed=NumberRange.new(1.5,3.5);motes.SpreadAngle=Vector2.new(70,70);motes.EmissionDirection=Enum.NormalId.Bottom
  motes.Acceleration=Vector3.new(0,2,0);motes.Drag=2;motes.Rotation=NumberRange.new(0,360);motes.RotSpeed=NumberRange.new(-120,120)
  motes.Parent=glow
+ pcall(Fun.styleParticle,motes,role)
  return {color=color,primary=primary,accent=accent,role=role,glow=glow,light=light,trail=trail,motes=motes,glowBase=glow.Color}
 end
 -- Called every render frame for a cube. speed in studs/s.
@@ -257,6 +258,98 @@ function Fun.confetti(parent,point,color,strength)
   anchor:Destroy();active-=1
  end)
 end
+-- Particles (owner, Nov 22): every round particle is one plain, crisp
+-- circle; the engine's default sparkle and the soft glow/flare blobs are
+-- swapped for it as they appear. And every drone type has its own particle
+-- look (shape, spin, stretch), applied to the particles its effects make.
+Fun.CIRCLE='rbxasset://textures/ui/VR/circleWhite.png'
+Fun.SQUARE=SQUARE
+Fun.STAR='rbxassetid://77624818077620'
+Fun.ROUND={['']=true,[SPARKLE]=true,['rbxasset://textures/sparkle.png']=true,['rbxasset://textures/glow.png']=true,
+ ['rbxasset://textures/particles/flare_main.dds']=true,['rbxasset://textures/ui/AvatarExperience/glowLight.png']=true}
+-- shape: circle | square (tumbling) | diamond (a square turned 45 degrees,
+-- still) | bar (a short slab along its flight) | needle (a long thin one) |
+-- star. spin in degrees/s; squash stretches along the flight.
+Fun.ROLE_PARTICLE={
+ Striker={shape='circle'},
+ Charger={shape='square',spin=260},
+ Ballcaster={shape='diamond'},
+ Needler={shape='needle',squash=2.6},
+ Bubbler={shape='circle',grow=true},
+ Halver={shape='bar',squash=1.4},
+ Gridcutter={shape='square',spin=0},
+ Singularity={shape='diamond',spin=320},
+ Starforge={shape='star',spin=120},
+ Frostbite={shape='diamond',squash=1.2},
+ Resonator={shape='circle',pulse=true},
+ Ramiel={shape='diamond',spin=90},
+ Nomad={shape='square',spin=420},
+ Lancer={shape='needle',squash=3.4},
+}
+function Fun.styleParticle(emitter,role)
+ local look=Fun.ROLE_PARTICLE[role or '']
+ if not look or not emitter:IsA('ParticleEmitter') then return end
+ emitter:SetAttribute('RoleParticle',role)
+ local shape=look.shape
+ emitter.FlipbookLayout=Enum.ParticleFlipbookLayout.None
+ if shape=='circle' then
+  emitter.Texture=Fun.CIRCLE
+  if look.grow then
+   local ok,s=pcall(function() return emitter.Size.Keypoints[1].Value end);s=ok and s or .5
+   emitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,s*.4),NumberSequenceKeypoint.new(.7,s*1.2),NumberSequenceKeypoint.new(1,0)})
+  elseif look.pulse then
+   local ok,s=pcall(function() return emitter.Size.Keypoints[1].Value end);s=ok and s or .5
+   emitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,s),NumberSequenceKeypoint.new(.25,s*.45),NumberSequenceKeypoint.new(.5,s),NumberSequenceKeypoint.new(.75,s*.45),NumberSequenceKeypoint.new(1,0)})
+  end
+ elseif shape=='star' then
+  emitter.Texture=Fun.STAR
+  emitter.Rotation=NumberRange.new(0,360);emitter.RotSpeed=NumberRange.new(-(look.spin or 0),look.spin or 0)
+ else
+  emitter.Texture=Fun.SQUARE
+  if shape=='diamond' then
+   emitter.Rotation=NumberRange.new(45,45)
+   emitter.RotSpeed=NumberRange.new(-(look.spin or 0),look.spin or 0)
+  elseif shape=='square' then
+   emitter.Rotation=NumberRange.new(0,(look.spin or 0)>0 and 360 or 0)
+   emitter.RotSpeed=NumberRange.new(-(look.spin or 0),look.spin or 0)
+  else -- bar, needle: slabs pointing where they fly
+   emitter.Rotation=NumberRange.new(0,0);emitter.RotSpeed=NumberRange.new(0,0)
+   emitter.Orientation=Enum.ParticleOrientation.VelocityParallel
+  end
+ end
+ if look.squash then emitter.Squash=NumberSequence.new(-look.squash) end
+end
+-- Particles made inside fn take the role's look (effects build their
+-- emitters synchronously; DescendantAdded below sees them as they appear).
+function Fun.withRole(role,fn,...)
+ local was=Fun.activeRole
+ Fun.activeRole=role
+ local result=table.pack(pcall(fn,...))
+ Fun.activeRole=was
+ if not result[1] then error(result[2],0) end
+ return table.unpack(result,2,result.n)
+end
+local function normalize(emitter)
+ if Fun.activeRole and not emitter:GetAttribute('RoleParticle') then
+  pcall(Fun.styleParticle,emitter,Fun.activeRole)
+ elseif Fun.ROUND[emitter.Texture] then
+  emitter.Texture=Fun.CIRCLE;emitter.FlipbookLayout=Enum.ParticleFlipbookLayout.None
+ end
+end
+function Fun.particles()
+ if Fun.particlesOn then return end
+ Fun.particlesOn=true
+ local function watch(item)
+  if item:IsA('ParticleEmitter') then
+   normalize(item)
+   item:GetPropertyChangedSignal('Texture'):Connect(function()
+    if Fun.ROUND[item.Texture] and not item:GetAttribute('RoleParticle') then item.Texture=Fun.CIRCLE end
+   end)
+  end
+ end
+ for _,item in ipairs(workspace:GetDescendants()) do watch(item) end
+ workspace.DescendantAdded:Connect(watch)
+end
 -- Slow colored motes floating above each square field. Created once.
 function Fun.fieldMotes(parent,world)
  if Fun.motesReady then return end
@@ -298,7 +391,9 @@ end
 -- changes. so still pastel but very dark. sun at like sunset".
 -- Then: "a little brighter again, more contrast with the lighting": a
 -- stronger low sun over a low ambient and sharper shadows.
-Fun.DARKEN={sun=.78,ambient=.36,outdoor=.34,haze=.45,density=.8,diffuse=.55,clock=17.7,shadow=.15,contrast=.12}
+-- Then: "still reads as far too dark -> nighttime": late afternoon (a warm,
+-- low but daytime sun) and only a moderate dimming, keeping the contrast.
+Fun.DARKEN={sun=.9,ambient=.5,outdoor=.48,haze=.5,density=.85,diffuse=.7,clock=16.3,shadow=.15,contrast=.12}
 function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end

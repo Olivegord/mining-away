@@ -1380,10 +1380,15 @@ function V:split(op: any,now: number)
  local spots=op.partial and {} or self:spreadPoints(op)
  local extent=0
  for _,q in ipairs(parts) do for _,v in ipairs(q.poly) do extent=math.max(extent,math.sqrt((v[1]-cx)^2+(v[2]-cz)^2)) end end
- local info={center=center,point=o+Vector3.new(cx,top,cz),ground=o.Y+bottom,bulk=bulk,strength=strength,owned=owned,heavy=heavy,spots=spots,extent=extent,
+ local info={center=center,point=o+Vector3.new(cx,top,cz),ground=o.Y+bottom,bulk=bulk,strength=strength,owned=owned,heavy=heavy,spots=spots,extent=extent,role=style.role,
   color=self:colorAt(top-.01,cx,cz),primary=primary,accent=accent,fx=fx,link=link}
- if hold>0 then table.insert(self.pending,{at=now+hold,run=function() self:burst(op,info) end})
- else self:burst(op,info) end
+ -- The break's particles take the drone type's look (a gem's stay its own).
+ local function beat()
+  if self.ctx.withRole and op.tier<=0 then self.ctx.withRole(style.role,function() self:burst(op,info) end)
+  else self:burst(op,info) end
+ end
+ if hold>0 then table.insert(self.pending,{at=now+hold,run=beat})
+ else beat() end
 end
 -- Your own Resonator break: its cells and their same-layer neighbours, the
 -- only cells its chain links can be (up to three, .15 s apart), for a
@@ -1486,6 +1491,7 @@ function V:breakCloud(op: any,e: any,big: boolean)
   sparks.Color=ColorSequence.new(e.primary:Lerp(BEAM_CORE,.35),e.accent)
   sparks.Lifetime=NumberRange.new(.4,.8);sparks.Speed=NumberRange.new(14,28);sparks.SpreadAngle=Vector2.new(70,70)
   sparks.EmissionDirection=Enum.NormalId.Top;sparks.Acceleration=Vector3.new(0,-30,0);sparks.Drag=1.5
+  if self.ctx.styleParticle and e.role then pcall(self.ctx.styleParticle,sparks,e.role) end
   sparks:Emit(count(8+3*bulk))
  end
  task.delay(1.2,function() holder:Destroy() end)
@@ -1568,7 +1574,7 @@ function V:burst(op: any,e: any)
  if not lively then return end
  if not gem and fx.contact then
   op.hub=e.point-self.origin
-  self:breakCloud(op,{primary=primary,accent=e.accent or primary,bulk=e.bulk},e.owned)
+  self:breakCloud(op,{primary=primary,accent=e.accent or primary,bulk=e.bulk,role=e.role},e.owned)
  end
  -- The 3D streaks (owner: the old rectangles): in the rock's tone, plus two
  -- in the role's color for your own breaks; at most five, so only the
@@ -2156,7 +2162,7 @@ function V:beamTarget(source: Instance): BasePart?
  beam.plateAt=os.clock()
  return beam.plate
 end
-function V:newBeam(color: Color3,mine: boolean)
+function V:newBeam(color: Color3,mine: boolean,role: string?)
  local root=fxPart(self.fx,'DigSight',SIGHT);root.Transparency=1;root.Size=Vector3.one*.05
  local a=Instance.new('Attachment');a.Name='From';a.Parent=root
  local b=Instance.new('Attachment');b.Name='To';b.Parent=root
@@ -2181,6 +2187,8 @@ function V:newBeam(color: Color3,mine: boolean)
  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(65,65)
  sparks.Speed=NumberRange.new(6,13);sparks.Lifetime=NumberRange.new(.2,.42);sparks.Drag=2
  sparks.Acceleration=Vector3.new(0,-26,0);sparks.Rate=mine and 14 or 4;sparks.Enabled=false;sparks.Parent=b
+ -- The drone type's own particle look (FunFX.ROLE_PARTICLE).
+ if self.ctx.styleParticle then pcall(self.ctx.styleParticle,sparks,role) end
  return {root=root,a=a,b=b,core=core,glow=glow,gui=gui,halo=halo,dot=dot,sparks=sparks,mine=mine,tint=color,edge=color,on=false}
 end
 function V:hideBeam(beam: any)
@@ -2197,7 +2205,7 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
  local beam=self.beams[id]
  if not beam then
   local player=Players.LocalPlayer
-  beam=self:newBeam(primary,player~=nil and source:GetAttribute('Owner')==player.UserId)
+  beam=self:newBeam(primary,player~=nil and source:GetAttribute('Owner')==player.UserId,source:GetAttribute('Role'))
   self.beams[id]=beam
  end
  local clock=os.clock() -- the step functions run on os.clock; `now` here is server time

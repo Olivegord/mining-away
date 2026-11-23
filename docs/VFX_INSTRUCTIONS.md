@@ -49,6 +49,17 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
   - Owner follow-up, "less color is not exactly applied":
     - The tint now goes by rank, not radius (small pieces had every chunk within the old radius). Only the 3 chunks nearest the hit take color: full, 60%, 30%, at most 35%.
     - A colored role shade (Ballcaster purple, Starforge orange, Frostbite ice) reaches only the 5 nearest chunks. Darkening still covers the whole piece.
+- **Particles (`FunFX.particles`, `FunFX.ROLE_PARTICLE`):** owner: no default or other circle particles, only straight circles; each drone its own particle look, some squares.
+  - Client-wide, every ParticleEmitter in the workspace using the default sparkle, an empty texture, `sparkle.png`, `glow.png`, `flare_main` or `glowLight` becomes the plain antialiased circle (`circleWhite.png`), as it appears and if its texture is set again. Smoke, fire, the vortex and the star texture are not circles and are kept.
+  - Per drone type (shape, spin, stretch):
+    - circle: Striker; Bubbler (grows); Resonator (pulses)
+    - square: Charger (tumbling); Gridcutter (still); Nomad (fast spin)
+    - diamond: Ballcaster; Singularity (spinning); Frostbite (stretched); Ramiel (slow spin)
+    - bar: Halver
+    - needle: Needler; Lancer (longer)
+    - star: Starforge
+  - The look applies to the drone's motes, its dig contact sparks, its break spark cells, and every particle its break effects create (`Fun.withRole` around the break beat). Gem effects keep their own.
+- **Spritesheet particles:** supported natively. `ParticleEmitter.FlipbookLayout` (grids such as 2×2, 4×4, 8×8), `FlipbookMode` (Loop, OneShot, PingPong, Random), `FlipbookFramerate` and `FlipbookStartRandom` play a sheet's frames over each particle's life. The sheet must be an uploaded image asset, square and power-of-two (up to 1024). This repo uploads none yet; it can be uploaded through Studio's Asset Manager.
 - **Gems are only opened by jumping (owner, Nov 22):**
   - Drones never break a gem open. Every gem found seals for its owner; the per-break (`SEAL_PER_BREAK`) and per-player (`SEAL_LIVE`) caps no longer apply. Only a cell already carved away (never a gem cell in practice) bursts out.
   - The first-break-into-a-layer gem only picks a cell that is still whole. If every cell was carved ahead, the next break in that layer gets it.
@@ -58,9 +69,8 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
   - The god rays stretch to 2.4–4.5× their length and get wider.
 - **Crack after the pause, midair combo (`V:geodeCombo`, `V:stepCombo`):** when the freeze ends, a crack (`crystal_split`) and a tink play. Each gem you open before standing on solid ground (0.25 s grounded, or 4 s without an opening, ends it) rings 12% higher, up to 2.2×, and a little louder.
 - **Darker baseline (`FunFX.colorPop`, client only):** owner: "even darker, ambient down, revert the color changes, still pastel but very dark, sun at sunset". Changes relative to the authored lighting:
-  - after "a little brighter, more contrast with the lighting": sun brightness ×0.78, ambient ×0.36, outdoor ambient ×0.34, environment diffuse ×0.55, shadow softness 0.15, grade contrast 0.12 (saturation stays −0.16);
+  - after "still reads as far too dark → nighttime": `ClockTime` 16.3 (late afternoon), sun brightness ×0.9, ambient ×0.5, outdoor ambient ×0.48, environment diffuse ×0.7, haze ×0.5, shadow softness 0.15, grade contrast 0.12 (saturation stays −0.16). This replaces the 17.7 sunset and the stronger dimming;
   - atmosphere haze ×0.45, density ×0.8, its color unchanged;
-  - `ClockTime` 17.7 (sunset);
   - Sun brightness, haze and clock time are held: a later change from elsewhere is darkened again. Ambient is set once, because the pit lamp drives it in the pit.
   - Emissive things (Neon, beams, particles, lights, gems) are unaffected, so they stand out more. The authored place lighting is unchanged.
 - **Tests:**

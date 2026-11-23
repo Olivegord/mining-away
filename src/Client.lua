@@ -97,7 +97,7 @@ end)
 return {frozen=frozen,freeze=freezeGame}
 end)()
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
-Presentation.Fun.colorPop()
+Presentation.Fun.colorPop();Presentation.Fun.particles()
 -- Dig role colors and kernels (shared DigCube styles, via the DigCubeView statics).
 -- Kept on Presentation.Fun so drone closures never capture another top-level
 -- local: the bundle is at Luau's 200-register limit for captured locals.
@@ -2009,7 +2009,7 @@ end)
 if profile then pickupView.sales:receiveProfile(profile) end
 pickupView.crew=CrewView.new({gui=safeRoot,player=player,world=world,localFX=localFX,command=command,audio=soundscape,
  presentation=presentation,reduced=CrystalImpactView.reducedMotion,hidden=menusVisible,profile=function() return profile end})
-pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,crack=crystalAudio,presentation=presentation,freeze=hitStop.freeze,
+pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,crack=crystalAudio,presentation=presentation,freeze=hitStop.freeze,withRole=Presentation.Fun.withRole,styleParticle=Presentation.Fun.styleParticle,
  beat=cameraBeat,splitBeat=rockDamage.splitBeat,reduced=CrystalImpactView.reducedMotion,impact=rockDamage.feedback,effects=RoleVisuals,
  fractures=function(name) local folder=command.Parent:FindFirstChild('CrystalFractures');return folder and folder:FindFirstChild(name) end})
 RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function()

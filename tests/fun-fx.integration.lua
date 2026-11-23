@@ -57,4 +57,39 @@ local model=Instance.new('Model');model.Parent=run
 local field=Instance.new('Part');field.Name='Field';field.Size=Vector3.new(32,1,32);field:SetAttribute('CrystalZone',3);field.Parent=model
 FunFX.fieldMotes(root,world)
 assert(FunFX.motesReady,'square fields get motes')
+-- Particles: round blobs become one plain circle; each drone type its own look.
+do
+ local added=signal and signal() or nil
+ local listeners={}
+ workspace.DescendantAdded={Connect=function(_,f) table.insert(listeners,f);return {Disconnect=function() end} end}
+ function workspace:GetDescendants() return {} end
+ local function emitter(texture)
+  local e=Instance.new('ParticleEmitter');e.Texture=texture;e.Size=NumberSequence.new(1)
+  e.GetPropertyChangedSignal=function() return {Connect=function() end} end
+  return e
+ end
+ FunFX.particles()
+ local function add(e) for _,f in ipairs(listeners) do f(e) end;return e end
+ local sparkle=add(emitter('rbxasset://textures/particles/sparkles_main.dds'))
+ assert(sparkle.Texture==FunFX.CIRCLE,'the default sparkle becomes a plain circle')
+ local blank=add(emitter(''))
+ assert(blank.Texture==FunFX.CIRCLE,'an untextured (default) emitter becomes a plain circle')
+ local smoke=add(emitter('rbxasset://textures/particles/smoke_main.dds'))
+ assert(smoke.Texture=='rbxasset://textures/particles/smoke_main.dds','smoke is not a circle: kept')
+ local looks={}
+ for role,look in pairs(FunFX.ROLE_PARTICLE) do
+  local e=emitter('');FunFX.styleParticle(e,role)
+  local key=look.shape..':'..tostring(look.spin or 0)..':'..tostring(look.squash or 0)..':'..tostring(look.grow)..':'..tostring(look.pulse)
+  assert(not looks[key],role..' shares a particle look with '..tostring(looks[key]))
+  looks[key]=role
+  local want=look.shape=='circle' and FunFX.CIRCLE or look.shape=='star' and FunFX.STAR or FunFX.SQUARE
+  assert(e.Texture==want,role..' texture')
+ end
+ local shapes={};for _,look in pairs(FunFX.ROLE_PARTICLE) do shapes[look.shape]=true end
+ assert(shapes.square and shapes.diamond and shapes.needle and shapes.circle,'squares, diamonds, needles and circles among the drones')
+ local made
+ FunFX.withRole('Charger',function() made=add(emitter('rbxasset://textures/particles/sparkles_main.dds')) end)
+ assert(made.Texture==FunFX.SQUARE and made:GetAttribute('RoleParticle')=='Charger','particles made inside a Charger effect take its square look')
+ print('PASS particles: default/soft round particles become plain circles; 14 distinct drone particle looks; effects take their drone look')
+end
 print('PASS FunFX one look per drone type (same type identical, 14 distinct silhouettes), trail/sparkle step, confetti, field motes and color grade (API doubles)')
