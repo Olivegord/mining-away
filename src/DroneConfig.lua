@@ -360,11 +360,11 @@ function DroneConfig.ramielRig(model: Model)
  local glass=model:FindFirstChild('RamielGlass')
  if not glass or not glass:FindFirstChild('UpperEquator') then return nil end
  local rig={halves={},core=glass:FindFirstChild('Core') :: BasePart,scale=model:GetScale(),
-  closed=glass:FindFirstChild('ClosedHull'),slices={}}
+  closed=glass:FindFirstChild('ClosedHull'),slices={},sliceSet={}}
  if rig.closed then
   for _,part in ipairs(glass:GetDescendants()) do
    if part:IsA('BasePart') and part~=rig.closed and part~=rig.core then
-    rig.slices[#rig.slices+1]=part
+    rig.slices[#rig.slices+1]=part;rig.sliceSet[part]=true
    end
   end
  end

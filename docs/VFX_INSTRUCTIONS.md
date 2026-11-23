@@ -2,11 +2,23 @@
 
 ## November 22 — no black rocks; rubble shrinks while tumbling
 
-Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes the near-black Ramiel char and the rest-then-vanish rubble below.
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes the near-black Ramiel char, the near-black Striker char halves (now at most 45% toward black, piece tone (28,22,22) cap 0.6), and both the rest-then-vanish and the shrink-once-stopped ("rubble never rests") rubble below.
 - **Black:** Ramiel's rubble went 70–80% (up to 90%) toward (12,6,10), and its charred piece 82%; every type's scorch near the hit could reach 85–90%. Now any rubble darkens at most `DARK_MAX` 0.5 toward its scorch. Ramiel's burnt tone is (44,28,32): rubble dark 0.3–0.42, char 50%, piece tone cap 0.5.
 - **Shrink while tumbling:** before, 1.15 s after a break every loose piece was anchored where it was (even in mid-air), lowest first, and shrank in 0.18 s. Now physics keeps running. A piece starts shrinking once it is slow (under 7 studs/s) near the floor of the hole after 0.8 s, or under 14 studs/s after 1.8 s, or at 2.8 s regardless. It shrinks to 10% over 0.85 s (smoothstep), fading in the last quarter. Its parts are joined by `Weld`s whose offsets scale with it, so the piece stays whole. Friction 0.5 (was 0.8) and bounce 0.2 (was 0.12), so pieces tumble a little longer. The invisible rubble floor lasts 2 s longer.
 - Tests: `test_rock_chunks.py` checks no near-black rubble and the shrink timing under physics doubles. Not seen in Play.
 
+## November 22 — shake retune, big-break pauses, char split, rubble never rests, Ramiel hull
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md).
+- **Why it shook so much:** dig chunks are big (bulk, the cube root of volume: tiny ≈4, medium ≈6, large ≈7.5, huge ≈9 studs), and a break counted as heavy at bulk 3.75, so nearly every break played `HeavySplit`; each crack pop also played a `Split`.
+- **Camera beats (`Presentation` `cameraBeats`, now `{amount,duration,attack,heavy,range}`):** routine beats roughly halved (Split .18→.085, Sale .115→.07, shots/hits ~35–45% lower); `HeavySplit` .49→.30. New `Crack` (crack pops), `Hit` (stage breaks, each Lancer punch), `Pop` (Bubbler bubble), `Slam` (.36, felt to 95 studs) and `Blast`. Ordinary cap .135→.08, total .52→.40, `kick` cap .16→.09, field crystal recoil ×0.6, Ramiel prism kick 3.0→2.3.
+- **Big vs small:** a dig break shakes heavy only for C/P/A/Y or bulk ≥ 8 (`BIG_ATTACK`, `BIG_BULK`); `splitBeat` takes that `big` flag, and the combo grows the shake but never promotes it to heavy. Field rocks: heavy from strength 1.6 (was 1.35).
+- **Smasher:** its slam now plays `Slam` for your own (and a third of it for others'), felt across the dig instead of fading out at 47 studs.
+- **Big-break pause:** your own non-gem full break of bulk ≥ 6.8 (≥ 5.3 for the big attackers) freezes the game for 2–5 frames (+1 for big attackers), at most every 0.5 s, via `hitStop.freeze(t,{light=true,shake=.035,punch=1.5})`. `light` skips the whole-place particle scan so a short pause cannot hitch.
+- **Char split (Striker, `ROLE_FX.L` `char`):** the piece darkens to near black over its progress (cap .82), then the chunk breaks into two charred halves across `DigCube.split`. Each half tips over its own outer foot (≈26° and 36°, ease-out cubic over 0.24 s, then +0.10 rad settle), drawn whole; at 0.42 s they crack into physical rubble. The outer-foot hinge keeps them out of the pit floor.
+- **Nomad:** rubble pattern `levitate` (lifted, held, hurled down), no longer the same blast as Ramiel.
+- **Rubble never rests:** a loose piece whose linear speed < 1.2 studs/s and spin < 1.5 rad/s for 0.05 s (checked from 0.15 s after release) shrinks away over 0.32 s. The pebble kept to collect is the exception. Hand-animated rubble no longer waits on the ground.
+- **Ramiel:** the per-frame camera-obstruction fade reset `LocalTransparencyModifier` on every part, undoing the rig's hull/slice switch; it now keeps `ClosedHull` hidden while the slices animate and the slices hidden while closed.
 
 ## November 22 — no floating regular cells (sealed gem cells may float)
 

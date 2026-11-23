@@ -616,8 +616,9 @@ do -- every role comes apart its own way
  end
  -- The ripple: the middle lets go first, the rest in a fast wave outward.
  local far=0
- for _,x in ipairs(striker) do
-  assert(math.abs(x.delay-x.dist*.014)<1e-6,string.format('Striker ripple: delay %.3f at %.2f studs',x.delay,x.dist));far=math.max(far,x.delay)
+ -- (The Striker's char split has its own timing now; the Ballcaster keeps the plain ripple.)
+ for _,x in ipairs(ball) do
+  assert(math.abs(x.delay-x.dist*.014)<1e-6,string.format('ripple: delay %.3f at %.2f studs',x.delay,x.dist));far=math.max(far,x.delay)
  end
  assert(far>0 and far<.2,'the ripple runs out fast: '..far)
  -- Light chips: smaller than the chunks and thrown far higher.

@@ -1179,12 +1179,20 @@ function P:destroyTurret(record)
 end
 -- Short camera translations driven by the same events as sound and particles.
 -- Keep routine feedback in its own budget so clustered hits cannot drown out a blast.
+-- {amount, duration, attack, heavy, range}. Owner, Nov 22: "screenshake is
+-- too much; reserve large shakes for big attacks; most attacks need shake".
+-- Routine hits are small; only the big attacks (Slam, Blast, a huge break,
+-- a gem) get the heavy rattle. Range is how far from you it is still felt
+-- (default 47 studs); big attacks reach across the whole dig.
 local cameraBeats={
- Sale={.115,.16,.019},
- NeedleFire={.014,.070,.008}, BallFire={.073,.15,.025},
- NeedleHit={.015,.075,.009}, BallHit={.080,.165,.026},
- Fracture={.032,.14,.023}, Split={.18,.29,.024}, HeavySplit={.49,.52,.021,true}, CompactorGrip={.125,.19,.017}, CompactorPress={.26,.29,.021,true}, CompactorEject={.32,.32,.016,true},
- DroneShot={.039,.13,.020}, SentryShot={.060,.17,.027}, DroneDeath={.093,.21,.034},
+ Sale={.07,.15,.019},
+ NeedleFire={.008,.06,.008}, BallFire={.04,.13,.025},
+ NeedleHit={.009,.065,.009}, BallHit={.045,.14,.026},
+ Crack={.022,.09,.012}, Hit={.035,.11,.016},
+ Fracture={.02,.12,.023}, Split={.085,.22,.022}, HeavySplit={.30,.42,.021,true,80},
+ Slam={.36,.40,.014,true,95}, Blast={.30,.46,.018,true,110}, Pop={.05,.14,.02},
+ CompactorGrip={.08,.17,.017}, CompactorPress={.17,.25,.021,true}, CompactorEject={.20,.27,.016,true},
+ DroneShot={.025,.11,.020}, SentryShot={.04,.15,.027}, DroneDeath={.07,.19,.034},
 }
 local function cameraListener(camera,player)
  local character=player and player.Character
@@ -1198,7 +1206,8 @@ function P:cameraBeat(kind,position,now,weight)
  local player=game:GetService('Players').LocalPlayer
  if player and (player:GetAttribute('ReducedMotion')==true or player:GetAttribute('MA_ReducedMotion')==true) then return end
  local distance=(cameraListener(camera,player)-position).Magnitude
- local falloff=math.clamp((47-distance)/40,0,1)^1.65
+ local range=style[5] or 47
+ local falloff=math.clamp((range-distance)/(range-7),0,1)^1.65
  local amount=style[1]*falloff*(weight or 1)
  if amount<.002 then return end
  local localPoint=camera.CFrame:PointToObjectSpace(position)
@@ -1242,9 +1251,9 @@ function P:sampleCameraBeats(now)
    else ordinary+=impulse end
   end
  end
- if ordinary.Magnitude>.135 then ordinary=ordinary.Unit*.135 end
+ if ordinary.Magnitude>.08 then ordinary=ordinary.Unit*.08 end
  local offset=ordinary+heavy
- if offset.Magnitude>.52 then offset=offset.Unit*.52 end
+ if offset.Magnitude>.40 then offset=offset.Unit*.40 end
  return offset
 end
 function P:kick(position,strength,now)
@@ -1257,7 +1266,7 @@ function P:kick(position,strength,now)
  local amount=strength*math.clamp(1-distance/55,0,1)^2
  if amount<=.001 then return end
  local remaining=math.max(0,(self.shakeStrength or 0)*(1-math.clamp((now-(self.shakeAt or 0))/.4,0,1)))
- self.shakeStrength=math.min(.16,remaining+amount);self.shakeAt=now
+ self.shakeStrength=math.min(.09,remaining+amount);self.shakeAt=now
 end
 function P:crystalKick(position,strength,now,prism,nomad)
  local camera=workspace.CurrentCamera
@@ -1269,8 +1278,8 @@ function P:crystalKick(position,strength,now,prism,nomad)
  local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
  if not major then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
  local amount=nomad and math.clamp((118-distance)/99,0,1)*strength
-  or prism and math.clamp((82-distance)/64,0,1)*3.0
-  or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
+  or prism and math.clamp((82-distance)/64,0,1)*2.3
+  or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)*.6
  if amount<=.02 then return end
  if major and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
