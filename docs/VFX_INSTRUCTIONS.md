@@ -43,6 +43,9 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
     - Only chunks within 1.9 studs of the hit take the attack color, at most 42%. The rest stay rock-colored.
     - Chunk motion is stop-motion on an 8 fps grid (`RockChunks.FPS`). A hit draws on its own frame, with the pop already at its overshoot; the next frame settles it.
     - The piece's whole-body pose (lift, jitter) is unchanged.
+  - Owner follow-up on stages and big breaks:
+    - At each stage break, every chunk of the next piece jumps and twists, then lands (`RockChunks.hop`, three 8 fps frames). A smaller hop comes with each crack.
+    - Break effects for many-cell breaks spread out (`V:spreadPoints`): up to 6 points, about one per 12 sq studs, picked far apart. At each point: rock and role streaks, contact particles (up to 4), specialist contacts (up to 3) and the spark cells. Each is sized for its share. The ground ring and the light reach over the whole break. A single cell stays one point.
 - **Tests:**
   - `test_rock_chunks.py`: exact 3D doubles, running RockChunks, the real DigCubeView pieces and the test area.
   - `test_dig_flow.py`: a carve-ahead section.

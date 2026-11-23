@@ -141,7 +141,7 @@ local instances=0
 local Instance={}
 function Instance.new(class)
  instances+=1
- return setmetatable({_p={ClassName=class,Name=class,CFrame=CFrame.identity,Size=Vector3.one,Transparency=0},_c={},_a={},ChildAdded=signal(),AttributeChanged=signal()},IT)
+ return setmetatable({_p={ClassName=class,Name=class,CFrame=CFrame.identity,Size=Vector3.one,Transparency=0},_c={},_a={},ChildAdded=signal(),AttributeChanged=signal(),Destroying=signal()},IT)
 end
 function IM:IsA(c) return self.ClassName==c or (c=='BasePart' and (self.ClassName=='Part' or self.ClassName=='WedgePart' or self.ClassName=='MeshPart')) end
 function IM:GetChildren() return table.clone(self._c) end
@@ -149,6 +149,7 @@ function IM:GetDescendants() local a={};for _,c in ipairs(self._c) do table.inse
 function IM:FindFirstChild(n) for _,c in ipairs(self._c) do if c.Name==n then return c end end;return nil end
 function IM:FindFirstChildWhichIsA(c) for _,x in ipairs(self:GetDescendants()) do if x:IsA(c) then return x end end;return nil end
 function IM:SetAttribute(k,v) self._a[k]=v end
+function IM:Emit(n) self.emitted=(self.emitted or 0)+n end
 function IM:GetAttribute(k) return self._a[k] end
 function IM:Destroy() for _,c in ipairs(self:GetChildren()) do c:Destroy() end;self.Parent=nil;rawset(self,'destroyed',true) end
 local workspace=Instance.new('Workspace')
@@ -163,7 +164,8 @@ function game:GetService(n)
  if n=='GuiService' then return {ReducedMotionEnabled=false} end
  error('missing service '..n)
 end
-local task={spawn=function(f,...) return f(...) end,defer=function(f,...) return f(...) end}
+local task={spawn=function(f,...) return f(...) end,defer=function(f,...) return f(...) end,delay=function() end}
+local EnergyDisc={configure=function() end}
 local Random={}
 function Random.new(seed)
  local r={s=seed or 1}
@@ -280,6 +282,15 @@ end
 assert(popped==2,'two chunks pop')
 RockChunks.burst(rec,30,Vector3.zero,{count=3,strength=1.5,mode='lift'},Random.new(4),1.4)
 RockChunks.step(rec,31,{})
+-- Stage feedback: every chunk jumps and twists, then lands where it was.
+RockChunks.reset(rec);RockChunks.step(rec,50,{})
+local before={};for _,tl in ipairs(rec.tiles) do before[tl]=centerY(tl) end
+RockChunks.hop(rec,51,Random.new(8),1)
+RockChunks.step(rec,51,{})
+RockChunks.step(rec,51.13,{})
+for _,tl in ipairs(rec.tiles) do assert(centerY(tl)>before[tl]+.05,'every chunk jumps') end
+RockChunks.step(rec,52,{})
+for _,tl in ipairs(rec.tiles) do assert(near(centerY(tl),before[tl],1e-9) and tl.hop==nil,'and lands back') end
 -- Halver slide and squeeze.
 RockChunks.reset(rec)
 RockChunks.step(rec,40,{slide=v3(.2,0,0)})
@@ -380,6 +391,42 @@ do
  assert(job.proxy.scale<1,'Singularity squeezes');self:clearCracks()
  self,job=roleRun('I',.85,60,function(f) return .3+f/100 end)
  assert(job.proxy.mesh.parts[1].Material==Enum.Material.Ice,'Frostbite ices the chunks');self:clearCracks()
+end
+do -- big breaks spread their effects; stages make the next piece hop
+ local self=view()
+ local small=chunkFor(self,.6)
+ local one={cells={small[1]},tier=0,flag=''}
+ assert(#self:spreadPoints(one)==1,'a single cell: one spot')
+ local ids=chunkFor(self,1.9)
+ local op={cells=ids,tier=0,flag=''}
+ local spots=self:spreadPoints(op)
+ assert(#spots>=3,'a big break gets several spots: '..#spots)
+ for i=1,#spots do for j=i+1,#spots do assert((spots[i].pos-spots[j].pos).Magnitude>1.5,'spots spread apart') end end
+ -- through the real split/burst with recording doubles
+ local fired,parts={},{}
+ self.ctx={impact={fireworks=function(_,at) table.insert(fired,at) end},
+  effects={Pulse=function(...) table.insert(parts,{'pulse',...}) end,ImpactParticles=function(at) table.insert(parts,at) end}}
+ for _,id in ipairs(ids) do self.mine[id]=true end
+ op.code='L';op.kind='c';op.parts=nil
+ self.heldAt=fakeClock+100 -- no frame hold, so the burst runs now
+ self:split(op,fakeClock)
+ local xs={};for _,at in ipairs(fired) do xs[string.format('%.1f,%.1f',at.X,at.Z)]=true end
+ local distinct=0;for _ in pairs(xs) do distinct+=1 end
+ assert(distinct>=3,'streaks fire over the whole break: '..distinct)
+ local hits=0;for _,x in ipairs(parts) do if type(x)~='table' or x[1]~='pulse' then hits+=1 end end
+ assert(hits>=3,'contact particles at each part: '..hits)
+ print('PASS big breaks: effects spread over every part of a many-cell break (streaks, contact particles, ring reach); one cell stays one spot')
+ -- a stage break: the next piece jumps and twists
+ local s2=view()
+ local cids=chunkFor(s2,1.4);local key=DigCube.key(cids)
+ local src=source(s2,cids)
+ s2:crackStage(key,.1,fakeClock,V.primaryColor('L'),true,true,'L',src)
+ s2.cutStage[key]=1
+ s2:crackStage(key,.3,fakeClock+.02,V.primaryColor('L'),true,true,'L',src)
+ local job=s2.cracks[key]
+ local hopping=0;for _,t in ipairs(job.proxy.mesh.tiles) do if t.hop then hopping+=1 end end
+ assert(job.piece==2 and hopping==#job.proxy.mesh.tiles,'after a stage, every chunk of the next piece jumps and twists')
+ s2:clearCracks();self:clearCracks()
 end
 do -- the test area
  local self=view()

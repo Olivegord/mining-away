@@ -1161,7 +1161,11 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
  end
  if not job.proxy then
   job.proxy=self:buildProxy(piece,owned,job.ids,code);job.piece=k
-  if job.proxy then job.proxy.step=step;self:poseProxy(job.proxy,now) end
+  if job.proxy then
+   job.proxy.step=step;self:poseProxy(job.proxy,now)
+   -- The stage before this one just broke: the whole piece jumps and twists.
+   if k>1 and job.proxy.mesh and not self:reduced() then RockChunks.hop(job.proxy.mesh,now,self.random,1) end
+  end
  end
  local proxy=job.proxy
  if not proxy then return end
@@ -1225,6 +1229,7 @@ function V:crackHit(proxy: any,step: number,k: number,hit: any)
   local now=os.clock()
   local burst=BURST[proxy.code or 'L'] or BURST.L
   RockChunks.burst(proxy.mesh,now,proxy.hit,burst,self.random,(self:reduced() and .5 or 1)*(1.2+.3*k))
+  if not self:reduced() then RockChunks.hop(proxy.mesh,now,self.random,.7) end
  end
  local ctx=self.ctx
  if ctx.crack then ctx.crack:playCrack(point) end
@@ -1359,7 +1364,11 @@ function V:split(op: any,now: number)
   if tense then table.insert(self.pending,{at=now+hold,run=function() self:shards(op,os.clock(),from,fx.rubble) end})
   else self:shards(op,now+hold,from,fx.rubble) end
  end
- local info={center=center,point=o+Vector3.new(cx,top,cz),ground=o.Y+bottom,bulk=bulk,strength=strength,owned=owned,heavy=heavy,
+ -- Spread over a big break (spreadPoints); its reach from the middle.
+ local spots=op.partial and {} or self:spreadPoints(op)
+ local extent=0
+ for _,q in ipairs(parts) do for _,v in ipairs(q.poly) do extent=math.max(extent,math.sqrt((v[1]-cx)^2+(v[2]-cz)^2)) end end
+ local info={center=center,point=o+Vector3.new(cx,top,cz),ground=o.Y+bottom,bulk=bulk,strength=strength,owned=owned,heavy=heavy,spots=spots,extent=extent,
   color=self:colorAt(top-.01,cx,cz),primary=primary,accent=accent,fx=fx,link=link}
  if hold>0 then table.insert(self.pending,{at=now+hold,run=function() self:burst(op,info) end})
  else self:burst(op,info) end
@@ -1420,13 +1429,13 @@ function V:breakCloud(op: any,e: any,big: boolean)
  if self:reduced() or (self.clouds or 0)>=8 then return end
  local o=self.origin
  local cells={}
- for _,q in ipairs(self:opParts(op)) do
-  if #cells>=CLOUD_CELLS then break end
+ for _,spot in ipairs(self:spreadPoints(op,CLOUD_CELLS)) do
+  local q=spot.part
   local minX,maxX,minZ,maxZ=math.huge,-math.huge,math.huge,-math.huge
   for _,v in ipairs(q.poly) do minX=math.min(minX,v[1]);maxX=math.max(maxX,v[1]);minZ=math.min(minZ,v[2]);maxZ=math.max(maxZ,v[2]) end
   local _,mx,mz=middle(q.poly)
   if maxX-minX>.2 and maxZ-minZ>.2 then
-   table.insert(cells,{minX=minX,maxX=maxX,minZ=minZ,maxZ=maxZ,y0=q.y0,y1=q.y1,cx=mx,cz=mz})
+   table.insert(cells,{minX=minX,maxX=maxX,minZ=minZ,maxZ=maxZ,y0=q.y0,y1=q.y,cx=mx,cz=mz})
   end
  end
  if #cells==0 then return end
@@ -1457,6 +1466,37 @@ function V:breakCloud(op: any,e: any,big: boolean)
   sparks:Emit(count(8+3*bulk))
  end
  task.delay(1.2,function() holder:Destroy() end)
+end
+-- Where a break's effects go (owner, Nov 22: a drone that breaks a TON of
+-- cells needs its effects spread over all of them, not one cell's worth in
+-- the middle): up to 6 points over the broken rock, about one per 12 square
+-- studs, picked far apart (the biggest part first). Each {pos=top surface,
+-- area=its share}. One point for an ordinary single-cell break.
+function V:spreadPoints(op: any,most: number?): {any}
+ local o=self.origin
+ local parts={}
+ local total=0
+ for _,q in ipairs(self:opParts(op)) do
+  local a,mx,mz=middle(q.poly)
+  if a>.05 then table.insert(parts,{a=a,x=mx,z=mz,y=q.y1,poly=q.poly,y0=q.y0});total+=a end
+ end
+ if #parts==0 then return {} end
+ local n=math.clamp(math.floor(total/12+.5),1,most or 6)
+ table.sort(parts,function(a,b) return a.a>b.a end)
+ local picked={parts[1]}
+ while #picked<math.min(n,#parts) do
+  local best,score=nil,-1
+  for _,q in ipairs(parts) do
+   local d=math.huge
+   for _,p in ipairs(picked) do d=math.min(d,(q.x-p.x)^2+(q.z-p.z)^2) end
+   if d>score then best,score=q,d end
+  end
+  if not best or score<=1e-6 then break end
+  table.insert(picked,best)
+ end
+ local out={}
+ for _,q in ipairs(picked) do table.insert(out,{pos=o+Vector3.new(q.x,q.y,q.z),area=total/#picked,part=q}) end
+ return out
 end
 -- One clear beat per break, in the breaking role's way (ROLE_FX): its
 -- sounds, its contact (a ring and particles; none for projectile roles,
@@ -1509,8 +1549,18 @@ function V:burst(op: any,e: any)
  -- streak boxes (no embers). A gem's reveal carries its own.
  if not gem and ctx.impact then
   local opts={life=1.3,lift=fx.lift or 1,speed=fx.speed or 1,cap=24}
-  ctx.impact:fireworks(point,ground,vivid,strength*2.4,now,3,opts)
-  if e.owned then ctx.impact:fireworks(point,ground,primary,strength*2.4,now,2,opts) end
+  local spots=e.spots or {}
+  if #spots>1 then
+   -- A big break: streaks over every part of it, sized for each part.
+   for i,spot in ipairs(spots) do
+    local s=math.clamp(math.sqrt(spot.area)*.36,.8,1.8)
+    ctx.impact:fireworks(spot.pos,ground,vivid,s*2.4,now,2,opts)
+    if e.owned and i<=3 then ctx.impact:fireworks(spot.pos,ground,primary,s*2.4,now,1,opts) end
+   end
+  else
+   ctx.impact:fireworks(point,ground,vivid,strength*2.4,now,3,opts)
+   if e.owned then ctx.impact:fireworks(point,ground,primary,strength*2.4,now,2,opts) end
+  end
  end
  -- The camera hit (and the climbing tink of a streak), shared with the
  -- field rocks; a chain link is a small one.
@@ -1518,17 +1568,26 @@ function V:burst(op: any,e: any)
  if ctx.splitBeat then ctx.splitBeat(point,beat,now,false,e.owned,nil)
  elseif ctx.beat then ctx.beat(e.heavy and 'HeavySplit' or 'Split',point,now,math.clamp(beat*.58,.6,1.35)*volume) end
  if not e.owned or gem then return end
- if fx.light then self:lightFlash(e.center,primary,14+3*e.bulk,7,.45) end
+ if fx.light then self:lightFlash(e.center,primary,math.max(14+3*e.bulk,(e.extent or 0)*1.6),7,.45) end
  local effects=ctx.effects
  local contact=fx.contact
  if not effects or not contact then return end
  local floor=Vector3.new(point.X,ground+.085,point.Z)
+ -- A big break: the ring reaches over all of it and the particles burst
+ -- at each part (e.spots), each sized for its part.
+ local spots=e.spots or {}
+ local reach=e.extent or 0
+ local many=#spots>1
+ local function each(fn: (Vector3,number) -> ())
+  if not many then fn(point,strength);return end
+  for i,spot in ipairs(spots) do if i<=4 then fn(spot.pos,math.clamp(math.sqrt(spot.area)*.36,.8,1.8)) end end
+ end
  if contact=='Striker' then
-  effects.Pulse(floor,primary:Lerp(BEAM_CORE,.3),strength*.55,strength*6.6,.58)
-  effects.ImpactParticles(point,primary,strength*1.2,'CrystalBreak',nil,primary,nil,.8)
+  effects.Pulse(floor,primary:Lerp(BEAM_CORE,.3),strength*.55,math.max(strength*6.6,reach*2.3),.58)
+  each(function(at,s) effects.ImpactParticles(at,primary,s*1.2,'CrystalBreak',nil,primary,nil,.8) end)
  elseif contact=='Charger' then
-  effects.Pulse(floor,primary,strength*.55,strength*8,.58,nil,1.6)
-  effects.ImpactParticles(point,primary,strength*1.2,'Touchdown')
+  effects.Pulse(floor,primary,strength*.55,math.max(strength*8,reach*2.5),.58,nil,1.6)
+  each(function(at,s) effects.ImpactParticles(at,primary,s*1.2,'Touchdown') end)
  elseif contact=='Resonator' and e.link then
   effects.Pulse(floor,primary,.3,3,.3)
  elseif effects.SpecialistContact then
@@ -1537,7 +1596,8 @@ function V:burst(op: any,e: any)
    local at=point+Vector3.yAxis*1.2
    table.insert(self.pending,{at=os.clock()+.7,run=function() effects.SpecialistContact('Bubbler',at,Vector3.yAxis,false,MUTE,primary) end})
   else
-   effects.SpecialistContact(contact,point,Vector3.yAxis,false,MUTE,primary)
+   if many then for i,spot in ipairs(spots) do if i<=3 then effects.SpecialistContact(contact,spot.pos,Vector3.yAxis,false,MUTE,primary) end end
+   else effects.SpecialistContact(contact,point,Vector3.yAxis,false,MUTE,primary) end
   end
   if contact=='Resonator' then
    -- Two rings, a beat apart, ringing out across the pit.
@@ -2694,11 +2754,12 @@ function V:stepShowcase(now: number)
     local burst=BURST[def.code] or BURST.L
     if once('b1',1.2) then RockChunks.burst(rec,now,Vector3.zero,burst,random,.7) end
     if once('b2',2.4) then RockChunks.burst(rec,now,Vector3.zero,burst,random,.7) end
-    if once('pop',3.6) then RockChunks.burst(rec,now,Vector3.zero,burst,random,1.4) end
+    if once('pop',3.6) then RockChunks.burst(rec,now,Vector3.zero,burst,random,1.4);RockChunks.hop(rec,now,random,1) end
    elseif def.kind=='crack' then
-    if once('a',.6) then RockChunks.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockChunks.pop(rec,2,1.1,now,random,'pry') end
-    if once('b',1.8) then RockChunks.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockChunks.pop(rec,3,1.1,now,random,'pry') end
-    if once('c',3) then RockChunks.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockChunks.pop(rec,3,1.2,now,random,'pry') end
+    -- crack pops with the stage jump-and-twist
+    if once('a',.6) then RockChunks.burst(rec,now,Vector3.zero,BURST.L,random,1);RockChunks.hop(rec,now,random,.7) end
+    if once('b',1.8) then RockChunks.burst(rec,now,Vector3.zero,BURST.L,random,1.3);RockChunks.hop(rec,now,random,1) end
+    if once('c',3) then RockChunks.burst(rec,now,Vector3.zero,BURST.L,random,1.4);RockChunks.hop(rec,now,random,1) end
    elseif def.kind=='slam' then
     for k,at in ipairs({.5,1.9,3.3}) do
      if once('s'..k,at) then RockChunks.burst(rec,now,Vector3.zero,BURST.C,random,1.3) end

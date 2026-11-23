@@ -181,6 +181,17 @@ function M.pop(rec: any,count: number,strength: number,now: number,random: Rando
  rec.dirty=true
 end
 
+-- Every chunk jumps and twists a little, then lands back where it was
+-- (owner: visual feedback at each stage). Three 8 fps frames.
+function M.hop(rec: any,now: number,random: Random,strength: number?)
+ if not rec or rec.dead then return end
+ local k=strength or 1
+ for _,tile in ipairs(rec.tiles) do
+  local sign=random:NextNumber()<.5 and -1 or 1
+  tile.hop={at=now-.05,dur=.4,h=(.14+.12*random:NextNumber())*k,twist=sign*snap(math.rad(5+5*random:NextNumber())*k)}
+ end
+ rec.dirty=true
+end
 -- A ring that runs out once from `center` (local x,z); speed < 0 runs in.
 function M.ring(rec: any,now: number,center: Vector3,amp: number,speed: number,width: number,glow: number?)
  if not rec or rec.dead then return end
@@ -217,6 +228,7 @@ function M.step(rec: any,now: number,s: any)
  end
  local animating=false
  for _,tile in ipairs(rec.tiles) do
+  if tile.hop then if now-tile.hop.at>=tile.hop.dur then tile.hop=nil;rec.dirty=true else animating=true end end
   local a=tile.anim
   if a then
    local u=math.clamp((now-a.at)/a.dur,0,1)
@@ -267,6 +279,12 @@ function M.step(rec: any,now: number,s: any)
    offset+=Vector3.new(math.noise(q,i,.3),math.noise(i,q,.9)*.4,math.noise(.5,i,q))*tremble
   end
   local f=CFrame.new(offset)
+  local hop=tile.hop
+  if hop then
+   local e=math.sin(math.pi*math.clamp((now-hop.at)/hop.dur,0,1))
+   local c=Vector3.new(tile.cx,tile.y1,tile.cz)
+   f=CFrame.new(0,hop.h*e,0)*f*CFrame.new(c)*CFrame.Angles(0,hop.twist*e,0)*CFrame.new(-c)
+  end
   if tile.angle~=0 and tile.hinge then
    local h=tile.hinge
    f=f*CFrame.new(h.a)*CFrame.fromAxisAngle(h.dir,tile.angle*h.sign)*CFrame.new(-h.a)
