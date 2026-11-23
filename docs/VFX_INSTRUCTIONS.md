@@ -1,5 +1,47 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — 14 dig roles, per-cell gems, 3D streaks, latency, Lancer
+
+Owner request above. Designed by a three-proposal judge panel (spec kept in the session scratchpad and summarized here), built in `777b3a5` (shared rules), `92a6d8a`/`2e91781` (server), `ba2a32a`/`815a50d` (dig view), `d0117e5`/`c9c4303` (effects and glue), and integrated in `a73eaf3`. Installed (Studio save 488). Not published.
+
+- **Roles (`DigCube.STYLES`, one entry per worker, code letter in every op `c<ids>~<code>|tier|flag`):**
+
+  | Role | Code | Kernel | What it does in the dig |
+  | --- | --- | --- | --- |
+  | Striker | L | beam | chunks by slot, terraces |
+  | Lancer | Z | pulse | new; 0.7 s pulses, each bites 36% of a medium chunk; the reference video's squash/stretch/shake shot |
+  | Charger | C | slam | dives onto huge chunks; the quake shakes nearby crew chunks |
+  | Ballcaster | B | shot | purple ball one-shots one small cell; dark rubble thrown high |
+  | Needler | N | shot | dart stream wears cells down; reveals nearby gem cells (`DigHints`) |
+  | Bubbler | U | beam | rubble floats, then pops; its dust collects from anywhere |
+  | Halver | H | beam | edges and walls; the chunk splits into two halves; 1.5× rock |
+  | Gridcutter | G | beam | zips along a line of cells (`C<n>` ops); grid rubble |
+  | Singularity | Y | beam | digs deepest; the rubble implodes |
+  | Starforge | M | beam | molten rubble that cools; 40% +1 gem tier |
+  | Frostbite | I | beam | leaves brittle frost cells (`Brittle`) that everyone cuts at 0.6 HP |
+  | Resonator | V | beam | each break chains to up to 3 small neighbours |
+  | Ramiel | P | volley | prism beam on an ore cluster (no full-screen flash in the dig) |
+  | Nomad | A | volley | high rocket that clears a cluster |
+
+- **Colors:** the attack and belly glow use the role's primary (`STYLES.color`). The cube body, trail and sparks use the drone's own palette color as an accent (`FunFX.accentFor`), so drones of one type still differ.
+- **Gems:** secret per-cell gems placed by the server (`DigCube.placeGems`; about 1.27 per 1000 cubic studs, weighted by cell volume, ore cells .40, stone .035). A gem is found when its cell gets its final break:
+  - It seals, with a crack-seal beat (`K` op), at most 3 per break and 4 live per owner; treasure always seals.
+  - Otherwise it bursts out at once.
+  - Value uses the gem cell's own volume.
+  - Geodes go public after the owner leaves or stops digging for 90 s, so they never stick.
+- **Old 3D rectangles:** these are `CrystalFireworkStreak` boxes. Each own final break plays 3 rock-colored and 2 primary-colored boxes. The `SquareParticle` debris and the `breakPieces` wedges are removed from dig breaks.
+- **Wait before breaking:**
+  - Carves only touch blocks a shape really enters (about 3× fewer CSG calls).
+  - Ops publish in the same tick.
+  - Shot and volley roles carve ahead under the proxy.
+  - The pop comes at 0.85 of each piece.
+  - Orphaned outlines clear in 0.3 s.
+  - The holder attribute `CarveLag` (p90) and a Studio print report carve times.
+- **Gem arcs:** the electric arcs are shorter (5 bolts, 1.8–3.6 studs, 0.2 s after), and the high gem launch is `vy*1.1+2`.
+- **Testing:** the Fleet menu's **Dig crew** button (`RoleLoadout {dig=true}`) gives all 14 roles. DevAdd covers the specialists and Lancer. The prestige rewards table now includes Ballcaster, Needler, Frostbite, Resonator, Starforge and Lancer.
+- **Verified with API doubles:** every role breaks with its own code; shots release cleanly; replay matches; no cell floats; carve-ahead; strict Y; same-tick publish. Throughput is .53–1.42× a medium Striker.
+- **Not seen in Play:** an agent-started Play was refused again.
+
 ## November 22 — floating slabs fixed at the carve, instant rubble pop, shorter pauses, music level
 
 Owner on `b382d33`. Built in `c03a747`.

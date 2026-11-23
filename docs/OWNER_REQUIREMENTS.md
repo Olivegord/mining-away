@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — every drone digs its own way; the old 3D rectangles; no long wait before breaks; a pulse-laser drone
+
+After `c03a747`: make gem arcs shorter; bring back the OLD 3D rectangle particles (the recent ones were wrong and too numerous); remove the long wait where the outline and rock pieces sit before breaking. Add the other drones to the game with unique particles and rock responses. Example: the purple ball shooter makes rocks darker, throws them higher, attacks one cell at a time and one-shots it, but only small cells. Each type has a base attack color with differing secondary colors. Work out how gem cells behave when drones crack differently sized pieces, keep mining clear and fun, and test several drones. Then, from a reference video (DoubleCats, "the secret of laser vfx"): implement it in a new laser drone.
+
 ## November 22 — floating layered rock, instant rubble, shorter pause, louder music
 
 After `b382d33`, with a screenshot of the pit: there are weird floating rock formations that still have layers. The physics rocks should appear instantly and start with a little upward force to show they are displaced. The pause is too long for rock breaking; make it shorter. Make the background music a little louder ("there is probably an optimal value online").

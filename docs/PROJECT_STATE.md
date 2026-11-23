@@ -1,5 +1,17 @@
 # Shared project context
 
+## November 22 — every drone digs its own way (14 roles), per-cell gems, latency, Lancer
+
+Built and integrated in `a73eaf3` (four work packages from a design-panel spec), installed by `tools/studio_apply.py` (Studio save 488, canonical sha256 `48d1e0bf…`). Not published. Details and the role table are in [VFX instructions](VFX_INSTRUCTIONS.md).
+
+- Try it: Play, Fleet menu, **Dig crew**.
+- Owner decisions to confirm:
+  - gem value now uses the gem cell's volume ×1.4;
+  - the prestige rewards table changed (this re-rolls an offer already in progress);
+  - Lancer is a new drone;
+  - flat fields still start with 4 Strikers, while AGENTS.md says 3.
+- An adversarial review of the merged change was running at install time; its confirmed fixes follow as a separate install. Not seen in Play by an agent.
+
 ## November 22 — failed carves rebuilt, rubble pop, shorter pauses, louder music
 
 Owner follow-up on `b382d33`. Built in `c03a747`, installed (Studio save 486, canonical sha256 `3df9b30d…`). Not published.
