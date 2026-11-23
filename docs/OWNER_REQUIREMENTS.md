@@ -1,5 +1,10 @@
 # Owner requirements
 
+## November 22 — no black rocks; rubble shrinks while it still tumbles
+
+"some rocks are just straight black. that is not good. also the velocity based rock breaking looks kinda weird because of the delay between rocks stopping and then just shrinking. it would be nice if they somehow just keep tumbling a bit longer and maybe started shrinking BEFORE they came to a complete stop".
+
+
 ## November 22 — no floating regular cells
 
 "make sure floating rocks/cells cannot exist. they look horrible and make map unreadable." Then: "no no no. sealed gem cells are fine"; "the OTHER regular cells are the issue".

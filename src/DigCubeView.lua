@@ -106,10 +106,10 @@ local ROLE_FX={
  V={proxy={vibrate={.01,.09},mesh={ripple={amp=.12,len=1.6,speed=7,glow=.6,beat=4}}},
   rubble={per=2.2,min=1,max=5,up={13,17},out={1,3},spin={1,2},dark={.06,.2},near=.6,dcap=.85,jitter=.12,pattern='waves'},
   contact='Resonator',sounds={{cue='coil_hit',pitch=1.19,seq=.12}},light=true,hold='split',lift=1,speed=1},
- P={proxy={tone=C3(12,6,10),cap=.9,src='late',mesh={charge=.45,tremble=.06}},carve=true,
+ P={proxy={tone=C3(44,28,32),cap=.5,src='late',mesh={charge=.45,tremble=.06}},carve=true,
   -- A giant laser (owner, Nov 22): the burnt rock is blown far out of the
   -- hit, smoking and shedding embers, and a spray of hot embers flies far.
-  rubble={per=1.6,min=1,max=6,count=30,up={30,44},out={24,38},spin={6,12},dark={.7,.8},near=.2,dcap=.9,scorch=C3(12,6,10),seed=true,pattern='blast',
+  rubble={per=1.6,min=1,max=6,count=30,up={30,44},out={24,38},spin={6,12},dark={.3,.42},near=.2,dcap=.5,scorch=C3(44,28,32),seed=true,pattern='blast',
    trail={{color={C3(255,236,214),C3(255,70,100)},tr={0,1},size={.16,0},speed={1,3},life={.3,.6},rate=24,accel=-10,most=12,stop=1.1,light=1},
     {smoke=true,color=C3(40,30,34),tr={.7,1},size={.6,1.8},speed={.5,1},life={.6,1},rate=10,accel=2,most=12,stop=1.4}}},
   spray={{color={C3(255,250,240),C3(255,80,110),C3(90,20,30)},tr={0,1},size={.24,0},speed={45,85},life={.9,1.7},drag=.5,accel=-30,spread=75,count=70,light=1},
@@ -508,7 +508,10 @@ local SHARD_DARK=Color3.fromRGB(46,38,36)
 local SHARD_GAP=.9 -- pieces start slightly apart, so the cracks between them show
 local SHARD_FADE=.45
 local SHARD_LIFE=1.25 -- seconds of tumbling before a loose piece fades
-local RUBBLE=PhysicalProperties.new(2.6,.8,.12,1,1)
+-- Lower friction and a little more bounce: pieces tumble a bit longer.
+local RUBBLE=PhysicalProperties.new(2.6,.5,.2,1,1)
+local DARK_MAX=.5 -- the most any rubble darkens toward its scorch tone
+local RUBBLE_SHRINK=.85 -- seconds a loose piece takes to shrink away, still tumbling
 local RUBBLE_REST=1.15 -- seconds the pile rests before the bottom pieces start to go
 local RUBBLE_STEP=.07 -- one piece every this many seconds, lowest first
 local RUBBLE_VANISH=.18 -- each shrinks away this fast
@@ -666,7 +669,9 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
    local near
    if plane then near=.6*math.exp(-math.abs((mx-plane.cx)*plane.nx+(mz-plane.cz)*plane.nz)/1.6)
    else near=fx.near*math.exp(-Vector3.new(mid.X-center.X,0,mid.Z-center.Z).Magnitude/2.6) end
-   local color=self:colorAt(c.y1-.01,mx,mz):Lerp(fx.scorch or SHARD_DARK,math.min(fx.dcap,U(fx.dark)+near))
+   -- Never near-black (owner, Nov 22: "some rocks are just straight black"):
+   -- darkened at most DARK_MAX toward the scorch, so the rock tone shows.
+   local color=self:colorAt(c.y1-.01,mx,mz):Lerp(fx.scorch or SHARD_DARK,math.min(DARK_MAX,fx.dcap,U(fx.dark)+near))
    local k=SHARD_GAP*(fx.implode and .75 or 1)
    local inverse=CFrame.new(mid):Inverse()
    local parts={}
@@ -746,7 +751,7 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
   local floor=fxPart(self.fx,'DigRubbleFloor',SHARD_DARK);floor.Transparency=1;floor.CanCollide=true
   floor.CollisionGroup='DigRubbleFloor';floor.Size=size
   floor.CFrame=CFrame.new(o.X+(lo.X+hi.X)*.5,o.Y+floorY-1,o.Z+(lo.Z+hi.Z)*.5)
-  table.insert(self.floors,{part=floor,untilAt=now+RUBBLE_REST+RUBBLE_STEP*#made+2})
+  table.insert(self.floors,{part=floor,untilAt=now+RUBBLE_REST+RUBBLE_STEP*#made+4})
  end
  -- Bottom up, one by one: once the pile has landed, the lowest piece goes
  -- first, then the next lowest, so the rest sink and fall into the hole.
@@ -826,7 +831,7 @@ function V:settle(f: any)
  local scaled=first.rel.Rotation+first.rel.Position*f.k
  f.base=primary.CFrame*scaled:Inverse()
  for _,q in ipairs(f.parts) do
-  for _,child in ipairs(q.part:GetChildren()) do if child:IsA('WeldConstraint') then child:Destroy() end end
+  for _,child in ipairs(q.part:GetChildren()) do if child:IsA('WeldConstraint') or child:IsA('Weld') then child:Destroy() end end
   q.part.Anchored=true;q.part.CanCollide=false
  end
  f.settledAt=os.clock()
@@ -843,7 +848,11 @@ function V:releaseShard(f: any)
  local parts=f.parts
  local primary=parts[1].part
  for n=2,#parts do
-  local weld=Instance.new('WeldConstraint');weld.Part0=primary;weld.Part1=parts[n].part;weld.Parent=primary
+  -- A Weld (not a constraint) so the piece can shrink while it tumbles:
+  -- its offsets are scaled with the parts (stepShards).
+  local weld=Instance.new('Weld');weld.Part0=primary;weld.Part1=parts[n].part
+  weld.C0=primary.CFrame:ToObjectSpace(parts[n].part.CFrame);weld.Parent=primary
+  parts[n].weld=weld;parts[n].c0=weld.C0
  end
  for _,q in ipairs(parts) do q.part.Anchored=false end
  local r=self.random
@@ -920,7 +929,7 @@ function V:stepSinks(now: number)
   if now>=sink.nextAt then
    local lowest,lowY=nil,math.huge
    for _,f in ipairs(sink.frags) do
-    if not f.dead and not f.vanishing and not (f.keeper and f.dust and not f.dust.goneAt) then
+    if not f.dead and not f.vanishing and not f.loose and not (f.keeper and f.dust and not f.dust.goneAt) then
      local y=f.parts[1] and f.parts[1].part.Position.Y or math.huge
      if y<lowY then lowest,lowY=f,y end
     end
@@ -976,7 +985,34 @@ function V:stepShards(now: number)
    end
    f.pos=primary.Position
    if primary.Position.Y<f.floor-8 or not primary.Parent then self:dropShard(f);table.remove(self.frags,i);continue end
-   if t>=f.life or (f.flyAt and now>=f.flyAt) then self:settle(f) else continue end
+   if t>=f.life or (f.flyAt and now>=f.flyAt) then self:settle(f)
+   else
+    -- Owner, Nov 22: pieces stopped dead, then shrank. Now each keeps
+    -- tumbling and starts shrinking while it is still slowing down: once it
+    -- is slow near the floor of the hole (after 0.8 s), or after 1.8 s
+    -- however it moves (2.8 s at the latest).
+    if f.released and not (f.keeper and f.dust and not f.dust.goneAt) then
+     if not f.shrinkAt then
+      local speed=primary.AssemblyLinearVelocity.Magnitude
+      if (t>.8 and speed<7 and primary.Position.Y<f.floor+3) or (t>1.8 and speed<14) or t>2.8 then f.shrinkAt=now end
+     end
+     if f.shrinkAt then
+      local u=math.clamp((now-f.shrinkAt)/RUBBLE_SHRINK,0,1)
+      if u>=1 then self:dropShard(f);table.remove(self.frags,i);continue end
+      local e=u*u*(3-2*u)
+      local s=1-.9*e
+      for n,q in ipairs(f.parts) do
+       q.part.Size=q.size*f.k*s
+       if n>1 and q.weld and q.c0 then q.weld.C0=q.c0.Rotation+q.c0.Position*s end
+      end
+      if u>.75 then
+       local clear=(u-.75)/.25
+       for _,q in ipairs(f.parts) do q.part.Transparency=clear end
+      end
+     end
+    end
+    continue
+   end
   end
   if f.flyAt and now>=f.flyAt then
    local player=f.dust and f.dust.owner and Players:GetPlayerByUserId(f.dust.owner)
@@ -1568,7 +1604,7 @@ do
   return function(tile,i)
    local burnt=math.clamp((front-dist(tile,h))/1.5,0,1)
    if burnt<=0 then return nil end
-   return Vector3.new(0,.55*rise*rise+.04*math.sin(i*2.1)*rise,0),nil,tile.stone:Lerp(Color3.fromRGB(16,10,14),.82*burnt)
+   return Vector3.new(0,.55*rise*rise+.04*math.sin(i*2.1)*rise,0),nil,tile.stone:Lerp(Color3.fromRGB(44,28,32),.5*burnt)
   end
  end}
  SIG.Z={ring={amp=.3,speed=20,width=.8,glow=.5},tiles=function(self,proxy,rec,p,now)

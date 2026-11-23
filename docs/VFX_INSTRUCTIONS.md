@@ -1,5 +1,13 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — no black rocks; rubble shrinks while tumbling
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes the near-black Ramiel char and the rest-then-vanish rubble below.
+- **Black:** Ramiel's rubble went 70–80% (up to 90%) toward (12,6,10), and its charred piece 82%; every type's scorch near the hit could reach 85–90%. Now any rubble darkens at most `DARK_MAX` 0.5 toward its scorch. Ramiel's burnt tone is (44,28,32): rubble dark 0.3–0.42, char 50%, piece tone cap 0.5.
+- **Shrink while tumbling:** before, 1.15 s after a break every loose piece was anchored where it was (even in mid-air), lowest first, and shrank in 0.18 s. Now physics keeps running. A piece starts shrinking once it is slow (under 7 studs/s) near the floor of the hole after 0.8 s, or under 14 studs/s after 1.8 s, or at 2.8 s regardless. It shrinks to 10% over 0.85 s (smoothstep), fading in the last quarter. Its parts are joined by `Weld`s whose offsets scale with it, so the piece stays whole. Friction 0.5 (was 0.8) and bounce 0.2 (was 0.12), so pieces tumble a little longer. The invisible rubble floor lasts 2 s longer.
+- Tests: `test_rock_chunks.py` checks no near-black rubble and the shrink timing under physics doubles. Not seen in Play.
+
+
 ## November 22 — no floating regular cells (sealed gem cells may float)
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md).

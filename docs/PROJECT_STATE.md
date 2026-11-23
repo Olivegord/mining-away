@@ -1,5 +1,10 @@
 # Shared project context
 
+## November 22 — no black rocks; rubble shrinks while tumbling
+
+Rubble and charred rock darken at most halfway (Ramiel was near-black). Loose rubble keeps its physics, tumbles a little longer and shrinks away while still slowing instead of freezing then vanishing. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.
+
+
 ## November 22 — no floating regular cells
 
 The floating rock came from the carve fallback: an empty CSG result (nil) counted as a failure, and the rebuild put a plain box back over dug, carved-ahead cells. Empty results now drop the block; the last resort rebuilds only cells still there; any regular cell left under 45% supported collapses with the break. Sealed gem cells may still float (owner). Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.
