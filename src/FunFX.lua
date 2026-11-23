@@ -535,16 +535,21 @@ end
 -- also be the old darker sunset lighting, and a more realistic shadow based
 -- darker day one". Client-local presets, each relative to the authored
 -- Lighting (snapshotted once). 1 is the current first-pastel look above,
--- unchanged (the default). 2 is the sunset darkening from ff69838 (clock
--- 17.7, sun x.78 over ambient x.36, sharp shadows). 3 is a darker realistic
+-- unchanged. 2 is the sunset (default since Nov 23, brightened from
+-- ff69838's clock 17.7, sun x.78 over ambient x.36). 3 is a darker realistic
 -- day: a mid-afternoon sun at full strength over low fill light, crisp
 -- shadows, less haze, a near-neutral grade.
 Fun.LIGHTS={
  {name='Pastel day',lamp=rgb(150,205,255),saturation=-.16,contrast=.03},
- {name='Sunset',lamp=rgb(255,150,90),sun=.78,ambient=.36,outdoor=.34,haze=.45,density=.8,diffuse=.55,clock=17.7,shadow=.15,saturation=-.16,contrast=.12},
+ -- Owner, Nov 23: "i like the dark lighting the most, but it is too dark.
+ -- keep it dim and moody with emphasis on lights, but not that dark".
+ -- Brighter than ff69838 (sun x.78 -> x.92, ambient x.36 -> x.52, a
+ -- slightly higher sun) but the fill stays well under the pastel day, so
+ -- beams, gems and lamps still carry the scene. Now the default.
+ {name='Sunset',lamp=rgb(255,150,90),sun=.92,ambient=.52,outdoor=.5,haze=.55,density=.85,diffuse=.68,clock=17.35,shadow=.18,saturation=-.13,contrast=.1},
  {name='Shadow day',lamp=rgb(255,240,200),sun=1.1,ambient=.42,outdoor=.4,haze=.35,density=.75,diffuse=.5,specular=1.6,clock=15.3,shadow=.06,exposure=-.1,saturation=-.05,contrast=.1},
 }
-local lightState={index=1}
+local lightState={index=2}
 function Fun.applyLight(index)
  local lighting=game:GetService('Lighting')
  local s=lightState

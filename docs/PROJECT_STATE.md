@@ -8,6 +8,10 @@ Shake is smaller everywhere; heavy shakes only for big attacks (slam, Ramiel, No
 
 The owner's dragged-in skybox was overriding the restored first pastel look. In shared Edit it is archived to `ServerStorage.OwnerSkyArchive.DraggedSky_20261122` and `Lighting.ToyWorldSky` is restored (Studio save version 520); the canonical file already had `ToyWorldSky`, so it was not edited for this. Striker cells blacken about halfway while cut and alternate layers are banded darker (see VFX_INSTRUCTIONS). Not seen in Play. Not published.
 
+## November 23 — Sunset brighter and the default
+
+Sunset lifted (sun x.92, ambient x.52, clock 17.35) so it stays dim and moody with lights carrying the scene, and players start on it (`Client.lua` applies preset 2 after `colorPop`). Not seen in Play.
+
 ## November 23 — rubble timed + velocity mix; dark scorched rubble back
 
 Loose dig rubble shrinks (0.42 s, still tumbling) when it slows under 3 studs/s or at its timed lowest-first turn from 1.15 s, whichever is first. Rubble near the hit is strongly scorched again (cap .9; Ramiel charred). Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.

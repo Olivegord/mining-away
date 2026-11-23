@@ -102,7 +102,7 @@ end)
 return {frozen=frozen,freeze=freezeGame}
 end)()
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
-Presentation.Fun.colorPop();Presentation.Fun.particles()
+Presentation.Fun.colorPop();Presentation.Fun.applyLight(2);Presentation.Fun.particles() -- start on Sunset (owner's favorite)
 -- Dig role colors and kernels (shared DigCube styles, via the DigCubeView statics).
 -- Kept on Presentation.Fun so drone closures never capture another top-level
 -- local: the bundle is at Luau's 200-register limit for captured locals.

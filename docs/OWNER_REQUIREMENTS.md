@@ -12,6 +12,10 @@
 
 "its probably the skybox i dragged in" and "also, there should still be blackening of rock and color differences between layers!" The dragged sky (SkyboxUp 18703232671) is archived to `ServerStorage.OwnerSkyArchive.DraggedSky_20261122` in shared Studio and `Lighting.ToyWorldSky` (Roblox default blue sky, sun 14, no stars or moon) is back, as in the canonical file. Striker cells darken about halfway toward charcoal while cut (never black, no split), rubble near the hit is scorched, and every other layer is a band 14% darker and a touch warmer (`DigCube.LAYER_BAND`).
 
+## November 23 — Sunset lighting brighter, and the default
+
+"i like the dark lighting the most, but it is too dark. keep it dim and moody with emphasis on lights, but not that dark". Sunset (`FunFX.LIGHTS[2]`) is now sun x.92, ambient x.52, outdoor x.5, haze x.55, diffuse x.68, clock 17.35, shadow .18, saturation −.13, contrast .1 (was x.78/x.36/x.34/x.45/x.55, 17.7). Every player starts on Sunset; the switch still cycles to Pastel day and Shadow day.
+
 ## November 23 — rubble: timed + velocity mix; the old dark scorched rubble back
 
 "also get a mix between the two rock debris systems, the timed one and the velocity one" and "get the old blackening from a while ago back" (chosen: the dark scorched rubble). Loose rubble keeps tumbling and starts shrinking at whichever comes first: it slows under 3 studs/s (from 0.3 s), or its turn in the timed pile clear (from 1.15 s, lowest first, one every 0.07 s); 2.8 s at the latest; shrink 0.42 s. Rubble darkness cap back to .9 (was .5): Striker rubble dark .06–.2, near .6, cap .85; Ramiel's charred (dark .7–.8 toward (12,6,10)). The piece being mined is unchanged.
