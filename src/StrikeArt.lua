@@ -24,6 +24,8 @@ local GLOW='rbxasset://textures/ui/AvatarExperience/glowLight.png'
 local CIRCLE='rbxasset://textures/ui/VR/circleWhite.png'
 local SPARKLE='rbxasset://textures/particles/sparkles_main.dds'
 local SMOKE='rbxasset://textures/particles/smoke_main.dds'
+-- The game's approved lens glint (assets/drone-vfx/striated-four-point-glint.png).
+local GLINT='rbxassetid://77624818077620'
 local function clamp01(x) return x<0 and 0 or (x>1 and 1 or x) end
 local function smooth(a,b,x) local t=clamp01((x-a)/(b-a));return t*t*(3-2*t) end
 local function lerp(a,b,t) return a+(b-a)*t end
@@ -122,27 +124,6 @@ local function slashPixel(f,u,v)
  return col.R,col.G,col.B,a*f.a
 end
 
--- The star: a hot white point, four spikes (the diagonal pair long), a blue
--- glow and a faint lens ring.
-local function flarePixel(u,v)
- local x,y=u-.5,v-.5
- local r=math.sqrt(x*x+y*y)
- local glow=.5*math.exp(-(r*r)/.022)
- local core=math.exp(-(r*r)/.0016)
- local function spike(ax,ay,len,thin)
-  local along=x*ax+y*ay
-  local perp=math.abs(-x*ay+y*ax)
-  return math.exp(-(perp/thin)^2)*math.exp(-math.abs(along)/len)
- end
- local d=math.sqrt(.5)
- local spikes=spike(d,d,.2,.007)+spike(-d,d,.07,.006)+.7*spike(1,0,.06,.005)+.7*spike(0,1,.06,.005)
- local ring=.22*math.exp(-((r-.36)/.012)^2)
- local white=clamp01(core+spikes)
- local a=clamp01(glow+white+ring)
- local col=C3(70,120,255):Lerp(WHITE,clamp01(white*1.4+ring*2))
- return col.R,col.G,col.B,a
-end
-
 -- The bolt's end: white blades fanning up out of a small hot orb, with a
 -- magenta glow. Three variants flicker.
 local CROWNS={
@@ -184,7 +165,6 @@ function Art.prepare(sync)
  local function run()
   for i,f in ipairs(Art.SLASH_FRAMES) do paint('slash'..i,192,192,function(u,v) return slashPixel(f,u,v) end) end
   for i,c in ipairs(CROWNS) do paint('crown'..i,112,112,crownPixel(c)) end
-  paint('flare',128,128,flarePixel)
  end
  if task and not sync then task.spawn(run) else run() end
 end
@@ -330,6 +310,20 @@ function Art.newBolt(parent)
  for _,b in ipairs(rig.glow) do b.LightEmission=1;b.Brightness=1.2 end
  for _,b in ipairs(rig.rim) do b.LightEmission=.7;b.Brightness=1.6 end
  for _,b in ipairs(rig.core) do b.LightEmission=.4;b.Brightness=2 end
+ -- round caps at the bends so the strokes join cleanly
+ rig.caps={}
+ for i=2,BOLT.JOINTS-1 do
+  local function disc(color,size,z)
+   local gui=Instance.new('BillboardGui');gui.Size=UDim2.fromScale(size,size);gui.LightInfluence=0;gui.Brightness=1.6;gui.Enabled=false
+   gui.Adornee=rig.joints[i];gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+   local img=Instance.new('ImageLabel');img.BackgroundTransparency=1;img.Size=UDim2.fromScale(1,1);img.Image=CIRCLE;img.ImageColor3=color;img.ZIndex=z;img.Parent=gui
+   gui.Parent=rig.joints[i]
+   return gui,img
+  end
+  local rimGui,rimImg=disc(BOLT.RIM,1,1)
+  local coreGui,coreImg=disc(BOLT.CORE,1,2)
+  rig.caps[i]={rim=rimGui,rimImg=rimImg,core=coreGui,coreImg=coreImg}
+ end
  rig.forkA,rig.forkM,rig.forkB=attach(host,'FA'),attach(host,'FM'),attach(host,'FB')
  rig.fork={beam(host,rig.forkA,rig.forkM,BOLT.FORK,.01),beam(host,rig.forkM,rig.forkB,BOLT.FORK,.01)}
  -- the crown where it bites
@@ -386,6 +380,7 @@ function Art.stepBolt(rig,now)
   rig.idle=true
   for _,list in ipairs({rig.glow,rig.rim,rig.core,rig.fork}) do for _,b in ipairs(list) do b.Enabled=false end end
   rig.crown.Enabled=false;rig.light.Brightness=0
+  for _,cap in pairs(rig.caps) do cap.rim.Enabled=false;cap.core.Enabled=false end
   return false
  end
  -- alive: the elbows drift smoothly, sampled at 24 fps so it stays crisp
@@ -428,11 +423,11 @@ function Art.stepBolt(rig,now)
   local mid=a:Lerp(b,.5)
   rig.mids[i].WorldPosition=mid
   local visible=i<shown
-  -- wide plates at the bends, a steady stroke between (no pinching)
-  local wa=BOLT.WIDTH*S*(.75+1.1*bend(i))*thin*wobble
-  local wb=BOLT.WIDTH*S*(.75+1.1*bend(i+1))*thin*wobble
-  local wm=BOLT.WIDTH*S*.7*thin
-  if i==BOLT.JOINTS-1 then wb=BOLT.WIDTH*S*.5*thin end
+  -- one steady stroke width, tapering a little toward the bite; the bends
+  -- get round caps (below) instead of flared plates
+  local function width(j) return BOLT.WIDTH*S*(1-.3*(j-1)/(BOLT.JOINTS-1))*thin*wobble end
+  local wa,wb=width(i),width(i+1)
+  local wm=(wa+wb)/2
   for k,list in ipairs({rig.glow,rig.rim,rig.core}) do
    local mul=k==1 and 3.6 or (k==2 and 1.25 or .55)
    local h1,h2=list[i*2-1],list[i*2]
@@ -443,9 +438,17 @@ function Art.stepBolt(rig,now)
     local tr=NumberSequence.new(fade)
     h1.Transparency=tr;h2.Transparency=tr
    end
-   -- a slight curve between elbows: angular, yet fluid
-   local c=rig.len*.12*math.noise(i*.9,q*3+rig.seed)
-   h1.CurveSize0=c;h2.CurveSize1=-c
+   -- straight strokes meet at the bends; the drift keeps them alive
+   h1.CurveSize0=0;h2.CurveSize1=0
+  end
+ end
+ for i,cap in pairs(rig.caps) do
+  local on=i<shown
+  cap.rim.Enabled=on;cap.core.Enabled=on
+  if on then
+   local w=BOLT.WIDTH*S*(1-.3*(i-1)/(BOLT.JOINTS-1))*thin*wobble
+   cap.rim.Size=UDim2.fromScale(w*1.25,w*1.25);cap.core.Size=UDim2.fromScale(w*.55,w*.55)
+   cap.rimImg.ImageTransparency=(1-live)*.85;cap.coreImg.ImageTransparency=(1-live)*.85
   end
  end
  -- a short fork off one elbow, only while fully alive
@@ -527,12 +530,12 @@ function Art.newStar(parent)
   return gui,img
  end
  local halo,haloImg=board(5,GLOW,C3(70,110,255),.35)
- local flare,flareImg=board(3.4,SPARKLE,WHITE,0)
+ local flare,flareImg=board(3.4,GLINT,WHITE,0)
  local rig={part=part,trail=trail,quill=quill,halo=halo,haloImg=haloImg,flare=flare,flareImg=flareImg,on=false}
  rig.dots=emitter(part,CIRCLE,{C3(220,236,255),C3(70,110,255)},{.09,.16},{.3,.6},{.3,1.4})
  rig.dots.Rate=0;rig.dots.Drag=3
  rig.twinkle=emitter(part,SPARKLE,{WHITE,C3(120,170,255)},{.15,.3},{.25,.5},{.2,.8})
- local light=Instance.new('PointLight');light.Color=C3(110,150,255);light.Range=10;light.Brightness=0;light.Shadows=false;light.Parent=part
+ local light=Instance.new('PointLight');light.Color=C3(110,150,255);light.Range=7;light.Brightness=0;light.Shadows=false;light.Parent=part
  rig.light=light
  return rig
 end
@@ -560,12 +563,10 @@ function Art.stepStar(rig,from,to,age,windup,flight,seed,now)
  part.CFrame=CFrame.new(pos)
  if not rig.on then
   rig.on=true;rig.halo.Enabled=true;rig.flare.Enabled=true
-  local flareTex=Art.tex('flare')
-  if flareTex then rig.flareImg.ImageContent=flareTex end
  end
  local grow=charging and smooth(0,math.max(windup,.05),age) or 1
  local twinkle=1+.12*math.sin(now*37+seed)
- local flareSize=(1.2+2.6*grow)*twinkle
+ local flareSize=(1.6+3.4*grow)*twinkle
  rig.flare.Size=UDim2.fromScale(flareSize,flareSize)
  rig.halo.Size=UDim2.fromScale(flareSize*1.6,flareSize*1.6)
  rig.flareImg.Rotation=(now*40+seed*90)%360*(charging and 1 or .3)

@@ -129,6 +129,7 @@ local IM={}
 local IT={}
 IT.__index=function(i,k)
  if IM[k] then return IM[k] end
+ if k=='Position' then local f=rawget(i,'_p').CFrame;return f and f.Position end
  local v=rawget(i,'_p')[k]
  if v~=nil then return v end
  for _,c in ipairs(rawget(i,'_c')) do if c.Name==k then return c end end
@@ -579,10 +580,45 @@ do -- every role comes apart its own way
  end
  local function mean(list,fn) local t=0;for _,x in ipairs(list) do t+=fn(x) end;return t/math.max(1,#list) end
  local striker,charger,ball,needle,lance,ram=run('L'),run('C'),run('B'),run('N'),run('Z'),run('P')
+ -- Never straight black (owner, Nov 22): Ramiel's burnt rock keeps its tone.
+ for _,list in ipairs({ram,ball,striker}) do
+  for _,x in ipairs(list) do
+   local c=x.f.parts[1].part.Color
+   assert(math.max(c.R,c.G,c.B)>.2,string.format('rubble is not near-black: %.2f %.2f %.2f',c.R,c.G,c.B))
+  end
+ end
+ -- Shrinks while it still tumbles (owner, Nov 22): not frozen, then shrunk.
+ do
+  local self=view();self.physics=true;self.physicsCheckAt=1e9
+  local ids=chunkFor(self,1.6)
+  local cx,cz=DigCube.chunkCenter(self.cube,ids)
+  fakeClock=9500
+  self:shards({cells=ids,tier=0,flag='',code='C'},fakeClock,self.origin+v3(cx,self.cube.cells[ids[1]].y1,cz),V.ROLE_FX.C.rubble)
+  local f
+  for _,g in ipairs(self.frags) do if not g.pebble and not g.keeper and #g.parts>=2 then f=g;break end end
+  assert(f,'a multi-part loose piece')
+  local primary=f.parts[1].part
+  local full=f.parts[1].part.Size
+  self:stepShards(f.at+.01)
+  assert(f.released and not primary.Anchored,'released to physics')
+  primary.AssemblyLinearVelocity=v3(2,0,1);primary.Position=v3(primary.Position.X,f.floor+.5,primary.Position.Z)
+  self:stepShards(f.at+.5)
+  assert(not f.shrinkAt and primary.Size==full,'still whole early on')
+  self:stepShards(f.at+.9)
+  assert(f.shrinkAt,'starts shrinking once slow near the floor')
+  self:stepShards(f.at+.9+.45)
+  assert(primary.Size.Magnitude<full.Magnitude*.8 and not primary.Anchored,'smaller while physics still moves it')
+  local q=f.parts[2]
+  assert(q.weld and (q.weld.C0.Position-q.c0.Position).Magnitude>1e-4 or q.c0.Position.Magnitude<1e-4,'its parts stay together as it shrinks')
+  self:stepShards(f.at+.9+.9)
+  assert(f.dead,'gone once shrunk')
+  print('PASS rubble: never near-black; loose pieces keep tumbling and shrink while slowing (from 0.8 s, gone 0.85 s later)')
+ end
  -- The ripple: the middle lets go first, the rest in a fast wave outward.
  local far=0
- for _,x in ipairs(striker) do
-  assert(math.abs(x.delay-x.dist*.014)<1e-6,string.format('Striker ripple: delay %.3f at %.2f studs',x.delay,x.dist));far=math.max(far,x.delay)
+ -- (The Striker's char split has its own timing now; the Ballcaster keeps the plain ripple.)
+ for _,x in ipairs(ball) do
+  assert(math.abs(x.delay-x.dist*.014)<1e-6,string.format('ripple: delay %.3f at %.2f studs',x.delay,x.dist));far=math.max(far,x.delay)
  end
  assert(far>0 and far<.2,'the ripple runs out fast: '..far)
  -- Light chips: smaller than the chunks and thrown far higher.

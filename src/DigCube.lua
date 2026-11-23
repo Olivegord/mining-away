@@ -96,19 +96,19 @@ local ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 -- tone, so a single layer reads as a gradient rather than a flat slab. The
 -- hues are muted toward stone and lowered in value (LAYER_MUTE, LAYER_VALUE):
 -- at full strength the rock was brighter than the effects on top of it.
--- Owner, Nov 22 (latest): "restore the pastel lighting and textures, albeit
--- just a bit dimmer. not darker, but dimmer". The cool lilac-to-slate
--- strata are gone; back to the original pastel rainbow (sand, peach, coral,
--- rose, orchid, periwinkle, sky, teal, mint, lemon) with the same stone mix,
--- only a touch lower in value (.8 -> .76) so they glare less.
+-- Owner, Nov 22: everything read as one tan-and-gold mush (tan rock, gold
+-- beams, amber gems). The strata are now one cool pastel family, pale
+-- lilac at the top deepening through periwinkle and powder blue to slate
+-- violet at the bottom: depth reads at a glance, the palette stays calm
+-- (not candyland), and the warm beams and ores pop against it.
 D.LAYER_HUES={
- {238,208,142},{242,170,92},{228,122,86},{216,106,130},{180,110,192},
- {122,126,216},{88,162,216},{80,184,168},{126,198,114},{204,208,98},
+ {176,174,206},{160,166,210},{148,168,210},{136,170,204},{126,164,194},
+ {116,148,190},{108,128,184},{100,108,170},{92,92,152},{80,76,130},
 }
 D.LAYER_SHIFT=.5 -- how far a layer's second tone leans toward the next hue
-D.LAYER_MUTE=.5 -- share of neutral stone mixed into every hue (the rock stays below the beams and gems)
-D.LAYER_VALUE=.76 -- overall brightness of the rock
-local STONE_TONE={132,124,120}
+D.LAYER_MUTE=.14 -- share of neutral stone mixed into every hue (the rock stays below the beams and gems)
+D.LAYER_VALUE=.86 -- overall brightness of the rock
+local STONE_TONE={150,150,166}
 local function mix(a: {number},b: {number},t: number): {number}
  return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t}
 end
