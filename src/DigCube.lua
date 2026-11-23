@@ -537,6 +537,91 @@ local function supported(cube: any,upper: number,id: number,gone: {[number]:any}
  return false
 end
 D.supported=supported
+-- Does this cell rest on anything under its middle (the bottom layer rests
+-- on the floor)? A sealed gem cell holds nothing up (it may float itself,
+-- owner Nov 22). `gone`: cells treated as removed.
+-- Convex clip (Sutherland-Hodgman): the part of `subject` inside `clip`.
+local function convexClip(subject: {{number}},clip: {{number}}): {{number}}
+ local n=#clip
+ local s=0
+ for i=1,n do local a,b=clip[i],clip[i%n+1];s+=a[1]*b[2]-b[1]*a[2] end
+ local sign=s>=0 and 1 or -1
+ local out=subject
+ for i=1,n do
+  if #out==0 then break end
+  local a,b=clip[i],clip[i%n+1]
+  local ex,ey=b[1]-a[1],b[2]-a[2]
+  local function inside(p: {number}): boolean return sign*(ex*(p[2]-a[2])-ey*(p[1]-a[1]))>=-1e-9 end
+  local input=out;out={}
+  local prev=input[#input]
+  for _,cur in ipairs(input) do
+   local ci,pi=inside(cur),inside(prev)
+   if ci~=pi then
+    local dx,dy=cur[1]-prev[1],cur[2]-prev[2]
+    local den=dx*ey-dy*ex
+    if math.abs(den)>1e-12 then
+     local t=((a[1]-prev[1])*ey-(a[2]-prev[2])*ex)/den
+     table.insert(out,{prev[1]+dx*t,prev[2]+dy*t})
+    end
+   end
+   if ci then table.insert(out,cur) end
+   prev=cur
+  end
+ end
+ return out
+end
+-- How much of each cell below lies under this one: {{id,area}}, cached.
+function D.overlaps(cube: any,id: number): {any}
+ cube.memo.overlap=cube.memo.overlap or {}
+ local m=cube.memo.overlap[id]
+ if m then return m end
+ m={}
+ local poly=cube.cells[id].poly
+ for _,b in ipairs(D.below(cube,id)) do
+  local piece=convexClip(poly,cube.cells[b].poly)
+  local area=#piece>=3 and D.polyArea(piece) or 0
+  if area>1e-4 then table.insert(m,{b,area}) end
+ end
+ cube.memo.overlap[id]=m
+ return m
+end
+-- At least this share of a regular cell's footprint must sit on rock, or it
+-- reads as floating (owner, Nov 22). The old test passed a cell whose middle
+-- touched any rock below, even a sliver.
+D.RESTING_SHARE=.45
+function D.resting(cube: any,id: number,gone: {[number]:any}?): boolean
+ local cell=cube.cells[id]
+ if cell.layer>=#cube.layers then return true end
+ local need=D.polyArea(cell.poly)*D.RESTING_SHARE
+ local held=0
+ for _,o in ipairs(D.overlaps(cube,id)) do
+  local b=o[1]
+  if not cube.removed[b] and not (gone and gone[b]) and not (cube.sealed and cube.sealed[b]) then
+   held+=o[2]
+   if held>=need then return true end
+  end
+ end
+ return false
+end
+-- No regular cell floats (owner, Nov 22: "floating rocks/cells cannot exist, they
+-- look horrible"; sealed gem cells may). After `seeds` are removed, every
+-- regular cell above them left
+-- with nothing under its middle falls too, and so on up the stack. Removes
+-- them and returns them in order (at most `most`, default 96).
+function D.collapse(cube: any,seeds: {number},most: number?): {number}
+ local fallen={}
+ local queue=table.clone(seeds)
+ local i=1
+ while i<=#queue and #fallen<(most or 96) do
+  local id=queue[i];i+=1
+  for _,up in ipairs(D.above(cube,id)) do
+   if not cube.removed[up] and not (cube.sealed and cube.sealed[up]) and not D.resting(cube,up) then
+    D.remove(cube,up);table.insert(fallen,up);table.insert(queue,up)
+   end
+  end
+ end
+ return fallen
+end
 -- A cell can be cut once nothing rests on its middle, and only if no other
 -- cell would be left floating with nothing under its middle (owner, Nov 22:
 -- regular cells never float). Sealed gem cells (`cube.sealed`, set by the

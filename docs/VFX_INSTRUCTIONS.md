@@ -1,5 +1,14 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — no floating regular cells (sealed gem cells may float)
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md).
+- **Cause, from the owner's Studio logs:** hundreds of `[DigCube] carve failed; rebuilding block … nil` warnings while the carve stats said `fails=0`. When a cut removes everything left of a block, `SubtractAsync` now returns nil without an error. `scene.digCarve` took that as a failed cut and rebuilt the region, and the rebuild got nil too. Its last resort then put a **plain box of rock** back whenever the cell at the region's middle was not removed, typically one carved ahead of its break. That box covered dug space and stayed (the carved cell's break skips its cut). These were the floating rocks.
+- **Fix (`Server.lua`):** an empty result (nil, or the old "empty" error) drops the block in both `digCarve` and `digRebuildBlock`. The last resort never builds a box. It rebuilds only the cells still there (not dug, not carved ahead) as plain wedges, one block per wedge, so later cuts still subtract from them.
+- **Safety net (`DigCube.resting`/`DigCube.collapse`, `scene.digCollapse`):** after every break and every gem opening, any regular cell left with less than 45% of its footprint on rock (`RESTING_SHARE`) breaks with it. It breaks in the same breaker's style, pays its rock to the same player, and a secret gem in it bursts out. The old pick rule only required any rock under the cell's middle. Sealed gem cells are untouched: they may float, and they hold nothing up. In the dig-rule simulations (4 × 400 chunks) and the 14-role server run, no cell fell, so this only catches what geometry or a new pick path might leave.
+- Tests: `test_dig_flow.py` checks that an empty cut drops its block, that an all-failing rebuild puts no box over a dug or carved-ahead cell, and that no regular cell is left resting under 45%. Not seen in Play.
+
+
 ## November 22 — nothing reacts to a charge; what each attack leaves on the rock; the ore combo
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Extends the reaction rule below: **the rock reacts only once something touches it**, and **debris carries what the attack did to it** (burn smoke, embers, dust).

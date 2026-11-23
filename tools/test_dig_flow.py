@@ -34,8 +34,11 @@ local DigCube=Config.DigCube
 -- cutLog set, every cut records the cube-local Y range of the block it cut.
 local cuts,failed=0,0
 local cutLog=nil
+local failAll=false
 function IM:SubtractAsync(negatives)
- if self:GetAttribute('FailCut') then failed+=1;error('CSG operation failed: too complex') end
+ if self:GetAttribute('FailCut') or failAll then failed+=1;error('CSG operation failed: too complex') end
+ -- Roblox now returns nil, with no error, when nothing is left of the part.
+ if self:GetAttribute('EmptyCut') then cuts+=1;return nil end
  cuts+=1
  if cutLog then table.insert(cutLog,{y0=self.Position.Y-self.Size.Y*.5-dig.origin.Y,y1=self.Position.Y+self.Size.Y*.5-dig.origin.Y,n=#negatives}) end
  local p=Instance.new('Part');p.Size=self.Size;p.CFrame=self.CFrame
@@ -168,6 +171,63 @@ do
  local covered=0
  for _,b in ipairs(dig.blocks) do if b.lo.X>=lo.X-.01 and b.hi.X<=hi.X+.01 and b.lo.Z>=lo.Z-.01 and b.hi.Z<=hi.Z+.01 and b.lo.Y==lo.Y then covered+=1 end end
  assert(covered>=1,'the region is rebuilt from a fresh box')
+end
+-- Floating rocks (owner, Nov 22; Studio log "carve failed ... nil"): an
+-- empty cut is not a failure. The block just goes; nothing is rebuilt.
+do
+ local victim=dig.blocks[#dig.blocks]
+ local lo,hi=victim.lo,victim.hi
+ victim.part:SetAttribute('EmptyCut',true)
+ local id
+ for cid,c in ipairs(dig.cube.cells) do
+  if not dig.cube.removed[cid] and c.cx>lo.X and c.cx<hi.X and c.cz>lo.Z and c.cz<hi.Z and c.y0>=lo.Y-.01 and c.y1<=hi.Y+.01 then id=cid;break end
+ end
+ DigCube.remove(dig.cube,id)
+ local n=#dig.blocks;local before=failed
+ scene.digCarve({generation=dig.generation,ids={id},parts={}})
+ assert(failed==before,'an empty cut is not a failure')
+ assert(#dig.blocks==n-1,'an empty block is dropped, not rebuilt: '..n..' -> '..#dig.blocks)
+ for _,b in ipairs(dig.blocks) do assert(b~=victim,'the emptied block is gone') end
+end
+-- Every cut failing: the last resort never puts a box back. It builds only
+-- the cells still there (not dug, not carved ahead), so nothing floats.
+do
+ local victim=dig.blocks[2]
+ local lo,hi=victim.lo,victim.hi
+ local inside={}
+ for cid,c in ipairs(dig.cube.cells) do
+  if not dig.cube.removed[cid] and c.cx>=lo.X and c.cx<hi.X and c.cz>=lo.Z and c.cz<hi.Z and (c.y0+c.y1)*.5>=lo.Y and (c.y0+c.y1)*.5<=hi.Y then table.insert(inside,cid) end
+ end
+ assert(#inside>=3,'cells in the block: '..#inside)
+ DigCube.remove(dig.cube,inside[1])
+ dig.carved[inside[2]]=true
+ failAll=true
+ scene.digCarve({generation=dig.generation,ids={inside[1]},parts={}})
+ failAll=false
+ dig.carved[inside[2]]=nil
+ local boxes,wedges=0,0
+ for _,b in ipairs(dig.blocks) do
+  if b.part.Parent and b.lo.Y==lo.Y and b.lo.X>=lo.X-6 and b.hi.X<=hi.X+6 and b.lo.Z>=lo.Z-6 and b.hi.Z<=hi.Z+6 and b~=victim then
+   if b.part:IsA('WedgePart') then wedges+=1
+   else
+    -- A box (an undug quarter) must not cover the dug or the carved-ahead cell.
+    for _,cid in ipairs({inside[1],inside[2]}) do
+     local c=dig.cube.cells[cid]
+     if c.cx>b.lo.X and c.cx<b.hi.X and c.cz>b.lo.Z and c.cz<b.hi.Z then boxes+=1 end
+    end
+   end
+  end
+ end
+ assert(boxes==0,'no box is put back over a dug or carved-ahead cell: '..boxes)
+ assert(wedges>0,'the cells still there are rebuilt as wedges')
+ for _,b in ipairs(dig.blocks) do
+  if b.part:IsA('WedgePart') and b.part.Parent then
+   local c1,c2=dig.cube.cells[inside[1]],dig.cube.cells[inside[2]]
+   assert(not (b.lo.X==c1.minX and b.lo.Z==c1.minZ and b.lo.Y==c1.y0),'no rock rebuilt for the dug cell')
+   assert(not (b.lo.X==c2.minX and b.lo.Z==c2.minZ and b.lo.Y==c2.y0),'no rock rebuilt for the carved-ahead cell')
+  end
+ end
+ print(string.format('PASS no floating rock from the carve: an empty cut drops its block; a block every cut fails on is rebuilt from the cells still there (%d wedges), never over dug rock',wedges))
 end
 -- Treasure pockets exist, sit deep, hold several gems and always seal.
 local pockets=0
@@ -467,7 +527,14 @@ do
  for id,c in ipairs(cube.cells) do
   if not cube.removed[id] and not (cube.sealed and cube.sealed[id]) and c.layer<#cube.layers then
    assert(DigCube.supported(cube,id,0),'cell '..id..' (layer '..c.layer..') floats')
+   -- and at least RESTING_SHARE of it sits on rock (owner, Nov 22: no floating cells at all)
+   assert(DigCube.resting(cube,id),'cell '..id..' (layer '..c.layer..') barely rests on rock')
   end
+ end
+ do
+  local fallen,breaks=0,0
+  for _,entry in ipairs(dig.ops) do local op=parsed(entry);if op and not op.partial then breaks+=1 end end
+  print(string.format('PASS nothing floats: every regular cell left rests at least %d%% on rock (%d break ops)',math.floor(DigCube.RESTING_SHARE*100),breaks))
  end
  -- Nothing on the holder or the drones names a gem cell before it breaks.
  local allowed={Origin=true,Width=true,Height=true,Seed=true,Generation=true,OpCount=true,Geodes=true,Brittle=true,CarveLag=true}

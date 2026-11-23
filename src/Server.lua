@@ -3668,7 +3668,11 @@ function scene.digCarve(job)
     result.Material=block.part.Material;result.MaterialVariant=block.part.MaterialVariant;result.Name='RockBlock'
     result.Parent=dig.rock
     block.part:Destroy();block.part=result
-   elseif not ok and string.find(tostring(result),'empty') then
+   elseif (ok and not result) or (not ok and string.find(tostring(result),'empty')) then
+    -- Nothing left of the block. SubtractAsync now returns nil with no error
+    -- for an empty result; that used to count as a failed cut, and the
+    -- rebuild's last resort put a plain box of rock back over the dug space:
+    -- the floating rocks (owner, Nov 22; Studio log: "carve failed ... nil").
     block.part:Destroy();table.remove(dig.blocks,i)
    else
     -- A failed cut used to leave the whole block standing while its cells
@@ -3747,7 +3751,7 @@ function scene.digRebuildBlock(block,stageParts,depth)
   result.Material=material;result.Name='RockBlock';result.Parent=dig.rock
   return {{part=result,lo=lo,hi=hi}}
  end
- if not ok and string.find(tostring(result),'empty') then box:Destroy();return {} end
+ if (ok and not result) or (not ok and string.find(tostring(result),'empty')) then box:Destroy();return {} end
  local size=hi-lo
  if depth<REBUILD_DEPTH and math.max(size.X,size.Z)>2 then
   box:Destroy()
@@ -3761,14 +3765,27 @@ function scene.digRebuildBlock(block,stageParts,depth)
   dig.carveFailures-=4 -- the quarters are not failures of their own
   return out
  end
- -- Last resort: keep a plain box only over rock that is still there.
- local middle=(lo+hi)*.5
- local layer=nil
- for L,l in ipairs(cube.layers) do if middle.Y>=l.y0 and middle.Y<=l.y1 then layer=L end end
- local id=layer and DigCube.cellAt(cube,layer,middle.X,middle.Z)
- if id and not cube.removed[id] then box.Parent=dig.rock;return {{part=box,lo=lo,hi=hi}} end
+ -- Last resort: no box (it covered dug and carved-ahead cells and floated
+ -- there, owner Nov 22). Build only the rock still there: the whole prism of
+ -- every cell left whose middle is in this region, from plain wedges.
  box:Destroy()
- return {}
+ local out={}
+ for id,c in ipairs(cube.cells) do
+  if not cube.removed[id] and not dig.carved[id] and c.cx>=lo.X and c.cx<hi.X and c.cz>=lo.Z and c.cz<hi.Z and (c.y0+c.y1)*.5>=lo.Y and (c.y0+c.y1)*.5<=hi.Y then
+   local col=DigCube.layerColor(cube,c.layer,c.cx,c.cz)
+   for _,w in ipairs(DigCube.polyWedges(c.poly,c.y0,c.y1)) do
+    local p=Instance.new('WedgePart');p.Name='RockBlock';p.Anchored=true;p.CanTouch=false;p.CastShadow=false
+    p.Material=material;p.MaterialVariant=block.part.MaterialVariant;p.Color=Color3.fromRGB(col[1],col[2],col[3])
+    p.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+    p.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+    p.Parent=dig.rock
+    -- Each wedge is its own small block, so later cuts subtract from it too.
+    table.insert(out,{part=p,lo=Vector3.new(c.minX,c.y0,c.minZ),hi=Vector3.new(c.maxX,c.y1,c.maxZ)})
+   end
+  end
+ end
+ return out
 end
 -- Drain the carve queue in order; the worker starts when a chunk is queued.
 function scene.digCarveLoop()
@@ -4530,6 +4547,7 @@ function scene.digBreak(job,d,p)
   table.insert(dig.ops,DigCube.formatOp(ids,code,immediate,flag,arg))
  end
  for _,id in ipairs(sealed) do table.insert(dig.ops,DigCube.formatOp({id},code,sealedSet[id],'K')) end
+ if #broken>0 then scene.digCollapse(broken,code,p,d.owner) end
  dig.dirty=true
  if #sealed>0 then scene.digPublishGeodes() end
  -- The cut: whatever was not already carved ahead.
@@ -4720,6 +4738,48 @@ end
 -- about when the client's 12-frame freeze ends (it was sent a moment before).
 local GEODE_LAUNCH=.08 -- the client's freeze is 8 frames
 local GEODE_LANDING=8 -- downward speed (studs/s) that counts as landing from a jump
+-- No regular cell floats (DigCube.collapse; sealed gem cells may): whatever
+-- the removed cells left with nothing under its middle breaks with them, in
+-- the same breaker's style (its rubble), pays its rock to the same player,
+-- and a secret gem in it bursts out to that player.
+function scene.digCollapse(seeds,code,p,owner)
+ local dig=scene.dig;local cube=dig.cube
+ local fallen=DigCube.collapse(cube,seeds)
+ if #fallen==0 then return fallen end
+ local tier=0
+ for _,id in ipairs(fallen) do
+  dig.recent[id]=now
+  local c=cube.cells[id]
+  local top=dig.origin+Vector3.new(c.cx,c.y1+.6,c.cz)
+  local gem=dig.gems[id]
+  local gp,gowner,gtier,gcount=p,owner,0,0
+  if gem then
+   dig.gems[id]=nil
+   gtier,gcount=gem.tier,gem.count or 1
+  end
+  if gtier>0 and gp then
+   tier=math.max(tier,gtier)
+   local volume=DigCube.cellVolume(cube,id)
+   for k=1,gcount do
+    table.insert(dig.pending,{at=now+.1+(k-1)*.15,p=gp,owner=gowner,tier=gtier,volume=volume,position=top+Vector3.new(0,k*.3,0),high=false})
+   end
+  end
+ end
+ table.insert(dig.ops,DigCube.formatOp(fallen,code,tier))
+ dig.dirty=true
+ local carve={}
+ for _,id in ipairs(fallen) do if dig.carved[id] then dig.carved[id]=nil else table.insert(carve,id) end end
+ if #carve>0 then
+  table.insert(dig.csg,{generation=dig.generation,ids=carve,queuedAt=os.clock()})
+  scene.digCarveLoop()
+ end
+ if p and owner then
+  local _,lx,lz=DigCube.chunkArea(cube,fallen)
+  local _,floor=DigCube.contact(cube,fallen)
+  scene.digRock(p,owner,fallen,math.max(1,DigCube.rockDrops(DigCube.volume(cube,fallen))),dig.origin+Vector3.new(lx,floor+1,lz))
+ end
+ return fallen
+end
 function scene.digOpenGeode(id,g)
  local dig=scene.dig;local cube=dig.cube
  local c=cube.cells[id]
@@ -4736,6 +4796,7 @@ function scene.digOpenGeode(id,g)
   table.insert(dig.pending,{at=now+GEODE_LAUNCH+(i-1)*.15,p=g.p,owner=g.owner,tier=g.tier,volume=g.volume,position=at+Vector3.new(0,i*.3,0),high=true})
  end
  scene.digPublishGeodes()
+ scene.digCollapse({id},nil,g.p,g.owner)
 end
 -- Is this root over the sealed cell (on it, or in a stage hole cut in it)?
 function scene.digOverGeode(hr,c,slack)

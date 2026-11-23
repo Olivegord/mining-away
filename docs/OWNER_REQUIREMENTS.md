@@ -1,5 +1,10 @@
 # Owner requirements
 
+## November 22 — no floating regular cells
+
+"make sure floating rocks/cells cannot exist. they look horrible and make map unreadable." Then: "no no no. sealed gem cells are fine"; "the OTHER regular cells are the issue".
+
+
 ## November 22 — no reaction while charging; Ramiel and Ballcaster thought through physically; ore combo
 
 After `d2edc68`: "rocks can slowly break while select drones are charging". "ramiel should shoot debris and PARTICLES pretty far because it is a giant laser. the purple ball shooter should have purple particles on impact (for example debris could have large purple smoke that is super subtle like the rocks were burned) think about this more physically. also make the ores move on the animation fps restriction of the rock bits, and be a little more rare and shiny. also make it so that jumping on them sequentially gives you higher bounce and a tiny movement speed boost each time, along with more of the electricity and delay (your first crack in this sequence should have less effects -- more toned down than it currently is)". And: "the particles that cracking those rocks leaves should be a LOT smaller, more like dust".

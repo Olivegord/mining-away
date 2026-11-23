@@ -1,5 +1,10 @@
 # Shared project context
 
+## November 22 — no floating regular cells
+
+The floating rock came from the carve fallback: an empty CSG result (nil) counted as a failure, and the rebuild put a plain box back over dug, carved-ahead cells. Empty results now drop the block; the last resort rebuilds only cells still there; any regular cell left under 45% supported collapses with the break. Sealed gem cells may still float (owner). Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.
+
+
 ## November 22 — no reaction while charging; laser and ball debris; ore combo
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). On `codex/rock-reactions`, installed by `tools/studio_apply.py`. Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md).
