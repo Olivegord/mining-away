@@ -19,6 +19,11 @@
 --    the piece's treatment while it is worked, its rubble and its break beat
 --    (ROLE_FX below); the Lancer fires short pulse lasers (pulseShot)
 -- Nothing here uses Neon.
+-- The dig field (owner, Nov 23): the map is tiled into chunks. V.new makes
+-- the field view: one chunk view (this same V, bound to one DigField holder)
+-- per chunk within DigCube.FIELD.VIEW of the character, each building its
+-- cube from the world seed over a few frames. The field routes each drone's
+-- beam to its chunk (DigChunk) and owns taps and the pit lamp.
 local DigCube=require('./DigCube')
 -- The painted attacks live in RoleEffectView (bundled before this view).
 local StrikeArt=RoleEffectView and RoleEffectView.StrikeArt or nil
@@ -175,23 +180,31 @@ local function fxPart(parent: Instance,name: string,color: Color3,class: string?
 end
 
 function V.new(ctx: any)
+ if not ctx.holder then return V.newField(ctx) end
+ return V.chunkView(ctx)
+end
+function V.chunkView(ctx: any)
  local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},cellCode={},cellAccent={},cutStage={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
   generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={},localOpened={},sealedIds={},chains={},frost={},hints={},shots={},slashes={},bolts={}},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
  self:watch()
- table.insert(self.connections,ctx.world.ChildAdded:Connect(function(child) if child.Name=='DigCube' then self:watch() end end))
+ if not ctx.holder then
+  table.insert(self.connections,ctx.world.ChildAdded:Connect(function(child) if child.Name=='DigCube' then self:watch() end end))
+ end
  -- Needler hints (gem cells near its breaks) for this player: markers soon.
  if Players.LocalPlayer then
   table.insert(self.connections,Players.LocalPlayer:GetAttributeChangedSignal('DigHints'):Connect(function() self.sparkleAt=0 end))
  end
- table.insert(self.connections,UIS.InputBegan:Connect(function(input,processed) self:inputBegan(input,processed) end))
- table.insert(self.connections,UIS.InputEnded:Connect(function(input,processed) self:inputEnded(input,processed) end))
+ if not ctx.field then
+  table.insert(self.connections,UIS.InputBegan:Connect(function(input,processed) self:inputBegan(input,processed) end))
+  table.insert(self.connections,UIS.InputEnded:Connect(function(input,processed) self:inputEnded(input,processed) end))
+ end
  return self
 end
 
 function V:watch()
- local holder=self.ctx.world:FindFirstChild('DigCube')
+ local holder=self.ctx.holder or self.ctx.world:FindFirstChild('DigCube')
  if not holder or holder==self.holder then return end
  self.holder=holder
  local function watchDust(folder: Instance)
@@ -263,13 +276,45 @@ function V:sync()
  if type(seed)~='number' or typeof(origin)~='Vector3' then return end
  local count=holder:GetAttribute('OpCount') or 0
  if generation~=self.generation then
+  -- A field chunk builds from the world seed and its grid coordinates,
+  -- spread over frames (one chunk at a time); sync runs again when done.
+  local chunk=holder:GetAttribute('Chunk')
+  local fieldFolder=holder.Parent
+  local worldSeed=fieldFolder and fieldFolder:GetAttribute('WorldSeed')
+  local built=nil
+  if type(chunk)=='string' and type(worldSeed)=='number' then
+   if self.ready and self.ready.generation==generation then
+    built=self.ready.cube;self.ready=nil
+   else
+    if self.building then return end
+    self.building=generation
+    local field=self.ctx.field
+    task.spawn(function()
+     while field and field.building do task.wait() end
+     if self.dead then return end
+     if field then field.building=true end
+     local i,j=DigCube.parseChunkKey(chunk)
+     local t0=os.clock()
+     local ok,cube=pcall(DigCube.buildChunk,worldSeed,i :: number,j :: number,generation,function()
+      if os.clock()-t0>.003 then task.wait();t0=os.clock() end
+     end)
+     if field then field.building=false end
+     self.building=nil
+     if self.dead then return end
+     if ok and cube.seed~=seed then (warn or print)('[DigField] chunk '..chunk..' seed differs from the server: '..tostring(cube.seed)..' vs '..tostring(seed)) end
+     if ok then self.ready={generation=generation,cube=cube};self:sync()
+     else (warn or print)('[DigField] chunk '..chunk..' build failed: '..tostring(cube)) end
+    end)
+    return
+   end
+  end
   for _,f in ipairs(self.frags) do self:dropShard(f) end
   self.frags={};self.mine={};self.cellColor={};self.cellCode={};self.cellAccent={};self.cutStage={}
   self.sealedIds={};self.chains={}
   self:clearCracks()
   self:clearFrost()
   self.generation=generation;self.origin=origin
-  self.cube=DigCube.build(seed)
+  self.cube=built or DigCube.build(seed)
   -- Cuts made before this client saw the cube play no effects.
   self.applied=0
   while self.applied<count do
@@ -283,7 +328,7 @@ function V:sync()
     DigCube.applyOp(self.cube,op)
    end
   end
-  self:buildPad()
+  if not self.ctx.field or self.ctx.pad then self:buildPad() end
   self:clearSparkles()
   self:clearGeodes()
   self:syncGeodes()
@@ -2655,7 +2700,7 @@ function V:landedOn(id: number,g: any): boolean
  local above=l.Y-c.y1
  if math.sqrt((l.X-c.cx)^2+(l.Z-c.cz)^2)>c.radius+1.2 or above<1-(c.y1-c.y0) or above>5.5 then return false end
  self.localOpened[id]=true
- self.ctx.command:FireServer('DigOpen',{id=id})
+ self.ctx.command:FireServer('DigOpen',{id=id,chunk=self.holder and self.holder:GetAttribute('Chunk') or nil})
  DigCube.remove(self.cube,id)
  self:split({kind='c',cells={id},tier=g.tier or 1,treasure=g.treasure==true,geode=true,partial=false,flag='G',removes={id}},os.clock())
  return true
@@ -3548,8 +3593,12 @@ function V:stepSparkles(now: number)
  end
  local list=Players.LocalPlayer and Players.LocalPlayer:GetAttribute('DigHints')
  local want={}
+ -- 'chunk:id:tier;...': only this chunk's.
+ local mine=self.holder and self.holder:GetAttribute('Chunk')
  if type(list)=='string' then
-  for id,tier in string.gmatch(list,'(%d+):(%d+)') do want[tonumber(id) :: number]=tonumber(tier) end
+  for key,id,tier in string.gmatch(list,'([%-%d]+_[%-%d]+):(%d+):(%d+)') do
+   if key==mine then want[tonumber(id) :: number]=tonumber(tier) end
+  end
  end
  for id,part in pairs(self.hints) do
   if not want[id] or self.cube.removed[id] then part:Destroy();self.hints[id]=nil end
@@ -3633,10 +3682,13 @@ function V:update()
  self:stepArcs(now)
  self:stepShots(now)
  self:stepFrost(now)
- self:stepLamp(math.clamp(now-(self.lastStep or now),0,.25))
+ -- In the field the lamp follows the chunk you are in (V.newField).
+ if not self.ctx.field then self:stepLamp(math.clamp(now-(self.lastStep or now),0,.25)) end
  self.lastStep=now
- self:stepPad(now)
- self:stepShowcase(now)
+ if not self.ctx.field or self.ctx.pad then
+  self:stepPad(now)
+  self:stepShowcase(now)
+ end
 end
 
 -- The drone gallery (replaces the Nov 22 rock mesh test area, whose big
@@ -3806,10 +3858,135 @@ function V:stepShowcase(now: number)
  end
 end
 function V:destroy()
+ self.dead=true
  for _,c in ipairs(self.connections) do c:Disconnect() end
   if self.lamp then self.lamp:Destroy() end
  self:restorePitLight()
  self:endWalkBonus()
  self.fx:Destroy()
 end
+
+-- ===== The dig field on this client =====
+local Field={}
+Field.__index=Field
+V.Field=Field
+function V.newField(ctx: any)
+ local self=setmetatable({ctx=ctx,views={},connections={},tapAt=0,scanAt=0,building=false,lampView=nil},Field)
+ table.insert(self.connections,UIS.InputBegan:Connect(function(input,processed) V.inputBegan(self :: any,input,processed) end))
+ table.insert(self.connections,UIS.InputEnded:Connect(function(input,processed) self:inputEnded(input,processed) end))
+ return self
+end
+function Field:root(): BasePart?
+ local character=Players.LocalPlayer and Players.LocalPlayer.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ return root and root:IsA('BasePart') and root or nil
+end
+-- Chunk views for holders within FIELD.VIEW of the character (or the camera
+-- focus); a view goes once it is FIELD.VIEW+24 away or its holder left.
+function Field:scan()
+ local folder=self.ctx.world:FindFirstChild('DigField')
+ local root=self:root()
+ local camera=workspace.CurrentCamera
+ local at=root and root.Position or (camera and camera.Focus.Position) or nil
+ for key,view in pairs(self.views) do
+  local gone=not view.holder or view.holder.Parent~=folder
+  if not gone and at then
+   local i,j=DigCube.parseChunkKey(key)
+   gone=DigCube.chunkDistance(i :: number,j :: number,at.X,at.Z)>DigCube.FIELD.VIEW+24
+  end
+  if gone then
+   if self.lampView==view then self.lampView=nil end
+   view:destroy();self.views[key]=nil
+  end
+ end
+ if not folder or not at then return end
+ for _,holder in ipairs(folder:GetChildren()) do
+  local key=holder:GetAttribute('Chunk')
+  local i,j=DigCube.parseChunkKey(key)
+  local reach=holder:GetAttribute('Rendered')==true and DigCube.FIELD.VIEW or DigCube.FIELD.VIEW_IDLE
+  if i and j and not self.views[key] and DigCube.chunkDistance(i,j,at.X,at.Z)<=reach then
+   local ctx=table.clone(self.ctx)
+   ctx.holder=holder;ctx.field=self
+   ctx.pad=DigCube.FIELD.PINNED[1]~=nil and i==DigCube.FIELD.PINNED[1][1] and j==DigCube.FIELD.PINNED[1][2]
+   self.views[key]=V.chunkView(ctx)
+  end
+ end
+end
+function Field:update()
+ local now=os.clock()
+ if now>=self.scanAt then self.scanAt=now+.5;self:scan() end
+ for _,view in pairs(self.views) do if view.cube then view:update() end end
+ self:stepLamp(now)
+end
+-- The pit lamp and shade follow the chunk you stand in; crossing a border
+-- hands them over, so the light does not jump.
+function Field:stepLamp(now: number)
+ local dt=math.clamp(now-(self.lampAt or now),0,.25);self.lampAt=now
+ local root=self:root()
+ local function inside(v: any): boolean
+  if not root or not v or not v.cube then return false end
+  local l=root.Position-v.origin
+  local W=v.cube.width
+  return l.X>=-2 and l.X<=W+2 and l.Z>=-2 and l.Z<=W+2
+ end
+ local cur=self.lampView
+ if not inside(cur) then
+  for _,v in pairs(self.views) do
+   if inside(v) then
+    if cur then
+     v.pitBase=cur.pitBase;v.pitDepth=cur.pitDepth;v.lamp=cur.lamp
+     cur.pitBase=nil;cur.pitDepth=0;cur.lamp=nil
+    end
+    self.lampView=v;cur=v
+    break
+   end
+  end
+ end
+ if cur and cur.cube then cur:stepLamp(dt) end
+end
+-- The view of the chunk a drone digs (DigChunk), else the one under it.
+function Field:viewFor(source: Instance,from: Vector3?): any
+ local key=source:GetAttribute('DigChunk')
+ if type(key)~='string' or key=='' then
+  local at=from or source:GetAttribute('Position')
+  if typeof(at)~='Vector3' then return nil end
+  local i,j=DigCube.chunkAt(at.X,at.Z)
+  key=DigCube.chunkKey(i,j)
+ end
+ local view=self.views[key]
+ return view and view.cube and view or nil
+end
+function Field:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
+ local view=self:viewFor(source,from)
+ if view then view:droneBeam(source,from,now,accent) end
+end
+function Field:beamTarget(source: Instance): BasePart?
+ local view=self:viewFor(source,nil)
+ return view and view:beamTarget(source) or nil
+end
+-- Tap the rock of any chunk to move the crater there.
+function Field:inputEnded(input: InputObject,processed: boolean)
+ if input.UserInputType~=Enum.UserInputType.MouseButton1 and input.UserInputType~=Enum.UserInputType.Touch then return end
+ local at,position=self.pressAt,self.pressPosition
+ self.pressAt=nil
+ if processed or not at or not position or os.clock()-at>.45 then return end
+ if (Vector2.new(input.Position.X,input.Position.Y)-position).Magnitude>14 then return end
+ if os.clock()<self.tapAt+.3 then return end
+ local folder=self.ctx.world:FindFirstChild('DigField')
+ local camera=workspace.CurrentCamera;if not camera or not folder then return end
+ local ray=camera:ViewportPointToRay(position.X,position.Y)
+ local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={folder}
+ local hit=workspace:Raycast(ray.Origin,ray.Direction*400,params)
+ if not hit or not hit.Instance or hit.Instance.Name~='RockBlock' then return end
+ self.tapAt=os.clock()
+ self.ctx.command:FireServer('DigFocus',{point=hit.Position})
+ local i,j=DigCube.chunkAt(hit.Position.X,hit.Position.Z)
+ local view=self.views[DigCube.chunkKey(i,j)]
+ if view and view.cube then view:puff(hit.Position+hit.Normal*.2,Color3.fromRGB(255,226,160),.6,5) end
+end
+function Field:destroy()
+ for _,c in ipairs(self.connections) do c:Disconnect() end
+ for key,view in pairs(self.views) do view:destroy();self.views[key]=nil end
+end
+
 return V

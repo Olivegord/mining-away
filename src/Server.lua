@@ -3694,6 +3694,10 @@ function scene.digGroundUpdate()
    local found=nil
    for _,piece in ipairs(pl.pieces) do if not keep[piece] and same(piece,r) then found=piece;break end end
    if found then keep[found]=true;table.insert(made,found)
+   elseif same({lo=pl.lo,hi=pl.hi},r) then
+    -- Nothing cut out of this plate any more: the authored plate itself comes back.
+    pl.template.Parent=pl.parent
+    table.insert(made,{part=pl.template,lo=pl.lo,hi=pl.hi,original=true})
    else
     local lo,hi=Vector2.new(r[1],r[2]),Vector2.new(r[3],r[4])
     local part=pl.template:Clone()
@@ -3707,7 +3711,7 @@ function scene.digGroundUpdate()
    end
   end
   for _,piece in ipairs(pl.pieces) do
-   if not keep[piece] then
+   if not keep[piece] and not (piece.original and made[1] and made[1].original) then
     if piece.original then piece.part.Parent=ground.archive else piece.part:Destroy() end
    end
   end
@@ -3825,7 +3829,7 @@ function scene.digReset(ch)
   holder:SetAttribute('OpCount',0)
   holder:SetAttribute('Origin',ch.origin);holder:SetAttribute('Width',DigCube.WIDTH);holder:SetAttribute('Height',cube.height)
   holder:SetAttribute('Chunk',ch.key);holder:SetAttribute('Seed',cube.seed);holder:SetAttribute('Generation',generation)
-  holder:SetAttribute('Geodes','');holder:SetAttribute('Brittle','')
+  holder:SetAttribute('Geodes','');holder:SetAttribute('Brittle','');holder:SetAttribute('Rendered',ch.rendered)
   if not holder.Parent then holder.Parent=F.folder end
   ch.ready=true
   if ch.pinned or ch.rendered then scene.digRender(ch,true) end
@@ -3860,7 +3864,7 @@ function scene.digRender(ch,rebuild)
  if not ch.ready then return end
  local was=ch.rendered
  if was and not rebuild then return end
- ch.rendered=true
+ ch.rendered=true;ch.holder:SetAttribute('Rendered',true)
  scene.digBuildRock(ch)
  if not was then
   F.perf.renders+=1
@@ -3922,12 +3926,16 @@ function scene.digFieldStep()
  local F=scene.digField
  if now<F.loadAt then return end
  F.loadAt=now+.25
+ -- Players load and keep chunks; a drone at work keeps its own chunk.
  local points={}
  for _,p in pairs(profiles) do
   local hr=characterRoot(p)
   if hr then table.insert(points,hr.Position) end
  end
- for _,d in pairs(drones) do if d.digJob then table.insert(points,d.pos) end end
+ for _,d in pairs(drones) do
+  local job=d.digJob
+  if job and job.ch and F.chunks[job.ch.key]==job.ch then job.ch.seenAt=now end
+ end
  for _,pos in ipairs(points) do
   for _,c in ipairs(DigCube.chunksNear(pos.X,pos.Z,FIELD.KEEP)) do
    local key=DigCube.chunkKey(c[1],c[2])
@@ -3938,13 +3946,25 @@ function scene.digFieldStep()
    if ch then ch.seenAt=now end
   end
  end
+ local idle={}
  for _,ch in pairs(F.chunks) do
   if not ch.pinned then
-   local idle=now-ch.seenAt
-   if (not ch.rendered and idle>FIELD.DROP_AFTER) or (ch.rendered and idle>FIELD.HEAL_AFTER) then
+   local away=now-ch.seenAt
+   local dug=ch.cube and math.clamp(ch.cube.removedCount/FIELD.HEAL_CELLS,0,1) or 0
+   local heal=FIELD.HEAL_MIN+(FIELD.HEAL_AFTER-FIELD.HEAL_MIN)*dug
+   if (not ch.rendered and away>FIELD.DROP_AFTER) or (ch.rendered and away>heal) then
     if ch.rendered then F.perf.heals+=1 end
     scene.digDropChunk(ch)
-   end
+   elseif away>2 then table.insert(idle,ch) end
+  end
+ end
+ -- Memory cap: past MAX_CHUNKS, chunks nobody is near go, longest idle first.
+ if F.count>FIELD.MAX_CHUNKS then
+  table.sort(idle,function(a,b) if a.seenAt~=b.seenAt then return a.seenAt<b.seenAt end;return a.key<b.key end)
+  for _,ch in ipairs(idle) do
+   if F.count<=FIELD.MAX_CHUNKS then break end
+   if ch.rendered then F.perf.heals+=1 end
+   scene.digDropChunk(ch)
   end
  end
 end

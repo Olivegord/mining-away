@@ -403,17 +403,17 @@ local BUCKET=6
 --  yield(): called between steps; a caller may pause there to spread the
 --   build over frames (the result does not depend on it)
 function D.build(seed: number,opts: any?)
- local o=opts or {}
- local yield: (() -> ())?=o.yield
+ local bo=opts or {}
+ local yield: (() -> ())?=bo.yield
  local W=D.WIDTH
  local R=D.rng(seed)
- local cube={seed=seed,width=W,layers={},cells={},removedCount=0,colorSeed=o.colorSeed or seed,offsetX=o.offsetX or 0,offsetZ=o.offsetZ or 0}
+ local cube={seed=seed,width=W,layers={},cells={},removedCount=0,colorSeed=bo.colorSeed or seed,offsetX=bo.offsetX or 0,offsetZ=bo.offsetZ or 0}
  local top=0
  local thick={}
  for L=1,D.LAYERS do thick[L]=R(3.6,5.2);top+=thick[L] end
- if o.thick then
+ if bo.thick then
   top=0
-  for L=1,D.LAYERS do thick[L]=o.thick[L];top+=thick[L] end
+  for L=1,D.LAYERS do thick[L]=bo.thick[L];top+=thick[L] end
  end
  -- Scale the layers to the fixed depth so the top always meets the ground.
  for L=1,D.LAYERS do thick[L]*=D.HEIGHT/top end
@@ -1562,11 +1562,17 @@ end
 D.FIELD={
  X0=D.CENTER[1]-D.WIDTH*.5,Z0=D.CENTER[3]-D.WIDTH*.5,
  EXTENT=1024, -- the ground plates' half-extent; chunks lie wholly inside it
- LOAD=40, -- studs: a chunk this close to a player or a digging drone is built and simulated
- KEEP=110, -- untouched chunks farther than this from everyone are dropped after DROP_AFTER s
- DROP_AFTER=8,
- HEAL_AFTER=300, -- a dug chunk nobody comes within KEEP of for this long grows back
- VIEW=64, -- client: effects, beams and gems of chunks this close to the character
+ -- A built chunk is about 13 MB of Lua (6,900 cells) and half a second of
+ -- build CPU, so only what a crew can reach soon is built.
+ LOAD=36, -- studs: a chunk this close to a player is built (in the background) and simulated
+ KEEP=56, -- untouched chunks farther than this from every player are dropped after DROP_AFTER s
+ DROP_AFTER=8, -- (a chunk a drone is working in is always kept)
+ HEAL_AFTER=300, -- a well-dug chunk nobody comes within KEEP of for this long grows back
+ HEAL_MIN=60, -- ... a lightly dug one sooner (scaled by cells dug up to HEAL_CELLS)
+ HEAL_CELLS=400,
+ MAX_CHUNKS=24, -- over this, the longest-idle chunks (nobody near) go first
+ VIEW=64, -- client: effects, beams and gems of rendered chunks this close to the character
+ VIEW_IDLE=44, -- client: untouched chunks are built only this close (a crew may start on them)
  HUB=50, -- fallback hub radius when the map has no SimpleFlatTestMap
  PINNED={{0,0}}, -- always loaded and rendered (the Plot 1 cube players know)
 }
@@ -1606,7 +1612,11 @@ function D.chunksNear(x: number,z: number,r: number): {{number}}
    if d<=r and D.inField(i,j) then table.insert(out,{i,j,d}) end
   end
  end
- table.sort(out,function(a,b) if a[3]~=b[3] then return a[3]<b[3] end;if a[1]~=b[1] then return a[1]<b[1] end;return a[2]<b[2] end)
+ table.sort(out,function(a: {number},b: {number}): boolean
+  if a[3]~=b[3] then return a[3]<b[3] end
+  if a[1]~=b[1] then return a[1]<b[1] end
+  return a[2]<b[2]
+ end)
  return out
 end
 -- Deterministic chunk seed in 1..2e9 from the world seed, grid coordinates and generation.
@@ -1631,7 +1641,7 @@ function D.chunkOptions(worldSeed: number,i: number,j: number,yield: (() -> ())?
  return {thick=D.fieldThickness(worldSeed),colorSeed=math.floor(math.abs(worldSeed))%100000+1,offsetX=x0,offsetZ=z0,yield=yield}
 end
 function D.buildChunk(worldSeed: number,i: number,j: number,generation: number?,yield: (() -> ())?): any
- local cube=D.build(D.chunkSeed(worldSeed,i,j,generation),D.chunkOptions(worldSeed,i,j,yield))
+ local cube: any=D.build(D.chunkSeed(worldSeed,i,j,generation),D.chunkOptions(worldSeed,i,j,yield))
  cube.chunkI=i;cube.chunkJ=j
  return cube
 end

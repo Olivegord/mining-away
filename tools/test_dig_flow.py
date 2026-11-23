@@ -550,7 +550,7 @@ do
   print(string.format('PASS nothing floats: every regular cell left rests at least %d%% on rock (%d break ops)',math.floor(DigCube.RESTING_SHARE*100),breaks))
  end
  -- Nothing on the holder or the drones names a gem cell before it breaks.
- local allowed={Origin=true,Width=true,Height=true,Seed=true,Generation=true,OpCount=true,Geodes=true,Brittle=true,CarveLag=true,Chunk=true}
+ local allowed={Origin=true,Width=true,Height=true,Seed=true,Generation=true,OpCount=true,Geodes=true,Brittle=true,CarveLag=true,Chunk=true,Rendered=true}
  for name in pairs(holder:GetAttributes()) do assert(allowed[name] or string.match(name,'^Ops%d+$'),'unexpected holder attribute '..name) end
  for part in string.gmatch(holder:GetAttribute('Geodes') or '','[^;]+') do
   local id=tonumber(string.match(part,'^(%d+):'))
