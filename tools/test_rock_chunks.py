@@ -212,6 +212,19 @@ assert(rose and not sank,'ripple chunks rise and never sink into the rock')
 local glowing=false
 for _,t in ipairs(rec.tiles) do if t.shown and t.shown.B<stone.B-.02 then glowing=true end end
 assert(glowing,'crests glow')
+-- Less color: only chunks near the hit are tinted, and only partly.
+for _,tl in ipairs(rec.tiles) do
+ if tl.r>RockChunks.TINT_RADIUS then assert(tl.shown==nil or tl.shown==tl.color,'far chunks stay rock colored') end
+ if tl.shown then assert(math.abs(tl.shown.R-stone.R)<=RockChunks.TINT_MAX+1e-6,'tint is partial') end
+end
+-- Stop-motion at 8 fps: nothing moves between ticks.
+RockChunks.step(rec,3.0,{ripple={amp=.2,len=2.4,speed=4.5,glow=.6}})
+local snap={};for k,p in ipairs(rec.parts) do snap[k]=p.CFrame.Position end
+RockChunks.step(rec,3.1,{ripple={amp=.2,len=2.4,speed=4.5,glow=.6}})
+for k,p in ipairs(rec.parts) do assert(p.CFrame.Position==snap[k],'no motion inside one 1/8 s frame') end
+RockChunks.step(rec,3.13,{ripple={amp=.2,len=2.4,speed=4.5,glow=.6}})
+local changed=false;for k,p in ipairs(rec.parts) do if p.CFrame.Position~=snap[k] then changed=true end end
+assert(changed,'the next 1/8 s frame moves')
 -- Outward and inward: the lifted chunks' mean radius moves with the wave.
 local big={}
 for k=0,5 do local a=k*math.pi/3;table.insert(big,{math.cos(a)*7,math.sin(a)*7}) end
@@ -243,6 +256,9 @@ RockChunks.step(rec,14,{})
 for _,t in ipairs(rec.tiles) do assert(near(centerY(t),rest[t],1e-9),'the ring passes') end
 -- The crack pop: rigid chunks, up, snapped angle, staying out.
 RockChunks.burst(rec,20,Vector3.zero,{count=2,strength=1.2,mode='pry'},Random.new(3),1)
+RockChunks.step(rec,20,{})
+local hitFrame=false;for _,tl in ipairs(rec.tiles) do if tl.popped and tl.angle>0 then hitFrame=true end end
+assert(hitFrame,'a pop shows on the hit frame itself')
 for f=1,20 do RockChunks.step(rec,20+f/40,{}) end
 RockChunks.step(rec,25,{}) -- the burst's ring has passed
 local popped=0
@@ -280,7 +296,7 @@ assert(near(rec.parts[1].CFrame.Position.Y-50,(rec.tiles[1].parts[1].base.Positi
 local model=rec.model
 RockChunks.destroy(rec)
 assert(model.destroyed and RockChunks.live==0,'destroy removes the parts')
-print('PASS RockChunks: animated wedge-part chunks (no EditableMesh); ripple rises only, glows, runs out/in; rings pass; crack pops rigid, snapped, stay out; slide and squeeze')
+print('PASS RockChunks: animated wedge-part chunks (no EditableMesh); 8 fps stop-motion, pops on the hit frame; tint only near the hit; ripple rises only, glows, runs out/in; rings pass; crack pops rigid, snapped, stay out; slide and squeeze')
 
 -- ===== DigCubeView pieces =====
 local V=DigCubeView

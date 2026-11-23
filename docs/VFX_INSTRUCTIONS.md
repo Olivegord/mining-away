@@ -39,6 +39,10 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
     - Needler: every dart, near the hit;
     - Ballcaster, Ramiel and Nomad: as the charge builds.
   - Halver halves slide apart, Singularity squeezes, and Frostbite turns to Ice. Reduced Motion halves the bursts and drops the ripple.
+  - Owner follow-up ("too colorful", "too smooth, animate them at like 8fps"):
+    - Only chunks within 1.9 studs of the hit take the attack color, at most 42%. The rest stay rock-colored.
+    - Chunk motion is stop-motion on an 8 fps grid (`RockChunks.FPS`). A hit draws on its own frame, with the pop already at its overshoot; the next frame settles it.
+    - The piece's whole-body pose (lift, jitter) is unchanged.
 - **Tests:**
   - `test_rock_chunks.py`: exact 3D doubles, running RockChunks, the real DigCubeView pieces and the test area.
   - `test_dig_flow.py`: a carve-ahead section.

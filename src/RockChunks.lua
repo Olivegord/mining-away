@@ -16,6 +16,13 @@ M.live=0
 M.MAX_TILES=14
 M.TILE_AREA=3.6 -- square studs per chunk
 M.ANGLE_STEP=math.rad(7.5)
+-- Owner, Nov 22: "too smooth, animate them at like 8fps". Chunk motion is
+-- stepped on an 8 fps grid (a new hit still shows on its own frame).
+M.FPS=8
+-- Owner, Nov 22: "too colorful". Only the few chunks nearest the hit take
+-- the attack color, and only partly; the rest stay rock.
+M.TINT_RADIUS=1.9 -- studs from the hit
+M.TINT_MAX=.42
 M.wedges=nil :: any -- DigCube.polyWedges, installed by the caller
 local TAU=math.pi*2
 local BLACK=Color3.new(0,0,0)
@@ -148,7 +155,9 @@ function M.pop(rec: any,count: number,strength: number,now: number,random: Rando
   local kind=mode or (random:NextNumber()<.6 and 'pry' or 'lift')
   local was=tile.popped
   tile.popped=true
-  local anim={at=now,dur=.16,fromLift=tile.lift,fromAngle=tile.angle}
+  -- Stop-motion: the hit frame already shows the chunk punched out past
+  -- its rest (the ease's overshoot), the next 8 fps frame settles it.
+  local anim={at=now-.1,dur=.18,fromLift=tile.lift,fromAngle=tile.angle}
   if kind=='pry' then
    -- Hinge on the outer edge farthest from the piece's middle: the inner
    -- side comes up, like rock levered out of its bed.
@@ -195,6 +204,11 @@ end
 --  (toward the pivot); tremble=studs of per-chunk shiver.
 function M.step(rec: any,now: number,s: any)
  if not rec or rec.dead then return end
+ -- Stop-motion: one pose per 1/FPS. A hit (dirty) draws at once.
+ local frame=math.floor(now*M.FPS)
+ if frame==rec.frameIndex and not rec.dirty then return end
+ rec.frameIndex=frame
+ if not rec.dirty then now=frame/M.FPS end
  local ripple=s.ripple
  local rings=rec.rings
  for i=#rings,1,-1 do
@@ -231,7 +245,7 @@ function M.step(rec: any,now: number,s: any)
    local w=math.max(0,math.sin(TAU*(r/ripple.len-now*ripple.speed/ripple.len)))
    -- Chunks rise on the crest; nothing sinks into the solid rock below.
    dy+=ripple.amp*w*env
-   glow=math.max(glow,(ripple.glow or 0)*w*env)
+   glow=math.max(glow,(ripple.glow or 0)*w*math.clamp(1-r/M.TINT_RADIUS,0,1))
   end
   for _,ring in ipairs(rings) do
    local dx,dz=x-ring.center.X,z-ring.center.Z
@@ -241,7 +255,7 @@ function M.step(rec: any,now: number,s: any)
    local d=(r-front)/ring.width
    local k=math.exp(-d*d)*math.clamp(1-t*.9,0,1)
    dy+=ring.amp*k
-   glow=math.max(glow,ring.glow*k)
+   glow=math.max(glow,ring.glow*k*math.clamp(1-r/M.TINT_RADIUS,0,1))
   end
   if (s.bulge or 0)>0 then dy+=s.bulge*math.clamp(1-(x*x+z*z)/(radius*radius),0,1) end
   if tile.popped then dy*=.35 end
@@ -258,7 +272,7 @@ function M.step(rec: any,now: number,s: any)
    f=f*CFrame.new(h.a)*CFrame.fromAxisAngle(h.dir,tile.angle*h.sign)*CFrame.new(-h.a)
   end
   tile.frame=f
-  local color=glow>0 and tile.color:Lerp(glowColor,math.min(.75,glow)) or tile.color
+  local color=glow>0 and tile.color:Lerp(glowColor,math.min(M.TINT_MAX,glow)) or tile.color
   if color~=tile.shown then
    tile.shown=color
    for _,e in ipairs(tile.parts) do e.part.Color=color end
