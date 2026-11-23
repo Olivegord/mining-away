@@ -1,5 +1,10 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — pastel strata and midday sky reverted
+
+Owner: "fully revert the pastel colors and the blue sky". `d74413c` is reverted: `DigCube.LAYER_HUES` the cool pastel family again (`LAYER_MUTE` .14, `LAYER_VALUE` .86, stone (150,150,166)), and `FunFX.DARKEN` back to sun ×.72, ambient ×.8, outdoor ×.74, haze ×.7, density ×.9, clock 14.2, shadow .32, exposure −.12, contrast .08, saturation −.04 (the 13:30, haze ×.85 midday light gave the bright blue sky). Do not bring the rainbow strata or that midday light back without a request.
+
+
 ## November 22 — no black rocks; rubble shrinks while tumbling
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes the near-black Ramiel char, the near-black Striker char halves (now at most 45% toward black, piece tone (28,22,22) cap 0.6), and both the rest-then-vanish and the shrink-once-stopped ("rubble never rests") rubble below.

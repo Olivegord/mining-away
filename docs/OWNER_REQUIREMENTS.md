@@ -4,6 +4,11 @@
 
 # Owner requirements
 
+## November 22 — revert the pastel colors and the blue sky
+
+"also fully revert the pastel colors and the blue sky". Reverted `d74413c` (pastel rainbow strata and brighter midday pastel light): back to the cool lilac-to-slate strata and the dimmer early-afternoon light (`FunFX.DARKEN`: sun ×.72, haze ×.7, clock 14.2, exposure −.12).
+
+
 ## November 22 — no black rocks; rubble shrinks while it still tumbles
 
 "some rocks are just straight black. that is not good. also the velocity based rock breaking looks kinda weird because of the delay between rocks stopping and then just shrinking. it would be nice if they somehow just keep tumbling a bit longer and maybe started shrinking BEFORE they came to a complete stop".

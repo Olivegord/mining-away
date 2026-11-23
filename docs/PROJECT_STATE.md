@@ -4,6 +4,11 @@ Shake is smaller everywhere; heavy shakes only for big attacks (slam, Ramiel, No
 
 # Shared project context
 
+## November 22 — pastel strata and midday sky reverted
+
+Owner request: the rainbow pastel strata and brighter midday light (`d74413c`) are reverted to the cool strata and dimmer early-afternoon light. Not seen in Play.
+
+
 ## November 22 — no black rocks; rubble shrinks while tumbling
 
 Rubble and charred rock darken at most halfway (Ramiel was near-black). Loose rubble keeps its physics, tumbles a little longer and shrinks away while still slowing instead of freezing then vanishing. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.
