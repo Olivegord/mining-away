@@ -20,7 +20,8 @@
 --    (ROLE_FX below); the Lancer fires short pulse lasers (pulseShot)
 -- Nothing here uses Neon.
 local DigCube=require('./DigCube')
-local RockMesh=require('./RockMesh')
+local RockChunks=require('./RockChunks')
+RockChunks.wedges=DigCube.polyWedges
 local UIS=game:GetService('UserInputService')
 local Players=game:GetService('Players')
 local V={}
@@ -53,7 +54,7 @@ end
 --   compress: shrinks toward the pivot; light: a heat glow; ice: Ice from there.
 --  carve: historical (B, N, P, A carved ahead first); every role's piece is
 --   carved ahead now, grown to cover the cut over a static collision copy.
---  mesh: what the RockMesh piece does (V:stepMesh): ripple={amp,len,speed
+--  mesh: what the RockChunks piece does (animated parts) (V:stepMesh): ripple={amp,len,speed
 --   (negative runs inward),square,glow,beat} while a beam cuts; bulge; hits
 --   (each jump in the work pops a chunk); charge (chunks pop from that share
 --   of the charge on) and tremble. Slams and pulses ring and pop by kernel.
@@ -852,7 +853,7 @@ end
 function V:dropProxy(proxy: any)
  if proxy.dead then return end
  proxy.dead=true
- if proxy.mesh then RockMesh.destroy(proxy.mesh);proxy.mesh=nil end
+ if proxy.mesh then RockChunks.destroy(proxy.mesh);proxy.mesh=nil end
  proxy.model:Destroy()
  if proxy.aux then proxy.aux:Destroy() end
  for _,id in ipairs(proxy.ids) do if self.crackCells[id]==proxy then self.crackCells[id]=nil end end
@@ -869,10 +870,9 @@ end
 -- is carved ahead now (the server cuts the piece a moment before its break,
 -- owner Nov 22: no gap between the break and the rubble), so every piece is
 -- grown to cover the cut and gets an invisible static copy the player stands
--- on until the break. Drawn as ONE deformable mesh (RockMesh: ripples and
--- popping chunks); the old wedge prisms are the fallback. The mesh is made
--- off the frame (it yields); the real rock is still whole until the carve,
--- so nothing shows a gap meanwhile.
+-- on until the break. Drawn as animated rock chunks (RockChunks: plain parts
+-- moved by CFrame, rippling and popping); the old wedge prisms are the
+-- fallback when a piece has no chunk.
 local PROXY_GROW=.3
 function V:proxyWedges(proxy: any,shapes: {any})
  local o=self.origin
@@ -963,32 +963,20 @@ function V:buildProxy(piece: any,owned: boolean,chunk: {number},code: string?): 
  end
  aux.Parent=self.fx;proxy.aux=aux
  for _,id in ipairs(ids) do self.crackCells[id]=proxy end
- -- The deformable mesh (pivot-local shapes); wedges if meshes are off.
+ -- The animated chunks (pivot-local shapes); wedges if there are none.
  local meshShapes={}
  for _,c in ipairs(shapes) do
   local poly={}
   for _,v in ipairs(c.grown) do table.insert(poly,{o.X+v[1]-pivot.X,o.Z+v[2]-pivot.Z}) end
   table.insert(meshShapes,{poly=poly,y0=o.Y+c.y0+.02-pivot.Y,y1=o.Y+c.y1+.03-pivot.Y,color=c.stone,side=c.side})
  end
- if RockMesh.failed then
-  self:proxyWedges(proxy,shapes)
+ local random=function() return self.random:NextNumber() end
+ local rec=RockChunks.build(meshShapes,DigCube.voronoiSplit,random)
+ if rec then
+  proxy.mesh=rec;rec.model.Parent=model
+  proxy.shade=-1
  else
-  proxy.building=true
-  local random=function() return self.random:NextNumber() end
-  task.spawn(function()
-   local ok,rec=pcall(RockMesh.build,meshShapes,DigCube.voronoiSplit,random)
-   proxy.building=false
-   if proxy.dead then if ok and rec then RockMesh.destroy(rec) end;return end
-   if ok and rec then
-    proxy.mesh=rec;rec.part.Parent=model
-    if proxy.iced then rec.part.Material=Enum.Material.Ice end
-    proxy.shade=-1
-    self:poseProxy(proxy,os.clock())
-   else
-    self:proxyWedges(proxy,shapes)
-    self:poseProxy(proxy,os.clock())
-   end
-  end)
+  self:proxyWedges(proxy,shapes)
  end
  return proxy
 end
@@ -1038,7 +1026,7 @@ function V:poseProxy(proxy: any,now: number)
  proxy.slideVec=slide>0 and proxy.normal*slide or nil
  proxy.core.CFrame=pose
  if proxy.mesh then
-  proxy.mesh.part.CFrame=pose
+  RockChunks.setPose(proxy.mesh,pose)
  else
   for _,e in ipairs(proxy.parts) do
    local base=scale~=1 and (e.base.Rotation+e.base.Position*scale) or e.base
@@ -1051,16 +1039,36 @@ end
 function V:shadeProxy(proxy: any,shade: number)
  if math.abs(shade-proxy.shade)<.01 then return end
  proxy.shade=shade
- if proxy.mesh then RockMesh.shade(proxy.mesh,proxy.tone,shade);return end
+ if proxy.mesh then RockChunks.shade(proxy.mesh,proxy.tone,shade);return end
  for _,e in ipairs(proxy.parts) do e.part.Color=e.stone:Lerp(proxy.tone,shade) end
 end
--- The rock doing things while it is worked (RockMesh), the role's way
+-- The rock doing things while it is worked (RockChunks), the role's way
 -- (ROLE_FX proxy.mesh): beam roles send a pulsing ripple out from the beam's
 -- point with a glowing crest; slams and pulses send one shock ring and pop
 -- chunks out; darts pop the chunk they hit; charged shots and volleys make
 -- the rock shiver and pop chunks as the charge builds; every crack pops a
 -- few chunks loose. Your own pieces animate at 30 Hz, others' at 12 Hz.
 local MESH_DEFAULT={ripple={amp=.09,len=2.4,speed=4.5,glow=.5}}
+-- The crack pop, each role's own way (RockChunks.burst): how many chunks, how
+-- hard, pried up on an edge or lifted out, and its shock ring (speed < 0
+-- runs inward). Plays all through the work, bigger at each crack.
+local BURST={
+ L={count=2,strength=1.1,mode='pry',ring=.2,speed=11},
+ C={count=3,strength=1.3,mode='lift',ring=.32,speed=15,width=1.2,glow=.55},
+ B={count=1,strength=1,mode='lift',ring=.14,speed=9},
+ N={count=1,strength=.8,mode='pry',ring=.08,speed=10,width=.6},
+ U={count=2,strength=.8,mode='lift',ring=.18,speed=6,width=1.3},
+ H={count=2,strength=1.35,mode='pry',ring=.22,speed=13},
+ G={count=2,strength=.9,mode='lift',ring=.16,speed=12},
+ Y={count=2,strength=1.4,mode='pry',ring=.24,speed=-10},
+ M={count=2,strength=1,mode='lift',ring=.2,speed=8,glow=.95},
+ I={count=3,strength=1.5,mode='pry',ring=.18,speed=16,width=.6},
+ V={count=3,strength=.9,mode='pry',ring=.2,speed=18,width=.7},
+ P={count=2,strength=1.4,mode='pry',ring=.26,speed=14},
+ A={count=2,strength=1.5,mode='lift',ring=.3,speed=12},
+ Z={count=2,strength=1,mode='pry',ring=.22,speed=20,width=.8,glow=.85},
+}
+V.BURST=BURST
 function V:stepMesh(proxy: any,now: number,cutting: boolean?)
  local rec=proxy.mesh
  if not rec or proxy.dead then return end
@@ -1069,31 +1077,40 @@ function V:stepMesh(proxy: any,now: number,cutting: boolean?)
  local progress=math.clamp(proxy.progress or 0,0,1)
  local kernel=DigCube.style(proxy.code).kernel
  local random=self.random
- -- Hits: a slam, a pulse, a dart (a jump in the work).
+ local burst=BURST[proxy.code or 'L'] or BURST.L
+ local small=reduced and .5 or 1
+ -- Hits: a slam, a pulse, a dart (a jump in the work): the crack pop.
  if proxy.slamAt and proxy.slamAt~=proxy.meshSlam then
   proxy.meshSlam=proxy.slamAt
-  RockMesh.ring(rec,now,proxy.hit,reduced and .12 or .32,15,1.2,.55)
-  RockMesh.pop(rec,reduced and 1 or 3,1.3,now,random,'lift')
+  RockChunks.burst(rec,now,proxy.hit,burst,random,1.3*small)
  end
  if proxy.pulseAt and proxy.pulseAt~=proxy.meshPulse then
   proxy.meshPulse=proxy.pulseAt
-  RockMesh.ring(rec,now,proxy.hit,reduced and .08 or .22,20,.8,.85)
-  RockMesh.pop(rec,random:NextInteger(1,2),1,now,random,'pry')
+  RockChunks.burst(rec,now,proxy.hit,burst,random,small)
  end
  local last=proxy.meshProgress or progress
  proxy.meshProgress=progress
  if m.hits and progress-last>=.02 then
   local a=random:NextNumber(0,math.pi*2);local r=random:NextNumber(0,proxy.radius*.8)
-  RockMesh.pop(rec,1,.8,now,random,nil,Vector3.new(math.cos(a)*r,0,math.sin(a)*r))
-  RockMesh.ring(rec,now,proxy.hit,.06,10,.6,.4)
+  RockChunks.burst(rec,now,proxy.hit,burst,random,small,Vector3.new(math.cos(a)*r,0,math.sin(a)*r))
  end
  if m.charge then
   -- Chunks work loose as the charge builds: none before m.charge, about
-  -- half the tiles by the end.
+  -- half the tiles by the end, each a small crack pop.
   local want=math.floor(math.clamp((progress-m.charge)/(1-m.charge),0,1)*#rec.tiles*.5)
   if want>proxy.pops then
    proxy.pops+=1
-   RockMesh.pop(rec,1,.7+.6*progress,now,random)
+   RockChunks.burst(rec,now,proxy.hit,burst,random,(.6+.6*progress)*small)
+  end
+ end
+ -- Beam roles: small crack pops all through each piece's work (at each
+ -- third of the way to its crack), then the big one at the crack (crackHit).
+ if kernel=='beam' and cutting then
+  local mark=(proxy.step or 0)==0 and math.floor(math.clamp(proxy.within or 0,0,.999)*3) or 3
+  local key=(proxy.piece or 0)*10+mark
+  if mark>0 and mark<3 and key~=proxy.burstMark then
+   proxy.burstMark=key
+   RockChunks.burst(rec,now,proxy.hit,burst,random,.7*small)
   end
  end
  -- Throttle the vertex work: your own at 30 Hz, others' at 12 Hz.
@@ -1103,11 +1120,11 @@ function V:stepMesh(proxy: any,now: number,cutting: boolean?)
  if m.ripple and kernel=='beam' and cutting and not reduced then
   local r=m.ripple
   local beat=.7+.3*math.sin(now*math.pi*2*(r.beat or 2.2))
-  state.ripple={amp=r.amp*(.55+.45*math.clamp(proxy.within or 0,0,1))*beat,len=r.len,speed=r.speed,square=r.square,glow=r.glow,center=proxy.hit}
+  state.ripple={amp=1.8*r.amp*(.55+.45*math.clamp(proxy.within or 0,0,1))*beat,len=r.len,speed=r.speed,square=r.square,glow=r.glow,center=proxy.hit}
  end
  if m.bulge then state.bulge=m.bulge*progress end
  if m.tremble and not reduced then state.tremble=m.tremble*progress*progress end
- RockMesh.step(rec,now,state)
+ RockChunks.step(rec,now,state)
 end
 -- Called every frame per cutting drone with its chunk's progress. `key` is
 -- the chunk's ids string, `code` the role's style code (its pieces mode and
@@ -1178,7 +1195,7 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
  if fx.ice and progress>=fx.ice and not proxy.iced then
   proxy.iced=true
   for _,e in ipairs(proxy.parts) do e.part.Material=Enum.Material.Ice end
-  if proxy.mesh then proxy.mesh.part.Material=Enum.Material.Ice end
+  if proxy.mesh then RockChunks.setMaterial(proxy.mesh,Enum.Material.Ice) end
  end
  if fx.compress then
   local scale=1-fx.compress*progress
@@ -1206,8 +1223,8 @@ function V:crackHit(proxy: any,step: number,k: number,hit: any)
  local volume=hit.owned and 1 or .55
  if proxy.mesh then
   local now=os.clock()
-  RockMesh.ring(proxy.mesh,now,proxy.hit,self:reduced() and .06 or .2,11,.9,.6)
-  RockMesh.pop(proxy.mesh,self:reduced() and 1 or 2+k,1.1,now,self.random,'pry')
+  local burst=BURST[proxy.code or 'L'] or BURST.L
+  RockChunks.burst(proxy.mesh,now,proxy.hit,burst,self.random,(self:reduced() and .5 or 1)*(1.2+.3*k))
  end
  local ctx=self.ctx
  if ctx.crack then ctx.crack:playCrack(point) end
@@ -2596,7 +2613,7 @@ end
 
 -- Rock mesh test area (owner, Nov 22: "add them to a test area where they
 -- play so i can see them"): a row of display rocks on the open ground west
--- of the dig cube, on the walk from home, each looping one RockMesh effect
+-- of the dig cube, on the walk from home, each looping one RockChunks effect
 -- with its name above it. Local only: no drones, rewards or collisions. If
 -- meshes are unavailable the sign says so, with the error.
 local SHOWCASE={
@@ -2614,7 +2631,7 @@ local SHOW_PERIOD=4.5
 function V:buildShowcase()
  local o=self.origin
  local ground=o.Y+self.cube.height
- local root=Instance.new('Folder');root.Name='RockMeshShowcase';root.Parent=self.fx
+ local root=Instance.new('Folder');root.Name='RockChunksShowcase';root.Parent=self.fx
  self.showcase={root=root,stations={}}
  local stone=self:colorAt(self.cube.height-.01)
  for i,def in ipairs(SHOWCASE) do
@@ -2639,23 +2656,15 @@ function V:buildShowcase()
   for n,q in ipairs(DigCube.voronoiSplit(poly,3,rnd)) do
    table.insert(shapes,{poly=q,y0=-1.6,y1=0,color=stone:Lerp(Color3.new(0,0,0),.06*(n-1)),side=def.code=='H' and (n%2*2-1) or nil})
   end
-  task.spawn(function()
-   local ok,rec=pcall(RockMesh.build,shapes,DigCube.voronoiSplit,rnd)
-   if not self.showcase or self.showcase.root~=root then if ok and rec then RockMesh.destroy(rec) end;return end
-   if ok and rec then
-    rec.part.Parent=root;rec.part.CFrame=CFrame.new(pivot);station.rec=rec
-   else
-    sub.Text='MESH EFFECTS OFF: '..tostring(ok and RockMesh.lastError or rec)
-    sub.TextColor3=Color3.fromRGB(255,120,120)
-   end
-  end)
+  local rec=RockChunks.build(shapes,DigCube.voronoiSplit,rnd)
+  if rec then rec.model.Parent=root;RockChunks.setPose(rec,CFrame.new(pivot));station.rec=rec end
  end
 end
 function V:stepShowcase(now: number)
  if not self.cube then return end
  if not self.showcase or self.showcase.generation~=self.generation then
   if self.showcase then
-   for _,st in ipairs(self.showcase.stations) do if st.rec then RockMesh.destroy(st.rec) end end
+   for _,st in ipairs(self.showcase.stations) do if st.rec then RockChunks.destroy(st.rec) end end
    self.showcase.root:Destroy()
   end
   self:buildShowcase();self.showcase.generation=self.generation
@@ -2670,7 +2679,7 @@ function V:stepShowcase(now: number)
    local def=st.def
    local t=now%SHOW_PERIOD
    local cycle=math.floor(now/SHOW_PERIOD)
-   if cycle~=st.cycle then st.cycle=cycle;st.fired={};st.pops=0;RockMesh.reset(rec) end
+   if cycle~=st.cycle then st.cycle=cycle;st.fired={};st.pops=0;RockChunks.reset(rec) end
    local function once(key: string,at: number): boolean
     if t>=at and not st.fired[key] then st.fired[key]=true;return true end
     return false
@@ -2682,34 +2691,36 @@ function V:stepShowcase(now: number)
     local r=mfx.ripple or MESH_DEFAULT.ripple
     local beat=.7+.3*math.sin(now*math.pi*2*(r.beat or 2.2))
     state.ripple={amp=r.amp*1.4*beat,len=r.len,speed=r.speed,square=r.square,glow=r.glow,center=Vector3.zero}
-    if once('pop',3.6) then RockMesh.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockMesh.pop(rec,3,1.1,now,random,'pry') end
+    local burst=BURST[def.code] or BURST.L
+    if once('b1',1.2) then RockChunks.burst(rec,now,Vector3.zero,burst,random,.7) end
+    if once('b2',2.4) then RockChunks.burst(rec,now,Vector3.zero,burst,random,.7) end
+    if once('pop',3.6) then RockChunks.burst(rec,now,Vector3.zero,burst,random,1.4) end
    elseif def.kind=='crack' then
-    if once('a',.6) then RockMesh.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockMesh.pop(rec,2,1.1,now,random,'pry') end
-    if once('b',1.8) then RockMesh.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockMesh.pop(rec,3,1.1,now,random,'pry') end
-    if once('c',3) then RockMesh.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockMesh.pop(rec,3,1.2,now,random,'pry') end
+    if once('a',.6) then RockChunks.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockChunks.pop(rec,2,1.1,now,random,'pry') end
+    if once('b',1.8) then RockChunks.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockChunks.pop(rec,3,1.1,now,random,'pry') end
+    if once('c',3) then RockChunks.ring(rec,now,Vector3.zero,.2,11,.9,.6);RockChunks.pop(rec,3,1.2,now,random,'pry') end
    elseif def.kind=='slam' then
     for k,at in ipairs({.5,1.9,3.3}) do
-     if once('s'..k,at) then RockMesh.ring(rec,now,Vector3.zero,.32,15,1.2,.55);RockMesh.pop(rec,3,1.3,now,random,'lift') end
+     if once('s'..k,at) then RockChunks.burst(rec,now,Vector3.zero,BURST.C,random,1.3) end
     end
    elseif def.kind=='pulse' then
     for k=1,5 do
-     if once('p'..k,.3+(k-1)*.7) then RockMesh.ring(rec,now,Vector3.zero,.22,20,.8,.85);RockMesh.pop(rec,random:NextInteger(1,2),1,now,random,'pry') end
+     if once('p'..k,.3+(k-1)*.7) then RockChunks.burst(rec,now,Vector3.zero,BURST.Z,random,1) end
     end
    elseif def.kind=='charge' then
     local progress=math.clamp(t/3.4,0,1)
     state.tremble=(mfx.tremble or .05)*progress*progress*1.5
     local want=math.floor(math.clamp((progress-.25)/.75,0,1)*#rec.tiles*.5)
-    if want>st.pops then st.pops+=1;RockMesh.pop(rec,1,.7+.6*progress,now,random) end
+    if want>st.pops then st.pops+=1;RockChunks.burst(rec,now,Vector3.zero,BURST.B,random,.6+.6*progress) end
    elseif def.kind=='darts' then
     for k=1,12 do
      if once('d'..k,.2+(k-1)*.28) then
       local a=random:NextNumber(0,math.pi*2);local r=random:NextNumber(0,2.2)
-      RockMesh.pop(rec,1,.8,now,random,nil,Vector3.new(math.cos(a)*r,0,math.sin(a)*r))
-      RockMesh.ring(rec,now,Vector3.zero,.06,10,.6,.4)
+      RockChunks.burst(rec,now,Vector3.zero,BURST.N,random,1,Vector3.new(math.cos(a)*r,0,math.sin(a)*r))
      end
     end
    end
-   RockMesh.step(rec,now,state)
+   RockChunks.step(rec,now,state)
   end
  end
 end

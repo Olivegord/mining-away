@@ -1,6 +1,6 @@
 # VFX instructions — owner feedback and implementation
 
-## November 22 — carve-ahead for every role, one look per drone type, RockMesh
+## November 22 — carve-ahead for every role, one look per drone type, animated rock chunks
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cube body, trail and sparks use the drone's own palette color" below.
 
@@ -29,26 +29,18 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
     - Nomad: rocket fins
     - Lancer: lance and tail fins
   - `Fun.colorFor` is no longer used for drones.
-- **RockMesh (`src/RockMesh.lua`, embedded in DigCubeView):**
-  - The worked piece is one EditableMesh, made off-frame. It is cut into Voronoi tiles (about 3.6 sq studs each, at most 14). Each tile's top has a centre, an inner ring and an outer ring for ripples. It has sides, no bottom, per-face normals that are recomputed, vertex colors, and two specks that pin the bounds symmetric about the pivot.
-  - Beam roles (`ROLE_FX.<code>.proxy.mesh.ripple`): a pulsing ripple from the drone's `DigPoint` while it cuts. The crest glows toward the attack color and fades to nothing at the piece's rim. Variants:
-    - Singularity runs inward.
-    - Gridcutter rings are square.
-    - Resonator is fast and tight.
-    - Bubbler also bulges.
-    - Starforge glows hottest.
-  - Chunk pops:
-    - Each crack: a shock ring and 2+stage tiles pried up on their outer edge.
-    - Charger slam: a big ring and 3 tiles lifted out.
-    - Lancer pulse: a ring and 1–2 tiles pried.
-    - Needler dart (a jump in the work): the nearest tile.
-    - Ballcaster, Ramiel and Nomad charges: tiles work loose as the charge builds, up to about half, with a shiver.
-  - Angles snap to 7.5°. Popped tiles stay out until the break, with an overshoot ease. Halver halves slide, Singularity squeezes, and Frostbite turns to Ice.
-  - Updates run at 30 Hz for your own pieces and 12 Hz for others. An idle piece costs almost nothing. Reduced Motion drops the ripples and most pops.
-  - Fallback: a missing API or experience setting (Allow Mesh / Image APIs) turns meshes off for the session and the old wedges are drawn. A memory-budget miss falls back for that piece only.
-- **Test area (`V:stepShowcase`):** owner asked to see the effects. Nine display rocks on plinths stand on the open ground west of the dig cube (x≈87, z −14 to 54), on the walk from home. Each loops one effect every 4.5 s with a sign: laser ripple, inward ripple, square ripple, fast ripple, crack pops, slam, pulse, charge, darts. It is local only and rebuilt per cube. If meshes are unavailable, each sign shows `MESH EFFECTS OFF: <error>`, and the Output has a `[RockMesh]` warning.
+- **RockChunks (`src/RockChunks.lua`, embedded in DigCubeView), replacing the first EditableMesh version:**
+  - The owner's Play log showed "Failed to create empty EditableMesh … memory budget limits" after six display rocks, so every mined piece fell back to plain wedges. The owner then asked for animations, not editable meshes, and for something that scales. The worked piece is now plain anchored wedge parts, cut into Voronoi chunks (about 3.6 sq studs each, at most 14). Each chunk moves rigidly by CFrame (`workspace:BulkMoveTo`). There is no mesh memory budget, and the test harness measured about 5× less per-frame work than the mesh.
+  - Beam roles: a pulsing ripple from the drone's `DigPoint`. Chunks bob up on the crest and never sink, because the rock under the piece is still solid until the carve. The crest tints toward the attack color. Singularity runs inward, Gridcutter is square, Resonator is fast and tight, Bubbler bulges.
+  - **The crack pop is the core effect** (owner: "phenomenal, reuse it everywhere"). `RockChunks.burst` is a shock ring plus chunks pried up on an edge or lifted out, at angles snapped to 7.5°. Popped chunks stay out until the break. Each role has its own version (`DigCubeView` `BURST`: count, strength, pry or lift, ring size, speed and glow; Singularity's ring runs inward). It plays:
+    - beam roles: small bursts at each third of a piece's work, and a big one at the crack;
+    - Charger: every slam (×1.3);
+    - Lancer: every pulse;
+    - Needler: every dart, near the hit;
+    - Ballcaster, Ramiel and Nomad: as the charge builds.
+  - Halver halves slide apart, Singularity squeezes, and Frostbite turns to Ice. Reduced Motion halves the bursts and drops the ripple.
 - **Tests:**
-  - `test_rock_mesh.py`: exact 3D doubles and an EditableMesh double, running RockMesh and the real DigCubeView proxy code.
+  - `test_rock_chunks.py`: exact 3D doubles, running RockChunks, the real DigCubeView pieces and the test area.
   - `test_dig_flow.py`: a carve-ahead section.
   - `test_fun_fx.py`: per-type looks.
   - Looks, real mesh cost and Play feel are not verified.
