@@ -294,25 +294,41 @@ end
 -- surface, while Neon, beams, particles, lights and gems (emissive) keep
 -- their full strength, so the drones' glows and the gems pop. Relative to
 -- the authored values, applied once.
-Fun.DARKEN={sun=.68,ambient=.7,outdoor=.66,haze=.55,density=.85,air=.82}
+Fun.DARKEN={sun=.55,ambient=.6,outdoor=.55,haze=.45,density=.8,air=.75,diffuse=.7}
 function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end
  local d=Fun.DARKEN
  local function dim(c,k) return Color3.new(c.R*k,c.G*k,c.B*k) end
  pcall(function()
-  lighting.Brightness=lighting.Brightness*d.sun
   lighting.Ambient=dim(lighting.Ambient,d.ambient)
   lighting.OutdoorAmbient=dim(lighting.OutdoorAmbient,d.outdoor)
+  lighting.EnvironmentDiffuseScale=lighting.EnvironmentDiffuseScale*d.diffuse
  end)
+ -- The sun and the haze stay darkened even if something sets them again
+ -- (a replicated change becomes the new base). The pit lamp owns the
+ -- ambient while you are down in the pit, so those are set once here.
+ local function hold(object,property,k)
+  local written
+  local function apply()
+   local value=object[property]
+   if written~=nil and math.abs(value-written)<1e-4 then return end
+   written=value*k
+   object[property]=written
+  end
+  pcall(apply)
+  object:GetPropertyChangedSignal(property):Connect(function() pcall(apply) end)
+ end
+ pcall(hold,lighting,'Brightness',d.sun)
  for _,air in ipairs(lighting:GetChildren()) do
   if air:IsA('Atmosphere') then
-   pcall(function() air.Haze=air.Haze*d.haze;air.Density=air.Density*d.density;air.Color=dim(air.Color,d.air) end)
+   pcall(hold,air,'Haze',d.haze)
+   pcall(function() air.Density=air.Density*d.density;air.Color=dim(air.Color,d.air) end)
   end
  end
  local grade=Instance.new('ColorCorrectionEffect');grade.Name='FunColorPop'
  -- Still pastel (a little desaturated), with more contrast against the glow.
- grade.Saturation=-.12;grade.Contrast=.1;grade.Brightness=-.02;grade.Parent=lighting
+ grade.Saturation=-.12;grade.Contrast=.12;grade.Brightness=-.04;grade.Parent=lighting
 end
 -- Depth of field for play: sharp from the camera out well past the player,
 -- so the whole dig and the crew stay crisp, with only the far walls and
