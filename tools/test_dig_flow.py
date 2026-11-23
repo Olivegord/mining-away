@@ -331,7 +331,8 @@ local function freshCube()
 end
 local function useCrew(roles,slot)
  local keep={}
- for _,owned in ipairs(roleTestFleet(p,nil,true)) do if roles[owned.role] then table.insert(keep,owned) end end
+ local names={};for r in pairs(roles) do table.insert(names,r) end;table.sort(names)
+ for _,owned in ipairs(roleTestFleet(p,nil,names)) do if roles[owned.role] then table.insert(keep,owned) end end
  p.testFleet=keep;rebuildFleet(p)
  if slot then p.drones[1].slot=slot end
  pl.Character:PivotTo(CFrame.new(spot))
@@ -340,8 +341,12 @@ do
  local crew=roleTestFleet(p,nil,true)
  local order={}
  for _,owned in ipairs(crew) do table.insert(order,owned.role) end
- assert(table.concat(order,',')=='Striker,Lancer,Charger,Ballcaster,Needler,Bubbler,Halver,Gridcutter,Singularity,Starforge,Frostbite,Resonator,Ramiel,Nomad','dig crew order: '..table.concat(order,','))
- assert(crew[1].id==data(p).fleet[1].id and pl:GetAttribute('MA_TestLoadoutLabel')=='Dig crew','the real first miner leads the dig crew')
+ -- A small random crew: the real first miner plus 3 different dig roles, named.
+ local seen={}
+ for i,r in ipairs(order) do assert(not seen[r] and (i==1 or r~='Striker'),'distinct dig crew roles: '..table.concat(order,','));seen[r]=true end
+ assert(#order==4 and order[1]=='Striker','dig crew of 4: '..table.concat(order,','))
+ local label=pl:GetAttribute('MA_TestLoadoutLabel')
+ assert(crew[1].id==data(p).fleet[1].id and string.sub(label,1,10)=='Dig crew: ','the real first miner leads the dig crew: '..tostring(label))
 end
 local function gemCount() local n=0;for _ in pairs(dig.gems) do n+=1 end;return n end
 local rocks=0

@@ -2246,7 +2246,7 @@ connect(UIS.InputBegan,function(input,processed)
  elseif not modal.Visible and key==Enum.KeyCode.C then logisticsView:cycle()
  elseif not modal.Visible and (key==Enum.KeyCode.Q or key==Enum.KeyCode.ButtonX) then command:FireServer('Evade')
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then
-  -- In the Dig Cube, T gives every dig drone type at once (the Dig crew).
+  -- In the Dig Cube, T gives a small random dig crew (and names it).
   if world:FindFirstChild('DigCube') then command:FireServer('RoleLoadout',{dig=true}) else command:FireServer('TestLoadout') end
  elseif key==Enum.KeyCode.ButtonR1 and not menusVisible() then
   local camera=workspace.CurrentCamera
@@ -2288,7 +2288,7 @@ connect(RunService.Heartbeat,function(dt)
  recall.Text=touch and 'Recall' or 'Recall [R]';recall.Visible=not menusVisible()
  local testWidth=math.min(236,view.X-86)
  testLoadout.Size=UDim2.fromOffset(testWidth,44);testLoadout.Position=UDim2.fromOffset(view.X-testWidth-(view.X<680 and 80 or 16),(view.X<680 or l.short) and 72 or 80)
- testLoadout.Text=world:FindFirstChild('DigCube') and (touch and 'Dig crew · all drones' or 'Dig crew · all drones [T]') or (touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]')
+ testLoadout.Text=world:FindFirstChild('DigCube') and (touch and 'Random dig crew' or 'Random dig crew [T]') or (touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]')
  testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not menusVisible()
  if modal.Visible and (not modalSize or (modalSize-view).Magnitude>1) then refreshModal() end
  if modal.Visible and (modalMode=='offer' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then

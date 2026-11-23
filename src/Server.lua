@@ -340,15 +340,19 @@ local function includePurchasedSpecials(p: any,fleet: any)
  end
  return fleet
 end
-local function roleTestFleet(p: any,starterOnly: boolean?,digCrew: boolean?)
+local function roleTestFleet(p: any,starterOnly: boolean?,digCrew: any)
  p.testRoll=(p.testRoll or 0)+1
  local fleet,counts={},{}
  local names={Striker='Miner',Courier='Emptier',Medic='Healer',Dart='Grower',Charger='Breaker',Orbiter='Orbital',Scrapper='Swarm'}
  local order={'Striker','Courier','Courier','Medic','Dart','Charger','Orbiter','Scrapper'}
  local optional={Starforge=true,Frostbite=true,Resonator=true,Ramiel=true,Nomad=true}
  if digCrew then
-  -- One of every worker role for the Dig Cube, the real first miner first.
-  order={'Striker','Lancer','Charger','Ballcaster','Needler','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Ramiel','Nomad'}
+  -- A small random crew for the Dig Cube (owner, Nov 22: all 14 at once was
+  -- far too confusing): the real first miner plus 3 different dig roles.
+  local pool={'Lancer','Charger','Ballcaster','Needler','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Ramiel','Nomad'}
+  order={'Striker'}
+  if type(digCrew)=='table' then for _,name in ipairs(digCrew) do if name~='Striker' then table.insert(order,name) end end
+  else for _=1,3 do table.insert(order,table.remove(pool,math.random(1,#pool))) end end
  else
   for _,name in ipairs(DroneCatalog.Order) do if name~='Laser' and (not starterOnly or not optional[name]) then table.insert(order,name) end end
   if (scene.runStart or scene.flatFields) and not starterOnly then table.insert(order,'Needler');table.insert(order,'Ballcaster') end
@@ -362,7 +366,13 @@ local function roleTestFleet(p: any,starterOnly: boolean?,digCrew: boolean?)
  end
  -- Keep the real first miner's identity so named cards also work in this test.
  local miner=Pro.clone(data(p).fleet[1]);miner.role='Striker';miner.name='Miner';fleet[1]=miner
- if digCrew then p.player:SetAttribute('MA_TestLoadoutLabel','Dig crew');return fleet end
+ if digCrew then
+  local shown={}
+  for _,d in ipairs(fleet) do table.insert(shown,d.name or d.role) end
+  p.digCrewNames=table.concat(shown,', ')
+  p.player:SetAttribute('MA_TestLoadoutLabel','Dig crew: '..p.digCrewNames)
+  return fleet
+ end
  if not starterOnly then
   local ink=Pro.clone(miner);ink.id=string.format('test:%d:%d:%d',p.player.UserId,p.testRoll,#fleet+1)
   ink.name='Inkbeam';ink.type='Blue';ink.beamVariant='Inkbeam';table.insert(fleet,ink)
@@ -6287,7 +6297,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
   RoleEffects.ClearAbility(pl.UserId);p.ability=nil
   p.testFleet=action=='RoleLoadout' and roleTestFleet(p,nil,type(payload)=='table' and payload.dig==true) or randomTestFleet(p);rebuildFleet(p);logistics:refresh(p)
-  notice(p,action=='RoleLoadout' and (type(payload)=='table' and payload.dig==true and 'Dig crew ready: walk onto the Dig Cube to watch every digger.' or 'All drone types ready. Click a rock to start mining.') or 'Random test loadout ready — no saved fleet changed.')
+  notice(p,action=='RoleLoadout' and (type(payload)=='table' and payload.dig==true and ('New dig crew: '..(p.digCrewNames or '?')..'. Press T again to reroll.') or 'All drone types ready. Click a rock to start mining.') or 'Random test loadout ready — no saved fleet changed.')
  elseif action=='Recall' then
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
