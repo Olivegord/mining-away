@@ -296,7 +296,9 @@ end
 -- the authored values, applied once.
 -- Owner follow-up: "even darker. ambient should be down ... revert the color
 -- changes. so still pastel but very dark. sun at like sunset".
-Fun.DARKEN={sun=.5,ambient=.3,outdoor=.28,haze=.45,density=.8,diffuse=.5,clock=17.7}
+-- Then: "a little brighter again, more contrast with the lighting": a
+-- stronger low sun over a low ambient and sharper shadows.
+Fun.DARKEN={sun=.78,ambient=.36,outdoor=.34,haze=.45,density=.8,diffuse=.55,clock=17.7,shadow=.15,contrast=.12}
 function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end
@@ -306,6 +308,7 @@ function Fun.colorPop()
   lighting.Ambient=dim(lighting.Ambient,d.ambient)
   lighting.OutdoorAmbient=dim(lighting.OutdoorAmbient,d.outdoor)
   lighting.EnvironmentDiffuseScale=lighting.EnvironmentDiffuseScale*d.diffuse
+  lighting.ShadowSoftness=d.shadow
  end)
  -- The sun and the haze stay darkened even if something sets them again
  -- (a replicated change becomes the new base). The pit lamp owns the
@@ -337,7 +340,7 @@ function Fun.colorPop()
  end
  local grade=Instance.new('ColorCorrectionEffect');grade.Name='FunColorPop'
  -- The original play grade (the color changes were reverted).
- grade.Saturation=-.16;grade.Contrast=.03;grade.Brightness=0;grade.Parent=lighting
+ grade.Saturation=-.16;grade.Contrast=d.contrast;grade.Brightness=0;grade.Parent=lighting
 end
 -- Depth of field for play: sharp from the camera out well past the player,
 -- so the whole dig and the crew stay crisp, with only the far walls and
