@@ -3545,7 +3545,7 @@ function scene.digReset()
  end
  dig.generation+=1
  local seedValue=dig.random:NextInteger(1,2000000000)
- dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.resetAt=nil;dig.dirty=false;dig.csg={};dig.deepest=1
+ dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.resetAt=nil;dig.dirty=false;dig.csg={};dig.deepest=1;dig.promised=1
  -- Secret gems per cell, from the server's own Random (never the public seed).
  dig.gems=DigCube.placeGems(dig.cube,function() return dig.random:NextNumber() end)
  dig.carved={};dig.stageParts={};dig.brittle={};dig.chains={}
@@ -3833,6 +3833,12 @@ function scene.digDrop(d)
   for _,id in ipairs(job.ids) do if dig.claimed[id]==d.id then dig.claimed[id]=nil end end
   scene.digDropNodes(job,false)
  end
+ -- A stage carved ahead always breaks: its pit is already open.
+ if job and not job.broken and (job.stageAhead or 0)>job.stage and profiles[d.owner] then
+  local whole=true
+  for _,id in ipairs(job.ids) do if dig.cube.removed[id] then whole=false;break end end
+  if whole then scene.digChip(job,d,profiles[d.owner]) end
+ end
  d.digJob=nil;d.digCell=nil;d.digWarm=nil;d.digProgress=nil;d.digWarmFor=nil;d.breaker=nil
  if d.digging then d.warmAt=nil end
  if job and job.committed and not job.broken then scene.digBreak(job,d,profiles[d.owner]) end
@@ -3974,10 +3980,12 @@ function scene.digChip(job,d,p)
  local piece=job.pieces[job.stage]
  table.insert(dig.ops,DigCube.formatOp(job.ids,job.code,0,'S',job.stage))
  dig.dirty=true
- table.insert(dig.csg,{generation=dig.generation,ids={},parts=piece.parts,queuedAt=os.clock()})
- -- Remembered until its cells go, so a rebuilt block keeps this pit.
- table.insert(dig.stageParts,{ids=job.ids,parts=piece.parts})
- scene.digCarveLoop()
+ if (job.stageAhead or 0)<job.stage then
+  table.insert(dig.csg,{generation=dig.generation,ids={},parts=piece.parts,queuedAt=os.clock()})
+  -- Remembered until its cells go, so a rebuilt block keeps this pit.
+  table.insert(dig.stageParts,{ids=job.ids,parts=piece.parts})
+  scene.digCarveLoop()
+ end
  local _,px,pz=DigCube.chunkArea(cube,job.ids)
  local floor=piece.parts[1] and piece.parts[1].y0 or cube.cells[job.ids[1]].y0
  local at=dig.origin+Vector3.new(px,floor+1,pz)
@@ -4084,6 +4092,9 @@ function scene.digBeamStep(d,p,job,dt)
   d.digWarmFor=job.hot and 0 or (rested and 1.3 or math.clamp(d.stats.warmup or .8,.7,1.1))
  end
  if not d.mining then d.warmAt=d.digWarm end
+ local dps=d.stats.miningDPS*job.style.power
+ local warmLeft=math.max(0,d.digWarmFor-(now-d.digWarm))
+ scene.digAhead(job,dps*math.max(0,scene.digCarveLead()-warmLeft))
  if now-d.digWarm<d.digWarmFor then d.state='Warmup';d.mining=false;return end
  if not d.mining then d.beamSince=now end
  d.state='Mine';d.mining=true;d.lastBeamAt=now
@@ -4110,7 +4121,7 @@ function scene.digNextLine(d,p,job)
  job.hp=DigCube.chunkHp(cube,job.ids,job.cut,scene.digHpMul);job.maxHp=job.hp
  job.pieces=DigCube.pieces(cube,job.ids,job.style.pieces);job.stage=0
  job.volume=DigCube.volume(cube,job.ids);job.volFrac=0;job.rock=DigCube.rockDrops(job.volume);job.rockPaid=0
- job.broken=nil;job.committed=nil;job.hot=true;job.nodes={}
+ job.broken=nil;job.committed=nil;job.stageAhead=nil;job.hot=true;job.nodes={}
  dig.claimed[id]=d.id
  scene.digAim(job)
  d.digJob=job;d.digCell=id;d.digPickAt=0
@@ -4119,7 +4130,28 @@ end
 -- cells go to the CSG queue before the break, so the hole is there when the
 -- rubble flies. A committed job always finishes (scene.digDrop).
 function scene.digCarveAhead(job)
- local dig=scene.dig
+ local dig=scene.dig;local cube=dig.cube
+ -- The first break into a new layer always pays a gem (digBreak). Choose
+ -- that cell now, the farthest from the middle, so it is never carved
+ -- ahead and can still seal.
+ local layer=cube.cells[job.ids[1]] and cube.cells[job.ids[1]].layer or 1
+ -- (Shots and volleys always carved theirs; that gem bursts out, as before.)
+ if not (job.style and job.style.carveAhead) and layer>(dig.deepest or 1) and layer>(dig.promised or 1) then
+  local any=false
+  for _,id in ipairs(job.ids) do if dig.gems[id] then any=true;break end end
+  if not any then
+   local cx,cz=DigCube.chunkCenter(cube,job.ids)
+   local best,score=nil,-math.huge
+   for _,id in ipairs(job.ids) do
+    local c=cube.cells[id]
+    if not cube.removed[id] and not dig.carved[id] then
+     local s=(c.cx-cx)^2+(c.cz-cz)^2
+     if s>score then best,score=id,s end
+    end
+   end
+   if best then dig.gems[best]={tier=DigCube.layerTier(layer),count=1};dig.promised=layer end
+  end
+ end
  local ids={}
  for _,id in ipairs(job.ids) do if not dig.gems[id] and not dig.carved[id] then table.insert(ids,id) end end
  if #ids==0 then return end
@@ -4127,6 +4159,39 @@ function scene.digCarveAhead(job)
  job.committed=true
  table.insert(dig.csg,{generation=dig.generation,ids=ids,queuedAt=os.clock()})
  scene.digCarveLoop()
+end
+-- Carve ahead for every role (owner, Nov 22: the rubble came before the hole):
+-- the piece about to break is cut a moment before its break op, while its
+-- client proxy still covers it, so the hole is already there when the
+-- rubble flies. A nested stage queues its pit; the final piece its cells
+-- (scene.digCarveAhead, which commits the job). Only the next piece: a later
+-- one has no proxy over it yet.
+function scene.digCarveLead()
+ return scene.dig.carveLead or .9
+end
+function scene.digCarvePiece(job)
+ local dig=scene.dig
+ local k=job.stage+1
+ local piece=job.pieces and job.pieces[k]
+ if not piece or job.broken then return end
+ if piece.final or k>=#job.pieces then
+  if not job.committed then scene.digCarveAhead(job) end
+  return
+ end
+ if (job.stageAhead or 0)>=k then return end
+ job.stageAhead=k
+ table.insert(dig.csg,{generation=dig.generation,ids={},parts=piece.parts,queuedAt=os.clock()})
+ table.insert(dig.stageParts,{ids=job.ids,parts=piece.parts})
+ scene.digCarveLoop()
+end
+-- `damage`: the work this job will surely take within the carve lead. When
+-- that reaches the next piece's share, carve it now.
+function scene.digAhead(job,damage)
+ if job.broken or not job.pieces or job.maxHp<=0 then return end
+ local piece=job.pieces[job.stage+1]
+ if not piece then return end
+ local hpAt=job.maxHp*(1-math.min(1,piece.at))
+ if job.hp-damage<=hpAt+1e-6 then scene.digCarvePiece(job) end
 end
 -- A job's MiningShot record: marked as a dig shot, with a Debris safety net.
 function scene.digTrack(job,node,life,grade)
@@ -4222,6 +4287,7 @@ function scene.digSlamStep(d,p,job,dt)
   if (d.pos-hover).Magnitude>1.5 then return end
   slam.phase='Windup';slam.phaseAt=now;d.breaker=slam;d.state='BreakerWindup'
   d.warmAt=now;d.digWarmFor=cfg.windup
+  scene.digAhead(job,d.stats.miningDPS*style.power*(cfg.windup+cfg.dive+cfg.hold+cfg.recover))
   publishBreakerPhase(d,slam)
   RoleEffects.BreakerPhase(d.pos,job.contact,'Windup',diameter)
   return
@@ -4333,6 +4399,10 @@ function scene.digPulseStep(d,p,job,dt)
   local rested=now-(d.lastBeamAt or -math.huge)>scene.FIRST_CHARGE_REST
   job.nextPulse=now+cfg.charge+(rested and .4 or 0)
   d.warmAt=now;d.digWarmFor=job.nextPulse-now
+ end
+ do
+  local due=math.max(0,math.floor((now+scene.digCarveLead()-job.nextPulse)/cfg.interval)+1)
+  scene.digAhead(job,job.maxHp*cfg.bite*due)
  end
  d.mining=false;d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
  if now<job.nextPulse then d.state=job.pulses and 'Mine' or 'Warmup';return end
@@ -4815,6 +4885,8 @@ function scene.digCarveReport()
  table.sort(lags)
  local p50,p90=lags[math.max(1,math.ceil(#lags*.5))],lags[math.max(1,math.ceil(#lags*.9))]
  scene.dig.holder:SetAttribute('CarveLag',p90)
+ -- Carve that much ahead (plus replication), so the hole is there at the break.
+ scene.dig.carveLead=math.clamp(p90+.3,.6,2.5)
  if inStudio then print(string.format('[DigCube] carve jobs=%d calls=%d p50=%.2f p90=%.2f fails=%d',stats.jobs,stats.calls,p50,p90,stats.fails)) end
  stats.lags={};stats.jobs=0;stats.calls=0;stats.fails=0
 end

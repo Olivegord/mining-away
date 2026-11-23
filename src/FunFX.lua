@@ -40,8 +40,8 @@ function Fun.colorFor(id)
  local index=(n and math.floor(n) or hash(tostring(id)))%#Fun.Palette+1
  return Fun.Palette[index]
 end
-local function bare(parent,name,size,color,material)
- local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false
+local function bare(parent,name,size,color,material,class)
+ local p=Instance.new(class or 'Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false
  p.CastShadow=false;p.Size=size;p.Color=color;p.Material=material or Enum.Material.SmoothPlastic;p.Parent=parent
  return p
 end
@@ -60,41 +60,140 @@ local function muted(c)
 end
 -- Fun.rolePrimary(role) -> Color3 and Fun.roleStyle(role) -> DigCube style are
 -- installed by the client controller from the DigCubeView statics (nil until then).
--- A drone's secondary color: its palette color, unless that sits too close to
--- the role's primary (hue within 35 degrees) or the primary is nearly gray;
--- then the palette hue turns a third of the wheel (same saturation/value).
-function Fun.accentFor(primary,palette)
- if not primary then return palette end
- local ph,ps=primary:ToHSV()
- local h,s,v=palette:ToHSV()
- local gap=math.abs(ph-h)%1
- gap=math.min(gap,1-gap)*360
- if gap<35 or ps<.25 then return Color3.fromHSV((h+1/3)%1,s,v) end
- return palette
+-- Owner, Nov 22: every drone TYPE looks different, and every drone of one
+-- type looks exactly the same (no per-drone palette color any more). The
+-- body is the role's attack color, muted; the trail, motes and beam sparks
+-- take the role's fixed secondary; a few parts on the cube give each type
+-- its own silhouette.
+Fun.ROLE_SECONDARY={
+ Striker=rgb(255,236,200),Charger=rgb(255,214,90),Ballcaster=rgb(255,120,214),Needler=rgb(40,222,190),
+ Bubbler=rgb(160,222,255),Halver=rgb(232,236,255),Gridcutter=rgb(70,226,255),Singularity=rgb(255,96,206),
+ Starforge=rgb(255,120,40),Frostbite=rgb(244,252,255),Resonator=rgb(240,255,120),Ramiel=rgb(255,176,186),
+ Nomad=rgb(255,170,60),Lancer=rgb(255,70,86),
+}
+local NEUTRAL=rgb(150,160,172)
+function Fun.accentFor(primary,role)
+ return Fun.ROLE_SECONDARY[role or ''] or (primary and primary:Lerp(WHITE,.45)) or NEUTRAL
 end
--- primary (optional) is the role's attack color: the glowing belly and its
--- light. The body, cap, trail and motes take the accent, so two drones of one
--- role still read apart. Without a primary the palette color does both.
-function Fun.paintCube(view,body,id,primary)
- local color=Fun.colorFor(id)
- local accent=primary and Fun.accentFor(primary,color) or color
+-- How much bigger or smaller a type's cube is than the standard one.
+Fun.ROLE_SCALE={Charger=1.14,Needler=.84,Singularity=1.06,Ramiel=.94,Lancer=.92,Ballcaster=.96}
+local DARK=rgb(32,34,44)
+-- One piece of a type's silhouette, fixed to the hull. `at` is in hull
+-- half-sizes (x, y, z), `size` in hull sizes.
+local function trim(view,body,name,shape,size,at,color,material,turn)
+ local s=body.Size
+ local p=bare(view,name,Vector3.new(s.X*size[1],s.Y*size[2],s.Z*size[3]),color,material,shape=='Wedge' and 'WedgePart' or nil)
+ if shape=='Ball' or shape=='Cylinder' then p.Shape=Enum.PartType[shape] end
+ attach(p,body,CFrame.new(s.X*.5*at[1],s.Y*.5*at[2],s.Z*.5*at[3])*(turn or CFrame.new()))
+ return p
+end
+local LOOKS={}
+-- Striker, the classic miner: a dark visor across the front and a short mast.
+LOOKS.Striker=function(v,b,c,a)
+ trim(v,b,'TypeVisor','Block',{.78,.2,.06},{0,.25,-1.02},DARK)
+ trim(v,b,'TypeMast','Cylinder',{.42,.07,.07},{.45,1.4,.45},a,nil,CFrame.Angles(0,0,math.pi/2))
+ trim(v,b,'TypeMastTip','Ball',{.13,.13,.13},{.45,1.85,.45},c,Enum.Material.Neon)
+end
+-- Charger, the heavy: a ram across the front and two horns.
+LOOKS.Charger=function(v,b,c,a)
+ trim(v,b,'TypeRam','Wedge',{.9,.34,.3},{0,-.62,-1.28},DARK,nil,CFrame.Angles(0,math.pi,0))
+ for side=-1,1,2 do trim(v,b,'TypeHorn','Wedge',{.12,.34,.3},{side*.7,1.3,-.55},a) end
+end
+-- Ballcaster: a glowing orb riding in a collar on top.
+LOOKS.Ballcaster=function(v,b,c,a)
+ trim(v,b,'TypeCollar','Cylinder',{.12,.62,.62},{0,1.08,0},DARK,nil,CFrame.Angles(0,0,math.pi/2))
+ trim(v,b,'TypeOrb','Ball',{.46,.46,.46},{0,1.45,0},c,Enum.Material.Neon)
+end
+-- Needler: a long needle under the belly and two small side fins.
+LOOKS.Needler=function(v,b,c,a)
+ trim(v,b,'TypeNeedle','Cylinder',{.9,.09,.09},{0,-1.75,0},a,Enum.Material.Metal,CFrame.Angles(0,0,math.pi/2))
+ for side=-1,1,2 do trim(v,b,'TypeFin','Block',{.42,.08,.36},{side*1.3,.1,.2},a) end
+end
+-- Bubbler: a glass dome.
+LOOKS.Bubbler=function(v,b,c,a)
+ local dome=trim(v,b,'TypeDome','Ball',{.78,.78,.78},{0,1.05,0},a,Enum.Material.Glass)
+ dome.Transparency=.45
+end
+-- Halver: split down the middle with a blade on each side.
+LOOKS.Halver=function(v,b,c,a)
+ trim(v,b,'TypeSeam','Block',{.07,1.04,1.04},{0,0,0},DARK)
+ for side=-1,1,2 do trim(v,b,'TypeBlade','Wedge',{.08,.5,.62},{side*1.12,.3,0},a,Enum.Material.Metal) end
+end
+-- Gridcutter: four prongs at the top corners and a cross-hatched lid.
+LOOKS.Gridcutter=function(v,b,c,a)
+ for x=-1,1,2 do for z=-1,1,2 do trim(v,b,'TypeProng','Block',{.1,.42,.1},{x*.82,1.32,z*.82},a) end end
+ trim(v,b,'TypeGridX','Block',{.86,.05,.07},{0,1.1,0},c,Enum.Material.Neon)
+ trim(v,b,'TypeGridZ','Block',{.07,.05,.86},{0,1.1,0},c,Enum.Material.Neon)
+end
+-- Singularity: a dark cube inside a flat ring.
+LOOKS.Singularity=function(v,b,c,a)
+ b.Color=DARK:Lerp(c,.22)
+ local ring=trim(v,b,'TypeRing','Cylinder',{.05,1.55,1.55},{0,0,0},c,Enum.Material.Neon,CFrame.Angles(0,0,math.pi/2))
+ ring.Transparency=.35
+end
+-- Starforge: a crown of four spikes.
+LOOKS.Starforge=function(v,b,c,a)
+ for k=0,3 do
+  local yaw=k*math.pi/2
+  trim(v,b,'TypeSpike','Wedge',{.22,.46,.22},{math.sin(yaw)*.62,1.42,math.cos(yaw)*.62},c,nil,CFrame.Angles(0,yaw,0))
+ end
+end
+-- Frostbite: ice shards growing from the top.
+LOOKS.Frostbite=function(v,b,c,a)
+ for k,spec in ipairs({{-.35,.6,.2},{.3,.5,-.25},{.05,.8,.05}}) do
+  local shard=trim(v,b,'TypeShard','Block',{.16,spec[2],.16},{spec[1],1+spec[2],spec[3]},a,Enum.Material.Ice,CFrame.Angles(.25*k,k,.2*k))
+  shard.Transparency=.2
+ end
+end
+-- Resonator: a tuning fork, two prongs with glowing tips.
+LOOKS.Resonator=function(v,b,c,a)
+ for side=-1,1,2 do
+  trim(v,b,'TypeFork','Block',{.1,.7,.1},{side*.34,1.7,0},a,Enum.Material.Metal)
+  trim(v,b,'TypeForkTip','Ball',{.17,.17,.17},{side*.34,2.42,0},c,Enum.Material.Neon)
+ end
+end
+-- Ramiel: a floating crystal diamond.
+LOOKS.Ramiel=function(v,b,c,a)
+ local gem=trim(v,b,'TypeDiamond','Block',{.46,.46,.46},{0,1.75,0},c,Enum.Material.Glass,CFrame.Angles(math.pi/4,0,math.pi/4))
+ gem.Transparency=.15
+end
+-- Nomad: rocket fins at the bottom corners.
+LOOKS.Nomad=function(v,b,c,a)
+ for k=0,3 do
+  local yaw=k*math.pi/2+math.pi/4
+  trim(v,b,'TypeRocketFin','Wedge',{.06,.5,.42},{math.sin(yaw)*1.08,-.62,math.cos(yaw)*1.08},a,nil,CFrame.Angles(0,yaw,0))
+ end
+end
+-- Lancer: a long lance barrel and two swept fins at the back.
+LOOKS.Lancer=function(v,b,c,a)
+ trim(v,b,'TypeLance','Cylinder',{.7,.15,.15},{0,-1.5,0},c,Enum.Material.Metal,CFrame.Angles(0,0,math.pi/2))
+ for side=-1,1,2 do trim(v,b,'TypeTailFin','Wedge',{.06,.36,.5},{side*.42,.95,1.1},a) end
+end
+Fun.LOOKS=LOOKS
+-- primary (optional) is the role's attack color; role (optional) its name.
+-- Without a role every cube looks the same neutral drone.
+function Fun.paintCube(view,body,id,primary,role)
+ local accent=Fun.accentFor(primary,role)
+ local color=primary or NEUTRAL
  primary=primary or color
  -- Render the cube smaller than its 3.4-stud gameplay hull so the fleet frames
  -- the action instead of covering it. The emitter moves up to the new belly.
- body.Size=body.Size*Fun.CUBE_VIEW_SCALE
+ body.Size=body.Size*Fun.CUBE_VIEW_SCALE*(Fun.ROLE_SCALE[role or ''] or 1)
  local s=body.Size
  local emitter=view:FindFirstChild('Emmiter')
  if emitter and emitter:IsA('BasePart') then emitter.CFrame=body.CFrame*CFrame.new(0,-s.Y*.5,0) end
- body.Color=muted(accent);body.Material=Enum.Material.SmoothPlastic;body.Reflectance=0
+ body.Color=muted(color);body.Material=Enum.Material.SmoothPlastic;body.Reflectance=0
  -- A lighter cap gives the cube a lit top and a darker underside: instant depth.
- local cap=bare(view,'FunCap',Vector3.new(s.X*.86,.08,s.Z*.86),muted(accent):Lerp(WHITE,.45))
+ local cap=bare(view,'FunCap',Vector3.new(s.X*.86,.08,s.Z*.86),muted(color):Lerp(WHITE,.45))
  attach(cap,body,CFrame.new(0,s.Y*.5+.035,0))
+ local look=LOOKS[role or '']
+ if look then pcall(look,view,body,primary,accent) end
  -- The glowing belly the laser comes out of, in the role's attack color.
  local glow=bare(view,'FunGlow',Vector3.new(s.X*.62,.06,s.Z*.62),primary:Lerp(WHITE,.25),Enum.Material.Neon)
  attach(glow,body,CFrame.new(0,-s.Y*.5-.025,0))
  local light=Instance.new('PointLight');light.Name='FunLight';light.Color=primary;light.Range=7;light.Brightness=.2
  light.Shadows=false;light.Parent=glow
- -- A ribbon trail in the cube's own color while it cruises.
+ -- A ribbon trail in the type's secondary color while it cruises.
  local a0=Instance.new('Attachment');a0.Name='FunTrailTop';a0.Position=Vector3.new(0,s.Y*.32,s.Z*.5);a0.Parent=body
  local a1=Instance.new('Attachment');a1.Name='FunTrailBottom';a1.Position=Vector3.new(0,-s.Y*.32,s.Z*.5);a1.Parent=body
  local trail=Instance.new('Trail');trail.Name='FunTrail';trail.Attachment0=a0;trail.Attachment1=a1
@@ -110,7 +209,7 @@ function Fun.paintCube(view,body,id,primary)
  motes.Speed=NumberRange.new(1.5,3.5);motes.SpreadAngle=Vector2.new(70,70);motes.EmissionDirection=Enum.NormalId.Bottom
  motes.Acceleration=Vector3.new(0,2,0);motes.Drag=2;motes.Rotation=NumberRange.new(0,360);motes.RotSpeed=NumberRange.new(-120,120)
  motes.Parent=glow
- return {color=color,primary=primary,accent=accent,glow=glow,light=light,trail=trail,motes=motes,glowBase=glow.Color}
+ return {color=color,primary=primary,accent=accent,role=role,glow=glow,light=light,trail=trail,motes=motes,glowBase=glow.Color}
 end
 -- Called every render frame for a cube. speed in studs/s.
 function Fun.stepCube(record,speed,working,hidden,now)

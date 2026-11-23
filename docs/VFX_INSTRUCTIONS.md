@@ -1,5 +1,57 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — carve-ahead for every role, one look per drone type, RockMesh
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cube body, trail and sparks use the drone's own palette color" below.
+
+- **Rubble and hole together (server, `scene.digAhead`/`scene.digCarvePiece`):**
+  - Cause: the break op published at once, so rubble spawned, but beam, slam and pulse roles only queued the CSG cut at the break (`PreciseConvexDecomposition`, then replication), so the old rock stayed visible a moment after the rubble.
+  - Now each role carves the piece about to break ahead: beam roles when the work left fits in the carve lead (after the warmup), a Charger when the windup starts and the coming slam will finish the piece, a Lancer when the pulses due within the lead will.
+  - The lead is `scene.dig.carveLead`, the measured carve p90 + 0.3 s (0.6–2.5 s, 0.9 s before the first report).
+  - A stage pit carved ahead skips its carve in `digChip`. A dropped job whose stage was carved ahead still breaks that stage. A final piece carved ahead commits the job (as for shots).
+  - The first-break-into-a-layer gem is chosen at carve time (`dig.promised`) so its cell is never carved and can still seal. Shots and volleys keep their old behavior: that gem bursts out.
+- **Client hold:** a stage piece stays up, popped and straining, until its own `S` op lands (`crackStage` caps at `cutStage+1`), because the server has already cut the pit under it. Every piece is grown 0.3 studs to cover the cut and has the invisible collision copy (`DigCrackHold`).
+- **Drone looks (`FunFX.paintCube`, `FunFX.LOOKS`):**
+  - The body is the type's attack color, muted. Trail, motes and beam sparks take `FunFX.ROLE_SECONDARY`. `FunFX.ROLE_SCALE` sizes the cube per type.
+  - Silhouettes:
+    - Striker: visor and mast
+    - Charger: ram and horns
+    - Ballcaster: orb in a collar
+    - Needler: needle and fins
+    - Bubbler: glass dome
+    - Halver: seam and side blades
+    - Gridcutter: corner prongs and lit grid
+    - Singularity: dark cube in a ring
+    - Starforge: spike crown
+    - Frostbite: ice shards
+    - Resonator: tuning fork
+    - Ramiel: floating diamond
+    - Nomad: rocket fins
+    - Lancer: lance and tail fins
+  - `Fun.colorFor` is no longer used for drones.
+- **RockMesh (`src/RockMesh.lua`, embedded in DigCubeView):**
+  - The worked piece is one EditableMesh, made off-frame. It is cut into Voronoi tiles (about 3.6 sq studs each, at most 14). Each tile's top has a centre, an inner ring and an outer ring for ripples. It has sides, no bottom, per-face normals that are recomputed, vertex colors, and two specks that pin the bounds symmetric about the pivot.
+  - Beam roles (`ROLE_FX.<code>.proxy.mesh.ripple`): a pulsing ripple from the drone's `DigPoint` while it cuts. The crest glows toward the attack color and fades to nothing at the piece's rim. Variants:
+    - Singularity runs inward.
+    - Gridcutter rings are square.
+    - Resonator is fast and tight.
+    - Bubbler also bulges.
+    - Starforge glows hottest.
+  - Chunk pops:
+    - Each crack: a shock ring and 2+stage tiles pried up on their outer edge.
+    - Charger slam: a big ring and 3 tiles lifted out.
+    - Lancer pulse: a ring and 1–2 tiles pried.
+    - Needler dart (a jump in the work): the nearest tile.
+    - Ballcaster, Ramiel and Nomad charges: tiles work loose as the charge builds, up to about half, with a shiver.
+  - Angles snap to 7.5°. Popped tiles stay out until the break, with an overshoot ease. Halver halves slide, Singularity squeezes, and Frostbite turns to Ice.
+  - Updates run at 30 Hz for your own pieces and 12 Hz for others. An idle piece costs almost nothing. Reduced Motion drops the ripples and most pops.
+  - Fallback: a missing API or experience setting (Allow Mesh / Image APIs) turns meshes off for the session and the old wedges are drawn. A memory-budget miss falls back for that piece only.
+- **Tests:**
+  - `test_rock_mesh.py`: exact 3D doubles and an EditableMesh double, running RockMesh and the real DigCubeView proxy code.
+  - `test_dig_flow.py`: a carve-ahead section.
+  - `test_fun_fx.py`: per-type looks.
+  - Looks, real mesh cost and Play feel are not verified.
+
 ## November 22 — 14 dig roles, per-cell gems, 3D streaks, latency, Lancer
 
 Owner request above. Designed by a three-proposal judge panel (spec kept in the session scratchpad and summarized here), built in `777b3a5` (shared rules), `92a6d8a`/`2e91781` (server), `ba2a32a`/`815a50d` (dig view), `d0117e5`/`c9c4303` (effects and glue), and integrated in `a73eaf3`. Installed (Studio save 488). Not published.

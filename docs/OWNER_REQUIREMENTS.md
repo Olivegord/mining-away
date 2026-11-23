@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — rubble in sync with the break; one look per drone type; deforming rock
+
+"lets work on rock breaking gameplay!" (1) There is still a delay between the rock bits spawning and the rock breaking event ("lag"). (2) Make each drone (type) visually different: they all look the same; remove the individual per-drone color so all drones of a type look exactly the same. (3) Cooler rock breaking effects using mesh animation: rework the rock mesh system so rocks do cool events (the rocks are very low poly). For the laser, a pulsing ripple from the origin; for other drone attacks, random points displaced at perfect angles so rock chunks pop out.
+
 ## November 22 — every drone digs its own way; the old 3D rectangles; no long wait before breaks; a pulse-laser drone
 
 After `c03a747`: make gem arcs shorter; bring back the OLD 3D rectangle particles (the recent ones were wrong and too numerous); remove the long wait where the outline and rock pieces sit before breaking. Add the other drones to the game with unique particles and rock responses. Example: the purple ball shooter makes rocks darker, throws them higher, attacks one cell at a time and one-shots it, but only small cells. Each type has a base attack color with differing secondary colors. Work out how gem cells behave when drones crack differently sized pieces, keep mining clear and fun, and test several drones. Then, from a reference video (DoubleCats, "the secret of laser vfx"): implement it in a new laser drone.

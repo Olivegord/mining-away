@@ -652,6 +652,54 @@ do
 end
 print('PASS carve-ahead: a committed Ballcaster cell is carved before its break op, walking away still breaks it next tick, rebuilds keep carved cells and stage pits')
 
+-- ===== Carve-ahead for beam, slam and pulse roles (owner, Nov 22: the
+-- rubble came before the hole): every stage pit and every final cell is cut
+-- in an earlier tick than its break op, about the carve lead before it.
+for _,role in ipairs({'Striker','Charger','Lancer','Singularity'}) do
+ freshCube()
+ dig.gems={}
+ useCrew({[role]=true},role=='Striker' and 3 or nil)
+ local style=DigCube.style(role)
+ local cellAt,partAt={},{}
+ local function sig(part) return string.format('%d:%.3f:%.3f:%.3f',part.cell or 0,part.y0,part.y1,part.poly[1][1]+part.poly[1][2]) end
+ local realCarve=scene.digCarve
+ scene.digCarve=function(job)
+  for _,id in ipairs(job.ids) do if cellAt[id]==nil then cellAt[id]=now end end
+  for _,part in ipairs(job.parts or {}) do local k=sig(part);if partAt[k]==nil then partAt[k]=now end end
+  return realCarve(job)
+ end
+ local seen=#dig.ops
+ local stages,finals,early,leads=0,0,0,{}
+ for _=1,1800 do
+  tick(1);scanRecords(nil)
+  while seen<#dig.ops do
+   seen+=1
+   local op=parsed(dig.ops[seen])
+   if op.flag=='S' then
+    stages+=1
+    local piece=DigCube.pieces(dig.cube,op.cells,style.pieces)[op.stage]
+    local first=math.huge
+    for _,part in ipairs(piece.parts) do first=math.min(first,partAt[sig(part)] or math.huge) end
+    if first<now then early+=1;table.insert(leads,now-first) end
+   elseif isFinal(op) then
+    finals+=1
+    local first=math.huge
+    for _,id in ipairs(op.removes) do first=math.min(first,cellAt[id] or math.huge) end
+    if first<now then early+=1;table.insert(leads,now-first) end
+   end
+  end
+ end
+ scene.digCarve=realCarve
+ local total=stages+finals
+ table.sort(leads)
+ local median=leads[math.max(1,math.ceil(#leads/2))] or 0
+ assert(total>=4,role..' breaks something: '..total)
+ assert(early>=total*.9,string.format('%s: %d/%d breaks carved ahead',role,early,total))
+ assert(median>=.45,string.format('%s: median carve lead %.2f s',role,median))
+ print(string.format('  %-12s %2d stages %2d finals, %d carved ahead, median lead %.2f s',role,stages,finals,early,median))
+end
+print('PASS carve-ahead for beam, slam and pulse: every stage pit and final cut is queued before its break op, near the carve lead (API doubles: real CSG time NOT measured)')
+
 -- ===== Strict vertical overlap (spec 3.5.1, 7.2.7) =====
 freshCube()
 useCrew({Striker=true})

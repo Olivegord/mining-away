@@ -1118,8 +1118,8 @@ local function registerDrone(source)
   optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
   optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
  elseif cube then
-  -- Belly glow in the role's attack color (DigCube style); the body keeps the drone's own accent.
-  cubeLook=Presentation.Fun.paintCube(clone,pivot,id,Presentation.Fun.rolePrimary and Presentation.Fun.rolePrimary(source:GetAttribute('Role')) or nil)
+  -- One look per drone type (FunFX.LOOKS): role colors and silhouette, the same for every drone of the type.
+  cubeLook=Presentation.Fun.paintCube(clone,pivot,id,Presentation.Fun.rolePrimary and Presentation.Fun.rolePrimary(source:GetAttribute('Role')) or nil,source:GetAttribute('Role'))
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.

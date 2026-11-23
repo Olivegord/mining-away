@@ -122,6 +122,7 @@ def module_bundle(names):
    code=code.replace("require('./FunFX')",'(function()\n'+(ROOT/'src/FunFX.lua').read_text()+'\nend)()')
   if name=='DigCubeView':
    code=code.replace("require('./DigCube')",'(function()\n'+(ROOT/'src/DigCube.lua').read_text()+'\nend)()')
+   code=code.replace("require('./RockMesh')",'(function()\n'+(ROOT/'src/RockMesh.lua').read_text().replace('--!strict\n','')+'\nend)()')
   if name=='CrewView':
    code=code.replace("require('./CrewAbilities')",'(function()\n'+(ROOT/'src/CrewAbilities.lua').read_text()+'\nend)()')
   if name=='SaleView':

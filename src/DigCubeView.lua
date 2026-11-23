@@ -20,6 +20,7 @@
 --    (ROLE_FX below); the Lancer fires short pulse lasers (pulseShot)
 -- Nothing here uses Neon.
 local DigCube=require('./DigCube')
+local RockMesh=require('./RockMesh')
 local UIS=game:GetService('UserInputService')
 local Players=game:GetService('Players')
 local V={}
@@ -50,8 +51,12 @@ end
 --   jitter, vibrate: shakes; lift: extra rise with progress; ball: a growing
 --   bubble; halves: the final piece slides apart; flat: no tilt or turn;
 --   compress: shrinks toward the pivot; light: a heat glow; ice: Ice from there.
---  carve: the server carves the hole ahead (B, N, P, A): the proxy covers more
---   and a static collision copy holds the player up until the break.
+--  carve: historical (B, N, P, A carved ahead first); every role's piece is
+--   carved ahead now, grown to cover the cut over a static collision copy.
+--  mesh: what the RockMesh piece does (V:stepMesh): ripple={amp,len,speed
+--   (negative runs inward),square,glow,beat} while a beam cuts; bulge; hits
+--   (each jump in the work pops a chunk); charge (chunks pop from that share
+--   of the charge on) and tremble. Slams and pulses ring and pop by kernel.
 --  rubble: per/min/max pieces by area (or halves/grid), up/out/spin ranges,
 --   dark base, near (darker by the hit), dcap, scorch tone, count (per break),
 --   seed (thrown from the seed cell top) and the extras.
@@ -59,46 +64,46 @@ end
 --   it); sounds; light; hold class; streak lift/speed multipliers.
 local C3=Color3.fromRGB
 local ROLE_FX={
- L={proxy={},
+ L={proxy={mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
   rubble={per=2.2,min=1,max=6,up={10,15},out={4,8},spin={4,8},dark={.06,.2},near=.6,dcap=.85},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
- C={proxy={tone=C3(90,72,58),cap=.4,slam=true},
+ C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
   rubble={per=3.6,min=1,max=4,up={5,8},out={10,16},spin={2,4},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3},
   contact='Charger',sounds={{cue='breaker_fracture',pitch=.9},{cue='crystal_split',rock=9}},light=true,hold='heavy',lift=.7,speed=1.3},
- B={proxy={tone=C3(25,12,45),cap=.55,src='progress',tremble=.03},carve=true,
+ B={proxy={tone=C3(25,12,45),cap=.55,src='progress',tremble=.03,mesh={charge=.25,tremble=.05}},carve=true,
   rubble={per=4,min=2,max=4,up={18,26},out={2,5},spin={8,14},dark={.3,.4},near=.6,dcap=.9,scorch=C3(38,18,58)},
   sounds={{cue='crystal_split',pitch=.9}},hold='split',lift=1.4,speed=1},
- N={proxy={jitter={.01,.04}},carve=true,
+ N={proxy={jitter={.01,.04},mesh={hits=true}},carve=true,
   rubble={per=2.2,min=1,max=3,up={8,12},out={2,5},spin={6,10},dark={.05,.1},near=.15,dcap=.3},
   sounds={{cue='crystal_split',pitch=1.25,level=.7}},hold='piece',lift=1,speed=1},
- U={proxy={cap=.1,lift={.1,.4},ball=true},
+ U={proxy={cap=.1,lift={.1,.4},ball=true,mesh={ripple={amp=.07,len=3,speed=2.5,glow=.4},bulge=.3}},
   rubble={per=2.2,min=1,max=5,up={4,6},out={1,3},spin={2,4},dark={.02,.06},near=.1,dcap=.2,scorch=C3(200,240,245),float=.7},
   contact='Bubbler',sounds={{cue='crystal_split',pitch=.8}},light=true,hold='split',lift=1,speed=.8},
- H={proxy={halves=true},
+ H={proxy={halves=true,mesh={ripple={amp=.08,len=2,speed=5.5,glow=.5}}},
   rubble={halves=true,per=5,min=1,max=3,up={8,11},out={6,10},spin={3,5},dark={.06,.2},near=.6,dcap=.85},
   contact='Halver',sounds={{cue='crystal_split'}},light=true,hold='heavy',lift=.9,speed=1.1},
- G={proxy={flat=true},
+ G={proxy={flat=true,mesh={ripple={amp=.08,len=1.8,speed=4,square=true,glow=.6}}},
   rubble={grid=1.8,up={9,13},out={2,5},spin={1,3},dark={.1,.2},near=.3,dcap=.5},
   contact='Gridcutter',sounds={{cue='crystal_electric',pitch=.85,seq=.06}},light=true,hold='piece',lift=1,speed=1},
- Y={proxy={tone=C3(20,8,40),cap=.55,compress=.1},
+ Y={proxy={tone=C3(20,8,40),cap=.55,compress=.1,mesh={ripple={amp=.1,len=2.2,speed=-4.5,glow=.6}}},
   rubble={per=2.2,min=1,max=6,up={14,20},out={1,3},spin={6,10},dark={.2,.3},near=.6,dcap=.9,scorch=C3(20,8,32),implode=.12},
   contact='Singularity',sounds={{cue='crystal_impact',pitch=.76}},light=true,hold='heavy',lift=1.3,speed=.6},
- M={proxy={tone=C3(255,120,40),cap=.6,pow=1.5,light=true},
+ M={proxy={tone=C3(255,120,40),cap=.6,pow=1.5,light=true,mesh={ripple={amp=.07,len=2.8,speed=3,glow=.85,beat=1.4}}},
   rubble={per=2.2,min=1,max=5,up={6,9},out={3,6},spin={2,4},dark={.06,.2},near=.6,dcap=.85,molten=C3(255,150,60)},
   contact='Starforge',sounds={{cue='tool_sizzle',pitch=.87}},light=true,hold='split',lift=.8,speed=1},
- I={proxy={tone=C3(190,235,255),cap=1,pow=1,ice=.5},
+ I={proxy={tone=C3(190,235,255),cap=1,pow=1,ice=.5,mesh={ripple={amp=.06,len=2.6,speed=2.2,glow=.5,beat=1.2}}},
   rubble={per=1.2,min=2,max=8,count=24,up={9,13},out={6,10},spin={8,14},dark={.3,.4},near=0,dcap=.4,scorch=C3(190,235,255),glass=true,friction=.05},
   contact='Frostbite',sounds={{cue='crystal_snap',pitch=1.31},{cue='crystal_split',pitch=1.15}},light=true,hold='split',lift=1,speed=1.2},
- V={proxy={vibrate={.01,.06}},
+ V={proxy={vibrate={.01,.06},mesh={ripple={amp=.12,len=1.6,speed=7,glow=.6,beat=4}}},
   rubble={per=2.2,min=1,max=5,up={13,17},out={1,3},spin={1,2},dark={.06,.2},near=.6,dcap=.85,jitter=.12},
   contact='Resonator',sounds={{cue='coil_hit',pitch=1.19,seq=.12}},light=true,hold='split',lift=1,speed=1},
- P={proxy={tone=C3(12,6,10),cap=.9,src='late'},carve=true,
+ P={proxy={tone=C3(12,6,10),cap=.9,src='late',mesh={charge=.45,tremble=.06}},carve=true,
   rubble={per=1.6,min=1,max=6,count=30,up={12,16},out={6,10},spin={6,10},dark={.7,.8},near=.2,dcap=.9,scorch=C3(12,6,10),seed=true},
   sounds={{cue='crystal_split',rock=9}},hold='heavy',lift=1.2,speed=1.1},
- A={proxy={},carve=true,
+ A={proxy={mesh={charge=.45,tremble=.05}},carve=true,
   rubble={per=3,min=1,max=4,count=30,up={16,22},out={8,13},spin={6,12},dark={.1,.2},near=.5,dcap=.8,scorch=C3(30,26,24),seed=true},
   sounds={{cue='crystal_split',rock=9}},hold='heavy',lift=1.5,speed=1.2},
- Z={proxy={pulse=true},
+ Z={proxy={pulse=true,mesh={}},
   rubble={per=2.2,min=1,max=5,up={11,15},out={5,9},spin={4,8},dark={.1,.2},near=.5,dcap=.85,scorch=C3(60,40,20)},
   sounds={{cue='crystal_split',pitch=1.1}},hold='split',lift=1.1,speed=1.1},
 }
@@ -847,6 +852,7 @@ end
 function V:dropProxy(proxy: any)
  if proxy.dead then return end
  proxy.dead=true
+ if proxy.mesh then RockMesh.destroy(proxy.mesh);proxy.mesh=nil end
  proxy.model:Destroy()
  if proxy.aux then proxy.aux:Destroy() end
  for _,id in ipairs(proxy.ids) do if self.crackCells[id]==proxy then self.crackCells[id]=nil end end
@@ -859,77 +865,91 @@ function V:clearCracks()
  for _,job in pairs(self.cracks) do if job.proxy then self:dropProxy(job.proxy) end end
  self.cracks={};self.crackCells={}
 end
--- The piece as its own prisms, slightly grown so they cover the carved rock.
--- Roles whose hole the server carves ahead (ROLE_FX carve) grow it further
--- and add an invisible static copy the player stands on until the break.
+-- The piece, slightly grown so it covers the carved rock. Every role's hole
+-- is carved ahead now (the server cuts the piece a moment before its break,
+-- owner Nov 22: no gap between the break and the rubble), so every piece is
+-- grown to cover the cut and gets an invisible static copy the player stands
+-- on until the break. Drawn as ONE deformable mesh (RockMesh: ripples and
+-- popping chunks); the old wedge prisms are the fallback. The mesh is made
+-- off the frame (it yields); the real rock is still whole until the carve,
+-- so nothing shows a gap meanwhile.
+local PROXY_GROW=.3
+function V:proxyWedges(proxy: any,shapes: {any})
+ local o=self.origin
+ for _,c in ipairs(shapes) do
+  for _,w in ipairs(DigCube.polyWedges(c.grown,c.y0+.02,c.y1+.03)) do
+   local part=fxPart(proxy.model,'DigCrack',c.stone,'WedgePart')
+   part.CastShadow=true
+   part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+   part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+    Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+   table.insert(proxy.parts,{part=part,stone=c.stone,size=part.Size,side=c.side,base=CFrame.new(proxy.pivot):ToObjectSpace(part.CFrame)})
+  end
+ end
+ if proxy.iced then for _,e in ipairs(proxy.parts) do e.part.Material=Enum.Material.Ice end end
+ proxy.shade=-1
+end
 function V:buildProxy(piece: any,owned: boolean,chunk: {number},code: string?): any?
  local cube=self.cube;local o=self.origin
  local fx=ROLE_FX[code or 'L'] or ROLE_FX.L
  local pfx=fx.proxy
- local parts,ids={},{}
- local model=Instance.new('Model');model.Name='DigCrackPiece'
- local area,sx,sz,top,bottom=0,0,0,-math.huge,math.huge
+ local ids={}
  for _,id in ipairs(chunk) do
   if not cube.removed[id] and not self.crackCells[id] and not self.sealedIds[id] and not self.geodes[id] then table.insert(ids,id) end
  end
- if #ids==0 then model:Destroy();return nil end
- local grow=fx.carve and .32 or .03
+ if #ids==0 then return nil end
  -- Halver: the final piece in two halves along the chunk's split plane.
  local plane=pfx.halves and piece.final and DigCube.split(cube,chunk) or nil
  local shapes={}
+ local area,sx,sz,top,bottom=0,0,0,-math.huge,math.huge
+ local function add(poly: {{number}},c: any,side: number?)
+  local a,mx,mz=middle(poly)
+  if a<=.02 then return end
+  area+=a;sx+=mx*a;sz+=mz*a;top=math.max(top,c.y1);bottom=math.min(bottom,c.y0)
+  table.insert(shapes,{poly=poly,grown=DigCube.grown(poly,PROXY_GROW),y0=c.y0,y1=c.y1,side=side,stone=self:colorAt(c.y1-.01,mx,mz)})
+ end
  for _,c in ipairs(piece.shell or piece.parts) do
   if plane then
    for side=-1,1,2 do
     local half=cutPoly(c.poly,plane.cx,plane.cz,-side*plane.nx,-side*plane.nz)
-    if #half>=3 then table.insert(shapes,{poly=half,y0=c.y0,y1=c.y1,side=side}) end
+    if #half>=3 then add(half,c,side) end
    end
-  else
-   table.insert(shapes,c)
-  end
+  else add(c.poly,c,nil) end
  end
- local aux=nil
- for _,c in ipairs(shapes) do
-  local a,mx,mz=middle(c.poly)
-  if a>.02 then
-   area+=a;sx+=mx*a;sz+=mz*a;top=math.max(top,c.y1);bottom=math.min(bottom,c.y0)
-   local stone=self:colorAt(c.y1-.01,mx,mz)
-   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(c.poly,grow),c.y0+.02,c.y1+.03)) do
-    local part=fxPart(model,'DigCrack',stone,'WedgePart')
-    part.CastShadow=true
-    part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
-    part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
-     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
-    table.insert(parts,{part=part,stone=stone,size=part.Size,side=c.side})
-    if fx.carve then
-     -- The carved-ahead hole is held shut for players until the break.
-     if not aux then aux=Instance.new('Folder');aux.Name='DigCrackHold' end
-     local hold=fxPart(aux,'DigCrackFloor',stone,'WedgePart')
-     hold.Transparency=1;hold.CanCollide=true;hold.CanQuery=false;hold.CanTouch=false;hold.CollisionGroup='Default'
-     hold.Size=part.Size;hold.CFrame=part.CFrame
-    end
-   end
-  end
- end
- if area<=0 then model:Destroy();if aux then aux:Destroy() end;return nil end
- model.Parent=self.fx
+ if area<=0 then return nil end
+ local model=Instance.new('Model');model.Name='DigCrackPiece'
  local pivot=o+Vector3.new(sx/area,top,sz/area)
- for _,e in ipairs(parts) do e.base=CFrame.new(pivot):ToObjectSpace(e.part.CFrame) end
+ -- The carved-ahead hole is held shut for players until the break.
+ local aux=Instance.new('Folder');aux.Name='DigCrackHold'
+ for _,c in ipairs(shapes) do
+  for _,w in ipairs(DigCube.polyWedges(c.grown,c.y0+.02,c.y1+.03)) do
+   local hold=fxPart(aux,'DigCrackFloor',c.stone,'WedgePart')
+   hold.Transparency=1;hold.CanCollide=true;hold.CanQuery=false;hold.CanTouch=false;hold.CollisionGroup='Default'
+   hold.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
+   hold.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+    Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+  end
+ end
+ -- An invisible core at the pivot carries the lights and the outline's
+ -- Adornee model while the mesh is still being made.
+ local core=fxPart(model,'DigCrackCore',shapes[1].stone);core.Transparency=1;core.Size=Vector3.one*.05;core.CFrame=CFrame.new(pivot)
+ model.Parent=self.fx
  -- The old pulsing outline: your own crew's piece breathes an outline in
  -- the rock's own color, lifted toward white (owner, Nov 22: rock, not drone).
  local highlight
  if owned then
   highlight=Instance.new('Highlight');highlight.Name='DigTarget';highlight.DepthMode=Enum.HighlightDepthMode.Occluded
-  highlight.FillTransparency=1;highlight.OutlineColor=parts[1].stone:Lerp(Color3.new(1,1,1),.4)
+  highlight.FillTransparency=1;highlight.OutlineColor=shapes[1].stone:Lerp(Color3.new(1,1,1),.4)
   highlight.OutlineTransparency=.5;highlight.Adornee=model;highlight.Parent=model
  end
- local proxy={parts=parts,ids=ids,pivot=pivot,step=0,shade=0,joltAt=-10,model=model,highlight=highlight,since=os.clock(),outline=highlight and highlight.OutlineColor,
+ local proxy={parts={},ids=ids,pivot=pivot,step=0,shade=0,joltAt=-10,model=model,core=core,highlight=highlight,since=os.clock(),outline=highlight and highlight.OutlineColor,
   turn=self.random:NextNumber(.7,1)*(self.random:NextInteger(0,1)*2-1),tipAxis=self.random:NextNumber(0,math.pi*2),
-  fx=pfx,code=code,tone=pfx.tone or BLACK,seed=self.random:NextNumber(1,100),scale=1,progress=0,within=0,
+  fx=pfx,code=code,tone=pfx.tone or BLACK,seed=self.random:NextNumber(1,100),scale=1,progress=0,within=0,owned=owned,
+  primary=V.primaryColor(code),hit=Vector3.zero,pops=0,
   vibAxis=CFrame.Angles(0,self.random:NextNumber(0,math.pi*2),0).LookVector,
   normal=plane and Vector3.new(plane.nx,0,plane.nz) or nil,radius=math.sqrt(area/math.pi),thick=top-bottom}
  if pfx.ball then
   -- Bubbler: a glassy bubble grows inside the piece as it is worked.
-  if not aux then aux=Instance.new('Folder');aux.Name='DigCrackHold' end
   local ball=fxPart(aux,'DigBubble',V.primaryColor(code),'Part')
   ball.Shape=Enum.PartType.Ball;ball.Material=Enum.Material.Glass;ball.Transparency=.75;ball.Size=Vector3.one*.05
   ball.CFrame=CFrame.new(pivot-Vector3.yAxis*proxy.thick*.3)
@@ -938,11 +958,38 @@ function V:buildProxy(piece: any,owned: boolean,chunk: {number},code: string?): 
  if pfx.light then
   -- Starforge: the piece heats up and glows a little on the pit walls.
   local light=Instance.new('PointLight');light.Name='DigHeat';light.Shadows=false
-  light.Color=Color3.fromRGB(255,140,60);light.Range=8;light.Brightness=0;light.Parent=parts[1].part
+  light.Color=Color3.fromRGB(255,140,60);light.Range=8;light.Brightness=0;light.Parent=core
   proxy.light=light
  end
- if aux then aux.Parent=self.fx;proxy.aux=aux end
+ aux.Parent=self.fx;proxy.aux=aux
  for _,id in ipairs(ids) do self.crackCells[id]=proxy end
+ -- The deformable mesh (pivot-local shapes); wedges if meshes are off.
+ local meshShapes={}
+ for _,c in ipairs(shapes) do
+  local poly={}
+  for _,v in ipairs(c.grown) do table.insert(poly,{o.X+v[1]-pivot.X,o.Z+v[2]-pivot.Z}) end
+  table.insert(meshShapes,{poly=poly,y0=o.Y+c.y0+.02-pivot.Y,y1=o.Y+c.y1+.03-pivot.Y,color=c.stone,side=c.side})
+ end
+ if RockMesh.failed then
+  self:proxyWedges(proxy,shapes)
+ else
+  proxy.building=true
+  local random=function() return self.random:NextNumber() end
+  task.spawn(function()
+   local ok,rec=pcall(RockMesh.build,meshShapes,DigCube.voronoiSplit,random)
+   proxy.building=false
+   if proxy.dead then if ok and rec then RockMesh.destroy(rec) end;return end
+   if ok and rec then
+    proxy.mesh=rec;rec.part.Parent=model
+    if proxy.iced then rec.part.Material=Enum.Material.Ice end
+    proxy.shade=-1
+    self:poseProxy(proxy,os.clock())
+   else
+    self:proxyWedges(proxy,shapes)
+    self:poseProxy(proxy,os.clock())
+   end
+  end)
+ end
  return proxy
 end
 -- Where the piece sits at its current stage (plus the pop after a crack),
@@ -967,6 +1014,8 @@ function V:poseProxy(proxy: any,now: number)
   local u=now-proxy.pulseAt
   if u>=0 and u<.12 then lift-=.1*math.sin(math.pi*u/.12) end
  end
+ -- The mesh pops its own chunks, so the whole piece lifts a little less.
+ if proxy.mesh then lift*=.55 end
  local shake=Vector3.zero
  if not self:reduced() then
   local amp=s>1 and .035*math.clamp(proxy.within or 0,0,1) or 0
@@ -986,17 +1035,79 @@ function V:poseProxy(proxy: any,now: number)
  local scale=proxy.scale or 1
  local slide=0
  if proxy.normal and s>1 then slide=.18*(1-(1-math.clamp(t,0,1))^2) end
- for _,e in ipairs(proxy.parts) do
-  local base=scale~=1 and (e.base.Rotation+e.base.Position*scale) or e.base
-  if e.side and slide>0 then base=CFrame.new(proxy.normal*(e.side*slide))*base end
-  e.part.CFrame=pose*base
+ proxy.slideVec=slide>0 and proxy.normal*slide or nil
+ proxy.core.CFrame=pose
+ if proxy.mesh then
+  proxy.mesh.part.CFrame=pose
+ else
+  for _,e in ipairs(proxy.parts) do
+   local base=scale~=1 and (e.base.Rotation+e.base.Position*scale) or e.base
+   if e.side and slide>0 then base=CFrame.new(proxy.normal*(e.side*slide))*base end
+   e.part.CFrame=pose*base
+  end
  end
  if proxy.ball then proxy.ball.CFrame=CFrame.new(pose.Position-Vector3.yAxis*proxy.thick*.3) end
 end
 function V:shadeProxy(proxy: any,shade: number)
  if math.abs(shade-proxy.shade)<.01 then return end
  proxy.shade=shade
+ if proxy.mesh then RockMesh.shade(proxy.mesh,proxy.tone,shade);return end
  for _,e in ipairs(proxy.parts) do e.part.Color=e.stone:Lerp(proxy.tone,shade) end
+end
+-- The rock doing things while it is worked (RockMesh), the role's way
+-- (ROLE_FX proxy.mesh): beam roles send a pulsing ripple out from the beam's
+-- point with a glowing crest; slams and pulses send one shock ring and pop
+-- chunks out; darts pop the chunk they hit; charged shots and volleys make
+-- the rock shiver and pop chunks as the charge builds; every crack pops a
+-- few chunks loose. Your own pieces animate at 30 Hz, others' at 12 Hz.
+local MESH_DEFAULT={ripple={amp=.09,len=2.4,speed=4.5,glow=.5}}
+function V:stepMesh(proxy: any,now: number,cutting: boolean?)
+ local rec=proxy.mesh
+ if not rec or proxy.dead then return end
+ local reduced=self:reduced()
+ local m=proxy.fx.mesh or MESH_DEFAULT
+ local progress=math.clamp(proxy.progress or 0,0,1)
+ local kernel=DigCube.style(proxy.code).kernel
+ local random=self.random
+ -- Hits: a slam, a pulse, a dart (a jump in the work).
+ if proxy.slamAt and proxy.slamAt~=proxy.meshSlam then
+  proxy.meshSlam=proxy.slamAt
+  RockMesh.ring(rec,now,proxy.hit,reduced and .12 or .32,15,1.2,.55)
+  RockMesh.pop(rec,reduced and 1 or 3,1.3,now,random,'lift')
+ end
+ if proxy.pulseAt and proxy.pulseAt~=proxy.meshPulse then
+  proxy.meshPulse=proxy.pulseAt
+  RockMesh.ring(rec,now,proxy.hit,reduced and .08 or .22,20,.8,.85)
+  RockMesh.pop(rec,random:NextInteger(1,2),1,now,random,'pry')
+ end
+ local last=proxy.meshProgress or progress
+ proxy.meshProgress=progress
+ if m.hits and progress-last>=.02 then
+  local a=random:NextNumber(0,math.pi*2);local r=random:NextNumber(0,proxy.radius*.8)
+  RockMesh.pop(rec,1,.8,now,random,nil,Vector3.new(math.cos(a)*r,0,math.sin(a)*r))
+  RockMesh.ring(rec,now,proxy.hit,.06,10,.6,.4)
+ end
+ if m.charge then
+  -- Chunks work loose as the charge builds: none before m.charge, about
+  -- half the tiles by the end.
+  local want=math.floor(math.clamp((progress-m.charge)/(1-m.charge),0,1)*#rec.tiles*.5)
+  if want>proxy.pops then
+   proxy.pops+=1
+   RockMesh.pop(rec,1,.7+.6*progress,now,random)
+  end
+ end
+ -- Throttle the vertex work: your own at 30 Hz, others' at 12 Hz.
+ if now-(proxy.meshAt or -1)<(proxy.owned and 1/31 or 1/12) then return end
+ proxy.meshAt=now
+ local state={glowColor=proxy.primary:Lerp(Color3.new(1,1,1),.25),slide=proxy.slideVec,scale=proxy.scale}
+ if m.ripple and kernel=='beam' and cutting and not reduced then
+  local r=m.ripple
+  local beat=.7+.3*math.sin(now*math.pi*2*(r.beat or 2.2))
+  state.ripple={amp=r.amp*(.55+.45*math.clamp(proxy.within or 0,0,1))*beat,len=r.len,speed=r.speed,square=r.square,glow=r.glow,center=proxy.hit}
+ end
+ if m.bulge then state.bulge=m.bulge*progress end
+ if m.tremble and not reduced then state.tremble=m.tremble*progress*progress end
+ RockMesh.step(rec,now,state)
 end
 -- Called every frame per cutting drone with its chunk's progress. `key` is
 -- the chunk's ids string, `code` the role's style code (its pieces mode and
@@ -1022,6 +1133,9 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
  local step=index%CRACK_STEPS
  local cut=self.cutStage[key] or 0
  if k<=cut then k=cut+1;step=0;within=0;index=(k-1)*CRACK_STEPS end
+ -- A piece stays up (popped, straining) until its own break op: the server
+ -- carves it ahead, so the next piece must not show before that op lands.
+ if k>cut+1 then k=cut+1;step=CRACK_STEPS-1;within=1;index=(k-1)*CRACK_STEPS+step end
  local piece=job.pieces[k]
  if not piece then return end
  if job.proxy and (job.proxy.dead or job.piece~=k) then
@@ -1037,6 +1151,8 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
  local fx=proxy.fx
  progress=math.clamp(progress,0,1)
  proxy.progress=progress;proxy.within=within
+ local point=source and source:GetAttribute('DigPoint')
+ if typeof(point)=='Vector3' then proxy.hit=Vector3.new(point.X-proxy.pivot.X,0,point.Z-proxy.pivot.Z) end
  proxy.slamAt=job.slamAt;proxy.pulseAt=job.pulseAt
  if proxy.highlight then
   -- Pulses while the drone works on it (owner, Nov 22), a quick strong beat
@@ -1062,6 +1178,7 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
  if fx.ice and progress>=fx.ice and not proxy.iced then
   proxy.iced=true
   for _,e in ipairs(proxy.parts) do e.part.Material=Enum.Material.Ice end
+  if proxy.mesh then proxy.mesh.part.Material=Enum.Material.Ice end
  end
  if fx.compress then
   local scale=1-fx.compress*progress
@@ -1082,10 +1199,16 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
   end
  end
  self:poseProxy(proxy,now)
+ self:stepMesh(proxy,now,cutting)
 end
 function V:crackHit(proxy: any,step: number,k: number,hit: any)
  local point=proxy.pivot+Vector3.yAxis*(CRACK_LIFT[step+1]+.1)
  local volume=hit.owned and 1 or .55
+ if proxy.mesh then
+  local now=os.clock()
+  RockMesh.ring(proxy.mesh,now,proxy.hit,self:reduced() and .06 or .2,11,.9,.6)
+  RockMesh.pop(proxy.mesh,self:reduced() and 1 or 2+k,1.1,now,self.random,'pry')
+ end
  local ctx=self.ctx
  if ctx.crack then ctx.crack:playCrack(point) end
  if ctx.audio then
