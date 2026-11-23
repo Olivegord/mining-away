@@ -4,6 +4,10 @@
 
 # Owner requirements
 
+## November 22 — not every rock black; the split for select drones; smoother attacks
+
+"not every rock should be black. and the splitting rock effect should only be for select drones. also all three of your attacks have issues with choppy effects". Earlier in the pass: "the elbows of the electric look bad"; "the lens flare of the star is bad, there already exist lens flares in the files of the game".
+
 ## November 22 — three new attacks from references (crescent slash, wandering star, living lightning)
 
 Three reference images. "add these three as attacks, replacing old weaker ideas. the first one is a new novel idea. it attacks the rock with slashes at an angle. note the colors, the gaps in the arc, the gradient, and the particles on its edge. the second can replace an extraneous drone attack, it launches a meandering star with a feathery trail behind it, lens flare in tow. this stars impact can reuse one of the two effects currently just playing unused in the workplace, albeit toned down. finally, replace another extraneous drone with this lightning attack. this is objectively the trickiest in roblox because the lightning is NOT just a bunch of jagged purple beams. instead it seems alive, has angles yet is fluid, and ends in a cool electric shape". Follow-up: "for a feathered trail you can literally use a trail part with a feathered width curve".

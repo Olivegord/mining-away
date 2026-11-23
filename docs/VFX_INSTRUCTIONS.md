@@ -1,5 +1,12 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — char split only for big-chunk Strikers; smoother painted attacks
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md).
+- **Black rock / split:** every starter drone is a Striker, so the Striker's char split (piece darkens toward black, two charred halves fall open) ran on nearly every rock. Now only Strikers whose `DigChunkSize` is `large` or `huge` char and split (`ROLE_FX.Lc`, chosen per cell from the drone that cut it: `DigCubeView.charStriker`, `cellChar`, `V:roleFx`). Tiny/medium Strikers (`ROLE_FX.L`) cut the classic terraces with a light warm scorch (tone (112,84,62), cap .22) and plain rubble.
+- **Choppy attacks:** the crescent crossfades between twelve painted frames sampled from its key poses (was six hard swaps); the bolt drifts every frame (was quantized to 24 fps), with no 61 Hz width wobble, one crown per strike (no 14 fps flicker) and a gentle light flicker; the star's size twinkle is 7 Hz and ±6% (was 37 Hz ±12%); the gallery moves its star every frame (the display rocks still step at 30 fps). The Crescent shear, Stormcaller jolt and Starfall heave on the rock ease continuously instead of in steps.
+- Tests: rock chunks, dig cube, dig flow, fun FX and beam pass. Not seen in Play.
+
 ## November 22 — Crescent, Starfall and Stormcaller (painted attacks)
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Branch `codex/new-attacks`. Code: `src/StrikeArt.lua` (embedded in RoleEffectView by `tools/build.py`; the client bundle is at Luau's 200-local limit, so it is not a top-level module; DigCubeView uses `RoleEffectView.StrikeArt`).

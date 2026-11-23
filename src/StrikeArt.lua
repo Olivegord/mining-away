@@ -75,11 +75,23 @@ local NOTCH={{.09,.04,1.4},{.17,.03,.66},{.28,.055,.6},{.4,.045,.72},{.53,.05,.5
 local HOLES={{.24,.58,.03,.14},{.47,.6,.026,.12},{.62,.7,.02,.09}}
 -- k: crescent thickness, H: how far the leading tip has swept, T: how far
 -- the trailing end has dissolved, g: how much the gaps have widened.
-Art.SLASH_FRAMES={
+-- Key poses over the slash; the painted frames sample them evenly and the
+-- sheet crossfades between neighbouring frames (owner: "choppy effects").
+local SLASH_KEYS={
  {k=.42,H=.42,T=0,g=1,a=1,at=0},{k=.78,H=.74,T=0,g=1,a=1,at=.035},{k=1,H=1.06,T=0,g=1,a=1,at=.07},
  {k=1,H=1.06,T=.16,g=1.35,a=.95,at=.13},{k=.78,H=1.06,T=.42,g=1.8,a=.8,at=.2},{k=.55,H=1.06,T=.7,g=2.4,a=.58,at=.27},
+ {k=.4,H=1.06,T=.95,g=2.8,a=.35,at=.33},
 }
 Art.SLASH_LIFE=.34
+Art.SLASH_FRAMES={}
+for j=0,11 do
+ local at=j/11*.33
+ local i=1
+ while SLASH_KEYS[i+1] and SLASH_KEYS[i+1].at<=at do i+=1 end
+ local a,b=SLASH_KEYS[i],SLASH_KEYS[math.min(i+1,#SLASH_KEYS)]
+ local w=b.at>a.at and (at-a.at)/(b.at-a.at) or 0
+ table.insert(Art.SLASH_FRAMES,{k=lerp(a.k,b.k,w),H=lerp(a.H,b.H,w),T=lerp(a.T,b.T,w),g=lerp(a.g,b.g,w),a=lerp(a.a,b.a,w),at=at})
+end
 local function slashPixel(f,u,v)
  local x,y=u-.5,v-.5
  local rO=.41
@@ -213,8 +225,9 @@ function Art.newSlash(parent)
   gui.SizingMode=Enum.SurfaceGuiSizingMode.FixedSize;gui.CanvasSize=Vector2.new(256,256);gui.ClipsDescendants=false;gui.Enabled=false
   gui.ResetOnSpawn=false;gui.Adornee=sheet
   local img=Instance.new('ImageLabel');img.BackgroundTransparency=1;img.Size=UDim2.fromScale(1,1);img.Parent=gui
+  local nxt=Instance.new('ImageLabel');nxt.BackgroundTransparency=1;nxt.Size=UDim2.fromScale(1,1);nxt.ImageTransparency=1;nxt.Parent=gui
   gui.Parent=sheet
-  table.insert(rig.images,{gui=gui,img=img})
+  table.insert(rig.images,{gui=gui,img=img,nxt=nxt})
  end
  local seam=Instance.new('Part');seam.Name='CrescentSeam';seam.Anchored=true;seam.CanCollide=false;seam.CanTouch=false;seam.CanQuery=false
  seam.CastShadow=false;seam.Material=Enum.Material.Neon;seam.Transparency=1;seam.Size=Vector3.one*.05;seam.Parent=sheet
@@ -245,16 +258,22 @@ function Art.stepSlash(rig,now)
   for _,v in ipairs(rig.images) do v.gui.Enabled=false end
   return false
  end
+ local frames=Art.SLASH_FRAMES
  local index=1
- for i,f in ipairs(Art.SLASH_FRAMES) do if t>=f.at then index=i end end
- local tex=Art.tex('slash'..index)
+ for i,f in ipairs(frames) do if t>=f.at then index=i end end
+ local nextIndex=math.min(index+1,#frames)
+ local w=nextIndex>index and clamp01((t-frames[index].at)/(frames[nextIndex].at-frames[index].at)) or 0
+ local tex,texNext=Art.tex('slash'..index),Art.tex('slash'..nextIndex)
  if index~=rig.frame then
   rig.frame=index
   for _,v in ipairs(rig.images) do
    v.gui.Enabled=tex~=nil
    if tex then v.img.ImageContent=tex end
+   if texNext then v.nxt.ImageContent=texNext end
   end
  end
+ -- crossfade into the next painted frame
+ for _,v in ipairs(rig.images) do v.img.ImageTransparency=w*w;v.nxt.ImageTransparency=1-w end
  -- the sheet keeps turning a little through the cut
  local turn=rig.spin*math.rad(-14+30*smooth(0,Art.SLASH_LIFE,t))
  local L=rig.size
@@ -383,8 +402,8 @@ function Art.stepBolt(rig,now)
   for _,cap in pairs(rig.caps) do cap.rim.Enabled=false;cap.core.Enabled=false end
   return false
  end
- -- alive: the elbows drift smoothly, sampled at 24 fps so it stays crisp
- local q=math.floor(t*24)/24
+ -- alive: the elbows drift smoothly, every frame
+ local q=t
  local live=1-smooth(BOLT.HOLD,BOLT.LIFE,t)
  local reach=smooth(0,BOLT.GROW,t)
  local pts={}
@@ -408,7 +427,7 @@ function Art.stepBolt(rig,now)
  end
  local S=rig.scale
  local thin=lerp(.25,1,live)
- local wobble=1+.12*math.sin(t*61)
+ local wobble=1
  local function bend(i)
   if i<=1 or i>=#pts then return .35 end
   local a=(pts[i]-pts[i-1]);local b=(pts[i+1]-pts[i])
@@ -477,14 +496,14 @@ function Art.stepBolt(rig,now)
   local size=3.4*S*(.4+.8*pop)
   rig.crown.Size=UDim2.fromScale(size,size)
   rig.crownAt.WorldPosition=rig.to+Vector3.yAxis*size*.32
-  local crownKey='crown'..(1+(rig.variant+math.floor(t*14))%3)
+  local crownKey='crown'..rig.variant
   local crown=Art.tex(crownKey)
   if crown and rig.crownKey~=crownKey then
    rig.crownKey=crownKey;rig.crownImg.ImageContent=crown;rig.crownImg.ImageColor3=WHITE
   end
   rig.crownImg.ImageTransparency=fade
  end
- rig.light.Brightness=bit and (rig.owned and 2.4 or 1.2)*(1-smooth(BOLT.GROW,BOLT.HOLD+.1,t))*(1+.3*math.sin(t*90)) or 0
+ rig.light.Brightness=bit and (rig.owned and 2.4 or 1.2)*(1-smooth(BOLT.GROW,BOLT.HOLD+.1,t))*(1+.12*math.sin(t*18)) or 0
  return true
 end
 
@@ -565,7 +584,7 @@ function Art.stepStar(rig,from,to,age,windup,flight,seed,now)
   rig.on=true;rig.halo.Enabled=true;rig.flare.Enabled=true
  end
  local grow=charging and smooth(0,math.max(windup,.05),age) or 1
- local twinkle=1+.12*math.sin(now*37+seed)
+ local twinkle=1+.06*math.sin(now*7+seed)
  local flareSize=(1.6+3.4*grow)*twinkle
  rig.flare.Size=UDim2.fromScale(flareSize,flareSize)
  rig.halo.Size=UDim2.fromScale(flareSize*1.6,flareSize*1.6)

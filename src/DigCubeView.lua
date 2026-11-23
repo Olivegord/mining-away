@@ -76,7 +76,14 @@ local ROLE_FX={
  -- (owner, Nov 22: "the rock turns black, then splits in half with an
  -- angle"): it blackens as the beam works, then the chunk comes away as two
  -- charred halves hinged at its foot that fall open, then crumble.
- L={proxy={tone=C3(28,22,22),cap=.6,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
+ -- Owner follow-up: "not every rock should be black. and the splitting rock
+ -- effect should only be for select drones". Only the big-chunk Strikers
+ -- (DigChunkSize large/huge) char and split (Lc); the rest (L) cut the
+ -- classic terraces with a light warm scorch.
+ L={proxy={tone=C3(112,84,62),cap=.22,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
+  rubble={per=3,min=1,max=4,up={4,7},out={3,6},spin={2,4},dark={.02,.06},near=.1,dcap=.2},
+  contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
+ Lc={proxy={tone=C3(28,22,22),cap=.6,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
   rubble={char=true,per=3,min=1,max=4,up={2,5},out={3,6},spin={2,4},dark={.02,.08},near=.1,dcap=.3,charDark=.86},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
  C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
@@ -164,7 +171,7 @@ local function fxPart(parent: Instance,name: string,color: Color3,class: string?
 end
 
 function V.new(ctx: any)
- local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},cellCode={},cellAccent={},cutStage={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
+ local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},cellCode={},cellChar={},cellAccent={},cutStage={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
   generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={},localOpened={},sealedIds={},chains={},frost={},hints={},shots={},slashes={},bolts={}},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
@@ -248,7 +255,7 @@ function V:sync()
  local count=holder:GetAttribute('OpCount') or 0
  if generation~=self.generation then
   for _,f in ipairs(self.frags) do self:dropShard(f) end
-  self.frags={};self.mine={};self.cellColor={};self.cellCode={};self.cellAccent={};self.cutStage={}
+  self.frags={};self.mine={};self.cellColor={};self.cellCode={};self.cellChar={};self.cellAccent={};self.cutStage={}
   self.sealedIds={};self.chains={}
   self:clearCracks()
   self:clearFrost()
@@ -1300,7 +1307,7 @@ function V:proxyWedges(proxy: any,shapes: {any})
 end
 function V:buildProxy(piece: any,owned: boolean,chunk: {number},code: string?): any?
  local cube=self.cube;local o=self.origin
- local fx=ROLE_FX[code or 'L'] or ROLE_FX.L
+ local fx=self:roleFx(code,chunk[1])
  local pfx=fx.proxy
  local ids={}
  for _,id in ipairs(chunk) do
@@ -1466,6 +1473,17 @@ end
 -- chunks out; darts pop the chunk they hit; charged shots and volleys make
 -- the rock shiver and pop chunks as the charge builds; every crack pops a
 -- few chunks loose. Your own pieces animate at 30 Hz, others' at 12 Hz.
+-- The effects for a piece: a big-chunk Striker's cells char and split.
+local function charStriker(code: string?,source: Instance?): boolean
+ if code~='L' or not source then return false end
+ local size=source:GetAttribute('DigChunkSize')
+ return size=='large' or size=='huge'
+end
+V.charStriker=charStriker
+function V:roleFx(code: string?,cell: number?): any
+ if (code or 'L')=='L' and cell and self.cellChar and self.cellChar[cell] then return ROLE_FX.Lc end
+ return ROLE_FX[code or 'L'] or ROLE_FX.L
+end
 local MESH_DEFAULT={ripple={amp=.09,len=2.4,speed=4.5,glow=.5}}
 -- The crack pop, each role's own way (RockChunks.burst): how many chunks, how
 -- hard, pried up on an edge or lifted out, and its shock ring (speed < 0
@@ -1604,7 +1622,7 @@ do
    for _,c in ipairs(proxy.cuts) do
     local s=tile.cx*c.n.X+tile.cz*c.n.Z-c.off
     -- three stop-motion steps to slide, then it rests
-    local u=math.floor(math.clamp((now-c.at)/.12,0,1)*3+.001)/3
+    local u=math.clamp((now-c.at)/.16,0,1);u=1-(1-u)^3
     if s*c.side>0 then off+=c.d*(.38*u*c.side)+Vector3.new(0,-.14*u,0)+c.n*(.06*u*c.side) end
     local glow=1-math.clamp((now-c.at)/.45,0,1)
     if glow>0 and math.abs(s)<.5 then col=(col or tile.stone):Lerp(Color3.fromRGB(255,216,240),.55*glow) end
@@ -1632,7 +1650,7 @@ do
   if p<1 then proxy.landAt=nil;return nil end
   -- landed: the strike heaves the rock up and out in two quick steps
   proxy.landAt=proxy.landAt or now
-  local u=math.floor(math.clamp((now-proxy.landAt)/.2,0,1)*2+.001)/2
+  local u=math.clamp((now-proxy.landAt)/.22,0,1);u=1-(1-u)^3
   return function(tile)
    return Vector3.new(tile.cx*.22*u,.55*u,tile.cz*.22*u),nil,tile.stone:Lerp(Color3.fromRGB(40,50,110),.3*u)
   end
@@ -1659,7 +1677,7 @@ do
   local n=proxy.hits or 0
   local reach=1.1+.5*n
   local jolt=math.clamp(1-(now-(proxy.hitAt or -9))/.3,0,1)
-  local frame=math.floor(now*12)
+  local frame=now*9
   return function(tile,i)
    local k=math.clamp(1-dist(tile,h)/reach,0,1)
    if k<=0 then return nil end
@@ -1942,7 +1960,7 @@ function V:split(op: any,now: number)
  local center=o+Vector3.new(cx,(top+bottom)*.5,cz)
  -- The role that broke it sets the colors, the rubble and the beat.
  local style=self:opStyle(op)
- local fx=ROLE_FX[style.code] or ROLE_FX.L
+ local fx=self:roleFx(style.code,op.cells[1])
  local primary=V.primaryColor(style.code)
  local owned,accent=false,nil
  for _,id in ipairs(op.cells) do
@@ -1958,7 +1976,7 @@ function V:split(op: any,now: number)
   -- A nested stage leaves the chunk's cells (and who is cutting them) in
   -- place; so do the cells that sealed (their K beat still needs them).
   if not op.staged and not (op.except and op.except[id]) then
-   self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;self.cellAccent[id]=nil
+   self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;if self.cellChar then self.cellChar[id]=nil end;self.cellAccent[id]=nil
   end
  end
  accent=accent or primary
@@ -2117,7 +2135,7 @@ function V:sealBeat(op: any,now: number)
  for _,id in ipairs(op.cells) do
   self:clearCrack(id)
   if self.mine[id] then owned=true end
-  self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;self.cellAccent[id]=nil
+  self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;if self.cellChar then self.cellChar[id]=nil end;self.cellAccent[id]=nil
  end
  local c=self.cube.cells[op.cells[1]]
  if not c then return end
@@ -2999,6 +3017,7 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
   beam.key=key
   for _,cell in ipairs(DigCube.parseKey(ids)) do
    self.cellColor[cell]=primary;self.cellCode[cell]=code;self.cellAccent[cell]=edge
+   self.cellChar=self.cellChar or {};self.cellChar[cell]=charStriker(code,source) or nil
    if beam.mine then self.mine[cell]=true end
   end
  end
@@ -3698,6 +3717,20 @@ function V:stepShowcase(now: number)
   self:buildShowcase();self.showcase.generation=self.generation
  end
  local camera=workspace.CurrentCamera
+ -- The gallery star moves every frame (the rocks below step at 30 fps).
+ if StrikeArt and not self:reduced() then
+  for _,st in ipairs(self.showcase.stations) do
+   if st.def.code=='M' and (not camera or (camera.CFrame.Position-st.pivot).Magnitude<80) then
+    StrikeArt.prepare()
+    st.star=st.star or StrikeArt.newStar(self.showcase.root)
+    local t=now%SHOW_PERIOD
+    local from,to=st.pivot+Vector3.new(2,8,-1),st.pivot+Vector3.yAxis*.9
+    if t<SHOW_STAR.land then StrikeArt.stepStar(st.star,from,to,t,SHOW_STAR.charge,SHOW_STAR.flight,math.floor(now/SHOW_PERIOD)%7+.5,now)
+    else StrikeArt.hideStar(st.star) end
+   end
+  end
+  StrikeArt.stepImpacts(os.clock())
+ end
  if now-(self.showcase.stepAt or -1)<1/30 then return end
  self.showcase.stepAt=now
  local reduced=self:reduced()
@@ -3735,15 +3768,8 @@ function V:stepShowcase(now: number)
       self:boltShot(st.pivot+Vector3.new(1.5,9,0),st.pivot+Vector3.yAxis*.9+Vector3.new(math.random()-.5,0,math.random()-.5),false,.8,true)
      end
     end
-    if def.code=='M' and StrikeArt and not reduced then
-     -- a star charges above the rock, wanders down and bursts on it
-     StrikeArt.prepare()
-     st.star=st.star or StrikeArt.newStar(self.showcase.root)
-     local from,to=st.pivot+Vector3.new(2,8,-1),st.pivot+Vector3.yAxis*.9
-     if t<SHOW_STAR.land then StrikeArt.stepStar(st.star,from,to,t,SHOW_STAR.charge,SHOW_STAR.flight,cycle%7+.5,now)
-     else StrikeArt.hideStar(st.star) end
-     if once('star',SHOW_STAR.land) then StrikeArt.starImpact(self.showcase.root,to-Vector3.yAxis*.9,os.clock(),.8) end
-     StrikeArt.stepImpacts(os.clock())
+    if def.code=='M' and StrikeArt and not reduced and once('star',SHOW_STAR.land) then
+     StrikeArt.starImpact(self.showcase.root,st.pivot,os.clock(),.8)
     end
     proxy.progress=p
     local lift=proxy.sig.lift and proxy.sig.lift(p) or 0
