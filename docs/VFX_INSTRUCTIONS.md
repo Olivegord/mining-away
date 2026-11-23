@@ -1,5 +1,19 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — nothing reacts to a charge; what each attack leaves on the rock; the ore combo
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Extends the reaction rule below: **the rock reacts only once something touches it**, and **debris carries what the attack did to it** (burn smoke, embers, dust).
+- **Charging (server):** Ballcaster and Ramiel published their charge as `DigProgress`, so the rock swelled, charred and popped chunks before anything hit it. Now progress is 0 while charging. The Ballcaster's rock reacts only at the ball's break. Ramiel's beam burns the cluster from contact to the blast over `breakDelay` 0.4 s (was 0.12), which drives the char and lift.
+- **Spray and trails (`ROLE_FX.<code>.spray`, `.rubble.trail`, `specEmitter`):** plain particle specs. They are marked `Randomized`/`RoleParticle`, so the global randomizer's drag and the role particle look leave them as designed.
+  - Ramiel (a giant laser): rubble pattern `blast`, up 30–44, out 24–38 studs/s; 70 hot embers at 45–85 studs/s (low drag, gravity) plus 24 short ones; up to 12 pieces trail embers and dark smoke; `ramiel_blast` under the split; streaks lift ×1.8, speed ×2.2.
+  - Ballcaster: 26 purple sparks and 7 large, very faint (0.84) purple smoke puffs at the hit; up to 10 pieces trail a faint wide purple smoke, as if burnt.
+  - Charger: up to 8 pieces trail light dust.
+- **Ores (sealed gem cells):** the idle shiver steps on `RockChunks.FPS` (8 fps), amplitude 0.012–0.022 rad. The shell is tinted 22% toward its gem with reflectance 0.32, and four-point stars twinkle on it (3/s). About 25% rarer (`GEM_P_ORE` 0.30, `GEM_P_STONE` 0.026, about 0.95 per 1000 cubic studs).
+- **Crack particles:** dust-sized. Quick sparks 0.11, streaks 0.15, glitter 0.1, motes 0.09 (were 0.4/0.5/0.35/0.32); `GemReward`/`CrystalBreak` ×0.45/×0.5; streak fireworks ×0.9 (were ×2.4).
+- **Midair combo (`comboPower(n)` = min(1.4, 0.45 + 0.27(n−1))):** the first opening is toned down: a 4-frame freeze (was 8), no long bolts, 3 short ones, quieter crack, smaller shake, light, halo, rays and blast. Each next opening before you land: freeze +2 frames (max 14), one more long bolt (max 4), more short bolts, louder, brighter. Bounce 52 studs/s +10 a step (max 105, was a flat 62); walk speed +1.5 a step (max +8), taken back when the combo ends (0.25 s on the ground or 4 s idle).
+- Tests: rock chunks (Ramiel now checks a far blast), dig cube (new gem density), dig flow, beam, fun FX and geode suites pass. Not seen in Play.
+
+
 ## November 22 — reactions from the attack's physics; old Ramiel, Needler and Ballcaster back
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Branch `codex/rock-reactions`.

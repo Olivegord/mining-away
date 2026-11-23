@@ -465,7 +465,7 @@ do
  gemCount=gems
  gemDensity=gems/vol*1000
  gemRatio=(lowG/lowV)/(highG/highV)
- check(gemDensity>=1.1 and gemDensity<=1.45,'gems per 1000 cubic studs: '..gemDensity)
+ check(gemDensity>=.8 and gemDensity<=1.1,'gems per 1000 cubic studs: '..gemDensity)
  check(gemRatio>=.75 and gemRatio<=1.33,'gems per volume, smallest quarter of cells vs largest: '..gemRatio)
 end
 -- 7.1.6 Gem size bounds.

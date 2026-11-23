@@ -184,7 +184,7 @@ D.STYLES={
  -- Ramiel charges on its original 4.94 s clock (the glass rig's filmed beats);
  -- the bigger budget keeps its rate (cycle 3.7 s -> 6.0 s).
  Ramiel={code='P',kernel='volley',pick='ore',size='cluster',pieces='none',power=1,color={249,22,60},shape='Prism',carveAhead=true,oreBias=6,
-  volley={hover=10,charge=4.94,flight=.06,beamHold=.42,breakDelay=.12,recover=.5,budget=5.4,radius=9,maxCells=8,preferOre=true}},
+  volley={hover=10,charge=4.94,flight=.06,beamHold=.42,breakDelay=.4,recover=.5,budget=5.4,radius=9,maxCells=8,preferOre=true}},
  Nomad={code='A',kernel='volley',pick='cone',size='cluster',pieces='none',power=1,color={70,160,255},shape='Nomad',carveAhead=true,
   volley={hover=16,charge=2.2,flight=.95,breakDelay=0,recover=.4,budget=3.4,radius=5.5,maxCells=7,preferOre=false,blastRadius=4}},
  -- Pulse laser (owner's reference video): short punchy pulses, each bites a big piece out.
@@ -200,7 +200,8 @@ function D.style(roleOrCode: string?): any
  return roleOrCode and (D.STYLES[roleOrCode] or D.STYLES_BY_CODE[roleOrCode]) or D.STYLES.Striker
 end
 D.BRITTLE_BIAS=3;D.DEPTH_BITE=.35;D.SEAL_PER_BREAK=3;D.SEAL_LIVE=4
-D.GEM_P_ORE=.40;D.GEM_P_STONE=.035;D.GEM_VOL=77;D.GEM_VALUE_K=1.4
+-- A little rarer (owner, Nov 22): x.75, about 0.95 per 1000 cubic studs.
+D.GEM_P_ORE=.30;D.GEM_P_STONE=.026;D.GEM_VOL=77;D.GEM_VALUE_K=1.4
 
 -- Park-Miller generator: exact in doubles, identical on server and clients.
 function D.rng(seed: number)
@@ -1077,7 +1078,7 @@ end
 -- volume (clamped), so gems per volume dug are the same for every drone and
 -- every crack size. Ore cells hold their own ore; plain cells a tier by
 -- depth. Treasure pockets always hold TREASURE_GEMS gems of a rich tier.
--- About 0.098 per cell, 1.27 per 1000 cubic studs.
+-- About 0.074 per cell, 0.95 per 1000 cubic studs.
 function D.placeGems(cube: any,random: () -> number): {[number]:any}
  local gems={}
  local ores=#D.ORES

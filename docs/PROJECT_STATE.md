@@ -1,5 +1,14 @@
 # Shared project context
 
+## November 22 — no reaction while charging; laser and ball debris; ore combo
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). On `codex/rock-reactions`, installed by `tools/studio_apply.py`. Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md).
+- Rocks no longer react while a Ballcaster or Ramiel charges; Ramiel's beam burns the cluster for 0.4 s after contact before the blast.
+- Ramiel blows debris and hot embers far; Ballcaster leaves purple sparks and faint purple burn smoke on its debris.
+- Sealed gem cells shiver at 8 fps, are glossier and 25% rarer; their crack particles are dust-sized; chaining them midair raises bounce, walk speed, freeze length and electricity, starting from a toned-down first crack.
+- Not seen in Play.
+
+
 ## November 22 — rock reactions from the attack's physics; old Ramiel, Needler and Ballcaster back
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Built on `codex/rock-reactions`, merged into the integration branch and installed by `tools/studio_apply.py` (see `docs/studio-installed.json`). Not published. Details and the reaction table in [VFX instructions](VFX_INSTRUCTIONS.md).

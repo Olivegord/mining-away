@@ -609,9 +609,9 @@ do -- every role comes apart its own way
  -- Lancer: one direction
  local dir=lance[1].f.jet
  for _,x in ipairs(lance) do assert(v3(x.v.X,0,x.v.Z).Unit:Dot(dir)>.6,string.format('Lancer jets one way: v=%.1f,%.1f,%.1f dir=%.2f,%.2f pattern=%s',x.v.X,x.v.Y,x.v.Z,dir.X,dir.Z,tostring(x.f.pattern))) end
- -- Ramiel: held up, then slammed (stepShards)
- assert(ram[1].f.slam and ram[1].f.floatUntil,'Ramiel lifts then slams')
- print('PASS break dynamics: Charger shockwave ring, Ballcaster column, Needler crumble, Lancer jet, Ramiel lift-and-slam (not just recolors)')
+ -- Ramiel: a giant laser blows the rock far out (owner, Nov 22)
+ assert(mean(ram,function(x) return v3(x.v.X,0,x.v.Z).Magnitude end)>20 and mean(ram,function(x) return x.v.Y end)>25,'Ramiel blasts its rock far out')
+ print('PASS break dynamics: Charger shockwave ring, Ballcaster column, Needler crumble, Lancer jet, Ramiel far blast (not just recolors)')
 end
 assert(RockChunks.live==live0,'every piece removed its chunks: '..RockChunks.live)
 print('PASS DigCubeView pieces: chunks per piece, held until its op, crack pops all through the work, slam/pulse/dart/charge pops, Singularity squeeze, Frostbite ice, chunks removed (doubles; looks NOT verified)')

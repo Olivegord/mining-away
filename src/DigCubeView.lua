@@ -71,10 +71,16 @@ local ROLE_FX={
   rubble={per=2.2,min=1,max=6,up={10,15},out={4,8},spin={4,8},dark={.06,.2},near=.6,dcap=.85},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
  C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
-  rubble={per=3.6,min=1,max=4,up={46,60},out={4,8},spin={1.2,2.6},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3,pattern='ring'},
+  rubble={per=3.6,min=1,max=4,up={46,60},out={4,8},spin={1.2,2.6},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3,pattern='ring',
+   trail={{smoke=true,color=C3(176,166,152),tr={.78,1},size={.7,1.8},speed={.5,1},life={.6,1},rate=8,accel=1,most=8,stop=1}}},
   contact='Charger',quake=true,sounds={{cue='breaker_fracture',pitch=.78},{cue='crystal_split',rock=9},{cue='metal_land',pitch=.5,level=1.5}},light=true,hold='heavy',lift=2,speed=.8},
  B={proxy={tone=C3(25,12,45),cap=.55,src='progress',tremble=.03,mesh={charge=.25,tremble=.05}},carve=true,
-  rubble={per=4,min=2,max=4,up={24,34},out={2,5},spin={10,18},dark={.3,.4},near=.6,dcap=.9,scorch=C3(38,18,58),pattern='column'},
+  rubble={per=4,min=2,max=4,up={24,34},out={2,5},spin={10,18},dark={.3,.4},near=.6,dcap=.9,scorch=C3(38,18,58),pattern='column',
+   -- Burnt by the energy: each piece trails a faint, wide purple smoke.
+   trail={{smoke=true,color=C3(132,70,210),tr={.86,1},size={1.2,2.8},speed={.5,1.5},life={.9,1.4},rate=9,accel=1,most=10,stop=1.3}}},
+  -- The ball bursts: purple sparks and a wide, very faint purple smoke where it hit.
+  spray={{color={C3(246,226,255),C3(150,84,255)},tr={.1,1},size={.22,0},speed={9,20},life={.4,.9},drag=3,accel=-18,spread=80,count=26,light=.9},
+   {smoke=true,color=C3(120,64,200),tr={.84,1},size={2.4,5.5},speed={1,3},life={1.4,2.2},drag=1,accel=1.2,spread=180,count=7}},
   sounds={{cue='crystal_split',pitch=.9}},hold='split',lift=1.4,speed=1},
  N={proxy={cap=.15,mesh={hits=true}},carve=true,
   rubble={per=.9,min=2,max=6,up={0,2},out={0,1},spin={1,3},dark={.05,.1},near=.15,dcap=.3,pattern='crumble'},
@@ -101,8 +107,14 @@ local ROLE_FX={
   rubble={per=2.2,min=1,max=5,up={13,17},out={1,3},spin={1,2},dark={.06,.2},near=.6,dcap=.85,jitter=.12,pattern='waves'},
   contact='Resonator',sounds={{cue='coil_hit',pitch=1.19,seq=.12}},light=true,hold='split',lift=1,speed=1},
  P={proxy={tone=C3(12,6,10),cap=.9,src='late',mesh={charge=.45,tremble=.06}},carve=true,
-  rubble={per=1.6,min=1,max=6,count=30,up={4,6},out={1,3},spin={2,4},dark={.7,.8},near=.2,dcap=.9,scorch=C3(12,6,10),seed=true,pattern='levitate'},
-  sounds={{cue='crystal_split',rock=9}},hold='heavy',lift=1.2,speed=1.1},
+  -- A giant laser (owner, Nov 22): the burnt rock is blown far out of the
+  -- hit, smoking and shedding embers, and a spray of hot embers flies far.
+  rubble={per=1.6,min=1,max=6,count=30,up={30,44},out={24,38},spin={6,12},dark={.7,.8},near=.2,dcap=.9,scorch=C3(12,6,10),seed=true,pattern='blast',
+   trail={{color={C3(255,236,214),C3(255,70,100)},tr={0,1},size={.16,0},speed={1,3},life={.3,.6},rate=24,accel=-10,most=12,stop=1.1,light=1},
+    {smoke=true,color=C3(40,30,34),tr={.7,1},size={.6,1.8},speed={.5,1},life={.6,1},rate=10,accel=2,most=12,stop=1.4}}},
+  spray={{color={C3(255,250,240),C3(255,80,110),C3(90,20,30)},tr={0,1},size={.24,0},speed={45,85},life={.9,1.7},drag=.5,accel=-30,spread=75,count=70,light=1},
+   {color={C3(255,220,230),C3(255,60,96)},tr={.1,1},size={.5,0},speed={18,34},life={.4,.8},drag=2,accel=-10,spread=180,count=24,light=1}},
+  sounds={{cue='crystal_split',rock=9},{cue='ramiel_blast',level=.75}},hold='heavy',lift=1.8,speed=2.2},
  A={proxy={mesh={charge=.45,tremble=.05}},carve=true,
   rubble={per=3,min=1,max=4,count=30,up={18,26},out={16,26},spin={10,18},dark={.1,.2},near=.5,dcap=.8,scorch=C3(30,26,24),seed=true,pattern='blast'},
   sounds={{cue='crystal_split',rock=9}},hold='heavy',lift=1.5,speed=1.2},
@@ -350,8 +362,46 @@ end
 -- (RockChunks.FPS); a ring of dust rolls out along the ground. The final
 -- break sends a wider, taller one with a dust column. Your own slams also
 -- clang (metal) and hit the camera; other players' are smaller and quieter.
+local BLACK_SPRAY=Color3.new(0,0,0)
 local WAVE_MAX,WAVE_UP=4,.4 -- live waves; seconds each slab is out
 local DUST_TEXTURE='rbxasset://textures/particles/smoke_main.dds'
+local CIRCLE_TEXTURE='rbxasset://textures/ui/VR/circleWhite.png'
+-- A particle look from a plain spec (ROLE_FX spray and rubble trails):
+-- {smoke, color (one or a gradient list), tr, size, speed, life (pairs),
+-- drag, accel (up), spread, rate, light}. Marked so the global randomizer
+-- and the role particle look leave it as designed: these keep their speed
+-- (a laser's embers really do fly far).
+local function specEmitter(parent: Instance,spec: any): ParticleEmitter
+ local e=Instance.new('ParticleEmitter');e.Name=spec.smoke and 'Smoke' or 'Embers'
+ e:SetAttribute('Randomized',true);e:SetAttribute('RoleParticle',true)
+ e.Enabled=false;e.Rate=spec.rate or 0
+ e.Texture=spec.smoke and DUST_TEXTURE or CIRCLE_TEXTURE
+ local c=spec.color
+ if typeof(c)=='Color3' then e.Color=ColorSequence.new(c)
+ else
+  local keys={}
+  for i,col in ipairs(c) do table.insert(keys,ColorSequenceKeypoint.new((i-1)/math.max(1,#c-1),col)) end
+  e.Color=ColorSequence.new(keys)
+ end
+ e.Transparency=NumberSequence.new(spec.tr[1],spec.tr[2])
+ e.Size=NumberSequence.new(spec.size[1],spec.size[2])
+ e.Speed=NumberRange.new(spec.speed[1],spec.speed[2]);e.Lifetime=NumberRange.new(spec.life[1],spec.life[2])
+ e.Drag=spec.drag or 0;e.Acceleration=Vector3.new(0,spec.accel or 0,0)
+ e.SpreadAngle=Vector2.new(spec.spread or 180,spec.spread or 180);e.EmissionDirection=Enum.NormalId.Top
+ e.LightEmission=spec.light or 0;e.LightInfluence=spec.light and 0 or 1
+ e.Rotation=NumberRange.new(0,360);e.RotSpeed=NumberRange.new(-60,60)
+ e.Parent=parent
+ return e
+end
+-- A break's spray (ROLE_FX.spray): what the attack throws out of the rock.
+function V:spray(at: Vector3,specs: {any},owned: boolean)
+ if self:reduced() then return end
+ local anchor=fxPart(self.fx,'DigSpray',BLACK_SPRAY);anchor.Transparency=1;anchor.Size=Vector3.one*.4;anchor.Position=at+Vector3.yAxis*.3
+ for _,spec in ipairs(specs) do
+  specEmitter(anchor,spec):Emit(math.floor(spec.count*(owned and 1 or .45)))
+ end
+ task.delay(3,function() anchor:Destroy() end)
+end
 function V:shockwave(at: Vector3,owned: boolean,big: boolean)
  if self:reduced() then return end
  self.waves=self.waves or {}
@@ -833,6 +883,22 @@ function V:releaseShard(f: any)
   primary.AssemblyAngularVelocity=Vector3.new(r:NextNumber(-1,1),r:NextNumber(-1,1),r:NextNumber(-1,1)).Unit*r:NextNumber(fx.spin[1],fx.spin[2])
  end
  if fx.float then f.floatUntil=os.clock()+fx.float end
+ -- What the attack left on the rock flies with it (smoke, embers, dust).
+ if fx.trail and not self:reduced() then
+  self.trailCount=self.trailCount or {}
+  for i,spec in ipairs(fx.trail) do
+   local key=tostring(fx)..i
+   local n=self.trailCount[key] or 0
+   if n<(spec.most or 8) then
+    self.trailCount[key]=n+1
+    local e=specEmitter(primary,spec);e.Enabled=true
+    task.delay(spec.stop or 1.2,function()
+     e.Enabled=false
+     if self.trailCount[key] then self.trailCount[key]=math.max(0,self.trailCount[key]-1) end
+    end)
+   end
+  end
+ end
 end
 -- Held in place before the release: a Singularity piece pulls toward the
 -- middle (it starts smaller), a Resonator piece shivers.
@@ -965,7 +1031,10 @@ end
 -- Shorter (owner, Nov 22: the pause was too long): about 5-8 frames is a
 -- medium hit; past ~20 reads as a bug.
 local HOLD_PIECE,HOLD_SPLIT,HOLD_HEAVY,HOLD_GEM=1/60,2/60,3/60,6/60
-local HOLD_GEODE=8/60 -- the full-game freeze after you land on a sealed gem
+local HOLD_GEODE_FRAMES=4 -- the full-game freeze after you land on a sealed gem (the first of a combo)
+-- How hard a gem opening hits, by its place in a midair combo: the first is
+-- toned down (owner, Nov 22), each next one more.
+local function comboPower(n: number): number return math.min(1.4,.45+.27*(n-1)) end
 local FLASH=Color3.fromRGB(255,249,216)
 local FLASH_FADE=.2
 -- Every break lights the whole segment that is coming out in the color of
@@ -1791,7 +1860,11 @@ function V:split(op: any,now: number)
  if owned and not self:reduced() and (op.tier>0 or now-(self.heldAt or -10)>=(op.partial and .9 or .3)) then
   -- A gem always gets the long pause; otherwise the role's hold class.
   local class=fx.hold
-  if op.geode then hold=HOLD_GEODE
+  if op.geode then
+   -- Longer with each gem opened midair (owner, Nov 22: "more of the
+   -- electricity and delay"): 4 frames for the first, +2 a step, up to 14.
+   local next=os.clock()-(self.comboAt or -10)>4 and 1 or (self.combo or 0)+1
+   hold=math.min(14,HOLD_GEODE_FRAMES+2*(next-1))/60
   elseif op.tier>0 then hold=HOLD_GEM
   elseif op.partial then hold=HOLD_PIECE
   elseif link then hold=0
@@ -1806,6 +1879,8 @@ function V:split(op: any,now: number)
  -- and bounces you straight up.
  local gem=op.tier>0 and rgb(DigCube.ORES[math.clamp(op.tier,1,#DigCube.ORES)].color) or nil
  local tense=op.geode and owned and hold>0
+ local combo=tense and self:geodeCombo() or 1
+ if tense then self.comboPower=comboPower(combo) end
  if tense then
   -- The freeze reads as tension, not lag: the sealed cell keeps shaking
   -- (hard at first, settling), its cracks blaze up, the rays flare, a deep
@@ -1814,8 +1889,9 @@ function V:split(op: any,now: number)
   -- The loudest crack cuts (the large rock pool), at full level, with the
   -- crystal crack and a heavy impact under them, on the very first frame.
   if self.ctx.audio then
-   self.ctx.audio:play('crystal_split',center,{level=1.7,rockSize=9})
-   self.ctx.audio:play('crystal_impact',center,{pitch=.8,level=1.4,rockSize=9})
+   local power=self.comboPower or 1
+   self.ctx.audio:play('crystal_split',center,{level=.6+.8*power,rockSize=9})
+   self.ctx.audio:play('crystal_impact',center,{pitch=.8,level=.5+.65*power,rockSize=9})
   end
   if self.ctx.crack then self.ctx.crack:playCrack(center) end
   if self.ctx.freeze then
@@ -1827,9 +1903,8 @@ function V:split(op: any,now: number)
   -- Jumping from one sealed gem to the next without touching the ground
   -- is a combo: each crack after the pause rings a step higher (owner,
   -- Nov 22). stepGeodes resets it once you stand on solid ground.
-  local combo=tense and self:geodeCombo() or 1
   table.insert(self.pending,{at=now+hold,run=function()
-   self:dropGeode(id);self:bounce(at)
+   self:dropGeode(id);self:bounce(at,combo)
    local audio=self.ctx.audio
    local pitch=math.min(2.2,1+.12*(combo-1))
    if audio then
@@ -2058,6 +2133,7 @@ function V:burst(op: any,e: any)
  -- A gem bursts out with the rock, not after it, and its color takes over.
  if gem then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk,owned=e.owned,op=op},os.clock()) end
  if not lively then return end
+ if not gem and fx.spray then self:spray(e.point,fx.spray,e.owned) end
  if not gem and fx.quake then
   -- Weight, not heat: a wide shockwave and dust, no spark discs.
   self:shockwave(e.point,e.owned,true)
@@ -2219,11 +2295,12 @@ function V:buildGeode(id: number,tier: number)
  for _,poly in ipairs(polys) do
   local _,mx,mz=middle(poly)
   local mid=o+Vector3.new(mx,(c.y0+c.y1)*.5+.04,mz)
-  local stone=self:colorAt(c.y1-.01,mx,mz):Lerp(SHARD_DARK,self.random:NextNumber(.05,.22))
+  -- Shiny (owner, Nov 22): the shell is tinted toward its gem and glossy.
+  local stone=self:colorAt(c.y1-.01,mx,mz):Lerp(SHARD_DARK,self.random:NextNumber(.05,.22)):Lerp(color,.22)
   local inverse=CFrame.new(mid):Inverse()
   local parts={}
   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(poly,.02),c.y0+.02,c.y1+.08)) do
-   local part=fxPart(model,'GeodePiece',stone,'WedgePart');part.CastShadow=true;part.Material=ROCK;part.MaterialVariant=ROCK_VARIANT
+   local part=fxPart(model,'GeodePiece',stone,'WedgePart');part.CastShadow=true;part.Material=Enum.Material.SmoothPlastic;part.Reflectance=.32
    local size=Vector3.new(w.size[1],w.size[2],w.size[3])
    local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
@@ -2268,6 +2345,15 @@ function V:buildGeode(id: number,tier: number)
   glints.Lifetime=NumberRange.new(.22,.45);glints.Speed=NumberRange.new(3,7);glints.SpreadAngle=Vector2.new(70,70)
   glints.EmissionDirection=Enum.NormalId.Top;glints.Acceleration=Vector3.new(0,-14,0);glints.Drag=2
   glints.Shape=Enum.ParticleEmitterShape.Box;glints.Rate=10;glints.Parent=anchor
+  -- Four-point stars twinkling on the shell: it reads as precious.
+  local twinkle=Instance.new('ParticleEmitter');twinkle.Name='GeodeTwinkle'
+  twinkle:SetAttribute('Randomized',true);twinkle:SetAttribute('RoleParticle',true)
+  twinkle.Texture='rbxasset://textures/particles/sparkles_main.dds'
+  twinkle.Color=ColorSequence.new(Color3.new(1,1,1),color:Lerp(Color3.new(1,1,1),.5))
+  twinkle.LightEmission=1;twinkle.LightInfluence=0;twinkle.Brightness=2.4
+  twinkle.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.45,.75),NumberSequenceKeypoint.new(1,0)})
+  twinkle.Lifetime=NumberRange.new(.28,.45);twinkle.Speed=NumberRange.new(0,0);twinkle.Rotation=NumberRange.new(0,90);twinkle.RotSpeed=NumberRange.new(-40,40)
+  twinkle.Shape=Enum.ParticleEmitterShape.Box;twinkle.Rate=3;twinkle.Parent=anchor
   -- A soft halo over the cell, breathing with the glow.
   local halo=Instance.new('BillboardGui');halo.Name='GeodeHalo';halo.LightInfluence=0;halo.Brightness=1.4
   local size=math.max(4,c.radius*3.4);halo.Size=UDim2.fromScale(size,size);halo.MaxDistance=140;halo.Parent=anchor
@@ -2313,9 +2399,12 @@ function V:stepGeodes(now: number)
   -- A fast, tight shiver (owner, Nov 22: less displacement, faster), a
   -- little stronger the longer it waits.
   local eager=math.clamp(age/3,0,1)
-  local amp=still and 0 or .007+.007*eager
+  -- On the rock chunks' stop-motion grid (owner, Nov 22): one new pose per
+  -- 8 fps frame, a touch bigger so each step reads.
+  local amp=still and 0 or .012+.01*eager
+  local frameNow=math.floor(now*RockChunks.FPS)/RockChunks.FPS
   for i,piece in ipairs(g.pieces) do
-   local t=now*(30+14*eager)
+   local t=frameNow*(30+14*eager)
    local rx=math.noise(t,i*3.1,.5)*2;local rz=math.noise(i*1.7,t,.25)*2
    local dy=math.noise(t,.75,i*2.3)*amp*1.5
    local frame=CFrame.new(piece.mid+Vector3.yAxis*dy)*CFrame.Angles(rx*amp,0,rz*amp)
@@ -2360,7 +2449,12 @@ function V:geodeCombo(): number
  return self.combo
 end
 function V:stepCombo(now: number)
- if (self.combo or 0)==0 then return end
+ if (self.combo or 0)>0 and now-(self.comboAt or -10)>4 then self.combo=0 end
+ if (self.combo or 0)==0 then
+  if self.walkBonus then self:endWalkBonus() end
+  self.comboPower=nil
+  return
+ end
  local character=Players.LocalPlayer and Players.LocalPlayer.Character
  local humanoid=character and character:FindFirstChildOfClass('Humanoid')
  local grounded=humanoid~=nil and humanoid.FloorMaterial~=Enum.Material.Air
@@ -2399,6 +2493,8 @@ end
 -- for a few seconds. The real rubble replaced the tumbling stand-ins.
 function V:geodeBlast(at: Vector3,ground: number,color: Color3,light: Color3,tier: number,weight: number,serverNow: number)
  local ctx=self.ctx
+ -- Fewer on the first opening of a combo, more each step.
+ weight*=self.comboPower or 1
  local holder=fxPart(self.fx,'GeodeBlast',color);holder.Transparency=1;holder.Size=Vector3.new(2,1,2);holder.Position=at
  local function emitter(name: string): ParticleEmitter
   local p=Instance.new('ParticleEmitter');p.Name=name;p.Enabled=false;p.Rate=0;p.LightInfluence=0
@@ -2406,7 +2502,8 @@ function V:geodeBlast(at: Vector3,ground: number,color: Color3,light: Color3,tie
   return p
  end
  local quick=emitter('QuickSparks')
- EnergyDisc.configure(quick,.4,.05,1,0,.35)
+ -- Dust-sized (owner, Nov 22: "a LOT smaller, more like dust").
+ EnergyDisc.configure(quick,.11,.05,1,0,.35)
  quick.LightEmission=1;quick.Brightness=2.4;quick.Color=ColorSequence.new(light,color)
  quick.Lifetime=NumberRange.new(.18,.4);quick.Speed=NumberRange.new(30,55);quick.SpreadAngle=Vector2.new(180,180)
  quick.Drag=4;quick.Acceleration=Vector3.new(0,-20,0)
@@ -2415,19 +2512,19 @@ function V:geodeBlast(at: Vector3,ground: number,color: Color3,light: Color3,tie
  streaks.Texture='rbxasset://textures/particles/sparkles_main.dds';streaks.LightEmission=1;streaks.Brightness=2
  streaks.Color=ColorSequence.new(Color3.new(1,1,1),color);streaks.Squash=NumberSequence.new(-2.2)
  streaks.Orientation=Enum.ParticleOrientation.VelocityParallel
- streaks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.5),NumberSequenceKeypoint.new(1,0)})
+ streaks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(1,0)})
  streaks.Lifetime=NumberRange.new(.3,.55);streaks.Speed=NumberRange.new(24,40);streaks.SpreadAngle=Vector2.new(180,180);streaks.Drag=3
  streaks:Emit(math.floor(36*weight))
  local linger=emitter('LingeringGlitter')
  linger.Texture='rbxasset://textures/particles/sparkles_main.dds';linger.LightEmission=1;linger.Brightness=1.6
  linger.Color=ColorSequence.new(light,color)
- linger.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.1,.35),NumberSequenceKeypoint.new(.8,.25),NumberSequenceKeypoint.new(1,0)})
+ linger.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.1,.1),NumberSequenceKeypoint.new(.8,.07),NumberSequenceKeypoint.new(1,0)})
  linger.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(.7,.2),NumberSequenceKeypoint.new(1,1)})
  linger.Lifetime=NumberRange.new(2.4,4.2);linger.Speed=NumberRange.new(6,16);linger.SpreadAngle=Vector2.new(180,180)
  linger.Drag=3.2;linger.Acceleration=Vector3.new(0,-.8,0);linger.Rotation=NumberRange.new(0,360);linger.RotSpeed=NumberRange.new(-120,120)
  linger:Emit(math.floor(70*weight))
  local motes=emitter('LingeringMotes')
- EnergyDisc.configure(motes,.32,.2,1,.2,.3)
+ EnergyDisc.configure(motes,.09,.2,1,.2,.3)
  motes.LightEmission=.9;motes.Brightness=1.5;motes.Color=ColorSequence.new(color)
  motes.Lifetime=NumberRange.new(1.8,3.2);motes.Speed=NumberRange.new(4,10);motes.SpreadAngle=Vector2.new(180,180)
  motes.Drag=2.5;motes.Acceleration=Vector3.new(0,1.2,0)
@@ -2437,14 +2534,14 @@ function V:geodeBlast(at: Vector3,ground: number,color: Color3,light: Color3,tie
  if ctx.effects then
   for i,delay in ipairs({.06,.18}) do
    task.delay(delay,function()
-    ctx.effects.ImpactParticles(at+Vector3.yAxis*(.4*i),i==1 and color or light,k*1.2,'GemReward')
+    ctx.effects.ImpactParticles(at+Vector3.yAxis*(.4*i),i==1 and color or light,k*.45,'GemReward')
     ctx.effects.Pulse(Vector3.new(at.X,ground+.1+i*.05,at.Z),i==1 and light or color,.5,(6+tier*2+i*3)*weight,.5+.1*i)
    end)
   end
-  ctx.effects.ImpactParticles(at,light,k*1.4,'CrystalBreak',nil,color,nil,1.3)
+  ctx.effects.ImpactParticles(at,light,k*.5,'CrystalBreak',nil,color,nil,1.3)
  end
  if ctx.impact then
-  ctx.impact:fireworks(at,ground,color,(1.4+tier*.15)*2.4*weight,serverNow,16)
+  ctx.impact:fireworks(at,ground,color,(1.4+tier*.15)*.9*weight,serverNow,16)
  end
 end
 -- The sealed cell during the full-game freeze (u: 0 at the landing, 1 at
@@ -2457,7 +2554,8 @@ function V:tenseGeode(id: number,u: number)
  if not g then return end
  -- Frantic (owner, Nov 22): a big, fast, random shake every frame for the
  -- whole freeze, easing only a little toward the break.
- local amp=.17*(1-.35*u)
+ local power=self.comboPower or 1
+ local amp=.17*(1-.35*u)*(.45+.4*power)
  local t=os.clock()*97
  for i,piece in ipairs(g.pieces) do
   local out=Vector3.new(piece.mid.X-g.center.X,0,piece.mid.Z-g.center.Z)
@@ -2479,21 +2577,22 @@ function V:tenseGeode(id: number,u: number)
   local holder=g.model and g.model:FindFirstChild('GeodeTop')
   if holder then light.Parent=holder;g.hitLight=light end
  end
- if g.hitLight then g.hitLight.Brightness=3*(1-.3*u) end
+ if g.hitLight then g.hitLight.Brightness=3*(1-.3*u)*power;g.hitLight.Range=10+6*power end
  self:arcs(g,u)
  if g.halo then
   g.halo.ImageTransparency=.15-.15*u
   local gui=g.halo.Parent
   if gui and gui:IsA('BillboardGui') then
    g.haloSize=g.haloSize or gui.Size
-   gui.Size=UDim2.fromScale(g.haloSize.X.Scale*(1.6+.6*u),g.haloSize.Y.Scale*(1.6+.6*u))
+   local grow=1+(.6+.6*u)*power
+   gui.Size=UDim2.fromScale(g.haloSize.X.Scale*grow,g.haloSize.Y.Scale*grow)
   end
  end
  for _,ray in ipairs(g.rays or {}) do
   if ray.dir and ray.base then
    ray.beam.Enabled=true
    ray.beam.Width1=.75*(1.6+1.4*u)
-   ray.tip.WorldPosition=ray.base+ray.dir*(ray.length or 3)*(2.4+2.1*u)
+   ray.tip.WorldPosition=ray.base+ray.dir*(ray.length or 3)*(1+(1.4+2.1*u)*power)
    ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35-.3*u),NumberSequenceKeypoint.new(.4,.55-.3*u),NumberSequenceKeypoint.new(1,1)})
   end
  end
@@ -2510,8 +2609,9 @@ function V:arcs(g: any,u: number)
  if not set or set.geode~=g then
   if set then set.anchor:Destroy() end
   local anchor=fxPart(self.fx,'GeodeArcs',g.color or FLASH);anchor.Transparency=1;anchor.Size=Vector3.one*.05;anchor.Position=g.center
+  local power=self.comboPower or 1
   local bolts={}
-  for b=1,ARC_COUNT do
+  for b=1,math.clamp(math.floor(1.5+2.6*power+.5),2,ARC_COUNT+2) do
    local points={}
    for i=0,ARC_SEGMENTS do local a=Instance.new('Attachment');a.Parent=anchor;points[i]=a end
    local beams={}
@@ -2526,7 +2626,8 @@ function V:arcs(g: any,u: number)
   end
   -- 1-4 extra long bolts, each in its own random direction for this hit.
   local long={}
-  for _=1,self.random:NextInteger(1,4) do
+  -- None on the first opening of a combo, then one more each step (max 4).
+  for _=1,math.clamp(math.floor((power-.45)/.27+.5),0,4) do
    local points={}
    for i=0,LONG_SEGMENTS do local a=Instance.new('Attachment');a.Parent=anchor;points[i]=a end
    local beams={}
@@ -2596,14 +2697,31 @@ function V:stepArcs(now: number)
  end
 end
 -- Straight up when your sealed gem breaks under you (client-owned physics).
-function V:bounce(at: Vector3)
+-- Each gem opened midair bounces you higher and walks you a little faster
+-- (owner, Nov 22): 52 studs/s up, +10 a step (max 105), and +1.5 walk
+-- speed a step (max +8) until the combo ends (stepCombo takes it back).
+local BOUNCE_BASE,BOUNCE_STEP,BOUNCE_MAX=52,10,105
+local SPEED_STEP,SPEED_MAX=1.5,8
+function V:bounce(at: Vector3,combo: number?)
  local character=Players.LocalPlayer and Players.LocalPlayer.Character
  local root=character and character:FindFirstChild('HumanoidRootPart')
  if not root or not root:IsA('BasePart') then return end
  local offset=root.Position-at
  if Vector3.new(offset.X,0,offset.Z).Magnitude>9 or math.abs(offset.Y)>10 then return end
+ local n=combo or 1
  local v=root.AssemblyLinearVelocity
- root.AssemblyLinearVelocity=Vector3.new(v.X*.25,62,v.Z*.25)
+ root.AssemblyLinearVelocity=Vector3.new(v.X*.25,math.min(BOUNCE_MAX,BOUNCE_BASE+BOUNCE_STEP*(n-1)),v.Z*.25)
+ local humanoid=character:FindFirstChildOfClass('Humanoid')
+ if humanoid then
+  local want=math.min(SPEED_MAX,SPEED_STEP*n)
+  local add=want-(self.walkBonus or 0)
+  if add>0 then humanoid.WalkSpeed+=add;self.walkBonus=want;self.walkHumanoid=humanoid end
+ end
+end
+function V:endWalkBonus()
+ local humanoid=self.walkHumanoid
+ if humanoid and self.walkBonus and humanoid.Parent then humanoid.WalkSpeed=math.max(0,humanoid.WalkSpeed-self.walkBonus) end
+ self.walkBonus=nil;self.walkHumanoid=nil
 end
 
 function V:banner(at: Vector3,text: string,color: Color3,big: number?)
@@ -3429,6 +3547,7 @@ function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
   if self.lamp then self.lamp:Destroy() end
  self:restorePitLight()
+ self:endWalkBonus()
  self.fx:Destroy()
 end
 return V

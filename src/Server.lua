@@ -4234,8 +4234,10 @@ function scene.digShotStep(d,p,job,dt)
  if not job.carveChecked and now>=job.lockAt+.25 then job.carveChecked=true;scene.digCarveAhead(job) end
  if style.shape=='Ball' then
   local launchAt=job.lockAt+job.charge
-  if now<launchAt then d.state='Warmup';d.mining=false;d.digProgress=math.clamp((now-job.lockAt)/job.charge,0,1);return end
-  d.state='SpecialMine';d.mining=false;d.digProgress=1;d.lastBeamAt=now
+  -- The rock does not react to a charge (owner, Nov 22: rocks were slowly
+  -- breaking while the drone charged): nothing touches it until the ball lands.
+  if now<launchAt then d.state='Warmup';d.mining=false;d.digProgress=0;return end
+  d.state='SpecialMine';d.mining=false;d.digProgress=0;d.lastBeamAt=now
   if not job.launched then
    job.launched=true
    local impulse=Feel.gunImpulse('Ballcaster',job.from,job.contact,d.flightMass)
@@ -4374,8 +4376,10 @@ function scene.digVolleyStep(d,p,job,dt)
  end
  if not job.carveChecked and now>=job.lockAt+.25 then job.carveChecked=true;scene.digCarveAhead(job) end
  local launchAt=job.lockAt+v.charge
- if now<launchAt then d.state='Warmup';d.mining=false;d.digProgress=math.clamp((now-job.lockAt)/v.charge,0,1);return end
- d.state='SpecialMine';d.mining=false;d.digProgress=1;d.lastBeamAt=now
+ -- Untouched while charging; the beam burns it from contact to the break.
+ if now<launchAt then d.state='Warmup';d.mining=false;d.digProgress=0;return end
+ d.state='SpecialMine';d.mining=false;d.lastBeamAt=now
+ d.digProgress=job.contactAt and math.clamp((now-job.contactAt)/math.max(.05,v.breakDelay),0,1) or 0
  if now<launchAt+v.flight then return end
  if not job.contactAt then
   job.contactAt=now

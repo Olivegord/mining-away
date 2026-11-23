@@ -1,5 +1,10 @@
 # Owner requirements
 
+## November 22 — no reaction while charging; Ramiel and Ballcaster thought through physically; ore combo
+
+After `d2edc68`: "rocks can slowly break while select drones are charging". "ramiel should shoot debris and PARTICLES pretty far because it is a giant laser. the purple ball shooter should have purple particles on impact (for example debris could have large purple smoke that is super subtle like the rocks were burned) think about this more physically. also make the ores move on the animation fps restriction of the rock bits, and be a little more rare and shiny. also make it so that jumping on them sequentially gives you higher bounce and a tiny movement speed boost each time, along with more of the electricity and delay (your first crack in this sequence should have less effects -- more toned down than it currently is)". And: "the particles that cracking those rocks leaves should be a LOT smaller, more like dust".
+
+
 ## November 22 — rocks react the way the attack would; old Ramiel, Needler and gunner effects back
 
 "rocks reaction to drones should make more sense! currently the default laser is good because i told you how to tune it. i want you to be able to generalize better. for example the breaker should seem very heavy! it should slowly float up, then get dropped with a lot of weight and a metallic sound causing an animated part shockwave. its final break should launch rocks much higher in the air and have different particles; it should have a different reaction than a constant laser that is slowly burning." And: "bring back old effects. for example ramiel's old chargeup was SOOO cool, along with its old animation. same with the needler, the old yellow gunner. do this step FIRST, then make the effects unique".
