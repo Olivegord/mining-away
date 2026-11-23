@@ -392,10 +392,12 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local style=sample.style or 'Cutter';local look=miningLooks[style] or miningLooks.Cutter
  local ink=sample.beamVariant=='Inkbeam' and sample.droneRole=='Striker'
  local tint=ink and InkbeamView.Gold or sample.cubeColor or miningTypeColors[sample.droneType] or look.color
- if beam.look~=look or beam.tint~=tint then
-  beam.look=look;beam.tint=tint
+ -- A cube drone's own accent rims the halo and contact marker; the core keeps the attack color.
+ local rim=sample.accentColor or tint
+ if beam.look~=look or beam.tint~=tint or beam.rim~=rim then
+  beam.look=look;beam.tint=tint;beam.rim=rim
   beam.core.Color=(sample.cubeColor or miningTypeColors[sample.droneType]) and tint:Lerp(WHITE,.4) or look.core
-  beam.halo.Color=tint;beam.marker.Color=tint
+  beam.halo.Color=rim;beam.marker.Color=rim
  end
  beam.miningCue=beam.miningCue or {}
  local pulse,newPulse=F.miningCue(beam.miningCue,sample,now)
@@ -423,7 +425,8 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.visibility=visible and 1 or 0
  beam.core.Transparency=1;beam.halo.Transparency=1
  local reference=sample.droneRole=='Striker' and sample.isMining
- local projectile=sample.droneRole=='Needler' or sample.droneRole=='Ballcaster' or sample.droneRole=='Ramiel'
+ -- Dig roles without a laser (sample.noBeam: shots, slams, volleys, pulses) draw no charge either.
+ local projectile=sample.droneRole=='Needler' or sample.droneRole=='Ballcaster' or sample.droneRole=='Ramiel' or sample.noBeam==true
  local charging=sample.alive and sample.charging and not sample.paused and not projectile
  local ignition=predicted and deadline or sample.since or now
  local launchTail=visible and beam.vfx and not sample.paused and now-ignition<.18
@@ -512,7 +515,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if glow then beam.marker.Position=point+normal*.06 end
   beam.marker.Transparency=glow and 0 or 1
  else
-  beam.marker.Color=tint
+  beam.marker.Color=rim
   beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1

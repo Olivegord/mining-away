@@ -267,7 +267,8 @@ local function stopRocket(rocket,now)
  if rocket.trail then rocket.trail.Enabled=false end
 end
 
-local function newCloud(parent,ground,reduced)
+-- scale shrinks a Dig Cube cloud (.6); its blast is a few cells, not a field.
+local function newCloud(parent,ground,reduced,scale)
  local root=group(parent,'NomadMushroom')
  if not root then return nil end
  local cap,stem={},{}
@@ -280,12 +281,14 @@ local function newCloud(parent,ground,reduced)
   stem[i].Material=Enum.Material.SmoothPlastic
  end
  local heart=part(root,'BlastHeart',GOLD,Vector3.one*.1,Enum.PartType.Ball)
- heart.Position=ground+VERTICAL*.42
- local light=Instance.new('PointLight');light.Color=AMBER;light.Range=13;light.Brightness=0;light.Parent=heart
+ heart.Position=ground+VERTICAL*.42*(scale or 1)
+ local light=Instance.new('PointLight');light.Color=AMBER;light.Range=scale and 9 or 13;light.Brightness=0;light.Parent=heart
  return {root=root,cap=cap,stem=stem,heart=heart,light=light}
 end
 
-local function drawCloud(cloud,ground,age,reduced,lowFlash)
+-- scale (Dig receipts .6) shrinks every size and offset; dim caps the light at 1.0.
+local function drawCloud(cloud,ground,age,reduced,lowFlash,scale,dim)
+ scale=scale or 1
  local bloom=1-math.exp(-age*8.2)
  local rise=smooth(age/.70)
  local cool=smooth((age-.13)/.86)
@@ -293,21 +296,21 @@ local function drawCloud(cloud,ground,age,reduced,lowFlash)
  local capHeight=.66+2.36*rise+.7*smooth((age-.65)/1.4)
  local stemHeight=.45+2.42*rise
  local core=math.max(0,1-age/.25)^2
- cloud.light.Brightness=not lowFlash and not reduced and 2.35*core or 0
+ cloud.light.Brightness=not lowFlash and not reduced and math.min(2.35*core,dim and 1 or math.huge) or 0
  cloud.heart.Transparency=1-core*(lowFlash and .28 or .76)
- cloud.heart.Size=Vector3.new(2.7,1.65,2.7)*(.13+.87*bloom)
+ cloud.heart.Size=Vector3.new(2.7,1.65,2.7)*(.13+.87*bloom)*scale
  for i,puff in ipairs(cloud.stem) do
   local step=i/3
-  puff.Position=ground+Vector3.new((step-.5)*.28,.18+stemHeight*step,0)
-  puff.Size=Vector3.new(1.32-step*.42,.76+step*.49,1.32-step*.42)*(.2+bloom)
+  puff.Position=ground+Vector3.new((step-.5)*.28,.18+stemHeight*step,0)*scale
+  puff.Size=Vector3.new(1.32-step*.42,.76+step*.49,1.32-step*.42)*(.2+bloom)*scale
   puff.Color=GOLD:Lerp(CLAY,cool*.91)
   puff.Transparency=.24+fade*.76
  end
  for i,puff in ipairs(cloud.cap) do
   local angle=i*math.pi*2/(#cloud.cap-1)
   local radius=i==1 and 0 or (.42+1.06*bloom)*(.95+.14*math.sin(i*2.3))
-  puff.Position=ground+Vector3.new(radius*math.cos(angle),capHeight+(i==1 and .40 or .21*math.sin(i*1.9)),radius*math.sin(angle))
-  puff.Size=Vector3.new(1.92,1.44,1.84)*(.19+bloom)*(.88+(i%3)*.09)*(1+fade*.14)
+  puff.Position=ground+Vector3.new(radius*math.cos(angle),capHeight+(i==1 and .40 or .21*math.sin(i*1.9)),radius*math.sin(angle))*scale
+  puff.Size=Vector3.new(1.92,1.44,1.84)*(.19+bloom)*(.88+(i%3)*.09)*(1+fade*.14)*scale
   puff.Color=(i%3==0 and GOLD or AMBER):Lerp(CLAY,cool*.88)
   puff.Transparency=.13+fade*.87
  end
@@ -385,8 +388,9 @@ function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpa
   end
  end
  if ageSince<CLOUD_TIME and near then
-  r.cloud=r.cloud or newCloud(camera,floor,reduced)
-  if r.cloud then drawCloud(r.cloud,floor,ageSince,reduced,lowFlash) end
+  local dig=node:GetAttribute('Dig')==true
+  r.cloud=r.cloud or newCloud(camera,floor,reduced,dig and .6 or nil)
+  if r.cloud then drawCloud(r.cloud,floor,ageSince,reduced,lowFlash,dig and .6 or 1,dig) end
  elseif r.cloud then r.cloud.root:Destroy();r.cloud=nil end
 end
 

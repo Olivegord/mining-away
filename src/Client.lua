@@ -98,6 +98,10 @@ return {frozen=frozen,freeze=freezeGame}
 end)()
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 Presentation.Fun.colorPop()
+-- Dig role colors and kernels (shared DigCube styles, via the DigCubeView statics).
+-- Kept on Presentation.Fun so drone closures never capture another top-level
+-- local: the bundle is at Luau's 200-register limit for captured locals.
+Presentation.Fun.rolePrimary=DigCubeView.primaryColor;Presentation.Fun.roleStyle=DigCubeView.style
 do
  local playFocus=Presentation.Fun.focus()
  RunService.RenderStepped:Connect(function()
@@ -698,10 +702,13 @@ openFleet=function()
   local reroll=button(body,UDim2.fromOffset(3,57),UDim2.fromOffset(half,44),'Random 2–5 [T]',function() command:FireServer('TestLoadout');modal.Visible=false end,palette.paper)
   reroll.Name='RerollTestCrew'
   local roles=button(body,UDim2.fromOffset(half+15,57),UDim2.fromOffset(half,44),profile.testCrewActive and 'Use saved fleet' or 'All drone types',function() command:FireServer(profile.testCrewActive and 'NormalLoadout' or 'RoleLoadout');modal.Visible=false end,palette.mineral);roles.Name='RestoreRoleCrew'
+  -- Every dig worker role at once, for the Dig Cube (server: RoleLoadout {dig=true}).
+  button(body,UDim2.fromOffset(3,109),UDim2.fromOffset(half,40),'Dig crew',function() command:FireServer('RoleLoadout',{dig=true});modal.Visible=false end,palette.mineral).Name='DigCrewLoadout'
   if player:GetAttribute('MA_DevToolsEnabled')==true then
-  local fill=button(body,UDim2.fromOffset(3,109),UDim2.fromOffset(width,40),'Fill backpack',function() command:FireServer('DevFillBag');modal.Visible=false end,palette.accent)
+  local fill=button(body,UDim2.fromOffset(half+15,109),UDim2.fromOffset(half,40),'Fill backpack',function() command:FireServer('DevFillBag');modal.Visible=false end,palette.accent)
   fill.Name='DevFillBag'
-  local choices={{'Striker','+ Miner'},{'Courier','+ Courier'},{'Medic','+ Healer'},{'Dart','+ Grower'},{'Charger','+ Smasher'},{'Orbiter','+ Orbital'},{'Ramiel','+ Ramiel'},{'Scrapper','+ Swarm'},{'Nomad','+ Nomad'}}
+  local choices={{'Striker','+ Miner'},{'Courier','+ Courier'},{'Medic','+ Healer'},{'Dart','+ Grower'},{'Charger','+ Smasher'},{'Orbiter','+ Orbital'},{'Ramiel','+ Ramiel'},{'Scrapper','+ Swarm'},{'Nomad','+ Nomad'},
+   {'Ballcaster','+ Ballcaster'},{'Needler','+ Needler'},{'Bubbler','+ Bubbler'},{'Halver','+ Halver'},{'Gridcutter','+ Gridcutter'},{'Singularity','+ Singularity'},{'Starforge','+ Starforge'},{'Frostbite','+ Frostbite'},{'Resonator','+ Resonator'},{'Lancer','+ Lancer'}}
   local columns=width>=560 and 4 or 2;local gap=8;local cell=(width-gap*(columns-1))/columns
   for index,choice in ipairs(choices) do
    local b=button(body,UDim2.fromOffset(3+((index-1)%columns)*(cell+gap),157+math.floor((index-1)/columns)*46),UDim2.fromOffset(cell,38),choice[2],function()
@@ -710,7 +717,7 @@ openFleet=function()
    b.Name='DevAdd'..choice[1]
   end
   rosterY=157+math.ceil(#choices/columns)*46+10
-  else rosterY=114 end
+  else rosterY=162 end
  end
  local columns=width>=650 and 2 or 1;local gap=14;local rowWidth=(width-gap*(columns-1))/columns
  for index,d in ipairs(crew or {}) do
@@ -1111,7 +1118,8 @@ local function registerDrone(source)
   optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
   optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
  elseif cube then
-  cubeLook=Presentation.Fun.paintCube(clone,pivot,id)
+  -- Belly glow in the role's attack color (DigCube style); the body keeps the drone's own accent.
+  cubeLook=Presentation.Fun.paintCube(clone,pivot,id,Presentation.Fun.rolePrimary and Presentation.Fun.rolePrimary(source:GetAttribute('Role')) or nil)
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
@@ -1639,7 +1647,8 @@ local function renderDrone(d,dt,now)
   if not resting or not d.ramielResting then
    local reduced=CrystalImpactView.reducedMotion()
    DroneConfig.poseRamiel(d.ramiel,visiblePose,aim,charge,recovery,0,reduced,hold)
-   RoleEffectView.ramielCharge(d.ramiel,charge,untilContact,BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true,hold)
+   RoleEffectView.ramielCharge(d.ramiel,charge,untilContact,BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true,hold,
+    d.shotReceipt~=nil and d.shotReceipt:GetAttribute('Dig')==true)
   end
   if ramielLatched then soundscape:play('ramiel_latch',visiblePose.Position) end
   if resting then d.ramielFiringShot=nil;d.ramielFiringPose=nil end
@@ -1732,7 +1741,7 @@ local function renderDrone(d,dt,now)
  end
  local digBeam=false
  if pickupView and pickupView.dig then
-  pickupView.dig:droneBeam(s,d.emitter.Position,now,d.cubeLook and d.cubeLook.color)
+  pickupView.dig:droneBeam(s,d.emitter.Position,now,d.cubeLook and (d.cubeLook.accent or d.cubeLook.color))
   -- Digging drones use this same mining beam (charge-up, startup, contact)
   -- aimed at a hidden plate on their cut in the Dig Cube.
   local plate=pickupView.dig:beamTarget(s)
@@ -1750,7 +1759,11 @@ local function renderDrone(d,dt,now)
   contact=active,
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
-  stoneColor=resource and resource.stoneColor,cubeColor=d.cubeLook and d.cubeLook.color,
+  stoneColor=resource and resource.stoneColor,cubeColor=digBeam and Presentation.Fun.rolePrimary and Presentation.Fun.rolePrimary(s:GetAttribute('Role')) or (d.cubeLook and d.cubeLook.color),
+  accentColor=d.cubeLook and d.cubeLook.accent or nil,
+  -- Dig roles without a laser (shots, slams, volleys, pulses) get no charge or beam VFX.
+  noBeam=pickupView and pickupView.dig and (s:GetAttribute('DigOp') or '')~='' and (Presentation.Fun.roleStyle and Presentation.Fun.roleStyle(s:GetAttribute('Role')).kernel~='beam'
+   or not Presentation.Fun.roleStyle and s:GetAttribute('MiningStyle')=='None') or nil,
   cube=cube,style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=not cube and s:GetAttribute('BeamVariant') or nil,droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
