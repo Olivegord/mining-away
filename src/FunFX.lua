@@ -537,14 +537,7 @@ end
 -- sun brightness and exposure and less fill, a neutral early-afternoon sun,
 -- a little contrast so shapes read. Emissive things (beams, gems, glowing
 -- parts) are unaffected, so they still pop.
--- Owner, Nov 22 (after the cool-strata pass): "restore the pastel lighting
--- and textures, albeit just a bit dimmer. not darker, but dimmer". The
--- authored washed pastel daylight as it was before any darkening (13:30
--- sun, light cool shadows, pale haze, the original -.16 saturation grade),
--- only turned down: exposure from +.15 to +.02 and a little less sun and
--- haze glare. Fill stays almost full and the clock stays midday, so shadows
--- do not deepen and nothing goes sepia or dusky.
-Fun.DARKEN={sun=.9,ambient=.95,outdoor=.93,haze=.85,density=.95,diffuse=.95,clock=13.5,shadow=.5,exposure=.02,contrast=.03,saturation=-.16}
+Fun.DARKEN={sun=.72,ambient=.8,outdoor=.74,haze=.7,density=.9,diffuse=.9,clock=14.2,shadow=.32,exposure=-.12,contrast=.08,saturation=-.04}
 function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end
