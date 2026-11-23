@@ -106,6 +106,10 @@ function Color3.new(r,g,b) return setmetatable({R=r,G=g,B=b},CO) end
 function Color3.fromRGB(r,g,b) return Color3.new(r/255,g/255,b/255) end
 function CO:Lerp(o,t) return Color3.new(self.R+(o.R-self.R)*t,self.G+(o.G-self.G)*t,self.B+(o.B-self.B)*t) end
 CO.__eq=function(a,b) return a.R==b.R and a.G==b.G and a.B==b.B end
+function CO:ToHSV()
+ local mx,mn=math.max(self.R,self.G,self.B),math.min(self.R,self.G,self.B)
+ return 0,mx>0 and (mx-mn)/mx or 0,mx
+end
 local NumberSequenceKeypoint={new=function(t,v) return {Time=t,Value=v} end}
 local NumberSequence={new=function(...) return {...} end}
 local ColorSequence={new=function(...) return {...} end}
@@ -216,7 +220,7 @@ for _,t in ipairs(rec.tiles) do if t.shown and t.shown.B<stone.B-.02 then glowin
 assert(glowing,'crests glow')
 -- Less color: only chunks near the hit are tinted, and only partly.
 for _,tl in ipairs(rec.tiles) do
- if tl.r>RockChunks.TINT_RADIUS then assert(tl.shown==nil or tl.shown==tl.color,'far chunks stay rock colored') end
+ if tl.rank>#RockChunks.TINT_RANKS then assert(tl.shown==nil or tl.shown==tl.color,'only the nearest few chunks take color') end
  if tl.shown then assert(math.abs(tl.shown.R-stone.R)<=RockChunks.TINT_MAX+1e-6,'tint is partial') end
 end
 -- Stop-motion at 8 fps: nothing moves between ticks.
@@ -413,9 +417,18 @@ do -- big breaks spread their effects; stages make the next piece hop
  local xs={};for _,at in ipairs(fired) do xs[string.format('%.1f,%.1f',at.X,at.Z)]=true end
  local distinct=0;for _ in pairs(xs) do distinct+=1 end
  assert(distinct>=3,'streaks fire over the whole break: '..distinct)
- local hits=0;for _,x in ipairs(parts) do if type(x)~='table' or x[1]~='pulse' then hits+=1 end end
- assert(hits>=3,'contact particles at each part: '..hits)
- print('PASS big breaks: effects spread over every part of a many-cell break (streaks, contact particles, ring reach); one cell stays one spot')
+ local hits={};for _,x in ipairs(parts) do if getmetatable(x)~=nil then table.insert(hits,x) end end
+ local mid=self.origin+v3(DigCube.chunkCenter(self.cube,ids),0,0)
+ assert(#hits==1,'round contact particles burst once, at the beam: '..#hits)
+ local cloud=self.fx:FindFirstChild('DigBreakCloud')
+ if cloud then
+  local cx,cz=DigCube.chunkCenter(self.cube,ids)
+  for _,cell in ipairs(cloud:GetChildren()) do
+   local d=Vector3.new(cell.CFrame.Position.X-self.origin.X-cx,0,cell.CFrame.Position.Z-self.origin.Z-cz).Magnitude
+   assert(d<=3.6,'spark discs stay by the beam: '..d)
+  end
+ end
+ print('PASS big breaks: 3D streaks spread over every part of a many-cell break; round particles and spark discs stay at the beam; one cell stays one spot')
  -- a stage break: the next piece jumps and twists
  local s2=view()
  local cids=chunkFor(s2,1.4);local key=DigCube.key(cids)

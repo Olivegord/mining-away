@@ -288,11 +288,31 @@ end
 -- the world and the drones sit a step below the authored saturation so the
 -- glowing things (beams, gems, the drones' bellies) are the most colorful on
 -- screen. Those are Neon or light-emitting, so they also carry the bloom.
+-- Owner, Nov 22: "make the map overall darker. i like the pastel look, but
+-- it was washing out too many of the brighter effects". The baseline is
+-- darkened on the client: less sun and ambient light and haze dim every lit
+-- surface, while Neon, beams, particles, lights and gems (emissive) keep
+-- their full strength, so the drones' glows and the gems pop. Relative to
+-- the authored values, applied once.
+Fun.DARKEN={sun=.68,ambient=.7,outdoor=.66,haze=.55,density=.85,air=.82}
 function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end
+ local d=Fun.DARKEN
+ local function dim(c,k) return Color3.new(c.R*k,c.G*k,c.B*k) end
+ pcall(function()
+  lighting.Brightness=lighting.Brightness*d.sun
+  lighting.Ambient=dim(lighting.Ambient,d.ambient)
+  lighting.OutdoorAmbient=dim(lighting.OutdoorAmbient,d.outdoor)
+ end)
+ for _,air in ipairs(lighting:GetChildren()) do
+  if air:IsA('Atmosphere') then
+   pcall(function() air.Haze=air.Haze*d.haze;air.Density=air.Density*d.density;air.Color=dim(air.Color,d.air) end)
+  end
+ end
  local grade=Instance.new('ColorCorrectionEffect');grade.Name='FunColorPop'
- grade.Saturation=-.16;grade.Contrast=.03;grade.Brightness=0;grade.Parent=lighting
+ -- Still pastel (a little desaturated), with more contrast against the glow.
+ grade.Saturation=-.12;grade.Contrast=.1;grade.Brightness=-.02;grade.Parent=lighting
 end
 -- Depth of field for play: sharp from the camera out well past the player,
 -- so the whole dig and the crew stay crisp, with only the far walls and

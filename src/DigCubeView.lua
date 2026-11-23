@@ -1039,7 +1039,7 @@ end
 function V:shadeProxy(proxy: any,shade: number)
  if math.abs(shade-proxy.shade)<.01 then return end
  proxy.shade=shade
- if proxy.mesh then RockChunks.shade(proxy.mesh,proxy.tone,shade);return end
+ if proxy.mesh then RockChunks.shade(proxy.mesh,proxy.tone,shade,proxy.hit);return end
  for _,e in ipairs(proxy.parts) do e.part.Color=e.stone:Lerp(proxy.tone,shade) end
 end
 -- The rock doing things while it is worked (RockChunks), the role's way
@@ -1429,13 +1429,24 @@ function V:breakCloud(op: any,e: any,big: boolean)
  if self:reduced() or (self.clouds or 0)>=8 then return end
  local o=self.origin
  local cells={}
- for _,spot in ipairs(self:spreadPoints(op,CLOUD_CELLS)) do
-  local q=spot.part
+ -- The round spark discs stay by the beam (owner, Nov 22): the cells
+ -- nearest the chunk's middle, within a few studs.
+ local hub=op.hub or Vector3.zero
+ local near={}
+ for _,q in ipairs(self:opParts(op)) do
+  local _,mx,mz=middle(q.poly)
+  local d=(mx-hub.X)^2+(mz-hub.Z)^2
+  if not op.hub or d<=3.5*3.5 then table.insert(near,{q=q,d=d}) end
+ end
+ table.sort(near,function(a,b) return a.d<b.d end)
+ for i,entry in ipairs(near) do
+  if i>CLOUD_CELLS then break end
+  local q=entry.q
   local minX,maxX,minZ,maxZ=math.huge,-math.huge,math.huge,-math.huge
   for _,v in ipairs(q.poly) do minX=math.min(minX,v[1]);maxX=math.max(maxX,v[1]);minZ=math.min(minZ,v[2]);maxZ=math.max(maxZ,v[2]) end
   local _,mx,mz=middle(q.poly)
   if maxX-minX>.2 and maxZ-minZ>.2 then
-   table.insert(cells,{minX=minX,maxX=maxX,minZ=minZ,maxZ=maxZ,y0=q.y0,y1=q.y,cx=mx,cz=mz})
+   table.insert(cells,{minX=minX,maxX=maxX,minZ=minZ,maxZ=maxZ,y0=q.y0,y1=q.y1,cx=mx,cz=mz})
   end
  end
  if #cells==0 then return end
@@ -1543,7 +1554,10 @@ function V:burst(op: any,e: any)
  -- A gem bursts out with the rock, not after it, and its color takes over.
  if gem then self:reveal({tier=op.tier,treasure=op.treasure,center=e.center+Vector3.yAxis*1.2,ground=ground,size=e.bulk,owned=e.owned,op=op},os.clock()) end
  if not lively then return end
- if not gem and fx.contact then self:breakCloud(op,{primary=primary,accent=e.accent or primary,bulk=e.bulk},e.owned) end
+ if not gem and fx.contact then
+  op.hub=e.point-self.origin
+  self:breakCloud(op,{primary=primary,accent=e.accent or primary,bulk=e.bulk},e.owned)
+ end
  -- The 3D streaks (owner: the old rectangles): in the rock's tone, plus two
  -- in the role's color for your own breaks; at most five, so only the
  -- streak boxes (no embers). A gem's reveal carries its own.
@@ -1568,26 +1582,19 @@ function V:burst(op: any,e: any)
  if ctx.splitBeat then ctx.splitBeat(point,beat,now,false,e.owned,nil)
  elseif ctx.beat then ctx.beat(e.heavy and 'HeavySplit' or 'Split',point,now,math.clamp(beat*.58,.6,1.35)*volume) end
  if not e.owned or gem then return end
- if fx.light then self:lightFlash(e.center,primary,math.max(14+3*e.bulk,(e.extent or 0)*1.6),7,.45) end
+ if fx.light then self:lightFlash(e.center,primary,14+3*e.bulk,7,.45) end
  local effects=ctx.effects
  local contact=fx.contact
  if not effects or not contact then return end
  local floor=Vector3.new(point.X,ground+.085,point.Z)
- -- A big break: the ring reaches over all of it and the particles burst
- -- at each part (e.spots), each sized for its part.
- local spots=e.spots or {}
- local reach=e.extent or 0
- local many=#spots>1
- local function each(fn: (Vector3,number) -> ())
-  if not many then fn(point,strength);return end
-  for i,spot in ipairs(spots) do if i<=4 then fn(spot.pos,math.clamp(math.sqrt(spot.area)*.36,.8,1.8)) end end
- end
+ -- The round things (contact particles, rings, specialist contacts) stay
+ -- at the beam (owner, Nov 22); only the 3D streaks spread over a big break.
  if contact=='Striker' then
-  effects.Pulse(floor,primary:Lerp(BEAM_CORE,.3),strength*.55,math.max(strength*6.6,reach*2.3),.58)
-  each(function(at,s) effects.ImpactParticles(at,primary,s*1.2,'CrystalBreak',nil,primary,nil,.8) end)
+  effects.Pulse(floor,primary:Lerp(BEAM_CORE,.3),strength*.55,strength*6.6,.58)
+  effects.ImpactParticles(point,primary,strength*1.2,'CrystalBreak',nil,primary,nil,.8)
  elseif contact=='Charger' then
-  effects.Pulse(floor,primary,strength*.55,math.max(strength*8,reach*2.5),.58,nil,1.6)
-  each(function(at,s) effects.ImpactParticles(at,primary,s*1.2,'Touchdown') end)
+  effects.Pulse(floor,primary,strength*.55,strength*8,.58,nil,1.6)
+  effects.ImpactParticles(point,primary,strength*1.2,'Touchdown')
  elseif contact=='Resonator' and e.link then
   effects.Pulse(floor,primary,.3,3,.3)
  elseif effects.SpecialistContact then
@@ -1596,8 +1603,7 @@ function V:burst(op: any,e: any)
    local at=point+Vector3.yAxis*1.2
    table.insert(self.pending,{at=os.clock()+.7,run=function() effects.SpecialistContact('Bubbler',at,Vector3.yAxis,false,MUTE,primary) end})
   else
-   if many then for i,spot in ipairs(spots) do if i<=3 then effects.SpecialistContact(contact,spot.pos,Vector3.yAxis,false,MUTE,primary) end end
-   else effects.SpecialistContact(contact,point,Vector3.yAxis,false,MUTE,primary) end
+   effects.SpecialistContact(contact,point,Vector3.yAxis,false,MUTE,primary)
   end
   if contact=='Resonator' then
    -- Two rings, a beat apart, ringing out across the pit.

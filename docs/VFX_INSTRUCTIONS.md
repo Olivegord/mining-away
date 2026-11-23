@@ -45,7 +45,15 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
     - The piece's whole-body pose (lift, jitter) is unchanged.
   - Owner follow-up on stages and big breaks:
     - At each stage break, every chunk of the next piece jumps and twists, then lands (`RockChunks.hop`, three 8 fps frames). A smaller hop comes with each crack.
-    - Break effects for many-cell breaks spread out (`V:spreadPoints`): up to 6 points, about one per 12 sq studs, picked far apart. At each point: rock and role streaks, contact particles (up to 4), specialist contacts (up to 3) and the spark cells. Each is sized for its share. The ground ring and the light reach over the whole break. A single cell stays one point.
+    - Break effects for many-cell breaks: only the 3D streaks spread out (`V:spreadPoints`): up to 6 points, about one per 12 sq studs, picked far apart, each sized for its share. Round things stay at the beam (owner: "SOME particles should only stay near the beam"): contact particles, specialist contacts, the ground ring, the light, and the spark discs (only cells within 3.5 studs of the chunk's middle).
+  - Owner follow-up, "less color is not exactly applied":
+    - The tint now goes by rank, not radius (small pieces had every chunk within the old radius). Only the 3 chunks nearest the hit take color: full, 60%, 30%, at most 35%.
+    - A colored role shade (Ballcaster purple, Starforge orange, Frostbite ice) reaches only the 5 nearest chunks. Darkening still covers the whole piece.
+- **Darker baseline (`FunFX.colorPop`, client only):** owner: darker, still pastel, so drones and gems pop. Changes relative to the authored lighting, applied once:
+  - sun brightness ×0.68, ambient ×0.7, outdoor ambient ×0.66;
+  - atmosphere haze ×0.55, density ×0.85, color ×0.82;
+  - grade saturation −0.12, contrast +0.1, brightness −0.02.
+  - Emissive things (Neon, beams, particles, lights, gems) are unaffected, so they stand out more. The authored place lighting is unchanged.
 - **Tests:**
   - `test_rock_chunks.py`: exact 3D doubles, running RockChunks, the real DigCubeView pieces and the test area.
   - `test_dig_flow.py`: a carve-ahead section.

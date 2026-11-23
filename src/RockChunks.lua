@@ -21,8 +21,9 @@ M.ANGLE_STEP=math.rad(7.5)
 M.FPS=8
 -- Owner, Nov 22: "too colorful". Only the few chunks nearest the hit take
 -- the attack color, and only partly; the rest stay rock.
-M.TINT_RADIUS=1.9 -- studs from the hit
-M.TINT_MAX=.42
+M.TINT_RANKS={1,.6,.3} -- the nearest chunks to the hit, in order; the rest none
+M.TINT_MAX=.35
+M.TONE_RANKS={1,.85,.65,.45,.25} -- a colored shade (role tone) reaches a few more
 M.wedges=nil :: any -- DigCube.polyWedges, installed by the caller
 local TAU=math.pi*2
 local BLACK=Color3.new(0,0,0)
@@ -93,9 +94,26 @@ function M.reset(rec: any)
  table.clear(rec.rings)
  rec.dirty=true
 end
--- Chunk colors: the stone toward `tone` by `shade` (darker under the beam).
-function M.shade(rec: any,tone: Color3,shade: number)
- for _,tile in ipairs(rec.tiles) do tile.color=tile.stone:Lerp(tone,shade) end
+-- Each chunk's rank by distance from the hit (0 = nearest).
+local function ranks(rec: any,center: Vector3)
+ if rec.rankCenter and (rec.rankCenter-center).Magnitude<.25 then return end
+ rec.rankCenter=center
+ local order=table.clone(rec.tiles)
+ table.sort(order,function(a,b) return (a.cx-center.X)^2+(a.cz-center.Z)^2<(b.cx-center.X)^2+(b.cz-center.Z)^2 end)
+ for i,tile in ipairs(order) do tile.rank=i end
+ rec.colorDirty=true
+end
+local function weight(list: {number},rank: number?): number return list[rank or math.huge] or 0 end
+-- Chunk colors: the stone toward `tone` by `shade`. Darkening (a gray or
+-- black tone) covers the piece; a colored tone only the chunks nearest the
+-- hit (owner: "too colorful").
+function M.shade(rec: any,tone: Color3,shade: number,center: Vector3?)
+ ranks(rec,center or rec.rankCenter or Vector3.zero)
+ local _,sat=tone:ToHSV()
+ for _,tile in ipairs(rec.tiles) do
+  local k=sat>.25 and weight(M.TONE_RANKS,tile.rank) or 1
+  tile.color=tile.stone:Lerp(tone,shade*k)
+ end
  rec.colorDirty=true
 end
 function M.setMaterial(rec: any,material: Enum.Material)
@@ -246,6 +264,7 @@ function M.step(rec: any,now: number,s: any)
  rec.wasActive=active;rec.lastScale=scale;rec.lastSlide=slide
  local glowColor=s.glowColor or Color3.new(1,1,1)
  local radius=rec.radius
+ ranks(rec,(ripple and ripple.center) or (rings[#rings] and rings[#rings].center) or rec.rankCenter or Vector3.zero)
  for i,tile in ipairs(rec.tiles) do
   local dy,glow=0,0
   local x,z=tile.cx,tile.cz
@@ -257,7 +276,7 @@ function M.step(rec: any,now: number,s: any)
    local w=math.max(0,math.sin(TAU*(r/ripple.len-now*ripple.speed/ripple.len)))
    -- Chunks rise on the crest; nothing sinks into the solid rock below.
    dy+=ripple.amp*w*env
-   glow=math.max(glow,(ripple.glow or 0)*w*math.clamp(1-r/M.TINT_RADIUS,0,1))
+   glow=math.max(glow,(ripple.glow or 0)*w*weight(M.TINT_RANKS,tile.rank))
   end
   for _,ring in ipairs(rings) do
    local dx,dz=x-ring.center.X,z-ring.center.Z
@@ -267,7 +286,7 @@ function M.step(rec: any,now: number,s: any)
    local d=(r-front)/ring.width
    local k=math.exp(-d*d)*math.clamp(1-t*.9,0,1)
    dy+=ring.amp*k
-   glow=math.max(glow,ring.glow*k*math.clamp(1-r/M.TINT_RADIUS,0,1))
+   glow=math.max(glow,ring.glow*k*weight(M.TINT_RANKS,tile.rank))
   end
   if (s.bulge or 0)>0 then dy+=s.bulge*math.clamp(1-(x*x+z*z)/(radius*radius),0,1) end
   if tile.popped then dy*=.35 end
