@@ -3660,6 +3660,7 @@ function scene.digCarve(job)
     -- counted as dug, so the crew dug under it: floating layered slabs
     -- (owner, Nov 22). Rebuild it from a fresh box instead.
     table.remove(dig.blocks,i)
+    dig.lastCarveError=tostring(result)
     for _,b in ipairs(scene.digRebuildBlock(block,stageParts,0)) do table.insert(rebuilt,b) end
    end
   end
@@ -3681,7 +3682,7 @@ function scene.digRebuildBlock(block,stageParts,depth)
  local lo,hi=block.lo,block.hi
  block.part:Destroy()
  dig.carveFailures=(dig.carveFailures or 0)+1
- if dig.carveFailures<=20 then (warn or print)('[DigCube] carve failed; rebuilding block '..tostring(lo)..' (depth '..depth..')') end
+ if dig.carveFailures<=20 then (warn or print)('[DigCube] carve failed; rebuilding block '..tostring(lo)..' (depth '..depth..'): '..string.sub(dig.lastCarveError or '?',1,160)) end
  local box=Instance.new('Part');box.Name='RockBlock'
  box.Anchored=true;box.CanTouch=false;box.CastShadow=false
  box.Material=material;box.Color=color;box.TopSurface=Enum.SurfaceType.Smooth;box.BottomSurface=Enum.SurfaceType.Smooth
@@ -3717,7 +3718,11 @@ function scene.digRebuildBlock(block,stageParts,depth)
  local ok,result=true,nil
  if #negatives>0 then
   dig.stats.calls+=1
+  -- The CSG API needs the part inside the DataModel; an unparented box made
+  -- every rebuild fail. ServerStorage keeps it out of view while it is cut.
+  box.Parent=game:GetService('ServerStorage')
   ok,result=pcall(function() return box:SubtractAsync(negatives,Enum.CollisionFidelity.Default,Enum.RenderFidelity.Automatic) end)
+  if not ok then dig.lastCarveError=tostring(result) end
  end
  for _,p in ipairs(negatives) do p:Destroy() end
  if ok and #negatives==0 then box.Parent=dig.rock;return {{part=box,lo=lo,hi=hi}} end
