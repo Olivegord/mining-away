@@ -3489,7 +3489,8 @@ do
  holder.Name='DigCube';holder.Parent=root
  local template=Instance.new('Part');template.Name='DigGem';template.Size=Vector3.new(1,1,1)
  scene.dig={origin=origin,holder=holder,template=template,generation=0,recent={},random=Random.new(),
-  dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},ops={},published=0,pending={},csg={},blocks={},dust={},dustAt=0,geodes={}}
+  dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},ops={},published=0,pending={},csg={},blocks={},dust={},dustAt=0,geodes={},
+  stats={jobs=0,calls=0,lags={},fails=0,at=0}}
  -- Collision groups for the clients' loose rubble: it lands on an invisible
  -- floor at the bottom of each hole and touches nothing else (players, the
  -- rock still being carved).
@@ -3512,6 +3513,7 @@ function scene.digReset()
  dig.generation+=1
  local seedValue=dig.random:NextInteger(1,2000000000)
  dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.resetAt=nil;dig.dirty=false;dig.csg={};dig.deepest=1
+ dig.stats={jobs=0,calls=0,lags={},fails=0,at=now+10}
  dig.geodes={};dig.holder:SetAttribute('Geodes','')
  for _,dust in ipairs(dig.dust) do dust.part:Destroy() end
  dig.dust={}
@@ -3600,23 +3602,25 @@ function scene.digCarve(job)
   local block=dig.blocks[i]
   local negatives={}
   for _,sp in ipairs(stageParts) do
-   if block.hi.X>sp.lo.X-.5 and block.lo.X<sp.hi.X+.5 and block.hi.Y>sp.lo.Y-.1 and block.lo.Y<sp.hi.Y+.6
+   if block.hi.X>sp.lo.X-.5 and block.lo.X<sp.hi.X+.5 and block.hi.Y>sp.lo.Y+.05 and block.lo.Y<sp.hi.Y-.05
     and block.hi.Z>sp.lo.Z-.5 and block.lo.Z<sp.hi.Z+.5 then
     for _,w in ipairs(sp.wedges) do table.insert(negatives,w) end
    end
   end
   for _,id in ipairs(job.ids) do
    local c=cube.cells[id]
-   if block.hi.X>c.minX-.5 and block.lo.X<c.maxX+.5 and block.hi.Y>c.y0-.1 and block.lo.Y<c.y1+.6
+   if block.hi.X>c.minX-.5 and block.lo.X<c.maxX+.5 and block.hi.Y>c.y0+.05 and block.lo.Y<c.y1-.05
     and block.hi.Z>c.minZ-.5 and block.lo.Z<c.maxZ+.5 then
     for _,w in ipairs(wedgesFor(id)) do table.insert(negatives,w) end
    end
   end
   if #negatives>0 then
+   dig.stats.calls+=1
    local ok,result=pcall(function()
     return block.part:SubtractAsync(negatives,Enum.CollisionFidelity.PreciseConvexDecomposition,Enum.RenderFidelity.Precise)
    end)
    if job.generation~=dig.generation then break end
+   if not ok and not string.find(tostring(result),'empty') then dig.stats.fails+=1 end
    if ok and result then
     result.Anchored=true;result.CanTouch=false;result.CastShadow=false;result.UsePartColor=true;result.Color=block.part.Color
     result.Material=block.part.Material;result.Name='RockBlock'
@@ -3635,6 +3639,8 @@ function scene.digCarve(job)
  end
  for _,b in ipairs(rebuilt) do table.insert(dig.blocks,b) end
  for _,p in ipairs(made) do p:Destroy() end
+ -- Latency from the first queued break to its cut being in the world.
+ if job.queuedAt then dig.stats.jobs+=1;table.insert(dig.stats.lags,os.clock()-job.queuedAt) end
 end
 -- A block region as a fresh box minus every dug cell (and this pass's stage
 -- shapes) that reaches it, at default fidelity (simpler, sturdier than
@@ -3663,12 +3669,12 @@ function scene.digRebuildBlock(block,stageParts,depth)
  end
  for id in pairs(cube.removed) do
   local c=cube.cells[id]
-  if hi.X>c.minX-.5 and lo.X<c.maxX+.5 and hi.Y>c.y0-.1 and lo.Y<c.y1+.6 and hi.Z>c.minZ-.5 and lo.Z<c.maxZ+.5 then
+  if hi.X>c.minX-.5 and lo.X<c.maxX+.5 and hi.Y>c.y0+.05 and lo.Y<c.y1-.05 and hi.Z>c.minZ-.5 and lo.Z<c.maxZ+.5 then
    for _,w in ipairs(DigCube.prismWedges(cube,{id})) do add(w) end
   end
  end
  for _,sp in ipairs(stageParts or {}) do
-  if hi.X>sp.lo.X-.5 and lo.X<sp.hi.X+.5 and hi.Y>sp.lo.Y-.1 and lo.Y<sp.hi.Y+.6 and hi.Z>sp.lo.Z-.5 and lo.Z<sp.hi.Z+.5 then
+  if hi.X>sp.lo.X-.5 and lo.X<sp.hi.X+.5 and hi.Y>sp.lo.Y+.05 and lo.Y<sp.hi.Y-.05 and hi.Z>sp.lo.Z-.5 and lo.Z<sp.hi.Z+.5 then
    for _,w in ipairs(sp.wedges) do
     local p=w:Clone();table.insert(negatives,p)
    end
@@ -3676,6 +3682,7 @@ function scene.digRebuildBlock(block,stageParts,depth)
  end
  local ok,result=true,nil
  if #negatives>0 then
+  dig.stats.calls+=1
   ok,result=pcall(function() return box:SubtractAsync(negatives,Enum.CollisionFidelity.Default,Enum.RenderFidelity.Automatic) end)
  end
  for _,p in ipairs(negatives) do p:Destroy() end
@@ -3718,9 +3725,10 @@ function scene.digCarveLoop()
   while #dig.csg>0 do
    -- Take everything queued for this cube in one pass: pieces break often,
    -- and one cut per block keeps the rock in step with the breaks.
-   local job={generation=dig.csg[1].generation,ids={},parts={}}
+   local job={generation=dig.csg[1].generation,ids={},parts={},queuedAt=dig.csg[1].queuedAt}
    while #dig.csg>0 and dig.csg[1].generation==job.generation do
     local item=table.remove(dig.csg,1)
+    job.queuedAt=math.min(job.queuedAt or math.huge,item.queuedAt or math.huge)
     for _,id in ipairs(item.ids) do table.insert(job.ids,id) end
     for _,part in ipairs(item.parts or {}) do table.insert(job.parts,part) end
    end
@@ -3829,7 +3837,7 @@ function scene.digChip(job,d,p)
  local piece=job.pieces[job.stage]
  table.insert(dig.ops,'c'..DigCube.key(job.ids)..'|0|S'..job.stage)
  dig.dirty=true
- table.insert(dig.csg,{generation=dig.generation,ids={},parts=piece.parts})
+ table.insert(dig.csg,{generation=dig.generation,ids={},parts=piece.parts,queuedAt=os.clock()})
  scene.digCarveLoop()
  local share=math.floor(job.rock*piece.at)-job.rockPaid
  if share>0 then
@@ -3840,7 +3848,16 @@ function scene.digChip(job,d,p)
  end
  scene.digAim(job)
 end
+-- One drone's dig step. A change of chunk, state or stage marks the drone
+-- for a snapshot in this same tick (after the ops publish, scene.digFlushOps).
 function scene.digDrone(d,p,dt)
+ local job=d.digJob
+ local key,state,stage=job and job.key or '',d.state,job and job.stage or 0
+ scene.digWork(d,p,dt)
+ job=d.digJob
+ if (job and job.key or '')~=key or d.state~=state or (job and job.stage or 0)~=stage then d.digDirty=true end
+end
+function scene.digWork(d,p,dt)
  local dig=scene.dig;local cube=dig.cube
  local hr=characterRoot(p)
  if not DroneRoles.isWorker(d.role) or d.hp<=0 then
@@ -3933,7 +3950,7 @@ function scene.digBreak(job,d,p)
  if #broken>0 then
   table.insert(dig.ops,'c'..DigCube.key(broken)..'|'..(sealed and 0 or tier)..(sealed and '' or flag))
   dig.dirty=true
-  table.insert(dig.csg,{generation=dig.generation,ids=broken})
+  table.insert(dig.csg,{generation=dig.generation,ids=broken,queuedAt=os.clock()})
   scene.digCarveLoop()
  end
  scene.crewBreak(d.owner)
@@ -3975,7 +3992,7 @@ function scene.digOpenGeode(id,g)
  if DigCube.remove(cube,id) then dig.recent[id]=now end
  table.insert(dig.ops,'c'..id..'|'..g.tier..'|'..(g.treasure and 'X' or 'G'))
  dig.dirty=true
- table.insert(dig.csg,{generation=dig.generation,ids={id}})
+ table.insert(dig.csg,{generation=dig.generation,ids={id},queuedAt=os.clock()})
  scene.digCarveLoop()
  local at=dig.origin+Vector3.new(c.cx,c.y1+.6,c.cz)
  for i=1,g.treasure and DigCube.TREASURE_GEMS or 1 do
@@ -4111,24 +4128,42 @@ function scene.digGem(p,owner,tier,volume,position,high)
  scene.digLaunch(p,owner,cargo,ore.material,false,true,position,Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]),'dig:gem:'..#scene.dig.ops,high)
  p.dirty=true;p.publishDirty=true
 end
--- Replicate new chunks at most ten times a second, 64 per attribute so only
--- the newest attribute changes; start a fresh cube once it is mostly dug out
--- or nothing is left to cut.
+-- Replicate new ops at most thirty times a second, 64 per attribute so only
+-- the newest attribute changes. Called after the drones step, so a break
+-- reaches clients in the same tick as the drone's next chunk (DigOp).
+function scene.digFlushOps()
+ local dig=scene.dig
+ if not dig.dirty or now<dig.publishAt then return end
+ dig.dirty=false;dig.publishAt=now+1/30
+ local first=math.floor(dig.published/OPS_PER_ATTRIBUTE)+1
+ local last=math.ceil(#dig.ops/OPS_PER_ATTRIBUTE)
+ for i=first,last do
+  dig.holder:SetAttribute('Ops'..i,table.concat(dig.ops,';',(i-1)*OPS_PER_ATTRIBUTE+1,math.min(#dig.ops,i*OPS_PER_ATTRIBUTE)))
+ end
+ dig.published=#dig.ops
+ dig.holder:SetAttribute('OpCount',#dig.ops)
+end
+-- Carve latency report: the holder's CarveLag is the p90 seconds from a
+-- break to its cut, over the last 10 s (also printed in Studio).
+function scene.digCarveReport()
+ local stats=scene.dig.stats
+ if now<stats.at then return end
+ stats.at=now+10
+ local lags=stats.lags
+ if #lags==0 then return end
+ table.sort(lags)
+ local p50,p90=lags[math.max(1,math.ceil(#lags*.5))],lags[math.max(1,math.ceil(#lags*.9))]
+ scene.dig.holder:SetAttribute('CarveLag',p90)
+ if inStudio then print(string.format('[DigCube] carve jobs=%d calls=%d p50=%.2f p90=%.2f fails=%d',stats.jobs,stats.calls,p50,p90,stats.fails)) end
+ stats.lags={};stats.jobs=0;stats.calls=0;stats.fails=0
+end
+-- Start a fresh cube once it is mostly dug out or nothing is left to cut.
 function scene.digStep()
  local dig=scene.dig
  if not dig.cube then scene.digReset();return end
  scene.digDustStep()
  scene.digGeodeStep()
- if dig.dirty and now>=dig.publishAt then
-  dig.dirty=false;dig.publishAt=now+.1
-  local first=math.floor(dig.published/OPS_PER_ATTRIBUTE)+1
-  local last=math.ceil(#dig.ops/OPS_PER_ATTRIBUTE)
-  for i=first,last do
-   dig.holder:SetAttribute('Ops'..i,table.concat(dig.ops,';',(i-1)*OPS_PER_ATTRIBUTE+1,math.min(#dig.ops,i*OPS_PER_ATTRIBUTE)))
-  end
-  dig.published=#dig.ops
-  dig.holder:SetAttribute('OpCount',#dig.ops)
- end
+ scene.digCarveReport()
  for i=#dig.pending,1,-1 do
   local gem=dig.pending[i]
   if now>=gem.at then
@@ -5902,6 +5937,12 @@ RunService.Heartbeat:Connect(function(dt: number)
     and (d.state=='Warmup' and not warmAt or d.state=='Mine' and not mining) then
     snapshotDrone(d)
    end
+  end
+  -- Dig: publish this tick's breaks, then the drones that changed chunk,
+  -- state or stage, so a break never reaches clients after the next DigOp.
+  scene.digFlushOps()
+  if not scene.dig.dirty then
+   for _,d in pairs(drones) do if d.digDirty then d.digDirty=false;snapshotDrone(d) end end
   end
   scene.flushPlotQueues(C.Tick)
   if scene.fieldTools then scene.fieldTools:step(C.Tick) end
