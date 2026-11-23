@@ -3727,7 +3727,9 @@ function scene.digSkirts(ch)
  ch.skirts=ch.skirts or {}
  local W=DigCube.WIDTH
  local bottom=ch.origin.Y
- local top=ground.plateTop-ground.plateThick-.02
+ -- The top tucks into the ground plate (hidden), and the wall stands a hair
+ -- outside the chunk so its face never shares a plane with a plate's cut edge.
+ local top=ground.plateTop-.05
  for k,side in ipairs(SIDES) do
   local other=F.chunks[DigCube.chunkKey(ch.i+side[1],ch.j+side[2])]
   local need=ch.rendered and not (other and other.rendered)
@@ -3743,10 +3745,10 @@ function scene.digSkirts(ch)
    local cx,cz=ch.origin.X+W*.5,ch.origin.Z+W*.5
    if side[1]~=0 then
     part.Size=Vector3.new(2,h,W+4)
-    part.CFrame=CFrame.new(cx+side[1]*(W*.5+1),bottom-4+h*.5,cz)
+    part.CFrame=CFrame.new(cx+side[1]*(W*.5+1.02),bottom-4+h*.5,cz)
    else
     part.Size=Vector3.new(W+4,h,2)
-    part.CFrame=CFrame.new(cx,bottom-4+h*.5,cz+side[2]*(W*.5+1))
+    part.CFrame=CFrame.new(cx,bottom-4+h*.5,cz+side[2]*(W*.5+1.02))
    end
    part.Parent=ch.holder
    ch.skirts[k]=part

@@ -2015,7 +2015,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
 end)
 
 local evade=button(safeRoot,UDim2.new(1,-136,1,-108),UDim2.fromOffset(118,38),'Evade  [Q]',function() command:FireServer('Evade') end,palette.accent);evade.Visible=false
-local testLoadout=button(safeRoot,UDim2.new(1,-252,0,80),UDim2.fromOffset(236,44),'Random loadout · 2–5 [T]',function() if world:FindFirstChild('DigCube') then command:FireServer('RoleLoadout',{dig=true}) else command:FireServer('TestLoadout') end end,Color3.fromRGB(139,83,224))
+local testLoadout=button(safeRoot,UDim2.new(1,-252,0,80),UDim2.fromOffset(236,44),'Random loadout · 2–5 [T]',function() if world:FindFirstChild('DigField') then command:FireServer('RoleLoadout',{dig=true}) else command:FireServer('TestLoadout') end end,Color3.fromRGB(139,83,224))
 testLoadout.Name='RandomLoadoutTester';testLoadout.Visible=false
 local function cargoAction()
  command:FireServer('Sell')
@@ -2286,7 +2286,7 @@ connect(UIS.InputBegan,function(input,processed)
  elseif not modal.Visible and (key==Enum.KeyCode.Q or key==Enum.KeyCode.ButtonX) then command:FireServer('Evade')
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then
   -- In the Dig Cube, T gives a small random dig crew (and names it).
-  if world:FindFirstChild('DigCube') then command:FireServer('RoleLoadout',{dig=true}) else command:FireServer('TestLoadout') end
+  if world:FindFirstChild('DigField') then command:FireServer('RoleLoadout',{dig=true}) else command:FireServer('TestLoadout') end
  elseif key==Enum.KeyCode.ButtonR1 and not menusVisible() then
   local camera=workspace.CurrentCamera
   if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);if selectorView:aimPreview(ray) then return end;local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
@@ -2327,7 +2327,7 @@ connect(RunService.Heartbeat,function(dt)
  recall.Text=touch and 'Recall' or 'Recall [R]';recall.Visible=not menusVisible()
  local testWidth=math.min(236,view.X-86)
  testLoadout.Size=UDim2.fromOffset(testWidth,44);testLoadout.Position=UDim2.fromOffset(view.X-testWidth-(view.X<680 and 80 or 16),(view.X<680 or l.short) and 72 or 80)
- testLoadout.Text=world:FindFirstChild('DigCube') and (touch and 'Random dig crew' or 'Random dig crew [T]') or (touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]')
+ testLoadout.Text=world:FindFirstChild('DigField') and (touch and 'Random dig crew' or 'Random dig crew [T]') or (touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]')
  testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not menusVisible()
  if modal.Visible and (not modalSize or (modalSize-view).Magnitude>1) then refreshModal() end
  if modal.Visible and (modalMode=='offer' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
