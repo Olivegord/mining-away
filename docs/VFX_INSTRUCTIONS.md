@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — no Striker char split at all; thinner dig layers
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). The large/huge-chunk Striker variant (`ROLE_FX.Lc`: blacken toward (28,22,22), two charred halves falling open) still ran, so it is removed with its `charStriker`/`cellChar` plumbing. Every Striker now cuts the classic terraces with the light warm scorch (`ROLE_FX.L`). Do not bring the char split back for the laser miners. The Dig Cube keeps its 44-stud depth but has 14 layers (about 3.1 studs each, was 10 at 4.4); hardness, depth pull, hues, ore tiers, treasure depth and the shot's deep layer are scaled by depth, so the bottom is as hard as before and the crater walls slope about 30 degrees. Tests: dig cube (terrace fingerprint refreshed, stage structure unchanged), dig flow, rock chunks, fun FX, beam VFX. Not seen in Play.
+
 ## November 22 — char split only for big-chunk Strikers; smoother painted attacks
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md).

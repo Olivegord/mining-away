@@ -115,7 +115,7 @@ for _,id in ipairs(cube.layers[1].cells) do
  local ws=D.wedges(cube.cells[id])
  check(#ws>=2,'cell has wedges')
  for _,w in ipairs(ws) do
-  check(w.size[1]>3 and w.size[2]>0 and w.size[3]>0,'wedge size')
+  check(w.size[1]>2 and w.size[2]>0 and w.size[3]>0,'wedge size')
   check(math.abs(w.right[2])>.999,'wedges extrude vertically')
  end
  wedgeCount+=#ws
@@ -343,27 +343,28 @@ end
 local pieceSample=D.build(12345)
 do
  local TERRACE=[[
-1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=71903.873946
-1:0.25:5:5:0:false,2:0.55:11:19:0:false,3:1:31:31:6:true=218577.238529
-1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=82614.074502
-1:0.25:6:6:0:false,2:0.55:13:23:0:false,3:1:35:35:7:true=278142.984333
-1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=83113.042397
-1:0.25:3:3:0:false,2:0.55:8:15:0:false,3:1:28:28:5:true=203744.137014
-1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=53140.846008
-1:0.25:8:8:0:false,2:0.55:16:23:0:false,3:1:36:36:8:true=186496.542228
-1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=58283.200572
-1:0.25:3:3:0:false,2:0.55:10:21:0:false,3:1:36:36:7:true=192927.204625
-1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=55447.882225
-1:0.25:5:5:0:false,2:0.55:12:22:0:false,3:1:35:35:7:true=188097.959565
-1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=68218.013589
-1:0.25:4:4:0:false,2:0.55:9:16:0:false,3:1:28:28:5:true=166336.547138
-1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=72542.788166
-1:0.25:4:4:0:false,2:0.55:10:19:0:false,3:1:31:31:6:true=216497.664942
-1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=63617.690954
-1:0.25:5:5:0:false,2:0.55:12:20:0:false,3:1:34:34:7:true=195470.739879
-1:0.4:1:1:0:false,2:1:7:7:1:true=24171.925337]]
+1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=82362.492310
+1:0.25:7:7:0:false,2:0.55:15:22:0:false,3:1:36:36:8:true=293517.260930
+1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=81169.224724
+1:0.25:4:4:0:false,2:0.55:10:19:0:false,3:1:33:33:6:true=239045.444191
+1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=61947.686265
+1:0.25:3:3:0:false,2:0.55:8:14:0:false,3:1:25:25:5:true=139818.318841
+1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=60194.008083
+1:0.25:6:6:0:false,2:0.55:14:26:0:false,3:1:42:42:8:true=228192.609913
+1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=39043.447011
+1:0.25:4:4:0:false,2:0.55:11:20:0:false,3:1:35:35:7:true=125127.313643
+1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=65854.761198
+1:0.25:4:4:0:false,2:0.55:11:22:0:false,3:1:37:37:7:true=222326.178870
+1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=28201.799748
+1:0.25:5:5:0:false,2:0.55:12:23:0:false,3:1:39:39:7:true=102042.744923
+1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=27648.485876
+1:0.25:5:5:0:false,2:0.55:13:21:0:false,3:1:37:37:8:true=93359.385435
+1:0.25:1:1:0:false,2:0.55:2:7:0:false,3:1:13:13:1:true=7514.485640
+1:0.25:3:3:0:false,2:0.55:7:14:0:false,3:1:26:26:4:true=18628.089215
+1:0.4:1:1:0:false,2:1:7:7:1:true=24098.512281]]
  -- The same id lists and fingerprint the terrace code produced before the
- -- dig-roles change (commit 769110b): its geometry must not move.
+ -- dig-roles change (commit 769110b): its geometry must not move. Refreshed
+ -- for the 14 thinner layers (Nov 22); stage structure unchanged.
  local lists={}
  for _,L in ipairs({1,4,10}) do
   for _,k in ipairs({3,50,120}) do

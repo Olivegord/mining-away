@@ -77,14 +77,12 @@ local ROLE_FX={
  -- angle"): it blackens as the beam works, then the chunk comes away as two
  -- charred halves hinged at its foot that fall open, then crumble.
  -- Owner follow-up: "not every rock should be black. and the splitting rock
- -- effect should only be for select drones". Only the big-chunk Strikers
- -- (DigChunkSize large/huge) char and split (Lc); the rest (L) cut the
- -- classic terraces with a light warm scorch.
+ -- effect should only be for select drones". Then: "sometimes the laser
+ -- drones STILL turn stuff completely black and cut it in half -> not good".
+ -- No Striker chars or splits any more (the big-chunk Lc variant is gone):
+ -- every Striker cuts the classic terraces with a light warm scorch.
  L={proxy={tone=C3(112,84,62),cap=.22,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
   rubble={per=3,min=1,max=4,up={4,7},out={3,6},spin={2,4},dark={.02,.06},near=.1,dcap=.2},
-  contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
- Lc={proxy={tone=C3(28,22,22),cap=.6,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
-  rubble={char=true,per=3,min=1,max=4,up={2,5},out={3,6},spin={2,4},dark={.02,.08},near=.1,dcap=.3,charDark=.86},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
  C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
   rubble={per=3.6,min=1,max=4,up={46,60},out={4,8},spin={1.2,2.6},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3,pattern='ring',
@@ -171,7 +169,7 @@ local function fxPart(parent: Instance,name: string,color: Color3,class: string?
 end
 
 function V.new(ctx: any)
- local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},cellCode={},cellChar={},cellAccent={},cutStage={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
+ local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},cellCode={},cellAccent={},cutStage={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
   generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={},localOpened={},sealedIds={},chains={},frost={},hints={},shots={},slashes={},bolts={}},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
@@ -255,7 +253,7 @@ function V:sync()
  local count=holder:GetAttribute('OpCount') or 0
  if generation~=self.generation then
   for _,f in ipairs(self.frags) do self:dropShard(f) end
-  self.frags={};self.mine={};self.cellColor={};self.cellCode={};self.cellChar={};self.cellAccent={};self.cutStage={}
+  self.frags={};self.mine={};self.cellColor={};self.cellCode={};self.cellAccent={};self.cutStage={}
   self.sealedIds={};self.chains={}
   self:clearCracks()
   self:clearFrost()
@@ -1473,15 +1471,8 @@ end
 -- chunks out; darts pop the chunk they hit; charged shots and volleys make
 -- the rock shiver and pop chunks as the charge builds; every crack pops a
 -- few chunks loose. Your own pieces animate at 30 Hz, others' at 12 Hz.
--- The effects for a piece: a big-chunk Striker's cells char and split.
-local function charStriker(code: string?,source: Instance?): boolean
- if code~='L' or not source then return false end
- local size=source:GetAttribute('DigChunkSize')
- return size=='large' or size=='huge'
-end
-V.charStriker=charStriker
-function V:roleFx(code: string?,cell: number?): any
- if (code or 'L')=='L' and cell and self.cellChar and self.cellChar[cell] then return ROLE_FX.Lc end
+-- The effects for a piece, by the role that cut it.
+function V:roleFx(code: string?,_cell: number?): any
  return ROLE_FX[code or 'L'] or ROLE_FX.L
 end
 local MESH_DEFAULT={ripple={amp=.09,len=2.4,speed=4.5,glow=.5}}
@@ -1976,7 +1967,7 @@ function V:split(op: any,now: number)
   -- A nested stage leaves the chunk's cells (and who is cutting them) in
   -- place; so do the cells that sealed (their K beat still needs them).
   if not op.staged and not (op.except and op.except[id]) then
-   self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;if self.cellChar then self.cellChar[id]=nil end;self.cellAccent[id]=nil
+   self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;self.cellAccent[id]=nil
   end
  end
  accent=accent or primary
@@ -2135,7 +2126,7 @@ function V:sealBeat(op: any,now: number)
  for _,id in ipairs(op.cells) do
   self:clearCrack(id)
   if self.mine[id] then owned=true end
-  self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;if self.cellChar then self.cellChar[id]=nil end;self.cellAccent[id]=nil
+  self.mine[id]=nil;self.cellColor[id]=nil;self.cellCode[id]=nil;self.cellAccent[id]=nil
  end
  local c=self.cube.cells[op.cells[1]]
  if not c then return end
@@ -3017,7 +3008,6 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
   beam.key=key
   for _,cell in ipairs(DigCube.parseKey(ids)) do
    self.cellColor[cell]=primary;self.cellCode[cell]=code;self.cellAccent[cell]=edge
-   self.cellChar=self.cellChar or {};self.cellChar[cell]=charStriker(code,source) or nil
    if beam.mine then self.mine[cell]=true end
   end
  end

@@ -22,10 +22,16 @@
 local D={}
 local halfPlaneOf: (poly: {{number}},cx: number,cz: number,nx: number,nz: number) -> {{number}}
 D.WIDTH=88
-D.LAYERS=10
+-- Owner, Nov 22: "the map is getting really hard to navigate while digging!
+-- make it so that each layer is overall thinner". Same 44-stud cube (the
+-- authored pit is lined to that depth), 14 layers instead of 10: about 3.1
+-- studs each (was 4.4), so each step down is a short hop and, with the same
+-- RUN, the crater walls slope about 30 degrees (were about 40). The per-layer
+-- rules below are scaled by depth so the bottom is as hard and as rich as before.
+D.LAYERS=14
 D.GAP=0 -- seamless: no crack lines until a drone cuts
 D.CORE=.7 -- share of a cell (about its centroid) that must be open above before it can be cut
-D.DEPTH_PULL=2 -- per-layer preference for going deeper
+D.DEPTH_PULL=2^(9/(D.LAYERS-1)) -- per-layer preference for going deeper (2 per old 4.4-stud layer)
 D.FOCUS_FALLOFF=15 -- studs; drones favor cells near the player or a tapped spot
 -- Owner, Nov 22 (latest): the crew sank narrow shafts that swallowed the
 -- player and the camera. A broad bowl instead: gentler walls (about 40
@@ -44,7 +50,7 @@ D.CENTER={140,D.GROUND-D.HEIGHT,20}
 -- too. it should not melt through them super fast": 2.5x the old first layer
 -- (was .2), and steeper with depth (was .4).
 D.HP_SCALE=.5
-D.HARDNESS_PER_LAYER=.55 -- the bottom layer takes about 6x the work of the top
+D.HARDNESS_PER_LAYER=.55*9/(D.LAYERS-1) -- the bottom layer takes about 6x the work of the top (per stud of rock)
 D.MINE_RADIUS=16 -- studs: drones only cut chunks this close to their player, so you move to keep digging
 D.BASE_CUT_AREA=48 -- square studs of top face in a chunk at cutSize 1 (about 8 studs across)
 D.MAX_CHUNK=40
@@ -112,11 +118,17 @@ local STONE_TONE={150,150,166}
 local function mix(a: {number},b: {number},t: number): {number}
  return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t}
 end
+-- The hue ramp sampled by depth, so any layer count spans sand to slate.
+local function hueAt(L: number): {number}
+ local n=#D.LAYER_HUES
+ local f=1+math.clamp((L-1)/math.max(1,D.LAYERS-1),0,1)*(n-1)
+ local i=math.min(n-1,math.floor(f))
+ return mix(D.LAYER_HUES[i],D.LAYER_HUES[i+1],f-i)
+end
 -- Color of layer L at cube-local x,z.
 function D.layerColor(cube: any,L: number,x: number,z: number): {number}
- local n=#D.LAYER_HUES
- local a=D.LAYER_HUES[(L-1)%n+1]
- local b=mix(a,D.LAYER_HUES[L%n+1],D.LAYER_SHIFT)
+ local a=hueAt(L)
+ local b=mix(a,hueAt(L+1.5),D.LAYER_SHIFT) -- about one hue step deeper
  b=mix(b,{255,250,236},.08)
  local t=D.noise3(x/22,L*5.7,z/22,(cube and cube.seed or 1)%100000)
  t=math.clamp((t-.2)/.6,0,1)
@@ -172,7 +184,7 @@ D.STYLES={
  Ballcaster={code='B',kernel='shot',pick='small',size='cell',pieces='none',power=1,color={150,84,255},shape='Ball',carveAhead=true,hintBias=4,
   shot={hover=7,chargeMin=.35,chargeMax=2,chargeDiv=1.4,rested=.4,flight=.26,recover=.15}},
  Needler={code='N',kernel='shot',pick='near',size='cell',pieces='none',power=1,color={255,195,94},shape='Dart',carveAhead=true,
-  shot={hover=4.5,first=.25,rested=.6,interval=.2,windup=.05,flight=.04,adjacent=.25,deepPower=1.25,deepLayer=3,maxLive=2},
+  shot={hover=4.5,first=.25,rested=.6,interval=.2,windup=.05,flight=.04,adjacent=.25,deepPower=1.25,deepLayer=4,maxLive=2},
   near={radius=7,falloff=5,adjacent=6,exposed=2},hints={radius=6,max=12,life=8}},
  Bubbler={code='U',kernel='beam',pick='cone',size='large',pieces='none',early=true,power=.95,color={60,232,212},beam='Repair',collect={ready=.25,range=1e6}},
  Halver={code='H',kernel='beam',pick='wall',size='medium',pieces='none',early=true,power=.8,color={80,100,255},beam='Lance',rockMul=1.5,wall={edge=4,other=.3}},
@@ -450,7 +462,7 @@ function D.build(seed: number)
  local placed=0
  for _=1,400 do
   if placed>=D.TREASURES then break end
-  local L=math.floor(R(3,D.LAYERS+.999))
+  local L=math.floor(R(1+(D.LAYERS-1)*2/9,D.LAYERS+.999)) -- the lower four fifths
   local layer=cube.layers[math.min(D.LAYERS,L)]
   local id=layer.cells[math.floor(R(1,#layer.cells+.999))]
   local c=id and cube.cells[id]

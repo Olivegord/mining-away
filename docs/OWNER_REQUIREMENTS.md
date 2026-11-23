@@ -4,6 +4,10 @@
 
 # Owner requirements
 
+## November 22 — thinner dig layers; no black split from the laser drones
+
+"overall teh map is getting really hard to navigate while digging! make it so that each layer is overall thinner. also sometiemes the laser drones STILL turn stuff completely black and cut it in half -> not good".
+
 ## November 22 — not every rock black; the split for select drones; smoother attacks
 
 "not every rock should be black. and the splitting rock effect should only be for select drones. also all three of your attacks have issues with choppy effects". Earlier in the pass: "the elbows of the electric look bad"; "the lens flare of the star is bad, there already exist lens flares in the files of the game".

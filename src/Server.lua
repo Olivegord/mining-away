@@ -4887,7 +4887,7 @@ function scene.digRock(p,owner,ids,count,position,collect)
  local dig=scene.dig;local cube=dig.cube
  local first=cube.cells[ids[1]]
  local layer=first.layer
- local tierIndex=math.clamp(1+math.floor((layer-1)/2.2),1,#DigCube.ORES)
+ local tierIndex=DigCube.layerTier(layer)
  local ore=DigCube.ORES[tierIndex]
  local tier=Workshop.CRYSTAL_BY_MATERIAL[ore.material]
  if not tier then return end
