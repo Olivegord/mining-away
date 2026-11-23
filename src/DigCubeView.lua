@@ -2330,8 +2330,10 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
  if not beam.on then beam.on=true end
  -- The red targeting laser shows only while the drone charges, right before
  -- it fires (or a Charger winds up); then the real attack takes its place.
- local aiming=charging and not cutting
- if beam.core.Enabled~=aiming then beam.core.Enabled=aiming;beam.glow.Enabled=aiming;beam.gui.Enabled=aiming end
+ -- No sightline any more (owner, Nov 22: "you can probably remove it
+ -- altogether"): the red targeting line and dot never show; the charge-up
+ -- and the attack itself say where a drone is about to hit.
+ if beam.core.Enabled or beam.glow.Enabled or beam.gui.Enabled then beam.core.Enabled=false;beam.glow.Enabled=false;beam.gui.Enabled=false end
  beam.root.CFrame=CFrame.new(tip+Vector3.yAxis*.05)
  beam.a.Position=from-tip
  local size,core,halo

@@ -80,6 +80,7 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
     - Nomad `blast`: far and high with wild spin.
     - Lancer `jet`: everything along one line.
     - Halver (halves), Bubbler (float) and Singularity (implosion) as before.
+- **Sightline removed:** the dig drones' red targeting line and dot (`SightLine`, `SightGlow`, `SightDot`) never show (owner: "you can probably remove it altogether"). This supersedes "sight only while charging" and the red sights in earlier entries. The contact sparks are unchanged.
 - **Spritesheet particles:** supported natively. `ParticleEmitter.FlipbookLayout` (grids such as 2×2, 4×4, 8×8), `FlipbookMode` (Loop, OneShot, PingPong, Random), `FlipbookFramerate` and `FlipbookStartRandom` play a sheet's frames over each particle's life. The sheet must be an uploaded image asset, square and power-of-two (up to 1024). This repo uploads none yet; it can be uploaded through Studio's Asset Manager.
 - **Gems are only opened by jumping (owner, Nov 22):**
   - Drones never break a gem open. Every gem found seals for its owner; the per-break (`SEAL_PER_BREAK`) and per-player (`SEAL_LIVE`) caps no longer apply. Only a cell already carved away (never a gem cell in practice) bursts out.
