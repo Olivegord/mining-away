@@ -115,7 +115,7 @@ end
 
 function V.new(ctx: any)
  local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},cellCode={},cellAccent={},cutStage={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
-  generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={},localOpened={},frost={},hints={},shots={}},V)
+  generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={},localOpened={},sealedIds={},chains={},frost={},hints={},shots={}},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
  self:watch()
@@ -199,6 +199,7 @@ function V:sync()
  if generation~=self.generation then
   for _,f in ipairs(self.frags) do self:dropShard(f) end
   self.frags={};self.mine={};self.cellColor={};self.cellCode={};self.cellAccent={};self.cutStage={}
+  self.sealedIds={};self.chains={}
   self:clearCracks()
   self:clearFrost()
   self.generation=generation;self.origin=origin
@@ -212,6 +213,7 @@ function V:sync()
    local op=DigCube.parseOp(entry)
    if op then
     if op.staged then self:markStage(op) end
+    self:markSealed(op)
     DigCube.applyOp(self.cube,op)
    end
   end
@@ -252,6 +254,7 @@ function V:sync()
     end
     op.parts=parts
    end
+   self:markSealed(op)
    -- Out of the cube first, so shards land on the floor the break leaves.
    for _,id in ipairs(DigCube.applyOp(self.cube,op)) do self:cellGone(id) end
    if op.sealed then self:sealBeat(op,now)
@@ -276,6 +279,16 @@ function V:opStyle(op: any): any
   if code and DigCube.STYLES_BY_CODE[code] then return DigCube.STYLES_BY_CODE[code] end
  end
  return DigCube.STYLES.Striker
+end
+-- Cells that sealed into geodes (K) stay in the cube until they open, but
+-- are never cut again: no proxy is built over them, even from a drone's
+-- DigOp that still names them for a frame after the seal.
+function V:markSealed(op: any)
+ if op.sealed then
+  for _,id in ipairs(op.cells) do self.sealedIds[id]=true end
+ elseif op.geode then
+  for _,id in ipairs(op.cells) do self.sealedIds[id]=nil end
+ end
 end
 -- A terrace stage that broke stays broken: its proxy never comes back.
 function V:markStage(op: any)
@@ -857,7 +870,7 @@ function V:buildProxy(piece: any,owned: boolean,chunk: {number},code: string?): 
  local model=Instance.new('Model');model.Name='DigCrackPiece'
  local area,sx,sz,top,bottom=0,0,0,-math.huge,math.huge
  for _,id in ipairs(chunk) do
-  if not cube.removed[id] and not self.crackCells[id] then table.insert(ids,id) end
+  if not cube.removed[id] and not self.crackCells[id] and not self.sealedIds[id] and not self.geodes[id] then table.insert(ids,id) end
  end
  if #ids==0 then model:Destroy();return nil end
  local grow=fx.carve and .32 or .03
@@ -1135,10 +1148,14 @@ function V:split(op: any,now: number)
   end
  end
  accent=accent or primary
+ -- Resonator chain links pop without a pause of their own. The server
+ -- breaks them itself (neighbour cells, never in a DigOp), so one right
+ -- after your own Resonator break counts as yours.
+ local link=op.flag=='C' and style.code=='V'
+ if link and not owned then owned=self:ownChainLink(op.cells[1],now)
+ elseif style.code=='V' and owned and op.flag~='C' and not op.partial and not op.geode then self:markChain(op.cells,now) end
  local strength=math.clamp(bulk*.36,.9,2.45)
  local heavy=owned and strength>=1.35
- -- Resonator chain links pop without a pause of their own.
- local link=op.flag=='C' and style.code=='V'
  local hold=0
  if owned and not self:reduced() and (op.tier>0 or now-(self.heldAt or -10)>=(op.partial and .9 or .3)) then
   -- A gem always gets the long pause; otherwise the role's hold class.
@@ -1206,6 +1223,29 @@ function V:split(op: any,now: number)
   color=self:colorAt(top-.01,cx,cz),primary=primary,accent=accent,fx=fx,link=link}
  if hold>0 then table.insert(self.pending,{at=now+hold,run=function() self:burst(op,info) end})
  else self:burst(op,info) end
+end
+-- Your own Resonator break: its cells and their same-layer neighbours, the
+-- only cells its chain links can be (up to three, .15 s apart), for a
+-- moment. A link op landing in one of them is yours.
+local CHAIN_WINDOW=.8
+function V:markChain(cells: {number},now: number)
+ self:ownChainLink(-1,now) -- drops the expired ones
+ local set={}
+ for _,id in ipairs(cells) do
+  set[id]=true
+  local c=self.cube.cells[id]
+  if c then for _,n in ipairs(c.neighbors) do set[n]=true end end
+ end
+ table.insert(self.chains,{at=now,cells=set})
+end
+function V:ownChainLink(id: number,now: number): boolean
+ local mine=false
+ for i=#self.chains,1,-1 do
+  local chain=self.chains[i]
+  if now-chain.at>=CHAIN_WINDOW then table.remove(self.chains,i)
+  elseif chain.cells[id] then mine=true end
+ end
+ return mine
 end
 -- A cell that sealed into a geode (K): the crack-seal beat. The piece stops,
 -- a gem-colored flash over the cell, a crack and a couple of chips. No
@@ -1882,6 +1922,12 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
  local state=source:GetAttribute('State')
  local digMining=source:GetAttribute('DigMining')==true
  local alive=(source:GetAttribute('HP') or 1)>0
+ local point=source:GetAttribute('DigPoint')
+ -- The dig this drone was last on, before this frame. The slam or pulse
+ -- that breaks a chunk replicates together with DigOp cleared (digBreak
+ -- drops the job in the same tick), or already with the next job's key.
+ local lastKey,lastPoint=beam.key,beam.lastPoint
+ local recent=ids~=nil or clock-(beam.digAt or -10)<.5
  -- Remember which cells each drone is cutting (its role and colors), and
  -- which are this player's own: their breaks get the pause and the combo.
  if ids and beam.key~=key then
@@ -1891,25 +1937,33 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
    if beam.mine then self.mine[cell]=true end
   end
  end
+ if ids then
+  beam.digAt=clock
+  if typeof(point)=='Vector3' then beam.lastPoint=point end
+ end
+ -- Where a slam or pulse seen this frame landed: the chunk it broke when
+ -- the dig cleared or moved on this frame, else the current DigPoint.
+ local moved=ids==nil or (lastKey~=nil and lastKey~=key)
+ local hitPoint=(moved and lastPoint) or (typeof(point)=='Vector3' and point) or nil
  -- A Charger's slam lands (ImpactSerial) and a Lancer pulse fires
  -- (MinePulseSerial): the piece jolts down. First sight only records them.
  local impactSerial=source:GetAttribute('ImpactSerial') or 0
- local slam=beam.impactSerial~=nil and impactSerial~=beam.impactSerial and code=='C' and ids~=nil
+ local slam=beam.impactSerial~=nil and impactSerial~=beam.impactSerial and code=='C' and recent
  beam.impactSerial=impactSerial
  local pulseSerial=source:GetAttribute('MinePulseSerial') or 0
- local pulse=beam.pulseSerial~=nil and pulseSerial~=beam.pulseSerial and code=='Z' and ids~=nil
+ local pulse=beam.pulseSerial~=nil and pulseSerial~=beam.pulseSerial and code=='Z' and recent
   and workspace:GetServerTimeNow()-(source:GetAttribute('MinePulseAt') or 0)<.5
  beam.pulseSerial=pulseSerial
- if ids and (slam or pulse) then
+ if ids and not moved and (slam or pulse) then
+  -- (a hit that broke the last chunk does not jolt the next one)
   local job=self.cracks[ids]
   if job then
    if slam then job.slamAt=clock end
    if pulse then job.pulseAt=clock end
   end
  end
- local point=source:GetAttribute('DigPoint')
  if slam and beam.mine and self.ctx.audio then
-  self.ctx.audio:play('breaker_contact',typeof(point)=='Vector3' and point or from,{level=.7})
+  self.ctx.audio:play('breaker_contact',hitPoint or from,{level=.7})
  end
  -- Stage cracks on the chunk this drone is cutting. The outline pulses
  -- while it works on it: the beam, or any other attack once it is there.
@@ -1931,7 +1985,7 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
   beam.tip=hit and hit.Position or Vector3.new(from.X,self.origin.Y,from.Z)
  end
  local tip=Vector3.new(from.X,beam.tip.Y,from.Z)
- if pulse then self:pulseShot(from,typeof(point)=='Vector3' and point or tip,primary,edge,beam.mine) end
+ if pulse then self:pulseShot(from,hitPoint or tip,primary,edge,beam.mine) end
  if from.Y-tip.Y<.4 then self:hideBeam(beam);return end
  local locked=ids~=nil
  local cutting=locked and digMining
