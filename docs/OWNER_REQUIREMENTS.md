@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 22 — more fun, less clutter, drones that differ; then six drones, keep Ramiel, see-through rock
+
+"make this game more fun and less visually cluttered! visual effects should be used to show things! not be overused. take videos and analyze everything and make sure it all looks good. chief complaint is all drones do the same progression of damage, and look the exact same, they just have different skins. also its not too fun the current game loop, and the lighting and textures are very ugly. it looked better in pastel, but that was too bright." Follow-ups: "only work on like 6 drones or less. all 14 is too much of an undertaking before all the game is ready"; "make sure rocks never block the camera when you are digging, they just become sorta transparent"; "keep ramiel for now".
+
 ## November 22 — gems only by jumping; a hit that feels great; darker map; less color
 
 Make sure drones don't randomly break the ores: the player has to jump on them. When the player hits one: make the ore brighter, lightning extending out in 1–4 random directions extra long, longer god rays, overall feel really good. A crack noise AFTER the pause, pitched up to signify combos when jumping between rocks midair. Earlier in this pass: the map overall darker (keep the pastel look, but don't wash out the bright effects; drones and gems should pop); less color on the chunk effects (only the few segments nearest the beam colored); chunk effects stepped at about 8 fps; some particles (the circular ones) stay near the beam on big breaks; chunks jump and twist at each stage; break effects spread over many-cell breaks; rock effects as animations, not editable meshes.

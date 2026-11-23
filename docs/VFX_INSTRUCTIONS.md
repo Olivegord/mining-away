@@ -1,5 +1,18 @@
 # VFX instructions — owner feedback and implementation
 
+## November 22 — one process and one body per type; pastel light; fewer effects
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes the shared darken/crack-pop/terrace progression for every type except the Striker, the cube-plus-trim looks, the late-afternoon darkening, the relief rock variant, the 2.4× role particles and the rock mesh test area below.
+
+- **Rock processes (`DigCubeView` `SIG`, `V:stepSignature`, `RockChunks.step` `s.sig`):** per chunk tile an offset, turn, color, hidden flag and material from the chunk's progress, on the 8 fps stop-motion grid. Slams and pulses ring the rock (`def.ring`); the Resonator rings on a timer. The shared crack pop, lift, strain jitter and crack chips are skipped for these types; the crack is only heard. Halver draws a glowing seam, Gridcutter neon grid lines (`def.build`/`def.extra`). Needler pieces are cut finer (`tileArea` 1.3).
+- **Server:** `STYLES.early` types call `digCarvePiece` from `digAhead` as soon as they are on station, committing the job (as shots did).
+- **Bodies (`FunFX.BODIES`, `ROLE_SCALE`, `ROLE_BELLY`, `MOTION`):** the hull stays the invisible pivot; animated parts ('spin', 'bob', 'part', 'hum') are placed in `stepCube` after the model is posed. `Presentation`'s per-frame color/transparency reset still applies to them. `WorkEffects:flight` skips trails and wisps for dig drones.
+- **Breaks:** no CrystalBreak or Touchdown `ImpactParticles` on dig breaks; `breakCloud` 4 cells, 4+1.5×bulk discs at .5 size; `ROLE_PARTICLE_SCALE` 1.45; contact sparks 7/s (3/s others).
+- **Sealed gems:** rays, glints and full motes only within `GEODE_NEAR` (20 studs); otherwise glowing cracks, a dimmer halo and a few motes.
+- **Lighting (`FunFX.DARKEN`):** sun ×.72, ambient ×.8, outdoor ×.74, diffuse ×.9, haze ×.7, clock 14.2, shadow softness .32, exposure −.12, grade saturation −.04 contrast .08. `MiningEnergyBloom` .38/16/1.3; pit fill .72, pit exposure −.18.
+- **Rock:** `DigCube.ROCK_VARIANT=''` (SmoothPlastic); `LAYER_HUES` cool pastel, `LAYER_MUTE` .14, `LAYER_VALUE` .86, stone tone (150,150,166).
+- **Gallery (`SHOWCASE`):** the active types only, 8 studs apart, signs readable within 34 studs, each looping its real process through a stand-in proxy.
+
 ## November 22 — carve-ahead for every role, one look per drone type, animated rock chunks
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cube body, trail and sparks use the drone's own palette color" below.
