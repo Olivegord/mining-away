@@ -569,16 +569,36 @@ do -- every role comes apart its own way
   local center=self.origin+v3(cx,self.cube.cells[ids[1]].y1,cz)
   fakeClock=9000
   self:shards(op,fakeClock,center,V.ROLE_FX[code].rubble)
-  local out={}
+  local out,chips={},{}
   for _,f in ipairs(self.frags) do
    self:releaseShard(f)
    local v=f.parts[1].part.AssemblyLinearVelocity or v3(0,0,0)
-   table.insert(out,{delay=f.at-fakeClock,dist=v3(f.from.X-center.X,0,f.from.Z-center.Z).Magnitude,v=v,f=f})
+   table.insert(f.pebble and chips or out,{delay=f.at-fakeClock,dist=v3(f.from.X-center.X,0,f.from.Z-center.Z).Magnitude,v=v,f=f})
   end
-  return out
+  return out,chips
  end
  local function mean(list,fn) local t=0;for _,x in ipairs(list) do t+=fn(x) end;return t/math.max(1,#list) end
  local striker,charger,ball,needle,lance,ram=run('L'),run('C'),run('B'),run('N'),run('Z'),run('P')
+ -- The ripple: the middle lets go first, the rest in a fast wave outward.
+ local far=0
+ for _,x in ipairs(striker) do
+  assert(math.abs(x.delay-x.dist*.014)<1e-6,string.format('Striker ripple: delay %.3f at %.2f studs',x.delay,x.dist));far=math.max(far,x.delay)
+ end
+ assert(far>0 and far<.2,'the ripple runs out fast: '..far)
+ -- Light chips: smaller than the chunks and thrown far higher.
+ local chips,up={},0
+ for _,code in ipairs({'L','L','L','L','N','B','Z'}) do
+  local pieces,list=run(code)
+  for _,x in ipairs(list) do
+   local top=0;for _,y in ipairs(pieces) do top=math.max(top,y.v.Y) end
+   assert(x.v.Y^2>=3*top^2 and x.v.Y>=12,string.format('%s chip flies 3x+ higher: up %.1f vs chunks %.1f',code,x.v.Y,top))
+   assert(x.f.parts[1].size.Magnitude<pieces[1].f.parts[1].size.Magnitude,'a chip is smaller than a chunk')
+   assert(x.f.parts[1].part.Transparency==0,'a chip shows when it goes')
+   table.insert(chips,x);up+=x.v.Y
+  end
+ end
+ assert(#chips>0,'some breaks throw light chips')
+ print(string.format('PASS ripple out from the hit (last piece %.0f ms) and %d light chips thrown far higher (mean up %.0f)',far*1000,#chips,up/#chips))
  -- Charger: a ring from the middle, outward and flat
  for _,x in ipairs(charger) do assert(math.abs(x.delay-x.dist*.035)<1e-6,'Charger pieces let go farther out later') end
  assert(mean(charger,function(x) return v3(x.v.X,0,x.v.Z).Magnitude end)>mean(charger,function(x) return x.v.Y end),'Charger throws flat and out')

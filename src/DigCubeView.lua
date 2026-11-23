@@ -362,6 +362,20 @@ local RUBBLE=PhysicalProperties.new(2.6,.8,.12,1,1)
 local RUBBLE_REST=1.15 -- seconds the pile rests before the bottom pieces start to go
 local RUBBLE_STEP=.07 -- one piece every this many seconds, lowest first
 local RUBBLE_VANISH=.18 -- each shrinks away this fast
+-- A quick ripple through every break (owner, Nov 22): the pieces by the hit
+-- let go first and the rest follow in a fast wave outward, about 70 studs a
+-- second, with a slight rise just before each one goes. Roles that already
+-- time their pieces by distance (ring, waves, rows) keep their own wave.
+local RIPPLE_DELAY=.014 -- seconds per stud from the hit
+local RIPPLE_LIFT=.14 -- studs a piece rises as the wave reaches it
+local RIPPLE_OWN={ring=true,waves=true,rows=true}
+-- Light chips (owner, Nov 22): now and then a much smaller piece breaks off
+-- the top of a chunk and, weighing less, flies far higher than the rest.
+local PEBBLE_CHANCE=.25 -- per piece
+local PEBBLE_MAX=6 -- per break
+local PEBBLE_SCALE={.2,.34} -- of the piece's outline
+local PEBBLE_UP={2.4,3.2} -- times the role's top pop speed
+local PEBBLE_UP_MIN,PEBBLE_UP_MAX=12,64
 -- The part of a convex polygon on the side (v-c).n <= 0.
 local function cutPoly(poly: {{number}},cx: number,cz: number,nx: number,nz: number): {{number}}
  local out={}
@@ -450,6 +464,7 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
  local fx=rf or ROLE_FX.L.rubble
  local loose=self:physicsReady()
  local made={}
+ local pebbles={}
  local lo,hi=Vector3.new(math.huge,0,math.huge),Vector3.new(-math.huge,0,-math.huge)
  local floorY=math.huge
  local random=function() return self.random:NextNumber() end
@@ -543,7 +558,9 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
     elseif pattern=='crumble' then delay+=self.random:NextNumber(0,.35)
     elseif pattern=='fountain' then delay+=self.random:NextNumber(0,.4)
     elseif pattern=='levitate' then delay+=self.random:NextNumber(0,.12) end
-    local f={parts=parts,pattern=pattern,jet=jetAxis,k=k,scale=k,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
+    local ripple=not RIPPLE_OWN[pattern or '']
+    if ripple then delay+=dist*RIPPLE_DELAY end
+    local f={ripple=ripple and dist*RIPPLE_DELAY>.01,parts=parts,pattern=pattern,jet=jetAxis,k=k,scale=k,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
      turn=self.random:NextNumber(.6,1.8),
      from=mid,land=Vector3.new(mid.X,landY,mid.Z)+out*self.random:NextNumber(.1,.9),
      at=now+delay,pre=delay>0,center=center,fx=fx,
@@ -564,9 +581,15 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
      end
     end
     table.insert(self.frags,f);table.insert(made,f)
+    if #pebbles<PEBBLE_MAX and #self.frags<SHARD_MAX and not self:reduced() and self.random:NextNumber()<PEBBLE_CHANCE then
+     local p=self:pebble(poly,c,mx,mz,color,f,fx,loose)
+     if p then table.insert(self.frags,p);table.insert(pebbles,p) end
+    end
    end
   end
  end
+ -- After the chunks, so a chunk stays the pebble left to collect.
+ for _,p in ipairs(pebbles) do table.insert(made,p) end
  -- The invisible floor the loose pieces land and pile on.
  if loose and #made>0 then
   local size=Vector3.new(hi.X-lo.X+10,2,hi.Z-lo.Z+10)
@@ -587,6 +610,50 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
    break
   end
  end
+end
+
+-- A light chip off the top of a chunk (PEBBLE_*): a small copy of the
+-- chunk's outline sitting on it, hidden until the chunk lets go, then
+-- thrown far higher than the chunks, spinning fast.
+function V:pebble(poly: {{number}},c: any,mx: number,mz: number,color: Color3,f: any,fx: any,loose: boolean): any?
+ local o=self.origin
+ local s=self.random:NextNumber(PEBBLE_SCALE[1],PEBBLE_SCALE[2])
+ local small={}
+ for _,v in ipairs(poly) do table.insert(small,{mx+(v[1]-mx)*s,mz+(v[2]-mz)*s}) end
+ if DigCube.polyArea(small)<.01 then return nil end
+ local h=math.clamp((c.y1-c.y0)*s,.2,.6)
+ local y0=c.y1+.02
+ local mid=o+Vector3.new(mx,y0+h*.5,mz)
+ local inverse=CFrame.new(mid):Inverse()
+ local parts={}
+ for _,w in ipairs(DigCube.polyWedges(small,y0,y0+h)) do
+  local part=fxPart(self.fx,'DigShard',color,'WedgePart');part.CastShadow=true;part.Material=ROCK;part.MaterialVariant=ROCK_VARIANT
+  if fx.glass then part.Material=Enum.Material.Glass end
+  part.Transparency=1
+  local size=Vector3.new(w.size[1],w.size[2],w.size[3])
+  local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
+   Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
+  local rel=inverse*frame
+  part.Size=size;part.CFrame=CFrame.new(mid)*rel
+  table.insert(parts,{part=part,size=size,rel=rel})
+ end
+ if #parts==0 then return nil end
+ local p={parts=parts,pebble=true,hidden=true,clear=1,pattern=f.pattern,jet=f.jet,k=1,scale=1,axis=f.axis,
+  turn=f.turn*2.5,from=mid,land=Vector3.new(mid.X,f.land.Y,mid.Z)+f.out*self.random:NextNumber(.8,1.8),
+  at=f.at,pre=false,center=f.center,fx=fx,T=f.T*1.6,hop=self.random:NextNumber(2,3),wait=f.wait,born=f.born,
+  pos=mid,out=f.out,floor=f.floor}
+ if loose then
+  -- No collisions until it goes (releaseShard), so nothing bumps a hidden chip.
+  p.loose=true;p.life=8
+  local physical=fx.friction and PhysicalProperties.new(2.6,fx.friction,.12,1,1) or RUBBLE
+  for _,q in ipairs(parts) do q.part.CollisionGroup='DigRubble';q.part.CustomPhysicalProperties=physical end
+ end
+ return p
+end
+-- The slight rise a piece makes as the break's ripple reaches it.
+local function rippleLift(f: any,now: number): Vector3
+ if not f.ripple then return Vector3.zero end
+ return Vector3.yAxis*RIPPLE_LIFT*math.clamp(1-(f.at-now)/.05,0,1)
 end
 
 -- A piece joins the rock dust it came from. The first one is the keeper: it
@@ -631,6 +698,18 @@ function V:releaseShard(f: any)
  for _,q in ipairs(parts) do q.part.Anchored=false end
  local r=self.random
  primary.CFrame+=Vector3.yAxis*.12
+ if f.pebble then
+  -- A light chip: far higher than the chunks, a little wider, spinning fast.
+  for _,q in ipairs(parts) do q.part.Transparency=0;q.part.CanCollide=true end
+  f.clear=0
+  local lift=math.min(PEBBLE_UP_MAX,math.max(fx.up[2],PEBBLE_UP_MIN)*r:NextNumber(PEBBLE_UP[1],PEBBLE_UP[2]))
+  local side=f.out+Vector3.new(r:NextNumber(-.5,.5),0,r:NextNumber(-.5,.5))
+  side=side.Magnitude>.05 and side.Unit or f.out
+  primary.AssemblyLinearVelocity=side*r:NextNumber(3,7)+Vector3.yAxis*lift
+  local spin=Vector3.new(r:NextNumber(-1,1),r:NextNumber(-1,1),r:NextNumber(-1,1))
+  primary.AssemblyAngularVelocity=(spin.Magnitude>.05 and spin.Unit or Vector3.xAxis)*r:NextNumber(12,22)
+  return
+ end
  primary.AssemblyLinearVelocity=f.out*r:NextNumber(fx.out[1],fx.out[2])+Vector3.yAxis*r:NextNumber(fx.up[1],fx.up[2])
  local pattern=f.pattern
  if pattern=='jet' then
@@ -665,6 +744,7 @@ function V:prePose(f: any,now: number)
  if fx.jitter and not self:reduced() then
   pos+=Vector3.new(self.random:NextNumber(-.08,.08),self.random:NextNumber(-.04,.04),self.random:NextNumber(-.08,.08))
  end
+ if not self:reduced() then pos+=rippleLift(f,now) end
  local frame=CFrame.new(pos)
  for _,q in ipairs(f.parts) do q.part.CFrame=frame*(q.rel.Rotation+q.rel.Position*f.k) end
 end
@@ -708,6 +788,12 @@ function V:stepShards(now: number)
    for _,q in ipairs(f.parts) do q.part.Color=color end
    if u>=1 then f.hot=nil end
   end
+  if f.hidden then
+   -- A light chip stays out of sight until its chunk lets go.
+   if t<0 then continue end
+   f.hidden=nil
+   if not f.loose then for _,q in ipairs(f.parts) do q.part.Transparency=0 end;f.clear=0 end
+  end
   if f.loose and not f.settled then
    local primary=f.parts[1].part
    if t<0 and f.pre then self:prePose(f,now) end
@@ -742,11 +828,11 @@ function V:stepShards(now: number)
    elseif t>0 then
     local q=math.clamp(t/f.T,0,1)
     -- A small jolt up as it cracks free, then it is pushed down and tips over.
-    local pos=f.from:Lerp(f.land,q*q)+Vector3.yAxis*(f.hop*4*q*(1-q)*(1-q))
+    local pos=f.from:Lerp(f.land,q*q)+Vector3.yAxis*(f.hop*4*q*(1-q)*(1-q))+rippleLift(f,now)*(1-q)
     frame=CFrame.new(pos)*CFrame.fromAxisAngle(f.axis,f.turn*(1-(1-q)^2))
     age=t-f.T-f.wait
    else
-    frame=CFrame.new(f.from);age=-1
+    frame=CFrame.new(f.from+rippleLift(f,now));age=-1
    end
    if f.keeper and f.dust and not f.dust.goneAt then
     -- The pebble left to collect.
