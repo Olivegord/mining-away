@@ -22,6 +22,8 @@
 local DigCube=require('./DigCube')
 local RockChunks=require('./RockChunks')
 RockChunks.wedges=DigCube.polyWedges
+local ROCK=Enum.Material[DigCube.ROCK_MATERIAL]
+RockChunks.material=ROCK
 local UIS=game:GetService('UserInputService')
 local Players=game:GetService('Players')
 local V={}
@@ -69,13 +71,13 @@ local ROLE_FX={
   rubble={per=2.2,min=1,max=6,up={10,15},out={4,8},spin={4,8},dark={.06,.2},near=.6,dcap=.85},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
  C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
-  rubble={per=3.6,min=1,max=4,up={5,8},out={10,16},spin={2,4},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3},
+  rubble={per=3.6,min=1,max=4,up={4,7},out={14,22},spin={2,4},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3,pattern='ring'},
   contact='Charger',sounds={{cue='breaker_fracture',pitch=.9},{cue='crystal_split',rock=9}},light=true,hold='heavy',lift=.7,speed=1.3},
  B={proxy={tone=C3(25,12,45),cap=.55,src='progress',tremble=.03,mesh={charge=.25,tremble=.05}},carve=true,
-  rubble={per=4,min=2,max=4,up={18,26},out={2,5},spin={8,14},dark={.3,.4},near=.6,dcap=.9,scorch=C3(38,18,58)},
+  rubble={per=4,min=2,max=4,up={24,34},out={2,5},spin={10,18},dark={.3,.4},near=.6,dcap=.9,scorch=C3(38,18,58),pattern='column'},
   sounds={{cue='crystal_split',pitch=.9}},hold='split',lift=1.4,speed=1},
  N={proxy={jitter={.01,.04},mesh={hits=true}},carve=true,
-  rubble={per=2.2,min=1,max=3,up={8,12},out={2,5},spin={6,10},dark={.05,.1},near=.15,dcap=.3},
+  rubble={per=.9,min=2,max=6,up={0,2},out={0,1},spin={1,3},dark={.05,.1},near=.15,dcap=.3,pattern='crumble'},
   sounds={{cue='crystal_split',pitch=1.25,level=.7}},hold='piece',lift=1,speed=1},
  U={proxy={cap=.1,lift={.1,.4},ball=true,mesh={ripple={amp=.07,len=3,speed=2.5,glow=.4},bulge=.3}},
   rubble={per=2.2,min=1,max=5,up={4,6},out={1,3},spin={2,4},dark={.02,.06},near=.1,dcap=.2,scorch=C3(200,240,245),float=.7},
@@ -84,28 +86,28 @@ local ROLE_FX={
   rubble={halves=true,per=5,min=1,max=3,up={8,11},out={6,10},spin={3,5},dark={.06,.2},near=.6,dcap=.85},
   contact='Halver',sounds={{cue='crystal_split'}},light=true,hold='heavy',lift=.9,speed=1.1},
  G={proxy={flat=true,mesh={ripple={amp=.08,len=1.8,speed=4,square=true,glow=.6}}},
-  rubble={grid=1.8,up={9,13},out={2,5},spin={1,3},dark={.1,.2},near=.3,dcap=.5},
+  rubble={grid=1.8,up={9,13},out={2,5},spin={1,3},dark={.1,.2},near=.3,dcap=.5,pattern='rows'},
   contact='Gridcutter',sounds={{cue='crystal_electric',pitch=.85,seq=.06}},light=true,hold='piece',lift=1,speed=1},
  Y={proxy={tone=C3(20,8,40),cap=.55,compress=.1,mesh={ripple={amp=.1,len=2.2,speed=-4.5,glow=.6}}},
   rubble={per=2.2,min=1,max=6,up={14,20},out={1,3},spin={6,10},dark={.2,.3},near=.6,dcap=.9,scorch=C3(20,8,32),implode=.12},
   contact='Singularity',sounds={{cue='crystal_impact',pitch=.76}},light=true,hold='heavy',lift=1.3,speed=.6},
  M={proxy={tone=C3(255,120,40),cap=.6,pow=1.5,light=true,mesh={ripple={amp=.07,len=2.8,speed=3,glow=.85,beat=1.4}}},
-  rubble={per=2.2,min=1,max=5,up={6,9},out={3,6},spin={2,4},dark={.06,.2},near=.6,dcap=.85,molten=C3(255,150,60)},
+  rubble={per=2.2,min=1,max=5,up={22,30},out={1,3},spin={2,4},dark={.06,.2},near=.6,dcap=.85,molten=C3(255,150,60),pattern='fountain'},
   contact='Starforge',sounds={{cue='tool_sizzle',pitch=.87}},light=true,hold='split',lift=.8,speed=1},
  I={proxy={tone=C3(190,235,255),cap=1,pow=1,ice=.5,mesh={ripple={amp=.06,len=2.6,speed=2.2,glow=.5,beat=1.2}}},
-  rubble={per=1.2,min=2,max=8,count=24,up={9,13},out={6,10},spin={8,14},dark={.3,.4},near=0,dcap=.4,scorch=C3(190,235,255),glass=true,friction=.05},
+  rubble={per=.6,min=3,max=10,count=34,up={8,12},out={12,20},spin={14,24},dark={.3,.4},near=0,dcap=.4,scorch=C3(190,235,255),glass=true,friction=.05,pattern='shatter'},
   contact='Frostbite',sounds={{cue='crystal_snap',pitch=1.31},{cue='crystal_split',pitch=1.15}},light=true,hold='split',lift=1,speed=1.2},
  V={proxy={vibrate={.01,.06},mesh={ripple={amp=.12,len=1.6,speed=7,glow=.6,beat=4}}},
-  rubble={per=2.2,min=1,max=5,up={13,17},out={1,3},spin={1,2},dark={.06,.2},near=.6,dcap=.85,jitter=.12},
+  rubble={per=2.2,min=1,max=5,up={13,17},out={1,3},spin={1,2},dark={.06,.2},near=.6,dcap=.85,jitter=.12,pattern='waves'},
   contact='Resonator',sounds={{cue='coil_hit',pitch=1.19,seq=.12}},light=true,hold='split',lift=1,speed=1},
  P={proxy={tone=C3(12,6,10),cap=.9,src='late',mesh={charge=.45,tremble=.06}},carve=true,
-  rubble={per=1.6,min=1,max=6,count=30,up={12,16},out={6,10},spin={6,10},dark={.7,.8},near=.2,dcap=.9,scorch=C3(12,6,10),seed=true},
+  rubble={per=1.6,min=1,max=6,count=30,up={4,6},out={1,3},spin={2,4},dark={.7,.8},near=.2,dcap=.9,scorch=C3(12,6,10),seed=true,pattern='levitate'},
   sounds={{cue='crystal_split',rock=9}},hold='heavy',lift=1.2,speed=1.1},
  A={proxy={mesh={charge=.45,tremble=.05}},carve=true,
-  rubble={per=3,min=1,max=4,count=30,up={16,22},out={8,13},spin={6,12},dark={.1,.2},near=.5,dcap=.8,scorch=C3(30,26,24),seed=true},
+  rubble={per=3,min=1,max=4,count=30,up={18,26},out={16,26},spin={10,18},dark={.1,.2},near=.5,dcap=.8,scorch=C3(30,26,24),seed=true,pattern='blast'},
   sounds={{cue='crystal_split',rock=9}},hold='heavy',lift=1.5,speed=1.2},
  Z={proxy={pulse=true,mesh={}},
-  rubble={per=2.2,min=1,max=5,up={11,15},out={5,9},spin={4,8},dark={.1,.2},near=.5,dcap=.85,scorch=C3(60,40,20)},
+  rubble={per=2.2,min=1,max=5,up={6,9},out={18,26},spin={4,8},dark={.1,.2},near=.5,dcap=.85,scorch=C3(60,40,20),pattern='jet'},
   sounds={{cue='crystal_split',pitch=1.1}},hold='split',lift=1.1,speed=1.1},
 }
 V.ROLE_FX=ROLE_FX
@@ -456,6 +458,9 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
  local cap=fx.count or 18
  local plane=fx.halves and DigCube.split(cube,op.cells) or nil
  local hot=0
+ -- One direction for a jet (Lancer), one sweep axis for rows (Gridcutter).
+ local ja=self.random:NextNumber(0,math.pi*2)
+ local jetAxis=Vector3.new(math.cos(ja),0,math.sin(ja))
  for i,c in ipairs(order) do
   if #self.frags>=SHARD_MAX or #made>=cap then break end
   for _,v in ipairs(c.poly) do
@@ -499,7 +504,7 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
    local inverse=CFrame.new(mid):Inverse()
    local parts={}
    for _,w in ipairs(DigCube.polyWedges(poly,c.y0,c.y1)) do
-    local part=fxPart(self.fx,'DigShard',color,'WedgePart');part.CastShadow=true
+    local part=fxPart(self.fx,'DigShard',color,'WedgePart');part.CastShadow=true;part.Material=ROCK
     if fx.glass then part.Material=Enum.Material.Glass end
     local size=Vector3.new(w.size[1],w.size[2],w.size[3])
     local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
@@ -525,7 +530,18 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
     -- All at once, the moment the pause ends (owner, Nov 22); an implosion
     -- or a jitter plays first, held in place.
     local delay=(fx.implode or fx.jitter or 0)
-    local f={parts=parts,k=k,scale=k,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
+    -- Each role comes apart its own way (owner: not reskins): when each
+    -- piece lets go.
+    local flat=Vector3.new(mid.X-center.X,0,mid.Z-center.Z)
+    local dist=flat.Magnitude
+    local pattern=fx.pattern
+    if pattern=='ring' then delay+=dist*.035          -- a shockwave from the slam
+    elseif pattern=='waves' then delay+=math.floor(dist/1.5)*.12 -- ringing out in steps
+    elseif pattern=='rows' then delay+=math.max(0,(flat:Dot(jetAxis)+8))*.045 -- a sweep across
+    elseif pattern=='crumble' then delay+=self.random:NextNumber(0,.35)
+    elseif pattern=='fountain' then delay+=self.random:NextNumber(0,.4)
+    elseif pattern=='levitate' then delay+=self.random:NextNumber(0,.12) end
+    local f={parts=parts,pattern=pattern,jet=jetAxis,k=k,scale=k,axis=axis.Magnitude>.05 and axis.Unit or Vector3.xAxis,
      turn=self.random:NextNumber(.6,1.8),
      from=mid,land=Vector3.new(mid.X,landY,mid.Z)+out*self.random:NextNumber(.1,.9),
      at=now+delay,pre=delay>0,center=center,fx=fx,
@@ -614,9 +630,27 @@ function V:releaseShard(f: any)
  local r=self.random
  primary.CFrame+=Vector3.yAxis*.12
  primary.AssemblyLinearVelocity=f.out*r:NextNumber(fx.out[1],fx.out[2])+Vector3.yAxis*r:NextNumber(fx.up[1],fx.up[2])
+ local pattern=f.pattern
+ if pattern=='jet' then
+  -- All down one line, like the lance blew through it.
+  primary.AssemblyLinearVelocity=f.jet*r:NextNumber(fx.out[1],fx.out[2])+f.out*r:NextNumber(0,3)+Vector3.yAxis*r:NextNumber(fx.up[1],fx.up[2])
+ elseif pattern=='crumble' then
+  -- No throw: it just falls apart where it was.
+  primary.CFrame-=Vector3.yAxis*.12
+  primary.AssemblyLinearVelocity=Vector3.new(r:NextNumber(-1,1),-r:NextNumber(0,2),r:NextNumber(-1,1))
+ elseif pattern=='levitate' then
+  -- Lifted and held up, then slammed down (stepShards).
+  f.floatUntil=os.clock()+r:NextNumber(.45,.7);f.slam=true
+ elseif pattern=='shatter' then
+  local away=(f.out+Vector3.new(r:NextNumber(-.6,.6),0,r:NextNumber(-.6,.6))).Unit
+  primary.AssemblyLinearVelocity=away*r:NextNumber(fx.out[1],fx.out[2])+Vector3.yAxis*r:NextNumber(fx.up[1],fx.up[2])
+ end
  local roll=Vector3.yAxis:Cross(f.out)
  local w=fx.spin[2]*.25
  primary.AssemblyAngularVelocity=roll*r:NextNumber(fx.spin[1],fx.spin[2])+Vector3.new(r:NextNumber(-w,w),r:NextNumber(-w,w),r:NextNumber(-w,w))
+ if pattern=='shatter' or pattern=='blast' then
+  primary.AssemblyAngularVelocity=Vector3.new(r:NextNumber(-1,1),r:NextNumber(-1,1),r:NextNumber(-1,1)).Unit*r:NextNumber(fx.spin[1],fx.spin[2])
+ end
  if fx.float then f.floatUntil=os.clock()+fx.float end
 end
 -- Held in place before the release: a Singularity piece pulls toward the
@@ -679,7 +713,12 @@ function V:stepShards(now: number)
    -- Bubbler: the pieces float up for a moment before they fall.
    if f.floatUntil and now<f.floatUntil and primary.Parent then
     local v=primary.AssemblyLinearVelocity
-    primary.AssemblyLinearVelocity=Vector3.new(v.X*.9,2.5,v.Z*.9)
+    primary.AssemblyLinearVelocity=Vector3.new(v.X*.9,f.slam and 4 or 2.5,v.Z*.9)
+   elseif f.slam and not f.slammed and f.floatUntil and primary.Parent then
+    -- Ramiel: the lifted rock is hurled down.
+    f.slammed=true
+    local v=primary.AssemblyLinearVelocity
+    primary.AssemblyLinearVelocity=Vector3.new(v.X*.4,-48,v.Z*.4)
    end
    f.pos=primary.Position
    if primary.Position.Y<f.floor-8 or not primary.Parent then self:dropShard(f);table.remove(self.frags,i);continue end
@@ -879,7 +918,7 @@ function V:proxyWedges(proxy: any,shapes: {any})
  for _,c in ipairs(shapes) do
   for _,w in ipairs(DigCube.polyWedges(c.grown,c.y0+.02,c.y1+.03)) do
    local part=fxPart(proxy.model,'DigCrack',c.stone,'WedgePart')
-   part.CastShadow=true
+   part.CastShadow=true;part.Material=ROCK
    part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
    part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
@@ -1731,7 +1770,7 @@ function V:buildGeode(id: number,tier: number)
   local inverse=CFrame.new(mid):Inverse()
   local parts={}
   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(poly,.02),c.y0+.02,c.y1+.08)) do
-   local part=fxPart(model,'GeodePiece',stone,'WedgePart');part.CastShadow=true
+   local part=fxPart(model,'GeodePiece',stone,'WedgePart');part.CastShadow=true;part.Material=ROCK
    local size=Vector3.new(w.size[1],w.size[2],w.size[3])
    local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))

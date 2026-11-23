@@ -25,6 +25,7 @@ M.TINT_RANKS={1,.6,.3} -- the nearest chunks to the hit, in order; the rest none
 M.TINT_MAX=.35
 M.TONE_RANKS={1,.85,.65,.45,.25} -- a colored shade (role tone) reaches a few more
 M.wedges=nil :: any -- DigCube.polyWedges, installed by the caller
+M.material=nil :: any -- the rock material, installed by the caller
 local TAU=math.pi*2
 local BLACK=Color3.new(0,0,0)
 
@@ -60,7 +61,7 @@ function M.build(shapes: {any},split: any,random: () -> number): any?
       lift=0,angle=0,hinge=nil,anim=nil,popped=false,frame=CFrame.new(),r=math.sqrt(cx*cx+cz*cz)}
      for _,w in ipairs(wedges(q,s.y0,s.y1)) do
       local p=Instance.new('WedgePart');p.Name='DigChunk';p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false
-      p.CastShadow=true;p.Material=Enum.Material.SmoothPlastic;p.Color=s.color
+      p.CastShadow=true;p.Material=M.material or Enum.Material.SmoothPlastic;p.Color=s.color
       p.TopSurface=Enum.SurfaceType.Smooth;p.BottomSurface=Enum.SurfaceType.Smooth
       p.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
       local base=CFrame.fromMatrix(Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),

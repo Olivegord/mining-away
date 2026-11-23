@@ -59,6 +59,27 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
     - needle: Needler; Lancer (longer)
     - star: Starforge
   - The look applies to the drone's motes, its dig contact sparks, its break spark cells, and every particle its break effects create (`Fun.withRole` around the break beat). Gem effects keep their own.
+- **Owner: "rocks read as plastic", "lots more randomness", "unique particles much larger", "breaking dynamics look different, not reskins":**
+  - **Material:** the dig rock is `Slate` (`DigCube.ROCK_MATERIAL`). That covers the server blocks (CSG results and rebuilds keep it), the worked chunks, the wedge fallback, the rubble and the sealed gem pieces, so a worked piece matches the rock around it. Frostbite still turns to Ice and its rubble to Glass.
+  - **Randomness (`Fun.randomize`, every client particle as it appears, once):**
+    - size envelope ±45%;
+    - lifetime ×0.6–1.5 and speed ×0.55–1.45;
+    - spread +18°;
+    - any starting angle, and spin either way (at least 40°/s) unless the particle flies along its velocity.
+  - **Drone particles** are 2.4× their effect's base size (Needler 0.8 of that), with a ±50% size spread.
+  - **Break dynamics (`ROLE_FX.<code>.rubble.pattern`):** when each piece lets go and how it flies.
+    - Striker: tips over (default).
+    - Charger `ring`: a shockwave, pieces letting go 0.035 s per stud from the middle, thrown flat and far.
+    - Ballcaster `column`: straight up, fast.
+    - Needler `crumble`: smaller pieces, no throw, dropping in place over 0.35 s.
+    - Gridcutter `rows`: a sweep across, 0.045 s per stud.
+    - Starforge `fountain`: a staggered molten fountain straight up.
+    - Frostbite `shatter`: many tiny glass shards scattering fast with wild spin.
+    - Resonator `waves`: rings stepping out every 1.5 studs, 0.12 s apart.
+    - Ramiel `levitate`: lifted and held about 0.5 s, then hurled down.
+    - Nomad `blast`: far and high with wild spin.
+    - Lancer `jet`: everything along one line.
+    - Halver (halves), Bubbler (float) and Singularity (implosion) as before.
 - **Spritesheet particles:** supported natively. `ParticleEmitter.FlipbookLayout` (grids such as 2×2, 4×4, 8×8), `FlipbookMode` (Loop, OneShot, PingPong, Random), `FlipbookFramerate` and `FlipbookStartRandom` play a sheet's frames over each particle's life. The sheet must be an uploaded image asset, square and power-of-two (up to 1024). This repo uploads none yet; it can be uploaded through Studio's Asset Manager.
 - **Gems are only opened by jumping (owner, Nov 22):**
   - Drones never break a gem open. Every gem found seals for its owner; the per-break (`SEAL_PER_BREAK`) and per-player (`SEAL_LIVE`) caps no longer apply. Only a cell already carved away (never a gem cell in practice) bursts out.

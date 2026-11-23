@@ -44,6 +44,7 @@ D.BASE_CUT_AREA=48 -- square studs of top face in a chunk at cutSize 1 (about 8 
 D.MAX_CHUNK=40
 D.PAUSE=1.1 -- seconds between the split and the gem-or-nothing reveal
 D.TILE=11 -- intact stretches render as one block per tile
+D.ROCK_MATERIAL='Slate' -- the dig rock, its worked pieces, rubble and sealed gem pieces (owner: not plastic)
 D.GEM_CHANCE_ORE=.5 -- per hidden ore cell in a chunk
 D.GEM_CHANCE_STONE=.05 -- per plain cell: a lucky find anywhere
 D.ROCK_PER_UNIT=150 -- cubic studs of rock per rock drop (bigger chunks drop more)

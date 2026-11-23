@@ -3587,7 +3587,9 @@ function scene.digBuildRock()
     local part=Instance.new('Part');part.Name='RockBlock'
     -- No cast shadows: the low morning sun would fill every pit with shadow.
     part.Anchored=true;part.CanTouch=false;part.CastShadow=false
-    part.Material=Enum.Material.SmoothPlastic;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+    -- Real rock, not plastic (owner, Nov 22): the client pieces and rubble
+    -- use the same material (DigCube.ROCK_MATERIAL) so they match.
+    part.Material=Enum.Material[DigCube.ROCK_MATERIAL];part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
     part.Color=Color3.fromRGB(c[1],c[2],c[3])
     part.Size=Vector3.new(x1-x0,y1-y0,z1-z0)
     part.CFrame=CFrame.new(dig.origin+Vector3.new((x0+x1)*.5,(y0+y1)*.5,(z0+z1)*.5))

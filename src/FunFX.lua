@@ -274,7 +274,7 @@ Fun.ROLE_PARTICLE={
  Striker={shape='circle'},
  Charger={shape='square',spin=260},
  Ballcaster={shape='diamond'},
- Needler={shape='needle',squash=2.6},
+ Needler={shape='needle',squash=2.6,scale=.8},
  Bubbler={shape='circle',grow=true},
  Halver={shape='bar',squash=1.4},
  Gridcutter={shape='square',spin=0},
@@ -286,10 +286,50 @@ Fun.ROLE_PARTICLE={
  Nomad={shape='square',spin=420},
  Lancer={shape='needle',squash=3.4},
 }
+-- Every particle varies more (owner, Nov 22: "add lots more randomness to
+-- particles"): a wider size envelope, longer and shorter lives, faster and
+-- slower ones, any starting angle and a spin either way. Once per emitter.
+local function scaled(seq,k,spread)
+ local ok,keys=pcall(function() return seq.Keypoints end)
+ if not ok or type(keys)~='table' then return nil end
+ local out={}
+ for _,kp in ipairs(keys) do
+  local v=kp.Value*k
+  table.insert(out,NumberSequenceKeypoint.new(kp.Time,v,math.max(kp.Envelope*k,v*spread)))
+ end
+ return NumberSequence.new(out)
+end
+local function widen(range,lo,hi)
+ local ok,r=pcall(function() return NumberRange.new(range.Min*lo,range.Max*hi) end)
+ return ok and r or nil
+end
+function Fun.randomize(emitter)
+ if emitter:GetAttribute('Randomized') then return end
+ emitter:SetAttribute('Randomized',true)
+ pcall(function()
+  local size=scaled(emitter.Size,1,.45)
+  if size then emitter.Size=size end
+  emitter.Lifetime=widen(emitter.Lifetime,.6,1.5) or emitter.Lifetime
+  emitter.Speed=widen(emitter.Speed,.55,1.45) or emitter.Speed
+  local spread=emitter.SpreadAngle
+  emitter.SpreadAngle=Vector2.new(math.min(180,spread.X+18),math.min(180,spread.Y+18))
+  if emitter.Orientation~=Enum.ParticleOrientation.VelocityParallel then
+   emitter.Rotation=NumberRange.new(0,360)
+   local spin=math.max(math.abs(emitter.RotSpeed.Min),math.abs(emitter.RotSpeed.Max),40)
+   emitter.RotSpeed=NumberRange.new(-spin*1.4,spin*1.4)
+  end
+ end)
+end
+-- How much bigger a drone type's own particles are than the effect's base.
+Fun.ROLE_PARTICLE_SCALE=2.4
 function Fun.styleParticle(emitter,role)
  local look=Fun.ROLE_PARTICLE[role or '']
  if not look or not emitter:IsA('ParticleEmitter') then return end
  emitter:SetAttribute('RoleParticle',role)
+ -- Much larger than the base effect (owner: "make the unique particles
+ -- much larger"), with a wide size spread so no two read the same.
+ local size=scaled(emitter.Size,Fun.ROLE_PARTICLE_SCALE*(look.scale or 1),.5)
+ if size then emitter.Size=size end
  local shape=look.shape
  emitter.FlipbookLayout=Enum.ParticleFlipbookLayout.None
  if shape=='circle' then
@@ -335,6 +375,7 @@ local function normalize(emitter)
  elseif Fun.ROUND[emitter.Texture] then
   emitter.Texture=Fun.CIRCLE;emitter.FlipbookLayout=Enum.ParticleFlipbookLayout.None
  end
+ Fun.randomize(emitter)
 end
 function Fun.particles()
  if Fun.particlesOn then return end

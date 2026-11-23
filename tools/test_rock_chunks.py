@@ -500,6 +500,39 @@ do -- jumping on a sealed gem: brighter, long bolts, longer rays, combo crack af
  self.combo=0
  print(string.format('PASS sealed gem hit: ore blazes, light floods, rays x2.4+, %d long bolts, crack after the pause pitched %.2f -> %.2f -> %.2f for a midair combo',#long,p1,p2,p3))
 end
+do -- every role comes apart its own way
+ local function run(code)
+  local self=view();self.physics=true;self.physicsCheckAt=1e9
+  local ids=chunkFor(self,1.6)
+  local op={cells=ids,tier=0,flag='',code=code}
+  local cx,cz=DigCube.chunkCenter(self.cube,ids)
+  local center=self.origin+v3(cx,self.cube.cells[ids[1]].y1,cz)
+  fakeClock=9000
+  self:shards(op,fakeClock,center,V.ROLE_FX[code].rubble)
+  local out={}
+  for _,f in ipairs(self.frags) do
+   self:releaseShard(f)
+   local v=f.parts[1].part.AssemblyLinearVelocity or v3(0,0,0)
+   table.insert(out,{delay=f.at-fakeClock,dist=v3(f.from.X-center.X,0,f.from.Z-center.Z).Magnitude,v=v,f=f})
+  end
+  return out
+ end
+ local function mean(list,fn) local t=0;for _,x in ipairs(list) do t+=fn(x) end;return t/math.max(1,#list) end
+ local striker,charger,ball,needle,lance,ram=run('L'),run('C'),run('B'),run('N'),run('Z'),run('P')
+ -- Charger: a ring from the middle, outward and flat
+ for _,x in ipairs(charger) do assert(math.abs(x.delay-x.dist*.035)<1e-6,'Charger pieces let go farther out later') end
+ assert(mean(charger,function(x) return v3(x.v.X,0,x.v.Z).Magnitude end)>mean(charger,function(x) return x.v.Y end),'Charger throws flat and out')
+ -- Ballcaster: straight up
+ assert(mean(ball,function(x) return x.v.Y end)>4*mean(ball,function(x) return v3(x.v.X,0,x.v.Z).Magnitude end),'Ballcaster blasts a column up')
+ -- Needler: crumbles, no throw
+ assert(mean(needle,function(x) return x.v.Magnitude end)<3,'Needler crumbles in place')
+ -- Lancer: one direction
+ local dir=lance[1].f.jet
+ for _,x in ipairs(lance) do assert(v3(x.v.X,0,x.v.Z).Unit:Dot(dir)>.6,string.format('Lancer jets one way: v=%.1f,%.1f,%.1f dir=%.2f,%.2f pattern=%s',x.v.X,x.v.Y,x.v.Z,dir.X,dir.Z,tostring(x.f.pattern))) end
+ -- Ramiel: held up, then slammed (stepShards)
+ assert(ram[1].f.slam and ram[1].f.floatUntil,'Ramiel lifts then slams')
+ print('PASS break dynamics: Charger shockwave ring, Ballcaster column, Needler crumble, Lancer jet, Ramiel lift-and-slam (not just recolors)')
+end
 assert(RockChunks.live==live0,'every piece removed its chunks: '..RockChunks.live)
 print('PASS DigCubeView pieces: chunks per piece, held until its op, crack pops all through the work, slam/pulse/dart/charge pops, Singularity squeeze, Frostbite ice, chunks removed (doubles; looks NOT verified)')
 '''
