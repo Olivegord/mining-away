@@ -4,6 +4,10 @@
 
 # Owner requirements
 
+## November 22 — see what you are mining; keep the depth gradient
+
+"some blackening is still needed. its impossible to see what you are mining" and "also make sure the color gradient as you dig still exists". The piece being cut darkens as soon as cutting starts and deepens with the work (never black); the top-to-bottom color ramp stays.
+
 ## November 22 — the first pastel sky back; blackening and layer contrast back
 
 "its probably the skybox i dragged in" and "also, there should still be blackening of rock and color differences between layers!" The dragged sky (SkyboxUp 18703232671) is archived to `ServerStorage.OwnerSkyArchive.DraggedSky_20261122` in shared Studio and `Lighting.ToyWorldSky` (Roblox default blue sky, sun 14, no stars or moon) is back, as in the canonical file. Striker cells darken about halfway toward charcoal while cut (never black, no split), rubble near the hit is scorched, and every other layer is a band 14% darker and a touch warmer (`DigCube.LAYER_BAND`).

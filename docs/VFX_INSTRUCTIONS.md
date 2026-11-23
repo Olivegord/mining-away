@@ -23,6 +23,10 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Branch `codex/new-
 - **Preview:** `python3 tools/studio_strike_preview.py OUT_DIR` poses all three in shared Edit (temporary, non-archivable, removed after; holds the install lock). Stills in `docs/review/media/new-attacks/`. Motion, the feather trail and particles are not judged by stills. **Not seen in Play.**
 - Tests: dig cube, dig flow (14 roles incl. throughput band, star shots, pulses), fun FX, beam, geodes, mining flight pass; rock chunks passes every new check but fails the pre-existing Striker ripple-delay check (fails identically on the untouched integration commit).
 
+## November 22 — the piece being mined reads dark at once; depth gradient kept
+
+Owner: "some blackening is still needed. its impossible to see what you are mining" and "make sure the color gradient as you dig still exists". While a drone cuts, a piece shows `MINING_MARK` (.4) of its role's darkening at once, then deepens with the work (`DigCubeView.crackStage`). Striker: tone (34,26,24), cap .68, start .5 (about a third dark as the beam bites, two thirds by the break; never black, no split). The lilac-to-slate depth ramp is unchanged; the even-layer bands sit on top of it (top layer about (148,147,172), bottom about (70,64,94)).
+
 ## November 22 — Striker blackening and layer bands back
 
 Owner: "there should still be blackening of rock and color differences between layers!" after the char split was removed. Striker `proxy` tone (34,26,24), cap .5 (the cut cell goes about halfway to charcoal, never black, no split); rubble dark .06–.16, near .35, dcap .45. Even layers are `DigCube.LAYER_BAND` (.14) darker and slightly warmer so thin neighbors read apart. Do not bring back the full black char split.

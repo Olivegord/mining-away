@@ -81,9 +81,11 @@ local ROLE_FX={
  -- drones STILL turn stuff completely black and cut it in half -> not good".
  -- No Striker chars or splits any more (the big-chunk Lc variant is gone).
  -- Then: "there should still be blackening of rock". The cut cell darkens
- -- toward charcoal as the beam works, but only about halfway (never black,
- -- never split), and rubble near the hit comes away scorched.
- L={proxy={tone=C3(34,26,24),cap=.5,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
+ -- toward charcoal as the beam works, never black, never split, and
+ -- rubble near the hit comes away scorched. Then: "some blackening is still
+ -- needed. its impossible to see what you are mining": a third of the way
+ -- dark as soon as the beam bites, about two thirds by the break.
+ L={proxy={tone=C3(34,26,24),cap=.68,start=.5,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
   rubble={per=3,min=1,max=4,up={4,7},out={3,6},spin={2,4},dark={.06,.16},near=.35,dcap=.45},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
  C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
@@ -1247,6 +1249,7 @@ end
 local CRACK_STEPS=2 -- per stage: one crack, then it breaks out
 local CRACK_POP=.85 -- the crack comes late in each piece's share of the work, so it strains, then breaks
 local CRACK_SHADE=.34 -- darkest just before a crack (the reference's shade curve)
+local MINING_MARK=.4 -- share of a role's darkening shown as soon as a piece is being cut
 local CRACK_LIFT={0,.28,.62} -- studs out of the rock at each stage
 local CRACK_TURN={0,.06,.13} -- radians of turn at each stage
 local CRACK_TIP={0,.025,.055} -- radians of tilt at each stage
@@ -1869,6 +1872,11 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
  if fx.src=='progress' then amount=progress
  elseif fx.src=='late' then amount=math.clamp((progress-.7)/.3,0,1)
  else amount=math.clamp(within,0,1)^(fx.pow or .88) end
+ -- Owner, Nov 22: "some blackening is still needed. its impossible to see
+ -- what you are mining". The piece being cut jumps to a clear share of its
+ -- darkening the moment cutting starts (MINING_MARK, or the role's own
+ -- start), then deepens with the work, so the target reads at a glance.
+ if cutting then local start=fx.start or MINING_MARK;amount=start+(1-start)*amount end
  self:shadeProxy(proxy,(fx.cap or CRACK_SHADE)*amount)
  if proxy.light then proxy.light.Brightness=proxy.sig and 2.2*progress or .9*math.clamp(within,0,1)^1.5 end
  if fx.ice and progress>=fx.ice and not proxy.iced then
