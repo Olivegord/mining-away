@@ -135,6 +135,10 @@ function HUD.new(refs: any)
  self.growth=frame(refs.resources,'PrestigeProgress',C.panel);plain(self.growth)
  text(self.growth,'Caption',0,0,98,24,18,C.muted).Text='Next drone'
  self.growthValue=text(self.growth,'Progress',98,0,62,24,18,C.text);self.growthValue.TextXAlignment=Enum.TextXAlignment.Right
+ -- Dig Cube: how deep you are and which ore that layer holds (deeper pays more).
+ self.depth=frame(refs.resources,'DigDepth',C.panel);plain(self.depth);self.depth.Visible=false
+ text(self.depth,'Caption',0,0,60,24,18,C.muted).Text='Depth'
+ self.depthValue=text(self.depth,'Layer',60,0,120,24,18,C.text);self.depthValue.TextXAlignment=Enum.TextXAlignment.Right
  self.dock=frame(refs.root,'CommandDock',C.panel);plain(self.dock)
  self.selectorStatus=text(self.dock,'SelectorStatus',0,0,0,0,16,C.muted)
  self.selectorStatus.Visible=false;self.selectorStatus.TextStrokeTransparency=.45
@@ -380,12 +384,15 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  -- Money stays on top; mineral rows that show for a moment after a sale go
  -- under everything else, so the backpack and progress rows never jump.
  local extra={}
+ -- In the Dig Cube the material rows (fractional chips, never spent) only
+ -- cluttered the card after every sale; the Depth row says what matters.
+ local digging=Players.LocalPlayer:GetAttribute('MA_Digging')==true
  for _,entry in ipairs(self.wallets) do
   local money=entry.key=='Money'
   local authoritative=money and (wallet.Quartz or 0) or (resources[entry.key] or 0)
   local balance=math.max(0,authoritative+(saleOffset[entry.key] or 0))
   if balance~=entry.last then entry.last=balance;entry.untilAt=math.max(entry.untilAt,now+4) end
-  local opacity=money and 1 or saleVisible[entry.key] and 1 or hover and balance>0 and 1 or math.clamp((entry.untilAt-now)/.7,0,1)
+  local opacity=money and 1 or digging and 0 or saleVisible[entry.key] and 1 or hover and balance>0 and 1 or math.clamp((entry.untilAt-now)/.7,0,1)
   entry.tile.Visible=opacity>0
   if opacity>0 then
    entry.tile.Size=UDim2.fromOffset(width,rowHeight)
@@ -408,7 +415,9 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local growthVisible=growth~=nil and type(growth.saleRequired)=='number'
  local cargoHeight=self:updateBackpack(p,Players.LocalPlayer,world,now,width,fighting)
  local afterCargo=shown*rowHeight+cargoHeight
- local fixed=afterCargo+((batteryVisible and 1 or 0)+(growthVisible and 1 or 0))*rowHeight
+ local depthLayer=digging and Players.LocalPlayer:GetAttribute('MA_DigLayer') or nil
+ local depthVisible=type(depthLayer)=='number'
+ local fixed=afterCargo+((batteryVisible and 1 or 0)+(growthVisible and 1 or 0)+(depthVisible and 1 or 0))*rowHeight
  for i,entry in ipairs(extra) do entry.tile.Position=UDim2.fromOffset(0,fixed+(i-1)*rowHeight) end
  local height=fixed+#extra*rowHeight
  local sideY=8 -- Keep the flat list above the mobile movement controls.
@@ -431,6 +440,14 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.battery.Position=UDim2.fromOffset(0,afterCargo);self.battery.Size=UDim2.fromOffset(width,rowHeight)
  self.growth.Visible=growthVisible
  self.growth.Position=UDim2.fromOffset(0,afterCargo+(batteryVisible and 1 or 0)*rowHeight);self.growth.Size=UDim2.fromOffset(width,rowHeight)
+ self.depth.Visible=depthVisible
+ if depthVisible then
+  self.depth.Position=UDim2.fromOffset(0,afterCargo+((batteryVisible and 1 or 0)+(growthVisible and 1 or 0))*rowHeight);self.depth.Size=UDim2.fromOffset(width,rowHeight)
+  local ore=Players.LocalPlayer:GetAttribute('MA_DigOre') or ''
+  self.depthValue.Text=string.format('%d/%d  %s',depthLayer,Players.LocalPlayer:GetAttribute('MA_DigLayers') or 10,ore)
+  local oreColor=Players.LocalPlayer:GetAttribute('MA_DigOreColor')
+  self.depthValue.TextColor3=typeof(oreColor)=='Color3' and oreColor:Lerp(Color3.new(1,1,1),.25) or C.text
+ end
  if growthVisible then
   local fraction=math.clamp((growth.earnings or 0)/math.max(1,growth.saleRequired),0,1)
   self.growthValue.Text=growth.eligible and 'Ready' or tostring(math.floor(fraction*100))..'%'

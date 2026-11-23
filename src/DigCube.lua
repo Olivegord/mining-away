@@ -25,10 +25,13 @@ D.WIDTH=88
 D.LAYERS=10
 D.GAP=0 -- seamless: no crack lines until a drone cuts
 D.CORE=.7 -- share of a cell (about its centroid) that must be open above before it can be cut
-D.DEPTH_PULL=2.4 -- per-layer preference for going deeper
+D.DEPTH_PULL=2 -- per-layer preference for going deeper
 D.FOCUS_FALLOFF=15 -- studs; drones favor cells near the player or a tapped spot
-D.RUN=3.6 -- studs the crater widens per layer (about 45 degree walls)
-D.LEAD=2 -- the crater aims this many layers below its current floor
+-- Owner, Nov 22 (latest): the crew sank narrow shafts that swallowed the
+-- player and the camera. A broad bowl instead: gentler walls (about 40
+-- degrees) and a floor that steps down one layer at a time.
+D.RUN=5.5 -- studs the crater widens per layer
+D.LEAD=1 -- the crater aims this many layers below its current floor
 D.APEX_RADIUS=9 -- studs around the focus that set the current floor
 D.CROWD_RADIUS=7
 D.RECENT_TIME=20
@@ -99,12 +102,12 @@ local ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 -- violet at the bottom: depth reads at a glance, the palette stays calm
 -- (not candyland), and the warm beams and ores pop against it.
 D.LAYER_HUES={
- {236,228,242},{220,216,240},{204,210,238},{188,208,232},{174,200,220},
- {164,184,216},{152,162,208},{142,142,194},{128,122,176},{112,104,152},
+ {190,176,214},{172,168,216},{156,170,214},{142,172,206},{130,164,194},
+ {120,148,190},{112,128,184},{104,108,170},{94,90,152},{82,74,130},
 }
 D.LAYER_SHIFT=.5 -- how far a layer's second tone leans toward the next hue
 D.LAYER_MUTE=.14 -- share of neutral stone mixed into every hue (the rock stays below the beams and gems)
-D.LAYER_VALUE=.9 -- overall brightness of the rock
+D.LAYER_VALUE=.92 -- overall brightness of the rock
 local STONE_TONE={150,150,166}
 local function mix(a: {number},b: {number},t: number): {number}
  return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t}

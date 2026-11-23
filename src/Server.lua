@@ -5696,7 +5696,9 @@ local function economyAction(p: any,pl: any,action: string,payload: any,previewC
   local station=previewCounter or scene.packStation
   if not atStation(p,station,previewCounter and 8 or 12) then return false end
   local function buyCard(copy: any): (any, any)
-   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false,crystalRun=scene.runStart~=nil,legendaryPreview=previewCounter~=nil and inStudio}
+   -- Someone who digs gets the dig pool (Workshop.DIG_DRAFT): upgrades that change digging.
+   local digger=scene.dig~=nil and (p.digging or p.digLeftAt~=nil)
+   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false,crystalRun=scene.runStart~=nil,dig=digger,legendaryPreview=previewCounter~=nil and inStudio}
    local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
    if ok then return result end
    return nil,result
@@ -6388,7 +6390,15 @@ local function commandPlayer(pl: any,action: any,payload: any)
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
   RoleEffects.ClearAbility(pl.UserId);p.ability=nil
-  p.testFleet=action=='RoleLoadout' and roleTestFleet(p,nil,type(payload)=='table' and payload.dig==true) or randomTestFleet(p);rebuildFleet(p);logistics:refresh(p)
+  -- Preview only: {dig=true,crew={'Charger','Needler',...}} picks the dig crew
+  -- (up to five known dig roles besides the Striker) for side-by-side checks.
+  local digCrew: any=type(payload)=='table' and payload.dig==true
+  if digCrew and type(payload.crew)=='table' then
+   local named={}
+   for _,name in ipairs(payload.crew) do if type(name)=='string' and DigCube.STYLES[name] and RoleConfig.StudioRoles[name] and #named<5 then table.insert(named,name) end end
+   if #named>0 then digCrew=named end
+  end
+  p.testFleet=action=='RoleLoadout' and roleTestFleet(p,nil,digCrew) or randomTestFleet(p);rebuildFleet(p);logistics:refresh(p)
   notice(p,action=='RoleLoadout' and (type(payload)=='table' and payload.dig==true and ('New dig crew: '..(p.digCrewNames or '?')..'. Press T again to reroll.') or 'All drone types ready. Click a rock to start mining.') or 'Random test loadout ready — no saved fleet changed.')
  elseif action=='Recall' then
   leaveField(p)

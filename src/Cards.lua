@@ -253,11 +253,11 @@ local function record(p,operation,tx,result)
 end
 local function validID(tx) return type(tx)=='string' and #tx>0 and #tx<=128 end
 -- Expose only choices with a real benefit for the permanent fleet, including legacy caps.
-function C.workshopOffer(p,tier,seed,crystalRun)
+function C.workshopOffer(p,tier,seed,crystalRun,dig)
  local pool={}
  for _,entry in ipairs(Workshop.CATALOG) do
   local owned=Workshop.find(p,entry.id);local count=owned and owned.level or 0
-  if count<entry.max and (if crystalRun then Workshop.CRYSTAL_DRAFT[entry.id] else not entry.crystalRun) then
+  if count<entry.max and (if dig then Workshop.DIG_DRAFT[entry.id] elseif crystalRun then Workshop.CRYSTAL_DRAFT[entry.id] else not entry.crystalRun and not entry.dig) then
    local c=Workshop.card(entry,tier,count)
    if beneficial(p,c) then
     c.preview,c.previewTargetName=preview(p,c)
@@ -316,9 +316,9 @@ function C.workshopOffer(p,tier,seed,crystalRun)
  for i=#chosen,2,-1 do local j=random(i);chosen[i],chosen[j]=chosen[j],chosen[i] end
  return chosen
 end
-local function firstCrystalPack(p)
+local function firstCrystalPack(p,dig)
  local choices={}
- for _,id in ipairs(Workshop.FIRST_PACK) do
+ for _,id in ipairs(dig and Workshop.DIG_FIRST_PACK or Workshop.FIRST_PACK) do
   local entry=Workshop.BY_ID[id]
   local owned=Workshop.find(p,id)
   local level=owned and owned.level or 0
@@ -345,13 +345,13 @@ function C.buy(p,tx,expectedRun,context)
  local tier=2
  local choices
  if context.legendaryPreview then
-  tier=4;choices=C.workshopOffer(p,tier,seed,context.crystalRun)
+  tier=4;choices=C.workshopOffer(p,tier,seed,context.crystalRun,context.dig)
   if not choices then return false,'No useful Legendary choices remain in this preview run.' end
- elseif context.crystalRun and p.run.packIndex==0 then choices=firstCrystalPack(p) end
+ elseif (context.crystalRun or context.dig) and p.run.packIndex==0 then choices=firstCrystalPack(p,context.dig) end
  if not choices then
   local candidates,weights,total={},{66,24,8,2},0
   for packTier=1,4 do
-   candidates[packTier]=C.workshopOffer(p,packTier,hash(tostring(seed)..':'..packTier),context.crystalRun)
+   candidates[packTier]=C.workshopOffer(p,packTier,hash(tostring(seed)..':'..packTier),context.crystalRun,context.dig)
    if candidates[packTier] then total+=weights[packTier] end
   end
   if total==0 then return false,'No three useful choices remain. Stack owned upgrades or prestige.' end

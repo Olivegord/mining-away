@@ -339,6 +339,9 @@ W.CATALOG={
  {id='Q_DENSER_PACK',title='Rapid Cycling',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
  {id='Q_CARGO_RACK',title='Quick Turnaround',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
  {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
+ -- Dig Cube: bigger chunks per break (Wide Cutters). Every drone breaks off
+ -- more rock per chunk, and a bigger chunk costs less work per stud.
+ {id='Q_WIDE_CUT',title='Wide Cutters',scope='Fleet',category='mining',tier=1,max=3,step={cut=.35},color={160,150,255},icon='mining',dig=true},
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
@@ -353,6 +356,13 @@ end
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
+-- What a pack offers to someone digging in the Dig Cube (owner, Nov 22: the
+-- loop was not fun). The field pool's first pack (Double Beam, Loose Seams,
+-- Aftershock) and most of its cards change nothing in the dig, so a pack
+-- bought there did nothing you could see. These all change digging: power,
+-- warmup, bag size, flight, chunk size.
+W.DIG_DRAFT={Q_POWER=true,Q_IGNITION=true,Q_CARGO=true,Q_THRUST=true,Q_WIDE_CUT=true,Q_HOT_START=true,Q_CARGO_LOOP=true,Q_OVERDRIVE=true}
+W.DIG_FIRST_PACK={'Q_POWER','Q_WIDE_CUT','Q_CARGO'}
 W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.DEEP_CUT_HARDNESS=1.75

@@ -1895,10 +1895,11 @@ function V:burst(op: any,e: any)
  -- at the beam (owner, Nov 22); only the 3D streaks spread over a big break.
  if contact=='Striker' then
   effects.Pulse(floor,primary:Lerp(BEAM_CORE,.3),strength*.55,strength*6.6,.58)
-  effects.ImpactParticles(point,primary,strength*1.2,'CrystalBreak',nil,primary,nil,.8)
+  -- Smaller than before (owner: effects show things; big gold blobs hid the break).
+  effects.ImpactParticles(point,primary,strength*.6,'CrystalBreak',nil,primary,nil,.8)
  elseif contact=='Charger' then
   effects.Pulse(floor,primary,strength*.55,strength*8,.58,nil,1.6)
-  effects.ImpactParticles(point,primary,strength*1.2,'Touchdown')
+  effects.ImpactParticles(point,primary,strength*.7,'Touchdown')
  elseif contact=='Resonator' and e.link then
   effects.Pulse(floor,primary,.3,3,.3)
  elseif effects.SpecialistContact then
@@ -2874,6 +2875,16 @@ function V:stepLamp(dt: number)
   if l.X>=-2 and l.X<=W+2 and l.Z>=-2 and l.Z<=W+2 then
    -- 0 on the ground beside the pit, 1 about twelve studs down and below.
    depth=math.clamp((self.cube.height+1-l.Y)/12,0,1)
+   -- The layer under your feet and its ore, for the HUD's Depth row
+   -- (owner, Nov 22: the loop was not fun; going deeper is where the
+   -- money is, so say how deep you are and what is down there).
+   local L=DigCube.layerAt(self.cube,math.clamp(l.Y-3.2,0,self.cube.height-.01))
+   local ore=DigCube.ORES[math.clamp(1+math.floor((L-1)/2.2),1,#DigCube.ORES)]
+   local player=Players.LocalPlayer
+   if player:GetAttribute('MA_DigLayer')~=L then
+    player:SetAttribute('MA_DigLayer',L);player:SetAttribute('MA_DigLayers',#self.cube.layers)
+    player:SetAttribute('MA_DigOre',ore.name);player:SetAttribute('MA_DigOreColor',Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]))
+   end
   end
  end
  self:stepPitLight(depth,dt)

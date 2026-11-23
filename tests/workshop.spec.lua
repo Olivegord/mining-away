@@ -468,4 +468,22 @@ test('pacing model quantifies first-level tradeoffs including selling travel',fu
   if entry.id=='Q_POWER' or entry.id=='Q_IGNITION' or entry.id=='Q_CARGO' or entry.id=='Q_YIELD' then assert(delta>0,entry.id..' must improve the modeled loop') end
  end
 end)
+test('a digger gets dig upgrades: the first pack and every pack after change digging',function()
+ local p=funded(7)
+ local ok,o=C.buy(p,'dig-first',p.run.id,{atDepot=true,expectedPackIndex=p.run.packIndex,dig=true})
+ assert(ok,o)
+ local ids={};for _,c in ipairs(o.choices) do ids[c.cardId]=true end
+ for _,id in ipairs(W.DIG_FIRST_PACK) do assert(ids[id],'first dig pack offers '..id) end
+ assert(choose(p,o,2,'dig-first-pick'))
+ for n=1,6 do
+  p.run.wallet.Quartz+=5000;p.run.credits=p.run.wallet.Quartz
+  local ok2,o2=C.buy(p,'dig-'..n,p.run.id,{atDepot=true,expectedPackIndex=p.run.packIndex,dig=true})
+  assert(ok2,o2)
+  for _,c in ipairs(o2.choices) do assert(W.DIG_DRAFT[c.cardId],c.cardId..' is not a dig upgrade') end
+  assert(choose(p,o2,1,'dig-pick-'..n));assert(P.validate(p,44))
+ end
+ local wide=C.stats(p,p.fleet[1],nil).cutSize
+ local fresh=funded(8)
+ assert(C.stats(fresh,fresh.fleet[1],nil).cutSize==1,'no cut without the card')
+end)
 print(tests..' WORKSHOP checks passed (logic/model; not human enjoyment or native multiplayer)')
