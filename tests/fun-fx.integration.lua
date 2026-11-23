@@ -90,6 +90,22 @@ do
  local made
  FunFX.withRole('Charger',function() made=add(emitter('rbxasset://textures/particles/sparkles_main.dds')) end)
  assert(made.Texture==FunFX.SQUARE and made:GetAttribute('RoleParticle')=='Charger','particles made inside a Charger effect take its square look')
- print('PASS particles: default/soft round particles become plain circles; 14 distinct drone particle looks; effects take their drone look')
+ local seen2={}
+ for role,look in pairs(FunFX.ROLE_PARTICLE) do
+  local e=emitter('');e.Speed=NumberRange.new(10,20);e.Lifetime=NumberRange.new(.3,.6);e.Drag=0
+  FunFX.styleParticle(e,role)
+  if look.motion=='float' then
+   assert(e.Speed.Max<=7 and e.Lifetime.Max>=2.2,role..' floats and lingers')
+  else
+   assert(look.motion=='burst' and e.Drag>=5 and e.Speed.Min>=8,role..' bursts out against heavy drag')
+  end
+  local key=look.shape..':'..look.scale..':'..look.motion
+  assert(not seen2[key],role..' looks like '..tostring(seen2[key])..' (shape, size, motion)')
+  seen2[key]=role
+ end
+ local fast=add(emitter('rbxasset://textures/particles/sparkles_main.dds'))
+ fast.Speed=NumberRange.new(20,40);fast.Drag=0;fast:SetAttribute('Randomized',nil);FunFX.randomize(fast)
+ assert(fast.Drag>=4 and fast.Speed.Max<=40,'fast particles get drag, never more speed')
+ print('PASS particles: default/soft round particles become plain circles; 14 distinct drone particle looks (shape, size, float or drag-burst motion); fast particles get drag; effects take their drone look')
 end
 print('PASS FunFX one look per drone type (same type identical, 14 distinct silhouettes), trail/sparkle step, confetti, field motes and color grade (API doubles)')

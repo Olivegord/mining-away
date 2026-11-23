@@ -80,6 +80,13 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
     - Nomad `blast`: far and high with wild spin.
     - Lancer `jet`: everything along one line.
     - Halver (halves), Bubbler (float) and Singularity (implosion) as before.
+- **Drone particles, second pass:** owner: "not unique in size, texture, everything; some too fast and linear; either floaty and lingery, or lots of drag and initial speed".
+  - Each type has its own shape, size (0.55–1.9× on top of the 2.4× base) and one of two motions:
+    - **float:** speed ×0.2–0.35, drag 1.4, 2.2 s or more of life, its own rise or settle;
+    - **burst:** a hard initial speed (×0.6–2.2 of the base) against drag 5–10, with a long linger and slight gravity.
+  - Float: Ballcaster (rising diamonds), Bubbler (large growing circles), Gridcutter (tiny hovering squares), Singularity (settling spinning diamonds), Starforge (rising stars), Frostbite (falling snow diamonds), Ramiel (big hanging diamonds).
+  - Burst: Striker (circles), Charger (big heavy squares), Needler (tiny needles), Halver (bars), Resonator (pulsing circles), Nomad (spinning squares), Lancer (long needles).
+  - The global randomizer no longer speeds anything up (speed ×0.5–1), and any particle over 10 studs/s gets drag 4 or more.
 - **Sightline removed:** the dig drones' red targeting line and dot (`SightLine`, `SightGlow`, `SightDot`) never show (owner: "you can probably remove it altogether"). This supersedes "sight only while charging" and the red sights in earlier entries. The contact sparks are unchanged.
 - **Spritesheet particles:** supported natively. `ParticleEmitter.FlipbookLayout` (grids such as 2×2, 4×4, 8×8), `FlipbookMode` (Loop, OneShot, PingPong, Random), `FlipbookFramerate` and `FlipbookStartRandom` play a sheet's frames over each particle's life. The sheet must be an uploaded image asset, square and power-of-two (up to 1024). This repo uploads none yet; it can be uploaded through Studio's Asset Manager.
 - **Gems are only opened by jumping (owner, Nov 22):**

@@ -270,21 +270,27 @@ Fun.ROUND={['']=true,[SPARKLE]=true,['rbxasset://textures/sparkle.png']=true,['r
 -- shape: circle | square (tumbling) | diamond (a square turned 45 degrees,
 -- still) | bar (a short slab along its flight) | needle (a long thin one) |
 -- star. spin in degrees/s; squash stretches along the flight.
+-- Owner, Nov 22: "not unique in size, texture, everything ... too fast and
+-- linear. when in doubt, either make them floaty and lingery, or have lots
+-- of drag and initial speed". Each type: a shape, a size, and one of two
+-- motions:
+--  float: slow, long-lived, drifting (rise > 0 floats up, < 0 settles down)
+--  burst: a hard initial speed killed by heavy drag, then a linger
 Fun.ROLE_PARTICLE={
- Striker={shape='circle'},
- Charger={shape='square',spin=260},
- Ballcaster={shape='diamond'},
- Needler={shape='needle',squash=2.6,scale=.8},
- Bubbler={shape='circle',grow=true},
- Halver={shape='bar',squash=1.4},
- Gridcutter={shape='square',spin=0},
- Singularity={shape='diamond',spin=320},
- Starforge={shape='star',spin=120},
- Frostbite={shape='diamond',squash=1.2},
- Resonator={shape='circle',pulse=true},
- Ramiel={shape='diamond',spin=90},
- Nomad={shape='square',spin=420},
- Lancer={shape='needle',squash=3.4},
+ Striker={shape='circle',scale=1,motion='burst',drag=7},
+ Charger={shape='square',spin=260,scale=1.7,motion='burst',drag=9,kick=1.8,gravity=-10},
+ Ballcaster={shape='diamond',scale=1.3,motion='float',rise=1.2},
+ Needler={shape='needle',squash=2.6,scale=.55,motion='burst',drag=10,kick=2.2},
+ Bubbler={shape='circle',grow=true,scale=1.9,motion='float',rise=2.4},
+ Halver={shape='bar',squash=1.4,scale=1.1,motion='burst',drag=6,kick=1.4},
+ Gridcutter={shape='square',spin=0,scale=.6,motion='float',rise=0},
+ Singularity={shape='diamond',spin=320,scale=.9,motion='float',rise=-.4},
+ Starforge={shape='star',spin=120,scale=1.25,motion='float',rise=2},
+ Frostbite={shape='diamond',squash=1.2,scale=.75,motion='float',rise=-1.2},
+ Resonator={shape='circle',pulse=true,scale=1.2,motion='burst',drag=5},
+ Ramiel={shape='diamond',spin=90,scale=1.6,motion='float',rise=.3},
+ Nomad={shape='square',spin=420,scale=1.4,motion='burst',drag=8,kick=2},
+ Lancer={shape='needle',squash=3.4,scale=1,motion='burst',drag=7,kick=1.6},
 }
 -- Every particle varies more (owner, Nov 22: "add lots more randomness to
 -- particles"): a wider size envelope, longer and shorter lives, faster and
@@ -309,8 +315,11 @@ function Fun.randomize(emitter)
  pcall(function()
   local size=scaled(emitter.Size,1,.45)
   if size then emitter.Size=size end
-  emitter.Lifetime=widen(emitter.Lifetime,.6,1.5) or emitter.Lifetime
-  emitter.Speed=widen(emitter.Speed,.55,1.45) or emitter.Speed
+  emitter.Lifetime=widen(emitter.Lifetime,.7,1.6) or emitter.Lifetime
+  -- Slower, never faster, and nothing flies on in a straight line: a fast
+  -- particle gets drag so it bursts out, stops and lingers.
+  emitter.Speed=widen(emitter.Speed,.5,1) or emitter.Speed
+  if emitter.Speed.Max>10 and emitter.Drag<4 then emitter.Drag=4 end
   local spread=emitter.SpreadAngle
   emitter.SpreadAngle=Vector2.new(math.min(180,spread.X+18),math.min(180,spread.Y+18))
   if emitter.Orientation~=Enum.ParticleOrientation.VelocityParallel then
@@ -358,6 +367,21 @@ function Fun.styleParticle(emitter,role)
   end
  end
  if look.squash then emitter.Squash=NumberSequence.new(-look.squash) end
+ pcall(function()
+  local speed,life=emitter.Speed,emitter.Lifetime
+  if look.motion=='float' then
+   emitter.Speed=NumberRange.new(speed.Min*.2,math.max(1.5,speed.Max*.35))
+   emitter.Drag=1.4
+   emitter.Lifetime=NumberRange.new(math.max(.9,life.Min*2),math.max(2.2,life.Max*2.6))
+   emitter.Acceleration=Vector3.new(0,look.rise or 0,0)
+  else
+   local k=look.kick or 1.3
+   emitter.Speed=NumberRange.new(math.max(8,speed.Max*k*.6),math.max(14,speed.Max*k*1.1))
+   emitter.Drag=look.drag or 6
+   emitter.Lifetime=NumberRange.new(math.max(.5,life.Min*1.4),math.max(1.1,life.Max*2))
+   emitter.Acceleration=Vector3.new(0,look.gravity or -3,0)
+  end
+ end)
 end
 -- Particles made inside fn take the role's look (effects build their
 -- emitters synchronously; DescendantAdded below sees them as they appear).
