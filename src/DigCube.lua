@@ -133,7 +133,13 @@ local function hueAt(L: number): {number}
  return mix(D.LAYER_HUES[i],D.LAYER_HUES[i+1],f-i)
 end
 -- Color of layer L at cube-local x,z.
+-- The top layer looks like the ground it replaces (owner, Nov 23: chunks
+-- must not turn blue when they load). The server sets this from the ground
+-- plate and publishes it (DigField TopColor); nil keeps the strata color.
+D.TOP_LOOK=nil :: {color:{number}}?
 function D.layerColor(cube: any,L: number,x: number,z: number): {number}
+ local top=D.TOP_LOOK
+ if L==1 and top then return {top.color[1],top.color[2],top.color[3]} end
  local a=hueAt(L)
  local b=mix(a,hueAt(L+1.5),D.LAYER_SHIFT) -- about one hue step deeper
  b=mix(b,{255,250,236},.08)
@@ -664,7 +670,7 @@ function D.collapse(cube: any,seeds: {number},most: number?): {number}
  while i<=#queue and #fallen<(most or 96) do
   local id=queue[i];i+=1
   for _,up in ipairs(D.above(cube,id)) do
-   if not cube.removed[up] and not (cube.sealed and cube.sealed[up]) and not D.resting(cube,up) then
+   if not cube.removed[up] and not (cube.sealed and cube.sealed[up]) and not (cube.fixed and cube.fixed[up]) and not D.resting(cube,up) then
     D.remove(cube,up);table.insert(fallen,up);table.insert(queue,up)
    end
   end
@@ -676,7 +682,7 @@ end
 -- regular cells never float). Sealed gem cells (`cube.sealed`, set by the
 -- server) may float: they neither block the cells under them nor need them.
 function D.diggable(cube: any,id: number,gone: {[number]:any}?): boolean
- if cube.removed[id] then return false end
+ if cube.removed[id] or (cube.fixed and cube.fixed[id]) then return false end
  local sealed=cube.sealed
  for _,other in ipairs(D.shoulders(cube,id)) do if not cube.removed[other] and not (sealed and sealed[other]) then return false end end
  for _,upper in ipairs(D.above(cube,id)) do
@@ -1639,6 +1645,24 @@ end
 function D.chunkOptions(worldSeed: number,i: number,j: number,yield: (() -> ())?): any
  local x0,z0=D.chunkCorner(i,j)
  return {thick=D.fieldThickness(worldSeed),colorSeed=math.floor(math.abs(worldSeed))%100000+1,offsetX=x0,offsetZ=z0,yield=yield}
+end
+-- Cells under what must never be dug (the hub, old field beds): every cell
+-- whose footprint reaches one of the cube-local rects {x0,z0,x1,z1} is
+-- fixed: never cut, never falls, and holds up whatever rests on it.
+function D.markFixed(cube: any,rects: {{number}}): number
+ local fixed: {[number]:boolean}=cube.fixed or {}
+ local n=0
+ for id,c in ipairs(cube.cells) do
+  for _,r in ipairs(rects) do
+   if c.maxX>r[1] and c.minX<r[3] and c.maxZ>r[2] and c.minZ<r[4] then
+    if not fixed[id] then fixed[id]=true;n+=1 end
+    cube.frontier[id]=nil
+    break
+   end
+  end
+ end
+ cube.fixed=fixed
+ return n
 end
 function D.buildChunk(worldSeed: number,i: number,j: number,generation: number?,yield: (() -> ())?): any
  local cube: any=D.build(D.chunkSeed(worldSeed,i,j,generation),D.chunkOptions(worldSeed,i,j,yield))

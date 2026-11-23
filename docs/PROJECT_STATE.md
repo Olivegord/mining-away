@@ -1,3 +1,10 @@
+## November 23 — dig field: chunks look like the ground; dig right up to the hub
+
+Owner, after Play: loaded chunks turned entirely blue ("they should look the same"), and at the edge of a loaded chunk the drones would not mine past it.
+- **Look:** a chunk's top layer now takes the ground plate's own color, material and texture (texture kept in world position), so a chunk that loads or starts being dug looks the same as the ground around it. Pit walls show that ground look for the top layer, then the strata below. Rubble from the top layer uses the same color (`DigField` attribute `TopColor`, `DigCube.TOP_LOOK`).
+- **Edges:** whole chunks touching the hub's bounds or an old field bed were blocked; west of Plot 1 that was the entire 88-stud band up to the hub, so crews stopped dead at Plot 1's edge. Now only chunks off the map are blocked; inside a chunk, just the cells under the hub or a bed are fixed (`DigCube.markFixed`: never cut, never fall). Chunk builds run nearest-player first and faster (12 ms a frame) while someone stands within reach of the chunk.
+- `tools/test_dig_field.py` adds the reported case (a crew at Plot 1's west edge digs into chunk −1_0 toward the hub; nothing inside the hub is cut) and checks the rock tops match the ground plate. Dig suites pass. Not seen in Play.
+
 ## November 23 — chunked dig field: the whole flat map digs, chunks only where needed
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md) ("the entire map is now a dig cube ... only spawning chunks when they are needed"). Branch `codex/chunked-dig-field` (from `codex/restore-feel-prestige`). **Not installed in shared Studio, not merged, not seen in Play.**

@@ -3564,15 +3564,29 @@ function scene.digPinned(i,j)
  for _,p in ipairs(FIELD.PINNED) do if p[1]==i and p[2]==j then return true end end
  return false
 end
+-- Only chunks off the field are blocked whole (owner, Nov 23: mine
+-- anywhere). In a chunk that reaches the hub or an old bed, just the cells
+-- under it are fixed (DigCube.markFixed); the rest digs.
 function scene.digBlocked(i,j)
  if scene.digPinned(i,j) then return false end
- if not DigCube.inField(i,j) then return true end
- local x0,z0=DigCube.chunkCorner(i,j)
- local x1,z1=x0+DigCube.WIDTH,z0+DigCube.WIDTH
+ return not DigCube.inField(i,j)
+end
+-- Inside a never-dug area by more than `inset` studs (the hub, a bed).
+function scene.digInBlocked(x,z,inset)
  for _,r in ipairs(scene.digField.blocked) do
-  if x1>r[1] and x0<r[3] and z1>r[2] and z0<r[4] then return true end
+  if x>r[1]+inset and x<r[3]-inset and z>r[2]+inset and z<r[4]-inset then return true end
  end
  return false
+end
+-- The never-dug rects reaching a chunk, in its local coordinates.
+function scene.digFixedRects(ch)
+ local out={}
+ local W=DigCube.WIDTH
+ for _,r in ipairs(scene.digField.blocked) do
+  local x0,z0,x1,z1=r[1]-ch.origin.X,r[2]-ch.origin.Z,r[3]-ch.origin.X,r[4]-ch.origin.Z
+  if x1>0 and x0<W and z1>0 and z0<W then table.insert(out,{x0,z0,x1,z1}) end
+ end
+ return out
 end
 -- Ground: the authored plates (Fields.Baseplate and Map.PlotPit.Ground*)
 -- are cut around every rendered chunk, and the old pit's shaft walls and
@@ -3614,6 +3628,31 @@ do
  end
  ground.plateTop=DigCube.GROUND
  ground.plateThick=ground.plates[1] and ground.plates[1].thick or 1
+ -- The top layer looks like this ground (owner, Nov 23: loaded chunks must
+ -- look the same, not turn blue). Clients read TopColor for their rubble.
+ local look=ground.plates[1] and ground.plates[1].template
+ if look and look.Color and look.Color.R then
+  DigCube.TOP_LOOK={color={look.Color.R*255,look.Color.G*255,look.Color.B*255}}
+  F.folder:SetAttribute('TopColor',look.Color)
+ end
+end
+-- A plate's texture tiling origin (world corner and authored offsets).
+local function tilingOf(pl)
+ if not pl.tiling then
+  pl.tiling={lo=pl.lo,offU=0,offV=0}
+  for _,t in ipairs(pl.template:GetChildren()) do
+   if t:IsA('Texture') and t.Face==Enum.NormalId.Top then pl.tiling.offU=t.OffsetStudsU;pl.tiling.offV=t.OffsetStudsV;break end
+  end
+ end
+ return pl.tiling
+end
+-- The ground plate at world x,z (the first one when none covers it).
+function scene.digTopPlate(x,z)
+ local plates=scene.digField.ground.plates
+ for _,pl in ipairs(plates) do
+  if x>=pl.lo.X and x<=pl.hi.X and z>=pl.lo.Y and z<=pl.hi.Y then return pl end
+ end
+ return plates[1]
 end
 -- Rectangles of [lo,hi] minus the squares (each {x0,z0,x1,z1}); x slabs,
 -- then vertically merged.
@@ -3681,12 +3720,7 @@ function scene.digGroundUpdate()
   end
  end
  for _,pl in ipairs(ground.plates) do
-  if not pl.tiling then
-   pl.tiling={lo=pl.lo,offU=0,offV=0}
-   for _,t in ipairs(pl.template:GetChildren()) do
-    if t:IsA('Texture') and t.Face==Enum.NormalId.Top then pl.tiling.offU=t.OffsetStudsU;pl.tiling.offV=t.OffsetStudsV;break end
-   end
-  end
+  tilingOf(pl)
   local want=subtractSquares(pl.lo,pl.hi,squares)
   local keep,made={},{}
   local function same(piece,r) return math.abs(piece.lo.X-r[1])<1e-4 and math.abs(piece.lo.Y-r[2])<1e-4 and math.abs(piece.hi.X-r[3])<1e-4 and math.abs(piece.hi.Y-r[4])<1e-4 end
@@ -3784,12 +3818,52 @@ function scene.digNewChunk(i,j)
  F.chunks[key]=ch;F.count+=1;F.perf.loads+=1
  return ch
 end
--- Spread a build over frames: pause whenever this slice ran past budget.
+-- Spread a build over frames: pause whenever this slice ran past budget
+-- (a number, or a function returning one).
 function scene.digYielder(budget)
  local t0=os.clock()
  return function()
-  if os.clock()-t0>budget then task.wait();t0=os.clock() end
+  local b=type(budget)=='function' and budget() or budget
+  if os.clock()-t0>b then task.wait();t0=os.clock() end
  end
+end
+-- Horizontal distance from a chunk to the nearest player.
+function scene.digNearest(ch)
+ local best=math.huge
+ for _,p in pairs(profiles) do
+  local hr=characterRoot(p)
+  if hr then best=math.min(best,DigCube.chunkDistance(ch.i,ch.j,hr.Position.X,hr.Position.Z)) end
+ end
+ return best
+end
+function scene.digBuilder()
+ local F=scene.digField
+ if F.building then return end
+ F.building=true
+ task.spawn(function()
+  while true do
+   local queue=F.buildQueue or {}
+   local pick,pickAt,pickD=nil,nil,math.huge
+   for k=#queue,1,-1 do
+    local item=queue[k]
+    if item.ch.dropped or item.ch.generation~=item.generation then table.remove(queue,k)
+    else
+     local d=scene.digNearest(item.ch)
+     if d<pickD or not pick then pick,pickAt,pickD=item,k,d end
+    end
+   end
+   if not pick then break end
+   table.remove(queue,pickAt)
+   local ch=pick.ch
+   local t0=os.clock()
+   local ok,cube=pcall(DigCube.buildChunk,F.worldSeed,ch.i,ch.j,pick.generation,scene.digYielder(function()
+    -- Someone is standing at it: build faster.
+    return scene.digNearest(ch)<=DigCube.MINE_RADIUS+4 and .012 or .004
+   end))
+   if ok then pick.finish(cube,os.clock()-t0) else (warn or print)('[DigField] chunk '..ch.key..' build failed: '..tostring(cube)) end
+  end
+  F.building=false
+ end)
 end
 -- Start a chunk over (a fresh generation of its rock): pays sealed gems to
 -- owners still here, drops every job on it, builds the new cube (in the
@@ -3826,6 +3900,7 @@ function scene.digReset(ch)
   if ch.generation~=generation or ch.dropped then return end
   F.perf.builds+=1;F.perf.buildTime+=seconds;F.perf.maxBuild=math.max(F.perf.maxBuild,seconds)
   ch.cube=cube
+  ch.fixedCount=DigCube.markFixed(cube,scene.digFixedRects(ch))
   -- Secret gems per cell, from the server's own Random (never the public seed).
   ch.gems=DigCube.placeGems(cube,function() return ch.random:NextNumber() end)
   holder:SetAttribute('OpCount',0)
@@ -3845,17 +3920,11 @@ function scene.digReset(ch)
   local cube=DigCube.buildChunk(F.worldSeed,ch.i,ch.j,generation)
   finish(cube,os.clock()-t0)
  else
-  task.spawn(function()
-   -- One build at a time, a few milliseconds a frame.
-   while F.building do task.wait() end
-   if ch.generation~=generation or ch.dropped then return end
-   F.building=true
-   local t0=os.clock()
-   local ok,cube=pcall(DigCube.buildChunk,F.worldSeed,ch.i,ch.j,generation,scene.digYielder(.004))
-   local seconds=os.clock()-t0
-   F.building=false
-   if ok then finish(cube,seconds) else (warn or print)('[DigField] chunk '..ch.key..' build failed: '..tostring(cube)) end
-  end)
+  -- Queued; one builder builds the chunk nearest a player first, a few
+  -- milliseconds a frame (more while a player stands within reach of it).
+  F.buildQueue=F.buildQueue or {}
+  table.insert(F.buildQueue,{ch=ch,generation=generation,finish=finish})
+  scene.digBuilder()
  end
 end
 -- Render a chunk's rock (on its first job): the ground plates give way over
@@ -3989,6 +4058,19 @@ local function rockBlock(ch,x0,x1,y0,y1,z0,z1,L)
  part.Color=Color3.fromRGB(c[1],c[2],c[3])
  part.Size=Vector3.new(x1-x0,y1-y0,z1-z0)
  part.CFrame=CFrame.new(ch.origin+Vector3.new((x0+x1)*.5,(y0+y1)*.5,(z0+z1)*.5))
+ -- The top layer is the ground's own look: its color, material and texture
+ -- (kept in world position), so a loaded chunk looks the same as before.
+ if L==1 then
+  local pl=scene.digTopPlate(ch.origin.X+(x0+x1)*.5,ch.origin.Z+(z0+z1)*.5)
+  if pl then
+   local t=pl.template
+   part.Color=t.Color;part.Material=t.Material;part.MaterialVariant=t.MaterialVariant
+   for _,tex in ipairs(t:GetChildren()) do
+    if tex:IsA('Texture') and tex.Face==Enum.NormalId.Top then tex:Clone().Parent=part end
+   end
+   alignTextures(part,Vector2.new(ch.origin.X+x0,ch.origin.Z+z0),tilingOf(pl))
+  end
+ end
  return part
 end
 function scene.digBuildRock(ch)
@@ -4125,6 +4207,7 @@ function scene.digCarve(job)
    if ok and result then
     result.Anchored=true;result.CanTouch=false;result.CastShadow=false;result.UsePartColor=true;result.Color=block.part.Color
     result.Material=block.part.Material;result.MaterialVariant=block.part.MaterialVariant;result.Name='RockBlock'
+    for _,tex in ipairs(block.part:GetChildren()) do if tex:IsA('Texture') then tex:Clone().Parent=result end end
     result.Parent=dig.rock
     block.part:Destroy();block.part=result
    elseif (ok and not result) or (not ok and string.find(tostring(result),'empty')) then
@@ -4290,7 +4373,7 @@ function scene.digSurface(x,z)
   local top=DigCube.surfaceAt(ch.cube,x-ch.origin.X,z-ch.origin.Z)
   if top then return ch.origin.Y+top end
  end
- if not scene.digBlocked(i,j) then return DigCube.GROUND end
+ if not scene.digBlocked(i,j) and not scene.digInBlocked(x,z,0) then return DigCube.GROUND end
  return nil
 end
 function scene.digInsideChunk(ch,position,margin)
@@ -4302,6 +4385,7 @@ end
 function scene.digInside(position,margin)
  local h=position.Y-DigCube.CENTER[2]
  if h<-2 or h>DigCube.HEIGHT+margin then return false end
+ if scene.digInBlocked(position.X,position.Z,margin) then return false end
  for _,c in ipairs(DigCube.chunksNear(position.X,position.Z,margin)) do
   if not scene.digBlocked(c[1],c[2]) then return true end
  end
@@ -4313,6 +4397,8 @@ function scene.digActive(p)
  if not hr then return false end
  local h=hr.Position.Y-DigCube.CENTER[2]
  if h<-3 or h>DigCube.HEIGHT+16 then return false end
+ -- In the hub (or on an old bed) more than 4 studs from open field: not digging.
+ if scene.digInBlocked(hr.Position.X,hr.Position.Z,4) then return false end
  for _,c in ipairs(DigCube.chunksNear(hr.Position.X,hr.Position.Z,4)) do
   if not scene.digBlocked(c[1],c[2]) then return true end
  end

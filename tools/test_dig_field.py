@@ -221,8 +221,14 @@ local startPieces=checkGround('start')
 assert(startPieces==5,'nothing is cut while only Plot 1 (already a hole in the plates) is rendered')
 assert(not workspace.MiningAway.Map.PlotPit:FindFirstChild('ShaftNorth'),'the old shaft walls are replaced by per-chunk walls')
 assert(chunk(0,0).floor and chunk(0,0).floor.Parent==chunk(0,0).holder,'Plot 1 has its floor')
-assert(scene.digBlocked(-1,0) and scene.digBlocked(-2,0),'the hub never digs')
-assert(not scene.digBlocked(0,0) and not scene.digBlocked(2,0) and not scene.digBlocked(-4,3),'the open field digs')
+assert(not scene.digBlocked(-1,0) and not scene.digBlocked(0,0) and not scene.digBlocked(2,0),'only chunks off the field are blocked whole (mine anywhere)')
+assert(scene.digBlocked(40,0),'off the field is blocked')
+assert(scene.digInBlocked(0,0,4) and not scene.digInBlocked(100,0,0),'the hub (and only it) is never dug')
+-- Loaded chunks look like the ground they replace: the top layer takes the plate's look.
+assert(root.DigField:GetAttribute('TopColor')==root.Fields.Baseplate.Color,'the field publishes the ground color for the top layer')
+for _,blk in ipairs(chunk(0,0).blocks) do
+ assert(blk.part.Color==root.Fields.Baseplate.Color and blk.part.Material==root.Fields.Baseplate.Material,'untouched rock tops look like the ground plate')
+end
 
 -- ===== Load: a player out on the field =====
 local function crew(p,roles)
@@ -253,6 +259,25 @@ for _,d in ipairs(p.drones) do
  if d.digJob then assert(d.model:GetAttribute('DigChunk')==d.digJob.ch.key,'a drone publishes its job chunk (DigChunk)') end
 end
 replayMatches(ch,'chunk 2_0')
+-- The reported bug: at Plot 1's west edge, toward the hub, the crew must dig
+-- past the edge (chunk -1_0 reaches the hub: only the cells under it stay).
+do
+ local edge=player(5106);players.PlayerAdded:Fire(edge);local pe=profiles[edge.UserId]
+ crew(pe,{'Striker','Striker','Needler','Lancer'})
+ local ex,ez=DigCube.chunkCorner(0,0)
+ edge.Character:PivotTo(CFrame.new(Vector3.new(ex-2,DigCube.GROUND+3,ez+W/2)))
+ local west
+ for _=1,900 do tick(5);west=chunk(-1,0);if west and #west.ops>=3 then break end end
+ assert(west and #west.ops>=3,'a crew at the edge of Plot 1 digs past it, toward the hub: '..(west and #west.ops or 0))
+ assert(west.fixedCount and west.fixedCount>0,'the cells under the hub are fixed')
+ for id in pairs(west.cube.fixed) do assert(not west.cube.removed[id],'a fixed cell under the hub is never removed') end
+ for id in pairs(west.cube.removed) do
+  local c=west.cube.cells[id]
+  assert(not scene.digInBlocked(west.origin.X+c.cx,west.origin.Z+c.cz,0),'nothing is dug inside the hub')
+ end
+ edge.Character:PivotTo(CFrame.new(Vector3.new(0,6,0)))
+ print(string.format('PASS edge: at Plot 1\'s west edge the crew cut %d ops in chunk -1_0 toward the hub; %d cells under the hub stay fixed',#west.ops,west.fixedCount))
+end
 print(string.format('PASS load: only Plot 1 at start; the player\'s chunk loads (seed from world seed + coords), renders on its first job (%d columns + %d layer blocks, 4 walls, floor), ground cut with no gap or overlap; ops replay',columns,layered))
 
 -- ===== Cross-chunk: a crew at a border digs both sides =====
@@ -347,7 +372,9 @@ print(string.format('PERF parts: %d rock blocks in %d rendered chunks (fully lay
 
 -- ===== Unload: everyone back to the hub =====
 FIELD.HEAL_AFTER=30;FIELD.HEAL_MIN=12
-for _,q in ipairs({pl,pl2,pl3,pl4}) do q.Character:PivotTo(CFrame.new(Vector3.new(0,6,0))) end
+-- (Off the field: chunks at the hub's edge now load and dig too, so the hub is no empty spot.)
+local OFF=Vector3.new(1500,6,1500)
+for _,q in pairs(profiles) do q.player.Character:PivotTo(CFrame.new(OFF)) end
 tick(math.ceil((FIELD.DROP_AFTER+2)/C.Tick))
 for _,c in pairs(F.chunks) do assert(c.pinned or c.rendered,'untouched chunks drop when nobody is near: '..c.key) end
 assert(rendered()>=5,'dug chunks stay a while')
@@ -359,8 +386,7 @@ for _,pl in ipairs(F.ground.plates) do
  assert(#pl.pieces==1 and pl.pieces[1].part==pl.template and pl.template.Parent==pl.parent,'each original plate is back in place')
 end
 assert(chunk(0,0).skirts[1] and chunk(0,0).skirts[2] and chunk(0,0).skirts[3] and chunk(0,0).skirts[4],'Plot 1 walls itself off again')
--- Hub: standing there loads nothing and does not dig.
-assert(not p.digging,'the hub is not the dig field')
+assert(not p.digging,'off the field nobody digs')
 -- Coming back regrows the same chunk (same seed: generation starts over).
 pl.Character:PivotTo(CFrame.new(center(2,0)))
 tick(30)
@@ -374,7 +400,7 @@ do
  assert(chunk(0,0),'the pinned chunk is never dropped by the cap')
  FIELD.MAX_CHUNKS=cap
 end
-print(string.format('PASS unload: untouched chunks drop after %ds, dug ones grow back after HEAL_AFTER, the original ground plates return (%d pieces), the hub stays solid (API doubles: looks, ground texture seams and real multiplayer NOT verified)',FIELD.DROP_AFTER,back))
+print(string.format('PASS unload: untouched chunks drop after %ds, dug ones grow back after HEAL_AFTER, the original ground plates return (%d pieces) (API doubles: looks, ground texture seams and real multiplayer NOT verified)',FIELD.DROP_AFTER,back))
 """
 source = "\n".join([
     "local REAL_CLOCK=os.clock -- the doubles replace os.clock with game time",

@@ -3900,6 +3900,9 @@ function Field:scan()
   end
  end
  if not folder or not at then return end
+ -- The top layer's ground look (server DigCube.TOP_LOOK), for rubble and pieces.
+ local top=folder:GetAttribute('TopColor')
+ if top and top.R and not DigCube.TOP_LOOK then DigCube.TOP_LOOK={color={top.R*255,top.G*255,top.B*255}} end
  for _,holder in ipairs(folder:GetChildren()) do
   local key=holder:GetAttribute('Chunk')
   local i,j=DigCube.parseChunkKey(key)
