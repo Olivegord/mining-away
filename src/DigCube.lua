@@ -45,7 +45,9 @@ D.GROUND=3.8 -- top of the ground plate around the cube
 D.HEIGHT=44 -- every cube is this deep; its layers vary in thickness inside it
 -- Bottom center in world space. The cube is sunk into a pit in the ground
 -- east of the hub, its top flush with the ground, so drones mine down into it.
-D.CENTER={140,D.GROUND-D.HEIGHT,20}
+-- It fills Plot 1 of the plot ring (Map.PlotRing, centers 160 studs from the hub;
+-- tools/studio_flat_plots.lua builds the matching Map.PlotPit around it).
+D.CENTER={160,D.GROUND-D.HEIGHT,0}
 -- Owner, Nov 22: "the first layer should be a lot hardier, and the others
 -- too. it should not melt through them super fast": 2.5x the old first layer
 -- (was .2), and steeper with depth (was .4).
