@@ -391,7 +391,8 @@ def recent_commits(main):
     # Not --first-parent: when a worktree merges the integration branch and the tool
     # fast-forwards to that merge, the commit another chat installed meanwhile sits on
     # the merge's second parent. Every candidate is still an exact committed bundle.
-    return git('log', f'-n{HISTORY}', '--format=%H', INTEGRATION, '--', 'src', cwd=main).split()
+    # tools/build.py shapes the bundles too: a commit that only changes it can be installed.
+    return git('log', f'-n{HISTORY}', '--format=%H', INTEGRATION, '--', 'src', 'tools/build.py', cwd=main).split()
 
 
 def report(installed, target, origin, target_commit):
