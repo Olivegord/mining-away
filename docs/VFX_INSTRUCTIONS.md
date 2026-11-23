@@ -31,6 +31,10 @@ Owner: "some blackening is still needed. its impossible to see what you are mini
 
 Owner: "there should still be blackening of rock and color differences between layers!" after the char split was removed. Striker `proxy` tone (34,26,24), cap .5 (the cut cell goes about halfway to charcoal, never black, no split); rubble dark .06–.16, near .35, dcap .45. Even layers are `DigCube.LAYER_BAND` (.14) darker and slightly warmer so thin neighbors read apart. Do not bring back the full black char split.
 
+## November 23 — rubble timed + velocity mix; dark scorched rubble back (supersedes the shrink and black caps below)
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). `DigCubeView` loose rubble: `shrinkAt` when speed < `RUBBLE_SLOW` 3 after `RUBBLE_SETTLE` 0.3 s, or when `stepSinks` reaches it (from `RUBBLE_REST` 1.15 s, lowest first, one per `RUBBLE_STEP` 0.07 s; loose pieces are no longer anchored by it, they shrink while tumbling), or at 2.8 s. `RUBBLE_SHRINK` 0.85 → 0.42 s. `DARK_MAX` .5 → .9; Striker rubble `dark={.06,.2},near=.6,dcap=.85`; Ramiel rubble `dark={.7,.8},dcap=.9,scorch=(12,6,10)` as before `5fc5cfc`. Proxy (piece being cut) shading unchanged. Tests: `test_rock_chunks.py`. Not seen in Play.
+
 ## November 22 — first pastel light restored (supersedes the lighting part below)
 
 Owner: "revert the FIRST instance of the pastel look. with the blue sky, bright sun, washed colors". `Fun.DARKEN` is gone; `Fun.colorPop` only adds the `53ebe40` grade (saturation −.16, contrast .03) over the authored washed daylight from `6ff08f1` (13:30, brightness 2.6, exposure .15, pale blue haze). Do not reintroduce client darkening without a request. The strata note below still applies.

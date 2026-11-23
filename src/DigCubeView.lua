@@ -85,8 +85,10 @@ local ROLE_FX={
  -- rubble near the hit comes away scorched. Then: "some blackening is still
  -- needed. its impossible to see what you are mining": a third of the way
  -- dark as soon as the beam bites, about two thirds by the break.
+ -- Owner, Nov 23: the old dark scorched rubble back ("get the old
+ -- blackening from a while ago back"): rubble by the hit darkens up to 85%.
  L={proxy={tone=C3(34,26,24),cap=.68,start=.5,src='progress',mesh={ripple={amp=.09,len=2.4,speed=4.5,glow=.55}}},
-  rubble={per=3,min=1,max=4,up={4,7},out={3,6},spin={2,4},dark={.06,.16},near=.35,dcap=.45},
+  rubble={per=3,min=1,max=4,up={4,7},out={3,6},spin={2,4},dark={.06,.2},near=.6,dcap=.85},
   contact='Striker',sounds='classic',light=true,hold='auto',lift=1,speed=1},
  C={proxy={tone=C3(90,72,58),cap=.4,slam=true,mesh={}},
   rubble={per=3.6,min=1,max=4,up={46,60},out={4,8},spin={1.2,2.6},dark={.06,.15},near=.3,dcap=.6,scorch=C3(118,108,91),friction=.3,pattern='ring',
@@ -138,7 +140,7 @@ local ROLE_FX={
  P={proxy={tone=C3(44,28,32),cap=.5,src='late',mesh={charge=.45,tremble=.06}},carve=true,
   -- A giant laser (owner, Nov 22): the burnt rock is blown far out of the
   -- hit, smoking and shedding embers, and a spray of hot embers flies far.
-  rubble={per=1.6,min=1,max=6,count=30,up={30,44},out={24,38},spin={6,12},dark={.3,.42},near=.2,dcap=.5,scorch=C3(44,28,32),seed=true,pattern='blast',
+  rubble={per=1.6,min=1,max=6,count=30,up={30,44},out={24,38},spin={6,12},dark={.7,.8},near=.2,dcap=.9,scorch=C3(12,6,10),seed=true,pattern='blast',
    trail={{color={C3(255,236,214),C3(255,70,100)},tr={0,1},size={.16,0},speed={1,3},life={.3,.6},rate=24,accel=-10,most=12,stop=1.1,light=1},
     {smoke=true,color=C3(40,30,34),tr={.7,1},size={.6,1.8},speed={.5,1},life={.6,1},rate=10,accel=2,most=12,stop=1.4}}},
   spray={{color={C3(255,250,240),C3(255,80,110),C3(90,20,30)},tr={0,1},size={.24,0},speed={45,85},life={.9,1.7},drag=.5,accel=-30,spread=75,count=70,light=1},
@@ -553,8 +555,12 @@ local SHARD_FADE=.45
 local SHARD_LIFE=1.25 -- seconds of tumbling before a loose piece fades
 -- Lower friction and a little more bounce: pieces tumble a bit longer.
 local RUBBLE=PhysicalProperties.new(2.6,.5,.2,1,1)
-local DARK_MAX=.5 -- the most any rubble darkens toward its scorch tone
-local RUBBLE_SHRINK=.85 -- seconds a loose piece takes to shrink away, still tumbling
+-- Owner, Nov 23: the old strongly scorched rubble is back (each role's dcap,
+-- up to .9); the .5 cap from "some rocks are just straight black" is lifted.
+local DARK_MAX=.9 -- the most any rubble darkens toward its scorch tone
+local RUBBLE_SHRINK=.42 -- seconds a loose piece takes to shrink away, still tumbling
+local RUBBLE_SLOW=3 -- studs/s: a piece this slow starts shrinking before it stops
+local RUBBLE_SETTLE=.3 -- seconds after release before slowness counts
 local RUBBLE_REST=1.15 -- seconds the pile rests before the bottom pieces start to go
 local RUBBLE_STEP=.07 -- one piece every this many seconds, lowest first
 local RUBBLE_VANISH=.18 -- each shrinks away this fast
@@ -1015,7 +1021,7 @@ function V:stepSinks(now: number)
   if now>=sink.nextAt then
    local lowest,lowY=nil,math.huge
    for _,f in ipairs(sink.frags) do
-    if not f.dead and not f.vanishing and not f.loose and not (f.keeper and f.dust and not f.dust.goneAt) then
+    if not f.dead and not f.vanishing and not (f.loose and (f.shrinkAt or not f.released or f.settled)) and not (f.keeper and f.dust and not f.dust.goneAt) then
      local y=f.parts[1] and f.parts[1].part.Position.Y or math.huge
      if y<lowY then lowest,lowY=f,y end
     end
@@ -1023,8 +1029,9 @@ function V:stepSinks(now: number)
    if not lowest then table.remove(self.sinks,i)
    else
     lowest.vanishing=true
-    if lowest.loose and not lowest.settled then self:settle(lowest) end
-    lowest.settledAt=now;lowest.fadeT=RUBBLE_VANISH
+    -- A loose piece keeps tumbling; its turn in the pile starts its shrink.
+    if lowest.loose then lowest.shrinkAt=now
+    else lowest.settledAt=now;lowest.fadeT=RUBBLE_VANISH end
     sink.nextAt=now+RUBBLE_STEP
    end
   end
@@ -1073,15 +1080,16 @@ function V:stepShards(now: number)
    if primary.Position.Y<f.floor-8 or not primary.Parent then self:dropShard(f);table.remove(self.frags,i);continue end
    if t>=f.life or (f.flyAt and now>=f.flyAt) then self:settle(f)
    else
-    -- Owner, Nov 22: pieces stopped dead, then shrank (first after a fixed
-    -- rest, then the moment they stopped). Now each keeps
-    -- tumbling and starts shrinking while it is still slowing down: once it
-    -- is slow near the floor of the hole (after 0.8 s), or after 1.8 s
-    -- however it moves (2.8 s at the latest).
+    -- Owner, Nov 23: "a mix between the two rock debris systems, the timed
+    -- one and the velocity one". Each piece keeps tumbling and starts to
+    -- shrink at whichever comes first: it slows under RUBBLE_SLOW (velocity,
+    -- just before it would stop), or its turn in the timed pile clear
+    -- (stepSinks: from RUBBLE_REST, lowest first, one every RUBBLE_STEP).
+    -- 2.8 s at the latest.
     if f.released and not (f.keeper and f.dust and not f.dust.goneAt) then
      if not f.shrinkAt then
       local speed=primary.AssemblyLinearVelocity.Magnitude
-      if (t>.8 and speed<7 and primary.Position.Y<f.floor+3) or (t>1.8 and speed<14) or t>2.8 then f.shrinkAt=now end
+      if (t>RUBBLE_SETTLE and speed<RUBBLE_SLOW) or t>2.8 then f.shrinkAt=now;f.vanishing=true end
      end
      if f.shrinkAt then
       local u=math.clamp((now-f.shrinkAt)/RUBBLE_SHRINK,0,1)

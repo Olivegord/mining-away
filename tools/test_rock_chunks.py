@@ -580,13 +580,15 @@ do -- every role comes apart its own way
  end
  local function mean(list,fn) local t=0;for _,x in ipairs(list) do t+=fn(x) end;return t/math.max(1,#list) end
  local striker,charger,ball,needle,lance,ram=run('L'),run('C'),run('B'),run('N'),run('Z'),run('P')
- -- Never straight black (owner, Nov 22): Ramiel's burnt rock keeps its tone.
- for _,list in ipairs({ram,ball,striker}) do
-  for _,x in ipairs(list) do
-   local c=x.f.parts[1].part.Color
-   assert(math.max(c.R,c.G,c.B)>.2,string.format('rubble is not near-black: %.2f %.2f %.2f',c.R,c.G,c.B))
-  end
+ -- The old dark scorched rubble (owner, Nov 23): Ramiel's comes away charred,
+ -- and the Striker's darkest piece (by the hit) is well past half dark.
+ local function darkest(list)
+  local low=math.huge
+  for _,x in ipairs(list) do local c=x.f.parts[1].part.Color;low=math.min(low,math.max(c.R,c.G,c.B)) end
+  return low
  end
+ assert(darkest(ram)<.3,string.format('Ramiel rubble is charred: %.2f',darkest(ram)))
+ assert(V.ROLE_FX.L.rubble.dcap>=.85,'Striker rubble by the hit can scorch to 85%')
  -- Shrinks while it still tumbles (owner, Nov 22): not frozen, then shrunk.
  do
   local self=view();self.physics=true;self.physicsCheckAt=1e9
@@ -602,17 +604,41 @@ do -- every role comes apart its own way
   self:stepShards(f.at+.01)
   assert(f.released and not primary.Anchored,'released to physics')
   primary.AssemblyLinearVelocity=v3(2,0,1);primary.Position=v3(primary.Position.X,f.floor+.5,primary.Position.Z)
-  self:stepShards(f.at+.5)
-  assert(not f.shrinkAt and primary.Size==full,'still whole early on')
-  self:stepShards(f.at+.9)
-  assert(f.shrinkAt,'starts shrinking once slow near the floor')
-  self:stepShards(f.at+.9+.45)
+  self:stepShards(f.at+.2)
+  assert(not f.shrinkAt and primary.Size==full,'still whole just after release')
+  self:stepShards(f.at+.4)
+  assert(f.shrinkAt,'velocity: starts shrinking once slow (before it stops)')
+  self:stepShards(f.at+.4+.25)
   assert(primary.Size.Magnitude<full.Magnitude*.8 and not primary.Anchored,'smaller while physics still moves it')
   local q=f.parts[2]
   assert(q.weld and (q.weld.C0.Position-q.c0.Position).Magnitude>1e-4 or q.c0.Position.Magnitude<1e-4,'its parts stay together as it shrinks')
-  self:stepShards(f.at+.9+.9)
+  self:stepShards(f.at+.4+.5)
   assert(f.dead,'gone once shrunk')
-  print('PASS rubble: never near-black; loose pieces keep tumbling and shrink while slowing (from 0.8 s, gone 0.85 s later)')
+ end
+ -- Timed: pieces still moving fast go in the pile's turn, lowest first.
+ do
+  local self=view();self.physics=true;self.physicsCheckAt=1e9
+  local ids=chunkFor(self,1.6)
+  local cx,cz=DigCube.chunkCenter(self.cube,ids)
+  fakeClock=9600
+  self:shards({cells=ids,tier=0,flag='',code='C'},fakeClock,self.origin+v3(cx,self.cube.cells[ids[1]].y1,cz),V.ROLE_FX.C.rubble)
+  local loose={}
+  for _,g in ipairs(self.frags) do if g.loose and not g.pebble and not g.keeper then table.insert(loose,g) end end
+  assert(#loose>=2,'several loose pieces')
+  local function fast(now)
+   for _,g in ipairs(loose) do local p=g.parts[1].part;if p.Parent then p.AssemblyLinearVelocity=v3(20,0,0) end end
+   self:stepShards(now)
+  end
+  fast(fakeClock+.5);fast(fakeClock+1)
+  for _,g in ipairs(loose) do assert(not g.shrinkAt,'fast pieces are not shrinking before the pile turn') end
+  local lowest,lowY=nil,math.huge
+  for _,g in ipairs(loose) do local y=g.parts[1].part.Position.Y;if y<lowY then lowest,lowY=g,y end end
+  fast(fakeClock+1.16)
+  local n=0
+  for _,g in ipairs(loose) do if g.shrinkAt then n+=1 end end
+  assert(n==1 and lowest.shrinkAt,'timed: the lowest goes first, one at a time')
+  assert(not lowest.parts[1].part.Anchored,'and keeps tumbling while it shrinks')
+  print('PASS rubble: dark scorch back; loose pieces shrink when slow (velocity) or at their timed turn, lowest first, still tumbling')
  end
  -- The ripple: the middle lets go first, the rest in a fast wave outward.
  local far=0

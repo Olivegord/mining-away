@@ -8,6 +8,10 @@ Shake is smaller everywhere; heavy shakes only for big attacks (slam, Ramiel, No
 
 The owner's dragged-in skybox was overriding the restored first pastel look. In shared Edit it is archived to `ServerStorage.OwnerSkyArchive.DraggedSky_20261122` and `Lighting.ToyWorldSky` is restored (Studio save version 520); the canonical file already had `ToyWorldSky`, so it was not edited for this. Striker cells blacken about halfway while cut and alternate layers are banded darker (see VFX_INSTRUCTIONS). Not seen in Play. Not published.
 
+## November 23 — rubble timed + velocity mix; dark scorched rubble back
+
+Loose dig rubble shrinks (0.42 s, still tumbling) when it slows under 3 studs/s or at its timed lowest-first turn from 1.15 s, whichever is first. Rubble near the hit is strongly scorched again (cap .9; Ramiel charred). Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.
+
 ## November 23 — lighting switch (Pastel day / Sunset / Shadow day)
 
 Client-local presets in `src/FunFX.lua` (`Fun.LIGHTS`, `Fun.applyLight`, `Fun.lightSwitch`), laid over a one-time snapshot of the authored Lighting; the switch post is built by `DigCubeView:buildPad` 8 studs from the launch pad and hands the pit ambient back before switching. Pastel day is the default and identical to before. Not seen in Play.
