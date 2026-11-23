@@ -530,6 +530,112 @@ function Fun.colorPop()
  local grade=Instance.new('ColorCorrectionEffect');grade.Name='FunColorPop'
  grade.Saturation=-.16;grade.Contrast=.03;grade.Brightness=0;grade.Parent=lighting
 end
+-- Owner, Nov 22: "keep the current lighting saved. make a button right next
+-- to the field to cycle through different lighting settings. have there
+-- also be the old darker sunset lighting, and a more realistic shadow based
+-- darker day one". Client-local presets, each relative to the authored
+-- Lighting (snapshotted once). 1 is the current first-pastel look above,
+-- unchanged (the default). 2 is the sunset darkening from ff69838 (clock
+-- 17.7, sun x.78 over ambient x.36, sharp shadows). 3 is a darker realistic
+-- day: a mid-afternoon sun at full strength over low fill light, crisp
+-- shadows, less haze, a near-neutral grade.
+Fun.LIGHTS={
+ {name='Pastel day',lamp=rgb(150,205,255),saturation=-.16,contrast=.03},
+ {name='Sunset',lamp=rgb(255,150,90),sun=.78,ambient=.36,outdoor=.34,haze=.45,density=.8,diffuse=.55,clock=17.7,shadow=.15,saturation=-.16,contrast=.12},
+ {name='Shadow day',lamp=rgb(255,240,200),sun=1.1,ambient=.42,outdoor=.4,haze=.35,density=.75,diffuse=.5,specular=1.6,clock=15.3,shadow=.06,exposure=-.1,saturation=-.05,contrast=.1},
+}
+local lightState={index=1}
+function Fun.applyLight(index)
+ local lighting=game:GetService('Lighting')
+ local s=lightState
+ if not s.base then
+  local b={brightness=lighting.Brightness,ambient=lighting.Ambient,outdoor=lighting.OutdoorAmbient,diffuse=lighting.EnvironmentDiffuseScale,
+   specular=lighting.EnvironmentSpecularScale,shadow=lighting.ShadowSoftness,exposure=lighting.ExposureCompensation,clock=lighting.ClockTime,air={}}
+  for _,air in ipairs(lighting:GetChildren()) do
+   if air:IsA('Atmosphere') then b.air[air]={haze=air.Haze,density=air.Density} end
+  end
+  s.base=b
+  -- Something resetting the sun or the clock (a replicated change) becomes
+  -- the new base and the chosen preset is laid over it again.
+  local function watch(property,key)
+   lighting:GetPropertyChangedSignal(property):Connect(function()
+    if s.writing or not s.written then return end
+    local value=lighting[property]
+    if math.abs(value-s.written[key])>1e-3 then b[key]=value;Fun.applyLight(s.index) end
+   end)
+  end
+  watch('Brightness','brightness');watch('ClockTime','clock')
+ end
+ local b=s.base
+ index=((index-1)%#Fun.LIGHTS)+1
+ s.index=index
+ local p=Fun.LIGHTS[index]
+ local function dim(c,k) return Color3.new(c.R*k,c.G*k,c.B*k) end
+ local written={brightness=b.brightness*(p.sun or 1),clock=p.clock or b.clock}
+ s.writing=true
+ pcall(function()
+  lighting.Brightness=written.brightness
+  lighting.ClockTime=written.clock
+  lighting.Ambient=dim(b.ambient,p.ambient or 1)
+  lighting.OutdoorAmbient=dim(b.outdoor,p.outdoor or 1)
+  lighting.EnvironmentDiffuseScale=b.diffuse*(p.diffuse or 1)
+  lighting.EnvironmentSpecularScale=math.min(1,b.specular*(p.specular or 1))
+  lighting.ShadowSoftness=p.shadow or b.shadow
+  lighting.ExposureCompensation=b.exposure+(p.exposure or 0)
+ end)
+ for air,a in pairs(b.air) do
+  if air.Parent then pcall(function() air.Haze=a.haze*(p.haze or 1);air.Density=a.density*(p.density or 1) end) end
+ end
+ s.written=written;s.writing=false
+ local grade=lighting:FindFirstChild('FunColorPop')
+ if grade then grade.Saturation=p.saturation;grade.Contrast=p.contrast end
+ for _,switch in ipairs(s.switches or {}) do
+  if switch.lamp.Parent then
+   switch.lamp.Color=p.lamp;switch.glow.Color=p.lamp;switch.prompt.ObjectText='Lighting: '..p.name
+  end
+ end
+ return p
+end
+function Fun.cycleLight()
+ return Fun.applyLight(lightState.index+1)
+end
+-- The lighting switch beside the dig field: a short post with a glowing
+-- lamp in the current preset's color. Hold-free prompt (L) or a click cycles.
+-- beforeCycle lets the pit light hand the ambient back first.
+function Fun.lightSwitch(parent,at,beforeCycle)
+ local model=Instance.new('Model');model.Name='LightingSwitch'
+ local function make(name,shape,size,cframe,color,material)
+  local part=Instance.new('Part');part.Name=name;part.Shape=shape;part.Size=size;part.CFrame=cframe
+  part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CastShadow=false
+  part.Material=material;part.Color=color;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+  part.Parent=model
+  return part
+ end
+ local post=make('Post',Enum.PartType.Cylinder,Vector3.new(3.4,.35,.35),CFrame.new(at+Vector3.new(0,1.7,0))*UP,rgb(70,74,86),METAL)
+ make('Base',Enum.PartType.Cylinder,Vector3.new(.3,1.6,1.6),CFrame.new(at+Vector3.new(0,.15,0))*UP,rgb(70,74,86),METAL)
+ local p=Fun.LIGHTS[lightState.index]
+ local lamp=make('Lamp',Enum.PartType.Ball,Vector3.new(1.1,1.1,1.1),CFrame.new(at+Vector3.new(0,3.8,0)),p.lamp,NEON)
+ local glow=Instance.new('PointLight');glow.Range=8;glow.Brightness=.8;glow.Color=p.lamp;glow.Shadows=false;glow.Parent=lamp
+ local prompt=Instance.new('ProximityPrompt');prompt.Name='CycleLighting'
+ prompt.ActionText='Change lighting';prompt.ObjectText='Lighting: '..p.name
+ prompt.KeyboardKeyCode=Enum.KeyCode.L;prompt.GamepadKeyCode=Enum.KeyCode.ButtonY
+ prompt.MaxActivationDistance=10;prompt.RequiresLineOfSight=false;prompt.HoldDuration=0
+ prompt.Parent=post
+ local function cycle()
+  if beforeCycle then pcall(beforeCycle) end
+  Fun.cycleLight()
+ end
+ prompt.Triggered:Connect(cycle)
+ local click=Instance.new('ClickDetector');click.MaxActivationDistance=40;click.Parent=lamp
+ click.MouseClick:Connect(cycle)
+ model.Parent=parent
+ lightState.switches=lightState.switches or {}
+ for i=#lightState.switches,1,-1 do
+  if not lightState.switches[i].lamp.Parent then table.remove(lightState.switches,i) end
+ end
+ table.insert(lightState.switches,{lamp=lamp,glow=glow,prompt=prompt})
+ return model
+end
 -- Depth of field for play: sharp from the camera out well past the player,
 -- so the whole dig and the crew stay crisp, with only the far walls and
 -- skyline softly blurred. Steps aside while a menu blurs the world itself.

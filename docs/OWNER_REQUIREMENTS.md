@@ -12,6 +12,10 @@
 
 "its probably the skybox i dragged in" and "also, there should still be blackening of rock and color differences between layers!" The dragged sky (SkyboxUp 18703232671) is archived to `ServerStorage.OwnerSkyArchive.DraggedSky_20261122` in shared Studio and `Lighting.ToyWorldSky` (Roblox default blue sky, sun 14, no stars or moon) is back, as in the canonical file. Striker cells darken about halfway toward charcoal while cut (never black, no split), rubble near the hit is scorched, and every other layer is a band 14% darker and a touch warmer (`DigCube.LAYER_BAND`).
 
+## November 23 — lighting switch beside the dig field (three presets)
+
+"keep the current lighting saved. make a button right next to the field to cycle through different lighting settings. have there also be the old darker sunset lighting, and a more realistic shadow based darker day one. so three i can choose between". A lamp post just past the dig launch pad cycles `FunFX.LIGHTS` (prompt L / gamepad Y, or click the lamp): 1 Pastel day (the current first-pastel look, default, unchanged), 2 Sunset (the `ff69838` darkening, clock 17.7), 3 Shadow day (clock 15.3, full sun over low fill, crisp shadows, less haze). Client-local, per player, not remembered between sessions.
+
 ## November 22 — the FIRST pastel look back (blue sky, bright sun, washed colors)
 
 "revert the FIRST instance of the pastel look. with the blue sky, bright sun, washed colors. get that one back, not the many different iterations, but the first one when i was happy with it and did not ask for changes for a while". That is the authored washed daylight (`6ff08f1`) under the light play grade from `53ebe40` (saturation −.16, contrast .03), unchanged from 11:52 to 19:27. The client darkening `Fun.DARKEN` (every later iteration) is removed; `Fun.colorPop` only adds that grade. This supersedes the earlier "revert the pastel colors and the blue sky" lighting note. Rock strata colors were not changed.

@@ -236,6 +236,11 @@ function V:buildPad()
  emitter.EmissionDirection=Enum.NormalId.Right;emitter.SpreadAngle=Vector2.new(8,8);emitter.LightEmission=.2
  emitter.Parent=pad
  self.pad=pad;self.padAt=at
+ -- The lighting switch stands just past the launch pad (FunFX.lightSwitch).
+ if self.lightSwitch then self.lightSwitch:Destroy();self.lightSwitch=nil end
+ if self.ctx.lightSwitch then
+  self.lightSwitch=self.ctx.lightSwitch(self.fx,at+Vector3.new(0,0,-8),function() self:restorePitLight() end)
+ end
 end
 
 -- Operation n of the replicated list (64 per attribute), or nil if not here yet.

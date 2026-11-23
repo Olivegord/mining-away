@@ -2048,7 +2048,7 @@ end)
 if profile then pickupView.sales:receiveProfile(profile) end
 pickupView.crew=CrewView.new({gui=safeRoot,player=player,world=world,localFX=localFX,command=command,audio=soundscape,
  presentation=presentation,reduced=CrystalImpactView.reducedMotion,hidden=menusVisible,profile=function() return profile end})
-pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,crack=crystalAudio,presentation=presentation,freeze=hitStop.freeze,withRole=Presentation.Fun.withRole,styleParticle=Presentation.Fun.styleParticle,
+pickupView.dig=DigCubeView.new({world=world,player=player,command=command,audio=soundscape,crack=crystalAudio,presentation=presentation,freeze=hitStop.freeze,withRole=Presentation.Fun.withRole,styleParticle=Presentation.Fun.styleParticle,lightSwitch=Presentation.Fun.lightSwitch,
  beat=cameraBeat,splitBeat=rockDamage.splitBeat,reduced=CrystalImpactView.reducedMotion,impact=rockDamage.feedback,effects=RoleVisuals,
  fractures=function(name) local folder=command.Parent:FindFirstChild('CrystalFractures');return folder and folder:FindFirstChild(name) end})
 RunService:BindToRenderStep('MiningAwaySelling',Enum.RenderPriority.Camera.Value+3,function()

@@ -8,6 +8,10 @@ Shake is smaller everywhere; heavy shakes only for big attacks (slam, Ramiel, No
 
 The owner's dragged-in skybox was overriding the restored first pastel look. In shared Edit it is archived to `ServerStorage.OwnerSkyArchive.DraggedSky_20261122` and `Lighting.ToyWorldSky` is restored (Studio save version 520); the canonical file already had `ToyWorldSky`, so it was not edited for this. Striker cells blacken about halfway while cut and alternate layers are banded darker (see VFX_INSTRUCTIONS). Not seen in Play. Not published.
 
+## November 23 — lighting switch (Pastel day / Sunset / Shadow day)
+
+Client-local presets in `src/FunFX.lua` (`Fun.LIGHTS`, `Fun.applyLight`, `Fun.lightSwitch`), laid over a one-time snapshot of the authored Lighting; the switch post is built by `DigCubeView:buildPad` 8 studs from the launch pad and hands the pit ambient back before switching. Pastel day is the default and identical to before. Not seen in Play.
+
 ## November 22 — first pastel light restored
 
 Owner request: bring back the first pastel look (blue sky, bright sun, washed colors), not the later iterations. Client lighting is again the authored washed daylight (`6ff08f1`) under the light `53ebe40` grade, as it was 11:52–19:27; `Fun.DARKEN` removed from `src/FunFX.lua`. Authored Lighting in the canonical file was not touched. Not seen in Play.
