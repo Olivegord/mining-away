@@ -262,7 +262,7 @@ local function drawStar(rays,position,right,up,angle,radius,scale,alpha)
  end
 end
 
--- dim: the shot is a Dig Cube receipt, whose lights stay at brightness 1.6, range 7.
+-- dim: the shot is a Dig Cube receipt; its star light peaks at 5 (range 18) instead of 9 (23).
 function View.ramielCharge(rig,charge,untilContact,reduced,beamHold,dim)
  local field=rig.chargeField
  beamHold=beamHold or DroneCatalog.Types.Ramiel.BeamHold
@@ -335,7 +335,7 @@ function View.ramielCharge(rig,charge,untilContact,reduced,beamHold,dim)
  end
  local white=smooth((radius-.13)/1.85)*bloom
  field.lamp.Enabled=white>.01
- field.lamp.Brightness=white*(dim and 1.6 or 9);field.lamp.Range=dim and 7 or 23
+ field.lamp.Brightness=white*(dim and 5 or 9);field.lamp.Range=dim and 18 or 23
  local rim=smooth((radius-.10)/.30)*launchFade
  PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
  local pressure=smooth((elapsed+.09)/.13)*(1-smooth((elapsed-.15)/.64))
@@ -535,8 +535,10 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
  function self:step(now,droneIndex,resources)
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
-   -- Dig Cube shots (Dig==true): DigCubeView owns the break beat (camera, flash,
-   -- hold), so these draw dim lights, no screen grade and no camera beats.
+   -- Dig Cube shots (Dig==true): DigCubeView owns the break beat (flash, hold),
+   -- so these draw dim lights and no screen grade. Their old fire/hit camera
+   -- beats and Ramiel's charge and beam pressure are back (owner, Nov 22:
+   -- "bring back old effects").
    local dig=kind=='MiningShot' and node:GetAttribute('Dig')==true
    if RoleVisuals.setDim then RoleVisuals.setDim(dig and 1.6 or nil,dig and 7 or nil) end
    if not node.Parent then
@@ -603,7 +605,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       local lowEffects=BeamVFX.reduced() or (player and player:GetAttribute('ReducedFlashing')==true)
       local strength=smooth((q-.12)/.16)*(.36+.64*q^2)
       drawPrismAim(r,camera,origin,endpoint,lowEffects and strength*.66 or strength,lowEffects)
-      if onPrismCharge and not dig and paused<=0 and q>.79 then onPrismCharge(origin,endpoint,smooth((q-.79)/.21),now) end
+      if onPrismCharge and paused<=0 and q>.79 then onPrismCharge(origin,endpoint,smooth((q-.79)/.21),now) end
      else clearPrismAim(r) end
      if audio and audio.setLoop then
       if firingAge and firingAge<hold then
@@ -639,7 +641,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
        -- A dig shot's contact is a cell that breaks a moment later: no ground scorch over the hole.
        RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .88 or 1.52,hold,'Prism',not dig and groundNormal or nil)
        if typeof(ground)=='Vector3' then RoleVisuals.PrismWave(ground,radius,hold) end
-       if onPrism and not dig then onPrism(origin,endpoint,contactAt,hold) end
+       if onPrism then onPrism(origin,endpoint,contactAt,hold) end
        if now-contactAt>=.18 then continue end
        local normal=node:GetAttribute('ContactNormal') or -travel.Unit
        RoleVisuals.PrismImpact(point,normal,ground)
@@ -667,7 +669,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      if not landed and paused<=0 and age-windup<.12 then
       local origin=muzzle or from
       local travel=to-origin
-      if onCameraBeat and not dig then onCameraBeat(ball and 'BallFire' or 'NeedleFire',origin,now) end
+      if onCameraBeat then onCameraBeat(ball and 'BallFire' or 'NeedleFire',origin,now) end
       if travel.Magnitude>.01 then burst(self,origin+travel.Unit*.17,travel.Unit,color,ball,false,size,now,true,dig,tail) end
       if audio then audio:play(ball and 'ballcaster_fire' or 'needle_fire',origin) end
      end
@@ -695,7 +697,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       local grade=level*size
       burst(self,point+normal*(ball and .34 or .065)*size,normal,color,ball,true,grade,now,true,dig,tail)
       if ball then RoleVisuals.Pulse(point+normal*.42*size,color,.55*size,3.25*grade,.37,normal,1.5) end
-      if onCameraBeat and not dig then onCameraBeat(ball and 'BallHit' or 'NeedleHit',point,now,grade) end
+      if onCameraBeat then onCameraBeat(ball and 'BallHit' or 'NeedleHit',point,now,grade) end
       if audio then audio:play(ball and 'ballcaster_impact' or 'needle_hit',point,{level=level,pitch=fractured and .91 or 1}) end
      end
     end

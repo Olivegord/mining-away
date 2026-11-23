@@ -1086,7 +1086,11 @@ local function registerDrone(source)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'
- if not cube then
+ -- Ramiel and the two gunners keep their original bodies on the Dig Cube
+ -- too (owner, Nov 22: "bring back old effects"): Ramiel's glass rig and
+ -- charge flare and the guns' slide and recoil need those parts.
+ local oldBody=cube and (role=='Ramiel' or role=='Needler' or role=='Ballcaster')
+ if not cube or oldBody then
   if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
   DroneConfig.fitBody(clone,role)
  end
@@ -1117,7 +1121,7 @@ local function registerDrone(source)
   optic.Shape=Enum.PartType.Cylinder;optic.Size=Vector3.new(.20,ink and .98 or .82,ink and .98 or .82)
   optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
   optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
- elseif cube then
+ elseif cube and not oldBody then
   -- One look per drone type (FunFX.LOOKS): role colors and silhouette, the same for every drone of the type.
   cubeLook=Presentation.Fun.paintCube(clone,pivot,id,Presentation.Fun.rolePrimary and Presentation.Fun.rolePrimary(source:GetAttribute('Role')) or nil,source:GetAttribute('Role'))
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then

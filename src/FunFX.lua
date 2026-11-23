@@ -65,7 +65,7 @@ end
 -- cube. One small glowing part per body (its eye, lens or core) is where
 -- its attack comes from; nothing else on a drone glows or sheds particles.
 Fun.ROLE_SECONDARY={
- Striker=rgb(255,236,200),Charger=rgb(255,214,90),Ballcaster=rgb(255,120,214),Needler=rgb(40,222,190),
+ Striker=rgb(255,236,200),Charger=rgb(255,214,90),Ballcaster=rgb(255,120,214),Needler=rgb(255,238,176),
  Bubbler=rgb(200,240,255),Halver=rgb(232,236,255),Gridcutter=rgb(70,226,255),Singularity=rgb(255,96,206),
  Starforge=rgb(255,220,120),Frostbite=rgb(244,252,255),Resonator=rgb(240,255,120),Ramiel=rgb(255,176,186),
  Nomad=rgb(255,112,64),Lancer=rgb(255,70,86),

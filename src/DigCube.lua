@@ -171,7 +171,7 @@ D.STYLES={
   slam={hover=7,lift=9,windup=.55,dive=.28,hold=.2,recover=.45,clear=1.05},quake={share=.08,radius=10,every=.5}},
  Ballcaster={code='B',kernel='shot',pick='small',size='cell',pieces='none',power=1,color={150,84,255},shape='Ball',carveAhead=true,hintBias=4,
   shot={hover=7,chargeMin=.35,chargeMax=2,chargeDiv=1.4,rested=.4,flight=.26,recover=.15}},
- Needler={code='N',kernel='shot',pick='near',size='cell',pieces='none',power=1,color={200,255,60},shape='Dart',carveAhead=true,
+ Needler={code='N',kernel='shot',pick='near',size='cell',pieces='none',power=1,color={255,195,94},shape='Dart',carveAhead=true,
   shot={hover=4.5,first=.25,rested=.6,interval=.2,windup=.05,flight=.04,adjacent=.25,deepPower=1.25,deepLayer=3,maxLive=2},
   near={radius=7,falloff=5,adjacent=6,exposed=2},hints={radius=6,max=12,life=8}},
  Bubbler={code='U',kernel='beam',pick='cone',size='large',pieces='none',early=true,power=.95,color={60,232,212},beam='Repair',collect={ready=.25,range=1e6}},
@@ -181,8 +181,10 @@ D.STYLES={
  Starforge={code='M',kernel='beam',pick='cone',size='large',pieces='none',early=true,power=.85,color={255,214,110},beam='Starforge',forge=.4,hintBias=3},
  Frostbite={code='I',kernel='beam',pick='cone',size='small',pieces='none',early=true,power=1,color={150,230,255},beam='Sentry',brittle={life=10,mul=.6,max=48}},
  Resonator={code='V',kernel='beam',pick='cone',size='medium',pieces='none',early=true,power=.85,color={80,255,140},beam='Resonance',chain={links=3,budget=.4,maxArea=22,gap=.15}},
+ -- Ramiel charges on its original 4.94 s clock (the glass rig's filmed beats);
+ -- the bigger budget keeps its rate (cycle 3.7 s -> 6.0 s).
  Ramiel={code='P',kernel='volley',pick='ore',size='cluster',pieces='none',power=1,color={249,22,60},shape='Prism',carveAhead=true,oreBias=6,
-  volley={hover=10,charge=2.6,flight=.06,beamHold=.42,breakDelay=.12,recover=.5,budget=3.3,radius=9,maxCells=6,preferOre=true}},
+  volley={hover=10,charge=4.94,flight=.06,beamHold=.42,breakDelay=.12,recover=.5,budget=5.4,radius=9,maxCells=8,preferOre=true}},
  Nomad={code='A',kernel='volley',pick='cone',size='cluster',pieces='none',power=1,color={70,160,255},shape='Nomad',carveAhead=true,
   volley={hover=16,charge=2.2,flight=.95,breakDelay=0,recover=.4,budget=3.4,radius=5.5,maxCells=7,preferOre=false,blastRadius=4}},
  -- Pulse laser (owner's reference video): short punchy pulses, each bites a big piece out.
