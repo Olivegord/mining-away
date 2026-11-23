@@ -2688,7 +2688,8 @@ local function move(d,goal,dt)
  if d.state=='Follow' then response+=.28*scene.followAgility(d) end
  if scene.flatFields and not d.target and not d.digJob then
   -- Softer, floatier thrust while cruising; each drone reacts at its own pace.
-  -- (A dig job travels like a committed field job.)
+  -- (A dig job travels like a committed field job: with the floaty cruise,
+  -- dig drones spent 55-80% of their time drifting to the next chunk.)
   d.swarmTraits=d.swarmTraits or Feel.swarmTraits(d.id)
   response*=.45+.35*(d.swarmTraits.rate-.68)/.64
  end
@@ -3712,13 +3713,7 @@ function scene.digRebuildBlock(block,stageParts,depth)
    end
   end
  end
- for _,sp in ipairs(stageParts or {}) do
-  if hi.X>sp.lo.X-.5 and lo.X<sp.hi.X+.5 and hi.Y>sp.lo.Y+.05 and lo.Y<sp.hi.Y-.05 and hi.Z>sp.lo.Z-.5 and lo.Z<sp.hi.Z+.5 then
-   for _,w in ipairs(sp.wedges) do
-    local p=w:Clone();table.insert(negatives,p)
-   end
-  end
- end
+ -- (This pass's stage shapes are already in dig.stageParts above.)
  local ok,result=true,nil
  if #negatives>0 then
   dig.stats.calls+=1
@@ -4009,7 +4004,22 @@ function scene.digWork(d,p,dt)
   if math.sqrt((job.cx-lx)^2+(job.cz-lz)^2)>DigCube.MINE_RADIUS+8 then scene.digDrop(d);job=nil end
  end
  -- A shot's recovery: hold the firing station a moment before the next pick.
- if not job and now<(d.digHoldUntil or 0) then d.mining=false;move(d,d.digHoldAt or d.pos,dt);return end
+ if not job and now<(d.digHoldUntil or 0) then
+  d.mining=false
+  local sr=d.slamRecover
+  if sr then
+   if now-sr.at<sr.hold then
+    d.state='BreakerImpact';d.pos=sr.impact;d.velocity=Vector3.zero;d.goal=sr.impact;d.intentGoal=sr.impact;return
+   end
+   if not sr.recovering then
+    sr.recovering=true;d.state='BreakerRecover';d.digDirty=true
+    publishBreakerPhase(d,{phase='Recover',phaseAt=now,impact=sr.impact,diveStart=sr.diveStart or sr.impact})
+   end
+   d.state='BreakerRecover';move(d,sr.hover,dt);return
+  end
+  move(d,d.digHoldAt or d.pos,dt);return
+ end
+ d.slamRecover=nil
  if not job and now>=(d.digPickAt or 0) then
   d.digPickAt=now+.2;d.digWarm=nil;d.digProgress=0
   job=scene.digPick(d,p)
@@ -4225,7 +4235,9 @@ function scene.digSlamStep(d,p,job,dt)
   d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
   if job.hp<=0 then
    scene.digBreak(job,d,p)
-   scene.digRecover(d,cfg.hold)
+   -- Keep the slam's hold and recover after the final break too.
+   scene.digRecover(d,cfg.hold+cfg.recover)
+   d.slamRecover={at=now,impact=slam.impact,hover=job.contact+Vector3.new(0,cfg.hover,0),hold=cfg.hold,diveStart=slam.diveStart}
   end
   return
  end
@@ -4479,7 +4491,7 @@ function scene.digChain(job,d,p,broken)
    end
   end
  end
- table.sort(list,function(a,b) if a.d~=b.d then return a.d<b.d end return a.id<b.id end)
+ table.sort(list,function(a,b) if a.d~=b.d then return a.d<b.d end;return a.id<b.id end)
  local taken={}
  for id in pairs(dig.claimed) do taken[id]=true end
  for id in pairs(dig.geodes) do taken[id]=true end
@@ -4541,7 +4553,7 @@ function scene.digHint(d,cells)
    table.insert(list,{id=id,d=dist,tier=g.tier})
   end
  end
- table.sort(list,function(a,b) if a.d~=b.d then return a.d<b.d end return a.id<b.id end)
+ table.sort(list,function(a,b) if a.d~=b.d then return a.d<b.d end;return a.id<b.id end)
  for _,e in ipairs(list) do
   if count>=cfg.max then break end
   hints[e.id]={tier=e.tier,untilAt=now+cfg.life};count+=1
@@ -6594,7 +6606,9 @@ RunService.Heartbeat:Connect(function(dt: number)
  if snapshotElapsed>=C.Snapshot then
   local snapshotDt=snapshotElapsed;snapshotElapsed=0
   local occupants
-  for _,d in pairs(drones) do snapshotDrone(d) end
+  -- A drone waiting on its post-flush snapshot goes out after the ops, never
+  -- before them (a DigOp must not reach clients ahead of the break op).
+  for _,d in pairs(drones) do if not (d.digDirty and scene.dig and scene.dig.dirty) then snapshotDrone(d) end end
   if scene.flatFields then
    for _,p in pairs(profiles) do
     local hr=characterRoot(p)
