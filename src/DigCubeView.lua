@@ -1895,11 +1895,13 @@ function V:burst(op: any,e: any)
  -- at the beam (owner, Nov 22); only the 3D streaks spread over a big break.
  if contact=='Striker' then
   effects.Pulse(floor,primary:Lerp(BEAM_CORE,.3),strength*.55,strength*6.6,.58)
-  -- Smaller than before (owner: effects show things; big gold blobs hid the break).
-  effects.ImpactParticles(point,primary,strength*.6,'CrystalBreak',nil,primary,nil,.8)
+  -- The field rocks' CrystalBreak burst is gone from dig breaks (owner,
+  -- Nov 22: effects should show things, not be overused): its lingering
+  -- drifting dust became big gold blobs over the dig, on top of the break's
+  -- own sparks, ring and streaks, which still mark it.
  elseif contact=='Charger' then
   effects.Pulse(floor,primary,strength*.55,strength*8,.58,nil,1.6)
-  effects.ImpactParticles(point,primary,strength*.7,'Touchdown')
+  -- (No Touchdown burst: the ring and the stamped crater say it.)
  elseif contact=='Resonator' and e.link then
   effects.Pulse(floor,primary,.3,3,.3)
  elseif effects.SpecialistContact then

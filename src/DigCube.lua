@@ -102,12 +102,12 @@ local ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 -- violet at the bottom: depth reads at a glance, the palette stays calm
 -- (not candyland), and the warm beams and ores pop against it.
 D.LAYER_HUES={
- {190,176,214},{172,168,216},{156,170,214},{142,172,206},{130,164,194},
- {120,148,190},{112,128,184},{104,108,170},{94,90,152},{82,74,130},
+ {176,174,206},{160,166,210},{148,168,210},{136,170,204},{126,164,194},
+ {116,148,190},{108,128,184},{100,108,170},{92,92,152},{80,76,130},
 }
 D.LAYER_SHIFT=.5 -- how far a layer's second tone leans toward the next hue
 D.LAYER_MUTE=.14 -- share of neutral stone mixed into every hue (the rock stays below the beams and gems)
-D.LAYER_VALUE=.92 -- overall brightness of the rock
+D.LAYER_VALUE=.86 -- overall brightness of the rock
 local STONE_TONE={150,150,166}
 local function mix(a: {number},b: {number},t: number): {number}
  return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t}

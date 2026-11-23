@@ -476,7 +476,9 @@ do -- big breaks spread their effects; stages make the next piece hop
  assert(distinct>=3,'streaks fire over the whole break: '..distinct)
  local hits={};for _,x in ipairs(parts) do if getmetatable(x)~=nil then table.insert(hits,x) end end
  local mid=self.origin+v3(DigCube.chunkCenter(self.cube,ids),0,0)
- assert(#hits==1,'round contact particles burst once, at the beam: '..#hits)
+ assert(#hits==0,'no field-rock particle burst on a dig break (the ring, sparks and streaks mark it): '..#hits)
+ local pulses=0;for _,x in ipairs(parts) do if type(x)=='table' and x[1]=='pulse' then pulses+=1 end end
+ assert(pulses>=1,'the break rings at the beam')
  local cloud=self.fx:FindFirstChild('DigBreakCloud')
  if cloud then
   local cx,cz=DigCube.chunkCenter(self.cube,ids)
