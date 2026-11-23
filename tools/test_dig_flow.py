@@ -54,10 +54,14 @@ local function holderOps(holder)
  return list
 end
 assert(dig and dig.cube,'the cube exists at startup')
-local holder=root:FindFirstChild('DigCube')
-assert(holder and holder:GetAttribute('Seed') and holder:GetAttribute('Generation')==1,'seed and generation replicate')
+local holder=dig.holder
+assert(holder and holder.Parent==root:FindFirstChild('DigField') and holder:GetAttribute('Chunk')=='0_0','the pinned Plot 1 chunk replicates under DigField')
+assert(holder:GetAttribute('Seed') and holder:GetAttribute('Generation')==1,'seed and generation replicate')
 assert(holder:GetAttribute('Origin')==dig.origin,'origin replicates')
-assert(#dig.blocks==#dig.cube.layers*64,'solid rock blocks: '..#dig.blocks)
+assert(holder:GetAttribute('Seed')==DigCube.chunkSeed(root.DigField:GetAttribute('WorldSeed'),0,0,1),'the chunk seed comes from the world seed and its grid coordinates')
+-- Untouched rock is one column per tile; a carve splits what it reaches into layer blocks.
+assert(#dig.blocks==64,'solid rock columns: '..#dig.blocks)
+for _,b in ipairs(dig.blocks) do assert(b.column and b.hi.Y-b.lo.Y==dig.cube.height,'every untouched tile is one full-height column') end
 local gemTotal=0;for _ in pairs(dig.gems) do gemTotal+=1 end
 assert(gemTotal>#dig.cube.cells*.05 and gemTotal<#dig.cube.cells*.2,'secret gems placed per cell: '..gemTotal)
 local pl=player(4813)
@@ -152,6 +156,12 @@ end
 -- A failed cut no longer leaves the block standing over dug cells: the
 -- block is rebuilt from a fresh box (floating layered slabs, owner Nov 22).
 assert(cuts>0,'the carve cuts blocks')
+do
+ local columns=0;for _,b in ipairs(dig.blocks) do if b.column then columns+=1 end end
+ assert(columns<64,'carving split the columns it reached: '..columns..' columns left')
+end
+-- The carve-failure checks below work on layer blocks: split every column.
+scene.digSplitColumns(dig,Vector3.new(-1,0,-1),Vector3.new(W+1,0,W+1))
 do
  local victim=dig.blocks[1]
  local lo,hi=victim.lo,victim.hi
@@ -482,7 +492,8 @@ for _,role in ipairs({'Lancer','Charger','Ballcaster','Needler','Bubbler','Halve
  elseif role=='Needler' then
   assert(s.hints,'Needler hints at nearby gems (DigHints)')
   for part in string.gmatch(s.hints,'[^;]+') do
-   local id,tier=string.match(part,'^(%d+):(%d+)$')
+   local key,id,tier=string.match(part,'^([%-%d]+_[%-%d]+):(%d+):(%d+)$')
+   assert(key=='0_0','DigHints names the chunk: '..part)
    assert(id and tonumber(tier)>=1 and tonumber(tier)<=#DigCube.ORES,'DigHints parses: '..s.hints)
   end
   assert((pl2:GetAttribute('DigHints') or '')=='','DigHints only on the owner Player')
@@ -539,7 +550,7 @@ do
   print(string.format('PASS nothing floats: every regular cell left rests at least %d%% on rock (%d break ops)',math.floor(DigCube.RESTING_SHARE*100),breaks))
  end
  -- Nothing on the holder or the drones names a gem cell before it breaks.
- local allowed={Origin=true,Width=true,Height=true,Seed=true,Generation=true,OpCount=true,Geodes=true,Brittle=true,CarveLag=true}
+ local allowed={Origin=true,Width=true,Height=true,Seed=true,Generation=true,OpCount=true,Geodes=true,Brittle=true,CarveLag=true,Chunk=true}
  for name in pairs(holder:GetAttributes()) do assert(allowed[name] or string.match(name,'^Ops%d+$'),'unexpected holder attribute '..name) end
  for part in string.gmatch(holder:GetAttribute('Geodes') or '','[^;]+') do
   local id=tonumber(string.match(part,'^(%d+):'))
@@ -696,6 +707,7 @@ do
  DigCube.prismWedges=function(c,ids,...) for _,x in ipairs(ids) do loggedIds[x]=true end;return prism(c,ids,...) end
  DigCube.partWedges=function(c,parts,...) for _,x in ipairs(parts) do loggedParts[x]=true end;return part(c,parts,...) end
  local function rebuildAt(x,z,layer)
+  scene.digSplitColumns(dig,Vector3.new(x-.1,0,z-.1),Vector3.new(x+.1,0,z+.1))
   local L=cube.layers[layer]
   for i,b in ipairs(dig.blocks) do
    if b.lo.X<=x and b.hi.X>=x and b.lo.Z<=z and b.hi.Z>=z and math.abs(b.lo.Y-L.y0)<.01 then

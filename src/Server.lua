@@ -3493,24 +3493,35 @@ function scene.collectGroundCargo(d,p,hr,dt)
  d.orePickupId=nil;p.nextEmptierPlan=nil
  return true
 end
--- Dig Cube: one huge block of Voronoi cells on the plain east of the hub.
--- Walk up to it (or onto it) and the crew digs craters around you; tap a cell
--- to move the crater there. Stone cells just break; ore cells drop a gem.
--- Geometry is built from the seed on every client; only removed cells replicate.
+-- Dig field (owner, Nov 23: "the entire map is now a dig cube ... only
+-- spawning chunks when they are needed"). The flat ground outside the hub is
+-- tiled into cube-sized chunks (DigCube.FIELD); chunk (0,0) is the Plot 1
+-- cube. A chunk is built (from the world seed and its grid coordinates) and
+-- simulated only while a player or a digging drone is near it; untouched
+-- chunks are dropped again when everyone has left. Its rock is rendered only
+-- once a drone starts on it: then the ground plates give way over its square
+-- (scene.digGroundUpdate) and its rock tops sit flush at DigCube.GROUND.
+-- Each chunk is the old single cube's state (origin, cube, ops, claims,
+-- gems, geodes, carve queue, blocks...) under DigField.C<i>_<j>; its cut ops
+-- replicate there as Ops1..N/OpCount. scene.dig is the pinned Plot 1 chunk.
+-- Walk onto the field and the crew digs craters around you; tap a cell to
+-- move the crater there. Stone cells just break; ore cells drop a gem.
 do
 local DigCube=Config.DigCube
+local FIELD=DigCube.FIELD
 local OPS_PER_ATTRIBUTE=64
 do
- local W=DigCube.WIDTH
- local origin=Vector3.new(DigCube.CENTER[1]-W*.5,DigCube.CENTER[2],DigCube.CENTER[3]-W*.5)
- local override=root:GetAttribute('DigCubeOrigin')
- if typeof(override)=='Vector3' then origin=override end
- local holder=root:FindFirstChild('DigCube') or Instance.new('Folder')
- holder.Name='DigCube';holder.Parent=root
+ local folder=root:FindFirstChild('DigField') or Instance.new('Folder')
+ folder.Name='DigField'
+ local random=Random.new()
+ local worldSeed=random:NextInteger(1,2000000000)
+ folder:SetAttribute('WorldSeed',worldSeed);folder:SetAttribute('ChunkSize',DigCube.WIDTH)
+ folder:SetAttribute('FieldX0',FIELD.X0);folder:SetAttribute('FieldZ0',FIELD.Z0)
+ folder.Parent=root
  local template=Instance.new('Part');template.Name='DigGem';template.Size=Vector3.new(1,1,1)
- scene.dig={origin=origin,holder=holder,template=template,generation=0,recent={},random=Random.new(),
-  dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},ops={},published=0,pending={},csg={},blocks={},dust={},dustAt=0,geodes={},
-  stats={jobs=0,calls=0,lags={},fails=0,at=0},gems={},carved={},stageParts={},hints={},brittle={},chains={}}
+ scene.digField={folder=folder,worldSeed=worldSeed,random=random,template=template,chunks={},count=0,
+  stats={jobs=0,calls=0,lags={},fails=0,at=0},dust={},dustAt=0,dirty=false,gemSerial=0,blocked={},loadAt=0,
+  perf={loads=0,drops=0,heals=0,renders=0,buildTime=0,builds=0,maxBuild=0}}
  -- Collision groups for the clients' loose rubble: it lands on an invisible
  -- floor at the bottom of each hole and touches nothing else (players, the
  -- rock still being carved).
@@ -3524,15 +3535,264 @@ do
   physics:CollisionGroupSetCollidable('DigRubble','DigRubbleFloor',true)
   physics:CollisionGroupSetCollidable('DigRubble','DigRubble',true)
  end)
- local dustFolder=holder:FindFirstChild('Dust') or Instance.new('Folder')
- dustFolder.Name='Dust';dustFolder.Parent=holder
- scene.dig.dustFolder=dustFolder
 end
-function scene.digReset()
- local dig=scene.dig
- -- Sealed gems left in the old cube are paid to owners still here (the
- -- same gem cargo a geode would have thrown).
- for _,g in pairs(dig.geodes) do
+-- Never dug: the hub (SimpleFlatTestMap, or a HubPad, or DigCube.FIELD.HUB
+-- around the origin) and the old field beds still standing on the ground
+-- (they go when the chunked field replaces them). Pinned chunks always dig.
+do
+ local F=scene.digField
+ -- Axis-aligned footprints (the hub, beds and ground slabs are not turned).
+ local function box(cf,size,margin)
+  local c,h=cf.Position,size*.5
+  table.insert(F.blocked,{c.X-h.X-margin,c.Z-h.Z-margin,c.X+h.X+margin,c.Z+h.Z+margin})
+ end
+ local hub=scene.map and scene.map:FindFirstChild('SimpleFlatTestMap')
+ local pad=scene.map and scene.map:FindFirstChild('HubPad',true)
+ if hub and hub:IsA('Model') then
+  local ok,cf,size=pcall(function() return hub:GetBoundingBox() end)
+  if ok then box(cf,size,2) else box(CFrame.new(),Vector3.new(FIELD.HUB*2,1,FIELD.HUB*2),0) end
+ elseif pad and pad:IsA('BasePart') then box(pad.CFrame,pad.Size,2)
+ else box(CFrame.new(),Vector3.new(FIELD.HUB*2,1,FIELD.HUB*2),0) end
+ for _,f in ipairs(scene.fields or {}) do
+  if f.part and f.part:IsA('BasePart') then box(f.part.CFrame,f.part.Size,4) end
+ end
+ local run=scene.map and scene.map:FindFirstChild('CrystalRun')
+ local flat=run and run:FindFirstChild('FlatGround')
+ if flat and flat:IsA('BasePart') then box(flat.CFrame,flat.Size,0) end
+end
+function scene.digPinned(i,j)
+ for _,p in ipairs(FIELD.PINNED) do if p[1]==i and p[2]==j then return true end end
+ return false
+end
+function scene.digBlocked(i,j)
+ if scene.digPinned(i,j) then return false end
+ if not DigCube.inField(i,j) then return true end
+ local x0,z0=DigCube.chunkCorner(i,j)
+ local x1,z1=x0+DigCube.WIDTH,z0+DigCube.WIDTH
+ for _,r in ipairs(scene.digField.blocked) do
+  if x1>r[1] and x0<r[3] and z1>r[2] and z0<r[4] then return true end
+ end
+ return false
+end
+-- Ground: the authored plates (Fields.Baseplate and Map.PlotPit.Ground*)
+-- are cut around every rendered chunk, and the old pit's shaft walls and
+-- floor become per-chunk walls (where a neighbor has no rock) and floors.
+-- Each plate's pieces are clones of it, so look and texture carry on; a
+-- piece keeps its texture tiling in world position (OffsetStuds).
+do
+ local F=scene.digField
+ local ground={plates={},skirt=nil,floor=nil}
+ F.ground=ground
+ local archive=Instance.new('Folder');archive.Name='DigFieldGround'
+ archive:SetAttribute('Reason','Authored ground plates and pit walls; the dig field cuts clones of them')
+ archive.Parent=game:GetService('ServerStorage')
+ ground.archive=archive
+ local function plate(part)
+  if not part or not part:IsA('BasePart') then return end
+  local h=part.Size*.5
+  local x,z=part.Position.X,part.Position.Z
+  table.insert(ground.plates,{template=part,parent=part.Parent,lo=Vector2.new(x-h.X,z-h.Z),hi=Vector2.new(x+h.X,z+h.Z),pieces={},y=part.Position.Y,thick=part.Size.Y})
+ end
+ local fields=root:FindFirstChild('Fields')
+ plate(fields and fields:FindFirstChild('Baseplate'))
+ local pit=scene.map and scene.map:FindFirstChild('PlotPit')
+ if pit then
+  for _,name in ipairs({'GroundWest','GroundEast','GroundNorth','GroundSouth'}) do plate(pit:FindFirstChild(name)) end
+  local wall=pit:FindFirstChild('ShaftNorth');local floor=pit:FindFirstChild('ShaftFloor')
+  if wall and wall:IsA('BasePart') then ground.skirt=wall end
+  if floor and floor:IsA('BasePart') then ground.floor=floor end
+ end
+ -- Each plate starts as one piece: itself, in place (nothing moves until a chunk renders).
+ for _,pl in ipairs(ground.plates) do
+  pl.pieces[1]={part=pl.template,lo=pl.lo,hi=pl.hi,original=true}
+ end
+ if pit then
+  for _,name in ipairs({'ShaftNorth','ShaftSouth','ShaftEast','ShaftWest','ShaftFloor'}) do
+   local part=pit:FindFirstChild(name)
+   if part then part.Parent=archive end
+  end
+ end
+ ground.plateTop=DigCube.GROUND
+ ground.plateThick=ground.plates[1] and ground.plates[1].thick or 1
+end
+-- Rectangles of [lo,hi] minus the squares (each {x0,z0,x1,z1}); x slabs,
+-- then vertically merged.
+local function subtractSquares(lo,hi,squares)
+ local xs={lo.X,hi.X}
+ local inside={}
+ for _,s in ipairs(squares) do
+  if s[3]>lo.X and s[1]<hi.X and s[4]>lo.Y and s[2]<hi.Y then
+   table.insert(inside,s)
+   if s[1]>lo.X and s[1]<hi.X then table.insert(xs,s[1]) end
+   if s[3]>lo.X and s[3]<hi.X then table.insert(xs,s[3]) end
+  end
+ end
+ if #inside==0 then return {{lo.X,lo.Y,hi.X,hi.Y}} end
+ table.sort(xs)
+ local out={}
+ local open={} -- key z0..z1 -> rect being extended along x
+ for k=1,#xs-1 do
+  local a,b=xs[k],xs[k+1]
+  if b-a>1e-6 then
+   local mid=(a+b)*.5
+   local cuts={}
+   for _,s in ipairs(inside) do if s[1]<mid and s[3]>mid then table.insert(cuts,{math.max(lo.Y,s[2]),math.min(hi.Y,s[4])}) end end
+   table.sort(cuts,function(p,q) return p[1]<q[1] end)
+   local spans={}
+   local z=lo.Y
+   for _,c in ipairs(cuts) do
+    if c[1]>z+1e-6 then table.insert(spans,{z,c[1]}) end
+    z=math.max(z,c[2])
+   end
+   if hi.Y>z+1e-6 then table.insert(spans,{z,hi.Y}) end
+   local nextOpen={}
+   for _,sp in ipairs(spans) do
+    local key=string.format('%.4f:%.4f',sp[1],sp[2])
+    local r=open[key]
+    if r then r[3]=b else r={a,sp[1],b,sp[2]};table.insert(out,r) end
+    nextOpen[key]=r
+   end
+   open=nextOpen
+  end
+ end
+ return out
+end
+scene.digSubtractSquares=subtractSquares
+local function alignTextures(part,lo,origin)
+ for _,t in ipairs(part:GetChildren()) do
+  if t:IsA('Texture') and t.Face==Enum.NormalId.Top then
+   local u,v=t.StudsPerTileU,t.StudsPerTileV
+   if u>0 and v>0 then
+    t.OffsetStudsU=(origin.offU+(lo.X-origin.lo.X))%u
+    t.OffsetStudsV=(origin.offV+(lo.Y-origin.lo.Y))%v
+   end
+  end
+ end
+end
+-- Re-cut every plate around the rendered chunks. New pieces are placed
+-- before old ones go, and unchanged pieces stay, so nobody drops through.
+function scene.digGroundUpdate()
+ local F=scene.digField;local ground=F.ground
+ local squares={}
+ for _,ch in pairs(F.chunks) do
+  if ch.rendered then
+   local x0,z0=ch.origin.X,ch.origin.Z
+   table.insert(squares,{x0,z0,x0+DigCube.WIDTH,z0+DigCube.WIDTH})
+  end
+ end
+ for _,pl in ipairs(ground.plates) do
+  if not pl.tiling then
+   pl.tiling={lo=pl.lo,offU=0,offV=0}
+   for _,t in ipairs(pl.template:GetChildren()) do
+    if t:IsA('Texture') and t.Face==Enum.NormalId.Top then pl.tiling.offU=t.OffsetStudsU;pl.tiling.offV=t.OffsetStudsV;break end
+   end
+  end
+  local want=subtractSquares(pl.lo,pl.hi,squares)
+  local keep,made={},{}
+  local function same(piece,r) return math.abs(piece.lo.X-r[1])<1e-4 and math.abs(piece.lo.Y-r[2])<1e-4 and math.abs(piece.hi.X-r[3])<1e-4 and math.abs(piece.hi.Y-r[4])<1e-4 end
+  for _,r in ipairs(want) do
+   local found=nil
+   for _,piece in ipairs(pl.pieces) do if not keep[piece] and same(piece,r) then found=piece;break end end
+   if found then keep[found]=true;table.insert(made,found)
+   else
+    local lo,hi=Vector2.new(r[1],r[2]),Vector2.new(r[3],r[4])
+    local part=pl.template:Clone()
+    part.Name=pl.template.Name
+    part.Size=Vector3.new(hi.X-lo.X,pl.template.Size.Y,hi.Y-lo.Y)
+    part.CFrame=CFrame.new((lo.X+hi.X)*.5,pl.y,(lo.Y+hi.Y)*.5)
+    alignTextures(part,lo,pl.tiling)
+    part:SetAttribute('DigFieldPiece',true)
+    part.Parent=pl.parent
+    table.insert(made,{part=part,lo=lo,hi=hi})
+   end
+  end
+  for _,piece in ipairs(pl.pieces) do
+   if not keep[piece] then
+    if piece.original then piece.part.Parent=ground.archive else piece.part:Destroy() end
+   end
+  end
+  pl.pieces=made
+ end
+end
+-- Walls where a rendered chunk meets ground with no rock under it (a
+-- neighbor not rendered), and a floor under every rendered chunk: the old
+-- pit's shaft walls and floor, per chunk.
+local SIDES={{1,0},{-1,0},{0,1},{0,-1}}
+function scene.digSkirts(ch)
+ local F=scene.digField;local ground=F.ground
+ ch.skirts=ch.skirts or {}
+ local W=DigCube.WIDTH
+ local bottom=ch.origin.Y
+ local top=ground.plateTop-ground.plateThick-.02
+ for k,side in ipairs(SIDES) do
+  local other=F.chunks[DigCube.chunkKey(ch.i+side[1],ch.j+side[2])]
+  local need=ch.rendered and not (other and other.rendered)
+  local skirt=ch.skirts[k]
+  if need and not skirt then
+   local part
+   if ground.skirt then part=ground.skirt:Clone() else
+    part=Instance.new('Part');part.Anchored=true;part.CanTouch=false;part.CastShadow=false
+    part.Material=Enum.Material.Slate;part.Color=Color3.fromRGB(86,82,104)
+   end
+   part.Name='DigSkirt'
+   local h=top-(bottom-4)
+   local cx,cz=ch.origin.X+W*.5,ch.origin.Z+W*.5
+   if side[1]~=0 then
+    part.Size=Vector3.new(2,h,W+4)
+    part.CFrame=CFrame.new(cx+side[1]*(W*.5+1),bottom-4+h*.5,cz)
+   else
+    part.Size=Vector3.new(W+4,h,2)
+    part.CFrame=CFrame.new(cx,bottom-4+h*.5,cz+side[2]*(W*.5+1))
+   end
+   part.Parent=ch.holder
+   ch.skirts[k]=part
+  elseif not need and skirt then
+   skirt:Destroy();ch.skirts[k]=nil
+  end
+ end
+ if ch.rendered and not ch.floor then
+  local part
+  if ground.floor then part=ground.floor:Clone() else
+   part=Instance.new('Part');part.Anchored=true;part.CanTouch=false;part.CastShadow=false
+   part.Material=Enum.Material.Slate;part.Color=Color3.fromRGB(70,66,86);part.Size=Vector3.new(1,2,1)
+  end
+  part.Name='DigFloor'
+  local y=ground.floor and ground.floor.Position.Y or bottom-1
+  local thick=ground.floor and ground.floor.Size.Y or 2
+  part.Size=Vector3.new(W,thick,W)
+  part.CFrame=CFrame.new(ch.origin.X+W*.5,math.min(y,bottom-thick*.5),ch.origin.Z+W*.5)
+  part.Parent=ch.holder;ch.floor=part
+ elseif not ch.rendered and ch.floor then ch.floor:Destroy();ch.floor=nil end
+end
+-- A new chunk record (not built yet). Its holder replicates once built.
+function scene.digNewChunk(i,j)
+ local F=scene.digField
+ local key=DigCube.chunkKey(i,j)
+ local x0,z0=DigCube.chunkCorner(i,j)
+ local holder=Instance.new('Folder');holder.Name='C'..key
+ local dust=Instance.new('Folder');dust.Name='Dust';dust.Parent=holder
+ local ch={key=key,i=i,j=j,pinned=scene.digPinned(i,j),origin=Vector3.new(x0,DigCube.CENTER[2],z0),holder=holder,dustFolder=dust,
+  template=F.template,generation=0,recent={},random=Random.new(F.random:NextInteger(1,1000000000)),dirty=false,publishAt=0,resetAt=nil,checkAt=0,
+  claimed={},ops={},published=0,pending={},csg={},blocks={},geodes={},gems={},carved={},stageParts={},hints={},brittle={},chains={},
+  seenAt=now,rendered=false,ready=false}
+ F.chunks[key]=ch;F.count+=1;F.perf.loads+=1
+ return ch
+end
+-- Spread a build over frames: pause whenever this slice ran past budget.
+function scene.digYielder(budget)
+ local t0=os.clock()
+ return function()
+  if os.clock()-t0>budget then task.wait();t0=os.clock() end
+ end
+end
+-- Start a chunk over (a fresh generation of its rock): pays sealed gems to
+-- owners still here, drops every job on it, builds the new cube (in the
+-- background unless pinned) and publishes it. With `keepRock` false (the
+-- default) a rendered chunk's rock is rebuilt whole.
+function scene.digReset(ch)
+ ch=ch or scene.dig
+ local F=scene.digField
+ for _,g in pairs(ch.geodes) do
   local p=g.p
   if p and profiles[g.owner]==p and healthy(p) then
    local cargo=scene.digGemCargo(g.tier,g.volume)
@@ -3542,73 +3802,230 @@ function scene.digReset()
  end
  -- Shots in flight and every job go with the old cube.
  for _,d in pairs(drones) do
-  if d.digJob then scene.digDropNodes(d.digJob,true);if d.breaker==d.digJob.slam then d.breaker=nil end end
-  d.digJob=nil;d.digCell=nil;d.digWarm=nil;d.digHoldUntil=nil;d.digLastCell=nil
+  if d.digJob and d.digJob.ch==ch then
+   scene.digDropNodes(d.digJob,true);if d.breaker==d.digJob.slam then d.breaker=nil end
+   d.digJob=nil;d.digCell=nil;d.digWarm=nil;d.digHoldUntil=nil;d.digLastCell=nil
+  end
  end
- dig.generation+=1
- local seedValue=dig.random:NextInteger(1,2000000000)
- dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.resetAt=nil;dig.dirty=false;dig.csg={};dig.deepest=1;dig.promised=1
- -- Secret gems per cell, from the server's own Random (never the public seed).
- dig.gems=DigCube.placeGems(dig.cube,function() return dig.random:NextNumber() end)
- dig.carved={};dig.stageParts={};dig.brittle={};dig.chains={}
- for owner in pairs(dig.hints) do local p=profiles[owner];if p and p.player.Parent then p.player:SetAttribute('DigHints','') end end
- dig.hints={}
- dig.stats={jobs=0,calls=0,lags={},fails=0,at=now+10}
- dig.geodes={};dig.holder:SetAttribute('Geodes','');dig.holder:SetAttribute('Brittle','')
- for _,dust in ipairs(dig.dust) do dust.part:Destroy() end
- dig.dust={}
- local holder=dig.holder
- for i=1,math.ceil(#dig.ops/OPS_PER_ATTRIBUTE) do holder:SetAttribute('Ops'..i,nil) end
- dig.ops={};dig.published=0
- holder:SetAttribute('OpCount',0)
- holder:SetAttribute('Origin',dig.origin);holder:SetAttribute('Width',DigCube.WIDTH);holder:SetAttribute('Height',dig.cube.height)
- holder:SetAttribute('Seed',seedValue);holder:SetAttribute('Generation',dig.generation)
- scene.digBuildRock()
- for _,p in pairs(profiles) do
-  local hr=characterRoot(p)
-  if hr and scene.digInside(hr.Position,0) then hr.CFrame=CFrame.new(hr.Position.X,dig.origin.Y+dig.cube.height+4,hr.Position.Z) end
+ ch.generation+=1
+ local generation=ch.generation
+ ch.ready=false;ch.recent={};ch.claimed={};ch.pending={};ch.resetAt=nil;ch.dirty=false;ch.csg={};ch.deepest=1;ch.promised=1
+ ch.carved={};ch.stageParts={};ch.brittle={};ch.chains={};ch.geodes={};ch.gems={}
+ for owner in pairs(ch.hints) do ch.hints[owner]=nil;scene.digPublishHints(owner) end
+ for i=#F.dust,1,-1 do local dust=F.dust[i];if dust.ch==ch then dust.part:Destroy();table.remove(F.dust,i) end end
+ local holder=ch.holder
+ for i=1,math.ceil(#ch.ops/OPS_PER_ATTRIBUTE) do holder:SetAttribute('Ops'..i,nil) end
+ ch.ops={};ch.published=0
+ local function finish(cube,seconds)
+  if ch.generation~=generation or ch.dropped then return end
+  F.perf.builds+=1;F.perf.buildTime+=seconds;F.perf.maxBuild=math.max(F.perf.maxBuild,seconds)
+  ch.cube=cube
+  -- Secret gems per cell, from the server's own Random (never the public seed).
+  ch.gems=DigCube.placeGems(cube,function() return ch.random:NextNumber() end)
+  holder:SetAttribute('OpCount',0)
+  holder:SetAttribute('Origin',ch.origin);holder:SetAttribute('Width',DigCube.WIDTH);holder:SetAttribute('Height',cube.height)
+  holder:SetAttribute('Chunk',ch.key);holder:SetAttribute('Seed',cube.seed);holder:SetAttribute('Generation',generation)
+  holder:SetAttribute('Geodes','');holder:SetAttribute('Brittle','')
+  if not holder.Parent then holder.Parent=F.folder end
+  ch.ready=true
+  if ch.pinned or ch.rendered then scene.digRender(ch,true) end
+  for _,p in pairs(profiles) do
+   local hr=characterRoot(p)
+   if hr and scene.digInsideChunk(ch,hr.Position,0) then hr.CFrame=CFrame.new(hr.Position.X,ch.origin.Y+cube.height+4,hr.Position.Z) end
+  end
+ end
+ if ch.pinned then
+  local t0=os.clock()
+  local cube=DigCube.buildChunk(F.worldSeed,ch.i,ch.j,generation)
+  finish(cube,os.clock()-t0)
+ else
+  task.spawn(function()
+   -- One build at a time, a few milliseconds a frame.
+   while F.building do task.wait() end
+   if ch.generation~=generation or ch.dropped then return end
+   F.building=true
+   local t0=os.clock()
+   local ok,cube=pcall(DigCube.buildChunk,F.worldSeed,ch.i,ch.j,generation,scene.digYielder(.004))
+   local seconds=os.clock()-t0
+   F.building=false
+   if ok then finish(cube,seconds) else (warn or print)('[DigField] chunk '..ch.key..' build failed: '..tostring(cube)) end
+  end)
  end
 end
--- The rock players see and walk on is real solid geometry on the server: one
--- block per layer per 11-stud tile, colored by depth. Each chunk that breaks
--- is subtracted from the blocks it reaches (its cells' prisms, Roblox CSG),
--- in order, and the result replicates to every player.
-function scene.digBuildRock()
- local dig=scene.dig;local cube=dig.cube
- if dig.rock then dig.rock:Destroy() end
- local rock=Instance.new('Model');rock.Name='Rock'
- dig.blocks={}
- local T=DigCube.TILE;local n=math.ceil(cube.width/T)
- for _,layer in ipairs(cube.layers) do
-  local y0,y1=layer.y0,layer.y1
-  for gx=0,n-1 do
-   for gz=0,n-1 do
-    local x0,x1=gx*T,math.min(cube.width,(gx+1)*T)
-    local z0,z1=gz*T,math.min(cube.width,(gz+1)*T)
-    local c=DigCube.layerColor(cube,layer.index,(x0+x1)*.5,(z0+z1)*.5)
-    local part=Instance.new('Part');part.Name='RockBlock'
-    -- No cast shadows: the low morning sun would fill every pit with shadow.
-    part.Anchored=true;part.CanTouch=false;part.CastShadow=false
-    -- Real rock, not plastic (owner, Nov 22): the client pieces and rubble
-    -- use the same look (DigCube.rockLook) so they match.
-    local rockMaterial,rockVariant=DigCube.rockLook()
-    part.Material=rockMaterial;part.MaterialVariant=rockVariant;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
-    part.Color=Color3.fromRGB(c[1],c[2],c[3])
-    part.Size=Vector3.new(x1-x0,y1-y0,z1-z0)
-    part.CFrame=CFrame.new(dig.origin+Vector3.new((x0+x1)*.5,(y0+y1)*.5,(z0+z1)*.5))
-    part.Parent=rock
-    table.insert(dig.blocks,{part=part,lo=Vector3.new(x0,y0,z0),hi=Vector3.new(x1,y1,z1)})
+-- Render a chunk's rock (on its first job): the ground plates give way over
+-- its square, its own walls and floor appear and the neighbors' walls toward
+-- it go. With `rebuild`, a rendered chunk's rock is made fresh.
+function scene.digRender(ch,rebuild)
+ local F=scene.digField
+ if not ch.ready then return end
+ local was=ch.rendered
+ if was and not rebuild then return end
+ ch.rendered=true
+ scene.digBuildRock(ch)
+ if not was then
+  F.perf.renders+=1
+  scene.digGroundUpdate()
+  scene.digSkirts(ch)
+  for _,side in ipairs(SIDES) do
+   local other=F.chunks[DigCube.chunkKey(ch.i+side[1],ch.j+side[2])]
+   if other then scene.digSkirts(other) end
+  end
+ end
+ -- Rock already dug next door faces this chunk's edge: show its layers there.
+ for _,side in ipairs(SIDES) do
+  local other=F.chunks[DigCube.chunkKey(ch.i+side[1],ch.j+side[2])]
+  if other and other.rendered and other.cube and other.cube.removedCount>0 then
+   local W=DigCube.WIDTH
+   local lo=Vector3.new(side[1]==1 and W-1 or -1,0,side[2]==1 and W-1 or -1)
+   local hi=Vector3.new(side[1]==-1 and 1 or W+1,0,side[2]==-1 and 1 or W+1)
+   scene.digSplitColumns(ch,lo,hi)
+  end
+ end
+end
+-- Drop a chunk: its jobs end, sealed gems are paid, its rock and holder go,
+-- the ground closes over it and the neighbors wall it off.
+function scene.digDropChunk(ch)
+ local F=scene.digField
+ if ch.pinned then return end
+ ch.dropped=true
+ for _,g in pairs(ch.geodes) do
+  local p=g.p
+  if p and profiles[g.owner]==p and healthy(p) then
+   local cargo=scene.digGemCargo(g.tier,g.volume)
+   local profile=data(p)
+   if cargo and Pro.addCargo(profile,cargo,g.count or 1,Ca.capacity(profile,previewPerks(p)))>0 then p.dirty=true;p.publishDirty=true end
+  end
+ end
+ for _,d in pairs(drones) do
+  if d.digJob and d.digJob.ch==ch then
+   scene.digDropNodes(d.digJob,true);if d.breaker==d.digJob.slam then d.breaker=nil end
+   d.digJob=nil;d.digCell=nil;d.digWarm=nil;d.digHoldUntil=nil;d.digLastCell=nil
+  end
+ end
+ for owner in pairs(ch.hints) do ch.hints[owner]=nil;scene.digPublishHints(owner) end
+ for i=#F.dust,1,-1 do local dust=F.dust[i];if dust.ch==ch then dust.part:Destroy();table.remove(F.dust,i) end end
+ F.chunks[ch.key]=nil;F.count-=1;F.perf.drops+=1
+ local rendered=ch.rendered
+ ch.rendered=false;ch.ready=false
+ ch.holder:Destroy()
+ if rendered then
+  scene.digGroundUpdate()
+  for _,side in ipairs(SIDES) do
+   local other=F.chunks[DigCube.chunkKey(ch.i+side[1],ch.j+side[2])]
+   if other then scene.digSkirts(other) end
+  end
+ end
+end
+-- Load chunks near players and digging drones; drop untouched chunks nobody
+-- is near, and let dug ones nobody came back to grow back (HEAL_AFTER).
+function scene.digFieldStep()
+ local F=scene.digField
+ if now<F.loadAt then return end
+ F.loadAt=now+.25
+ local points={}
+ for _,p in pairs(profiles) do
+  local hr=characterRoot(p)
+  if hr then table.insert(points,hr.Position) end
+ end
+ for _,d in pairs(drones) do if d.digJob then table.insert(points,d.pos) end end
+ for _,pos in ipairs(points) do
+  for _,c in ipairs(DigCube.chunksNear(pos.X,pos.Z,FIELD.KEEP)) do
+   local key=DigCube.chunkKey(c[1],c[2])
+   local ch=F.chunks[key]
+   if not ch and c[3]<=FIELD.LOAD and pos.Y<DigCube.GROUND+60 and not scene.digBlocked(c[1],c[2]) then
+    ch=scene.digNewChunk(c[1],c[2]);scene.digReset(ch)
+   end
+   if ch then ch.seenAt=now end
+  end
+ end
+ for _,ch in pairs(F.chunks) do
+  if not ch.pinned then
+   local idle=now-ch.seenAt
+   if (not ch.rendered and idle>FIELD.DROP_AFTER) or (ch.rendered and idle>FIELD.HEAL_AFTER) then
+    if ch.rendered then F.perf.heals+=1 end
+    scene.digDropChunk(ch)
    end
   end
  end
- rock.Parent=dig.holder;dig.rock=rock
+end
+-- A chunk's rock: one tall column per 11-stud tile (its top is the top
+-- layer's color, the only face anyone sees until it is cut). A carve splits
+-- the columns it reaches into one block per layer (scene.digSplitColumns),
+-- colored by depth; then each break is subtracted from the blocks it
+-- reaches (its cells' prisms, Roblox CSG), in order, and the result
+-- replicates to every player.
+local function rockBlock(ch,x0,x1,y0,y1,z0,z1,L)
+ local cube=ch.cube
+ local c=DigCube.layerColor(cube,L,(x0+x1)*.5,(z0+z1)*.5)
+ local part=Instance.new('Part');part.Name='RockBlock'
+ -- No cast shadows: the low morning sun would fill every pit with shadow.
+ part.Anchored=true;part.CanTouch=false;part.CastShadow=false
+ -- Real rock, not plastic (owner, Nov 22): the client pieces and rubble
+ -- use the same look (DigCube.rockLook) so they match.
+ local rockMaterial,rockVariant=DigCube.rockLook()
+ part.Material=rockMaterial;part.MaterialVariant=rockVariant;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+ part.Color=Color3.fromRGB(c[1],c[2],c[3])
+ part.Size=Vector3.new(x1-x0,y1-y0,z1-z0)
+ part.CFrame=CFrame.new(ch.origin+Vector3.new((x0+x1)*.5,(y0+y1)*.5,(z0+z1)*.5))
+ return part
+end
+function scene.digBuildRock(ch)
+ ch=ch or scene.dig
+ local cube=ch.cube
+ if ch.rock then ch.rock:Destroy() end
+ local rock=Instance.new('Model');rock.Name='Rock'
+ ch.blocks={}
+ local T=DigCube.TILE;local n=math.ceil(cube.width/T)
+ for gx=0,n-1 do
+  for gz=0,n-1 do
+   local x0,x1=gx*T,math.min(cube.width,(gx+1)*T)
+   local z0,z1=gz*T,math.min(cube.width,(gz+1)*T)
+   local part=rockBlock(ch,x0,x1,0,cube.height,z0,z1,1)
+   part.Parent=rock
+   table.insert(ch.blocks,{part=part,lo=Vector3.new(x0,0,z0),hi=Vector3.new(x1,cube.height,z1),column=true})
+  end
+ end
+ rock.Parent=ch.holder;ch.rock=rock
+end
+-- Split every column reaching the local x/z box [lo,hi] into its layer blocks.
+function scene.digSplitColumns(ch,lo,hi)
+ local cube=ch.cube
+ if not cube or not ch.rock then return 0 end
+ local split=0
+ for i=#ch.blocks,1,-1 do
+  local b=ch.blocks[i]
+  if b.column and b.hi.X>lo.X and b.lo.X<hi.X and b.hi.Z>lo.Z and b.lo.Z<hi.Z then
+   table.remove(ch.blocks,i);b.part:Destroy();split+=1
+   for _,layer in ipairs(cube.layers) do
+    local part=rockBlock(ch,b.lo.X,b.hi.X,layer.y0,layer.y1,b.lo.Z,b.hi.Z,layer.index)
+    part.Parent=ch.rock
+    table.insert(ch.blocks,{part=part,lo=Vector3.new(b.lo.X,layer.y0,b.lo.Z),hi=Vector3.new(b.hi.X,layer.y1,b.hi.Z)})
+   end
+  end
+ end
+ return split
+end
+-- A carve reaching within a stud of a chunk edge opens the next chunk's
+-- side too: split its columns there so its layers show.
+function scene.digSplitNeighbors(ch,lo,hi)
+ local F=scene.digField;local W=DigCube.WIDTH
+ for _,side in ipairs(SIDES) do
+  local near=(side[1]==1 and hi.X>=W-1) or (side[1]==-1 and lo.X<=1) or (side[2]==1 and hi.Z>=W-1) or (side[2]==-1 and lo.Z<=1)
+  if near then
+   local other=F.chunks[DigCube.chunkKey(ch.i+side[1],ch.j+side[2])]
+   if other and other.rendered then
+    local shift=Vector3.new(side[1]*W,0,side[2]*W)
+    scene.digSplitColumns(other,lo-shift-Vector3.new(1,0,1),hi-shift+Vector3.new(1,0,1))
+   end
+  end
+ end
 end
 -- Subtract broken cells from the blocks they reach. A job may hold the cells
 -- of several chunks (everything queued while the last carve ran), and each
 -- block is cut once with only the cells that touch it.
 function scene.digCarve(job)
- local dig=scene.dig;local cube=dig.cube;local o=dig.origin
- if job.generation~=dig.generation then return end
+ local dig=job.ch or scene.dig;local cube=dig.cube;local o=dig.origin;local F=scene.digField
+ if job.generation~=dig.generation or dig.dropped or not dig.rock then return end
  local made,wedges={},{}
  local function wedgesFor(id)
   local list=wedges[id]
@@ -3640,6 +4057,23 @@ function scene.digCarve(job)
   end
   table.insert(stageParts,{lo=lo,hi=hi,wedges=list})
  end
+ -- Columns this pass reaches (with the same half-stud reach as below) come
+ -- apart into their layer blocks first, and so do a neighbor chunk's when
+ -- the cut opens its side.
+ do
+  local x0,z0,x1,z1=math.huge,math.huge,-math.huge,-math.huge
+  for _,id in ipairs(job.ids) do
+   local c=cube.cells[id]
+   x0=math.min(x0,c.minX);z0=math.min(z0,c.minZ);x1=math.max(x1,c.maxX);z1=math.max(z1,c.maxZ)
+  end
+  for _,sp in ipairs(stageParts) do
+   x0=math.min(x0,sp.lo.X);z0=math.min(z0,sp.lo.Z);x1=math.max(x1,sp.hi.X);z1=math.max(z1,sp.hi.Z)
+  end
+  if x0<=x1 then
+   local lo,hi=Vector3.new(x0-.5,0,z0-.5),Vector3.new(x1+.5,0,z1+.5)
+   scene.digSplitColumns(dig,lo,hi);scene.digSplitNeighbors(dig,lo,hi)
+  end
+ end
  for i=#dig.blocks,1,-1 do
   local block=dig.blocks[i]
   local negatives={}
@@ -3657,12 +4091,15 @@ function scene.digCarve(job)
    end
   end
   if #negatives>0 then
-   dig.stats.calls+=1
+   F.stats.calls+=1
    local ok,result=pcall(function()
     return block.part:SubtractAsync(negatives,Enum.CollisionFidelity.PreciseConvexDecomposition,Enum.RenderFidelity.Precise)
    end)
-   if job.generation~=dig.generation then break end
-   if not ok and not string.find(tostring(result),'empty') then dig.stats.fails+=1 end
+   if job.generation~=dig.generation or dig.dropped then
+    if ok and result then result:Destroy() end
+    break
+   end
+   if not ok and not string.find(tostring(result),'empty') then F.stats.fails+=1 end
    if ok and result then
     result.Anchored=true;result.CanTouch=false;result.CastShadow=false;result.UsePartColor=true;result.Color=block.part.Color
     result.Material=block.part.Material;result.MaterialVariant=block.part.MaterialVariant;result.Name='RockBlock'
@@ -3680,14 +4117,14 @@ function scene.digCarve(job)
     -- (owner, Nov 22). Rebuild it from a fresh box instead.
     table.remove(dig.blocks,i)
     dig.lastCarveError=tostring(result)
-    for _,b in ipairs(scene.digRebuildBlock(block,stageParts,0)) do table.insert(rebuilt,b) end
+    for _,b in ipairs(scene.digRebuildBlock(block,stageParts,0,dig)) do table.insert(rebuilt,b) end
    end
   end
  end
  for _,b in ipairs(rebuilt) do table.insert(dig.blocks,b) end
  for _,p in ipairs(made) do p:Destroy() end
  -- Latency from the first queued break to its cut being in the world.
- if job.queuedAt then dig.stats.jobs+=1;table.insert(dig.stats.lags,os.clock()-job.queuedAt) end
+ if job.queuedAt then F.stats.jobs+=1;table.insert(F.stats.lags,os.clock()-job.queuedAt) end
 end
 -- A block region as a fresh box minus every dug cell (and this pass's stage
 -- shapes) that reaches it, at default fidelity (simpler, sturdier than
@@ -3695,8 +4132,9 @@ end
 -- split in four and each quarter rebuilt; a quarter that still fails keeps a
 -- plain box only if its middle is rock that has not been dug.
 local REBUILD_DEPTH=2
-function scene.digRebuildBlock(block,stageParts,depth)
- local dig=scene.dig;local cube=dig.cube;local o=dig.origin
+function scene.digRebuildBlock(block,stageParts,depth,dig)
+ dig=dig or scene.dig
+ local cube=dig.cube;local o=dig.origin
  local color,material=block.part.Color,block.part.Material
  local lo,hi=block.lo,block.hi
  block.part:Destroy()
@@ -3736,7 +4174,7 @@ function scene.digRebuildBlock(block,stageParts,depth)
  -- (This pass's stage shapes are already in dig.stageParts above.)
  local ok,result=true,nil
  if #negatives>0 then
-  dig.stats.calls+=1
+  scene.digField.stats.calls+=1
   -- The CSG API needs the part inside the DataModel; an unparented box made
   -- every rebuild fail. ServerStorage keeps it out of view while it is cut.
   box.Parent=game:GetService('ServerStorage')
@@ -3760,7 +4198,7 @@ function scene.digRebuildBlock(block,stageParts,depth)
   for _,q in ipairs({{lo.X,mx,lo.Z,mz},{mx,hi.X,lo.Z,mz},{lo.X,mx,mz,hi.Z},{mx,hi.X,mz,hi.Z}}) do
    local piece=Instance.new('Part');piece.Color=color;piece.Material=material
    local sub={part=piece,lo=Vector3.new(q[1],lo.Y,q[3]),hi=Vector3.new(q[2],hi.Y,q[4])}
-   for _,b in ipairs(scene.digRebuildBlock(sub,stageParts,depth+1)) do table.insert(out,b) end
+   for _,b in ipairs(scene.digRebuildBlock(sub,stageParts,depth+1,dig)) do table.insert(out,b) end
   end
   dig.carveFailures-=4 -- the quarters are not failures of their own
   return out
@@ -3788,15 +4226,15 @@ function scene.digRebuildBlock(block,stageParts,depth)
  return out
 end
 -- Drain the carve queue in order; the worker starts when a chunk is queued.
-function scene.digCarveLoop()
- local dig=scene.dig
+function scene.digCarveLoop(dig)
+ dig=dig or scene.dig
  if dig.carving or #dig.csg==0 then return end
  dig.carving=true
  task.spawn(function()
   while #dig.csg>0 do
    -- Take everything queued for this cube in one pass: pieces break often,
    -- and one cut per block keeps the rock in step with the breaks.
-   local job={generation=dig.csg[1].generation,ids={},parts={},queuedAt=dig.csg[1].queuedAt}
+   local job={ch=dig,generation=dig.csg[1].generation,ids={},parts={},queuedAt=dig.csg[1].queuedAt}
    while #dig.csg>0 and dig.csg[1].generation==job.generation do
     local item=table.remove(dig.csg,1)
     job.queuedAt=math.min(job.queuedAt or math.huge,item.queuedAt or math.huge)
@@ -3809,28 +4247,54 @@ function scene.digCarveLoop()
   dig.carving=false
  end)
 end
--- The rock surface below a point (the carved rock, or the ground).
+-- The rock surface below a point (the carved rock of any chunk, or the ground).
 function scene.digFloorAt(x,z,fromY)
- local dig=scene.dig
  local include={}
- if dig.rock then table.insert(include,dig.rock) end
+ for _,ch in pairs(scene.digField.chunks) do if ch.rock then table.insert(include,ch.rock) end end
+ for _,pl in ipairs(scene.digField.ground.plates) do for _,piece in ipairs(pl.pieces) do if piece.part.Parent then table.insert(include,piece.part) end end end
  local base=workspace:FindFirstChild('Baseplate');if base then table.insert(include,base) end
  if #include==0 or not RaycastParams then return nil end
  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances=include
- local hit=workspace:Raycast(Vector3.new(x,fromY,z),Vector3.new(0,-(fromY-dig.origin.Y+20),0),query)
+ local hit=workspace:Raycast(Vector3.new(x,fromY,z),Vector3.new(0,-(fromY-DigCube.CENTER[2]+20),0),query)
  return hit and hit.Position.Y
 end
-function scene.digInside(position,margin)
- local dig=scene.dig;if not dig.cube then return false end
- local l=position-dig.origin
- return l.X>=-margin and l.X<=DigCube.WIDTH+margin and l.Z>=-margin and l.Z<=DigCube.WIDTH+margin and l.Y>=-2 and l.Y<=dig.cube.height+margin
+-- The field's own surface at world x,z: the rock left in a rendered chunk
+-- (exact from its cube, ahead of the carving), the ground elsewhere on the
+-- field, nil over the hub or off the field.
+function scene.digSurface(x,z)
+ local i,j=DigCube.chunkAt(x,z)
+ local ch=scene.digField.chunks[DigCube.chunkKey(i,j)]
+ if ch and ch.ready and ch.rendered then
+  local top=DigCube.surfaceAt(ch.cube,x-ch.origin.X,z-ch.origin.Z)
+  if top then return ch.origin.Y+top end
+ end
+ if not scene.digBlocked(i,j) then return DigCube.GROUND end
+ return nil
 end
--- On the cube, in a pit, or standing right next to it.
+function scene.digInsideChunk(ch,position,margin)
+ if not ch.cube then return false end
+ local l=position-ch.origin
+ return l.X>=-margin and l.X<=DigCube.WIDTH+margin and l.Z>=-margin and l.Z<=DigCube.WIDTH+margin and l.Y>=-2 and l.Y<=ch.cube.height+margin
+end
+-- Over (or within `margin` of) a diggable part of the field.
+function scene.digInside(position,margin)
+ local h=position.Y-DigCube.CENTER[2]
+ if h<-2 or h>DigCube.HEIGHT+margin then return false end
+ for _,c in ipairs(DigCube.chunksNear(position.X,position.Z,margin)) do
+  if not scene.digBlocked(c[1],c[2]) then return true end
+ end
+ return false
+end
+-- On the field, in a pit, or standing right next to it (the hub is not).
 function scene.digActive(p)
- local dig=scene.dig;local hr=characterRoot(p)
- if not dig.cube or not hr then return false end
- local l=hr.Position-dig.origin
- return l.X>=-4 and l.X<=DigCube.WIDTH+4 and l.Z>=-4 and l.Z<=DigCube.WIDTH+4 and l.Y>=-3 and l.Y<=dig.cube.height+16
+ local hr=characterRoot(p)
+ if not hr then return false end
+ local h=hr.Position.Y-DigCube.CENTER[2]
+ if h<-3 or h>DigCube.HEIGHT+16 then return false end
+ for _,c in ipairs(DigCube.chunksNear(hr.Position.X,hr.Position.Z,4)) do
+  if not scene.digBlocked(c[1],c[2]) then return true end
+ end
+ return false
 end
 function scene.digRelease(p)
  for _,d in ipairs(p.drones) do
@@ -3850,7 +4314,7 @@ end
 -- Forget a drone's chunk, its cell claims and its uncontacted shots. A
 -- committed job (its cells already carved ahead) is finished, never dropped.
 function scene.digDrop(d)
- local dig=scene.dig;local job=d.digJob
+ local job=d.digJob;local dig=job and job.ch or scene.dig
  if job then
   for _,id in ipairs(job.ids) do if dig.claimed[id]==d.id then dig.claimed[id]=nil end end
   scene.digDropNodes(job,false)
@@ -3866,8 +4330,8 @@ function scene.digDrop(d)
  if job and job.committed and not job.broken then scene.digBreak(job,d,profiles[d.owner]) end
 end
 -- A brittle cell (Frostbite) takes .6 of its HP for every drone.
-function scene.digHpMul(id)
- local t=scene.dig.brittle[id]
+function scene.digHpMul(id,ch)
+ local t=(ch or scene.dig).brittle[id]
  return t and t>now and DigCube.STYLES.Frostbite.brittle.mul or 1
 end
 function scene.digColor(style)
@@ -3877,19 +4341,14 @@ end
 -- then its shape (size): a chunk grown around the seed, one small cell, a
 -- Gridcutter line or a volley cluster. Brittle cells draw every drone; a
 -- role with hintBias prefers the cells its owner's Needler found gems near.
+-- Every built field chunk within reach of the player is a candidate: each
+-- draws its own weighted cell (DigCube.pick) and one chunk wins in
+-- proportion to its total weight, the same draw as one big cube, so a crew
+-- at a chunk border digs on both sides. The winning chunk renders its rock
+-- if this is its first job.
 function scene.digPick(d,p)
- local dig=scene.dig;local cube=dig.cube
+ local F=scene.digField
  local style=DigCube.style(d.role)
- local taken,points={},{}
- for id,droneId in pairs(dig.claimed) do
-  local worker=drones[droneId]
-  if worker and worker.hp>0 and worker.digJob then
-   taken[id]=true
-   if worker.digJob.left[1]==id then table.insert(points,{worker.digJob.cx,worker.digJob.cz}) end
-  else dig.claimed[id]=nil end
- end
- -- Sealed gem cells wait for their owner; no drone cuts them.
- for id in pairs(dig.geodes) do taken[id]=true end
  local hr=characterRoot(p)
  if not hr then return nil end
  -- Drones only cut near their player: a tapped spot steers the crater only
@@ -3897,41 +4356,77 @@ function scene.digPick(d,p)
  local point=hr.Position
  local tapped=p.digFocus and now<(p.digFocusUntil or 0) and p.digFocus
  if tapped and Vector3.new(tapped.X-point.X,0,tapped.Z-point.Z).Magnitude<=DigCube.MINE_RADIUS then point=tapped end
- local random=function() return dig.random:NextNumber() end
- local lx,lz=hr.Position.X-dig.origin.X,hr.Position.Z-dig.origin.Z
- -- Claimed cells also count as gone for support (two jobs never float a cell).
- local opts={taken=taken,gone=taken,takenPoints=points,recent=dig.recent,now=now,random=random,anchorX=lx,anchorZ=lz}
- opts.focusX=math.clamp(point.X-dig.origin.X,0,DigCube.WIDTH);opts.focusZ=math.clamp(point.Z-dig.origin.Z,0,DigCube.WIDTH)
- local mode=style.pick
- local hints=dig.hints[d.owner]
- local dx,dz=d.pos.X-dig.origin.X,d.pos.Z-dig.origin.Z
- if mode=='near' then opts.radius=style.near.radius;opts.falloff=style.near.falloff
- elseif mode=='deep' then opts.depthPow=style.depthPow;opts.lead=style.lead end
- opts.weight=function(id,c,apex)
-  local w=1
-  if mode=='small' then
-   -- Small cells right under the drone.
-   w=math.clamp((16/c.area)^2,.1,6)*math.exp(-math.sqrt((c.cx-dx)^2+(c.cz-dz)^2)/8)
-  elseif mode=='near' then
-   -- Stay on the face it is working: next to its last cell, at exposed edges.
-   if d.digLastCell and table.find(c.neighbors,d.digLastCell) then w*=style.near.adjacent end
-   for _,o in ipairs(c.neighbors) do if cube.removed[o] then w*=style.near.exposed;break end end
-  elseif mode=='wall' then
-   -- Shear the crater walls: cells above the floor with an open side.
-   local edge=false
-   if c.layer<apex-1 then for _,o in ipairs(c.neighbors) do if cube.removed[o] then edge=true;break end end end
-   w=edge and style.wall.edge or style.wall.other
-  elseif mode=='ore' and c.ore>0 then w=style.oreBias end
-  local frozen=dig.brittle[id]
-  if frozen and frozen>now then w*=DigCube.BRITTLE_BIAS end
-  if style.hintBias and hints and hints[id] then w*=style.hintBias end
-  return w
+ -- Every live claim on the field, as a world point (crews spread out across borders too).
+ local claims={}
+ local candidates={}
+ for _,c in ipairs(DigCube.chunksNear(hr.Position.X,hr.Position.Z,DigCube.MINE_RADIUS)) do
+  local ch=F.chunks[DigCube.chunkKey(c[1],c[2])]
+  if ch and ch.ready and not scene.digBlocked(c[1],c[2]) then table.insert(candidates,ch) end
  end
- local seed=DigCube.pick(cube,opts)
- if not seed then return nil end
+ if #candidates==0 then return nil end
+ for _,ch in pairs(F.chunks) do
+  for id,droneId in pairs(ch.claimed) do
+   local worker=drones[droneId]
+   local wj=worker and worker.digJob
+   if worker and worker.hp>0 and wj and (wj.ch or scene.dig)==ch then
+    if wj.left[1]==id then table.insert(claims,ch.origin+Vector3.new(wj.cx,0,wj.cz)) end
+   else ch.claimed[id]=nil end
+  end
+ end
+ local mode=style.pick
+ local picks,sum={},0
+ for _,dig in ipairs(candidates) do
+  local cube=dig.cube
+  local taken,points={},{}
+  for id in pairs(dig.claimed) do taken[id]=true end
+  -- Sealed gem cells wait for their owner; no drone cuts them.
+  for id in pairs(dig.geodes) do taken[id]=true end
+  for _,w in ipairs(claims) do table.insert(points,{w.X-dig.origin.X,w.Z-dig.origin.Z}) end
+  local random=function() return dig.random:NextNumber() end
+  local lx,lz=hr.Position.X-dig.origin.X,hr.Position.Z-dig.origin.Z
+  -- Claimed cells also count as gone for support (two jobs never float a cell).
+  local opts={taken=taken,gone=taken,takenPoints=points,recent=dig.recent,now=now,random=random,anchorX=lx,anchorZ=lz}
+  opts.focusX=point.X-dig.origin.X;opts.focusZ=point.Z-dig.origin.Z
+  local hints=dig.hints[d.owner]
+  local dx,dz=d.pos.X-dig.origin.X,d.pos.Z-dig.origin.Z
+  if mode=='near' then opts.radius=style.near.radius;opts.falloff=style.near.falloff
+  elseif mode=='deep' then opts.depthPow=style.depthPow;opts.lead=style.lead end
+  opts.weight=function(id,c,apex)
+   local w=1
+   if mode=='small' then
+    -- Small cells right under the drone.
+    w=math.clamp((16/c.area)^2,.1,6)*math.exp(-math.sqrt((c.cx-dx)^2+(c.cz-dz)^2)/8)
+   elseif mode=='near' then
+    -- Stay on the face it is working: next to its last cell, at exposed edges.
+    if d.digLastCell and (d.digLastChunk or scene.dig)==dig and table.find(c.neighbors,d.digLastCell) then w*=style.near.adjacent end
+    for _,o in ipairs(c.neighbors) do if cube.removed[o] then w*=style.near.exposed;break end end
+   elseif mode=='wall' then
+    -- Shear the crater walls: cells above the floor with an open side.
+    local edge=false
+    if c.layer<apex-1 then for _,o in ipairs(c.neighbors) do if cube.removed[o] then edge=true;break end end end
+    w=edge and style.wall.edge or style.wall.other
+   elseif mode=='ore' and c.ore>0 then w=style.oreBias end
+   local frozen=dig.brittle[id]
+   if frozen and frozen>now then w*=DigCube.BRITTLE_BIAS end
+   if style.hintBias and hints and hints[id] then w*=style.hintBias end
+   return w
+  end
+  local seed,total=DigCube.pick(cube,opts)
+  if seed then
+   table.insert(picks,{dig=dig,seed=seed,total=total,taken=taken,random=random,lx=lx,lz=lz});sum+=total
+  end
+ end
+ if #picks==0 then return nil end
+ local chosen=picks[1]
+ if #picks>1 then
+  local roll=F.random:NextNumber()*sum
+  for _,c in ipairs(picks) do roll-=c.total;if roll<=0 then chosen=c;break end end
+ end
+ local dig,seed,taken,random,lx,lz=chosen.dig,chosen.seed,chosen.taken,chosen.random,chosen.lx,chosen.lz
+ local cube=dig.cube
  local size=style.size
  local cutSize=d.stats.cutSize or 1
- local mul=scene.digHpMul
+ local mul=function(id) return scene.digHpMul(id,dig) end
  local ids,cut,queue
  if size=='cell' then ids={seed}
  elseif size=='line' then
@@ -3950,6 +4445,8 @@ function scene.digPick(d,p)
   ids=DigCube.chunk(cube,seed,cut,taken,random)
  end
  for _,id in ipairs(ids) do dig.claimed[id]=d.id end
+ -- First job on this chunk: its rock replaces the ground.
+ if not dig.rendered then scene.digRender(dig) end
  local kernel=style.kernel
  -- Work: a Striker's bigger slot chunks move more rock per second (today's
  -- rule, chunkHp over the chunk scale); a role's own chunk size is only its
@@ -3962,7 +4459,7 @@ function scene.digPick(d,p)
  local volume=DigCube.volume(cube,ids)
  -- A terrace chunk comes away in pieces from its middle outward; the beam
  -- works on the next piece to go. Shots and volleys break whole cells.
- local job={ids=ids,left=table.clone(ids),key=DigCube.key(ids),code=style.code,style=style,kernel=kernel,size=size,cx=cx,cz=cz,hp=hp,maxHp=hp,
+ local job={ch=dig,generation=dig.generation,ids=ids,left=table.clone(ids),key=DigCube.key(ids),code=style.code,style=style,kernel=kernel,size=size,cx=cx,cz=cz,hp=hp,maxHp=hp,
   pieces=DigCube.pieces(cube,ids,style.pieces),stage=0,volume=volume,volFrac=0,rock=DigCube.rockDrops(volume),rockPaid=0,cut=hpCut,
   queue=queue,seq=queue and 1 or nil,nodes={}}
  scene.digAim(job)
@@ -3972,7 +4469,7 @@ end
 -- nested stage grows from: the rock surface there, below any stage already
 -- carved out. The drone hovers straight above it. A volley aims at its seed.
 function scene.digAim(job)
- local dig=scene.dig
+ local dig=job.ch or scene.dig
  if job.kernel=='volley' then
   local c=dig.cube.cells[job.ids[1]]
   job.contact=dig.origin+Vector3.new(c.cx,c.y1,c.cz);return
@@ -3990,30 +4487,30 @@ end
 function scene.digPayRock(d,p,job,volume,position)
  d.digRockCarry=(d.digRockCarry or 0)+volume*(job.style.rockMul or 1)/DigCube.ROCK_PER_UNIT
  local n=math.floor(d.digRockCarry)
- if n>0 then d.digRockCarry-=n;scene.digRock(p,d.owner,job.ids,n,position,job.style.collect) end
+ if n>0 then d.digRockCarry-=n;scene.digRock(p,d.owner,job.ids,n,position,job.style.collect,job.ch) end
 end
 -- One nested stage of a chunk breaks out (a Voronoi cell around its middle,
 -- shallower than the layer): it is carved now, the cells themselves stay
 -- until the final break (ops flag S<stage>; every client recomputes the
 -- shape from the chunk key) and it pays its share of the chunk's rock.
 function scene.digChip(job,d,p)
- local dig=scene.dig;local cube=dig.cube
+ local dig=job.ch or scene.dig;local cube=dig.cube
  job.stage+=1
  local piece=job.pieces[job.stage]
  table.insert(dig.ops,DigCube.formatOp(job.ids,job.code,0,'S',job.stage))
- dig.dirty=true
+ scene.digMark(dig)
  if (job.stageAhead or 0)<job.stage then
   table.insert(dig.csg,{generation=dig.generation,ids={},parts=piece.parts,queuedAt=os.clock()})
   -- Remembered until its cells go, so a rebuilt block keeps this pit.
   table.insert(dig.stageParts,{ids=job.ids,parts=piece.parts})
-  scene.digCarveLoop()
+  scene.digCarveLoop(dig)
  end
  local _,px,pz=DigCube.chunkArea(cube,job.ids)
  local floor=piece.parts[1] and piece.parts[1].y0 or cube.cells[job.ids[1]].y0
  local at=dig.origin+Vector3.new(px,floor+1,pz)
  if job.style.rockCarry==false then
   local share=math.floor(job.rock*piece.at)-job.rockPaid
-  if share>0 then job.rockPaid+=share;scene.digRock(p,d.owner,job.ids,share,at) end
+  if share>0 then job.rockPaid+=share;scene.digRock(p,d.owner,job.ids,share,at,nil,dig) end
  else
   scene.digPayRock(d,p,job,job.volume*math.max(0,piece.at-job.volFrac),at);job.volFrac=piece.at
  end
@@ -4034,18 +4531,20 @@ function scene.digDrone(d,p,dt)
  if (job and job.key or '')~=key or d.state~=state or (job and job.stage or 0)~=stage then d.digDirty=true end
 end
 function scene.digWork(d,p,dt)
- local dig=scene.dig;local cube=dig.cube
  local hr=characterRoot(p)
  if not DroneRoles.isWorker(d.role) or d.hp<=0 then
   scene.digDrop(d);d.state='Follow';d.mining=false
   move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt);return
  end
  local job=d.digJob
- if job and (cube.removed[job.left[1]] or dig.claimed[job.left[1]]~=d.id) then scene.digDrop(d);job=nil end
+ local jc=job and (job.ch or scene.dig)
+ -- Its chunk started over or was dropped (nobody near): let it go.
+ if job and (jc.dropped or (job.generation and job.generation~=jc.generation)) then scene.digDrop(d);job=nil end
+ if job and (jc.cube.removed[job.left[1]] or jc.claimed[job.left[1]]~=d.id) then scene.digDrop(d);job=nil end
  -- Walked away: let go of chunks left behind so the crew follows you (a
  -- committed shot still lands: scene.digDrop finishes it).
  if job and hr then
-  local lx,lz=hr.Position.X-dig.origin.X,hr.Position.Z-dig.origin.Z
+  local lx,lz=hr.Position.X-jc.origin.X,hr.Position.Z-jc.origin.Z
   if math.sqrt((job.cx-lx)^2+(job.cz-lz)^2)>DigCube.MINE_RADIUS+8 then scene.digDrop(d);job=nil end
  end
  -- A shot's recovery: hold the firing station a moment before the next pick.
@@ -4131,7 +4630,7 @@ end
 -- Gridcutter: the beam runs on to the next cell of its line, if it is still
 -- free and cuttable (sequence ops C1, C2...).
 function scene.digNextLine(d,p,job)
- local dig=scene.dig;local cube=dig.cube
+ local dig=job.ch or scene.dig;local cube=dig.cube
  local id=job.queue[(job.seq or 1)+1]
  if not id or cube.removed[id] or (cube.sealed and cube.sealed[id]) or dig.claimed[id] or dig.geodes[id] then return end
  local taken={}
@@ -4140,7 +4639,7 @@ function scene.digNextLine(d,p,job)
  if not DigCube.diggable(cube,id,taken) then return end
  local c=cube.cells[id]
  job.seq=(job.seq or 1)+1;job.ids={id};job.left={id};job.key=tostring(id);job.cx=c.cx;job.cz=c.cz
- job.hp=DigCube.chunkHp(cube,job.ids,job.cut,scene.digHpMul);job.maxHp=job.hp
+ job.hp=DigCube.chunkHp(cube,job.ids,job.cut,function(x) return scene.digHpMul(x,dig) end);job.maxHp=job.hp
  job.pieces=DigCube.pieces(cube,job.ids,job.style.pieces);job.stage=0
  job.volume=DigCube.volume(cube,job.ids);job.volFrac=0;job.rock=DigCube.rockDrops(job.volume);job.rockPaid=0
  job.broken=nil;job.committed=nil;job.stageAhead=nil;job.hot=true;job.nodes={}
@@ -4152,7 +4651,7 @@ end
 -- cells go to the CSG queue before the break, so the hole is there when the
 -- rubble flies. A committed job always finishes (scene.digDrop).
 function scene.digCarveAhead(job)
- local dig=scene.dig;local cube=dig.cube
+ local dig=job.ch or scene.dig;local cube=dig.cube
  -- The first break into a new layer always pays a gem (digBreak). Choose
  -- that cell now, the farthest from the middle, so it is never carved
  -- ahead and can still seal.
@@ -4180,7 +4679,7 @@ function scene.digCarveAhead(job)
  for _,id in ipairs(ids) do dig.carved[id]=true end
  job.committed=true
  table.insert(dig.csg,{generation=dig.generation,ids=ids,queuedAt=os.clock()})
- scene.digCarveLoop()
+ scene.digCarveLoop(dig)
 end
 -- Carve ahead for every role (owner, Nov 22: the rubble came before the hole):
 -- the piece about to break is cut a moment before its break op, while its
@@ -4189,10 +4688,10 @@ end
 -- (scene.digCarveAhead, which commits the job). Only the next piece: a later
 -- one has no proxy over it yet.
 function scene.digCarveLead()
- return scene.dig.carveLead or .9
+ return scene.digField.carveLead or .9
 end
 function scene.digCarvePiece(job)
- local dig=scene.dig
+ local dig=job.ch or scene.dig
  local k=job.stage+1
  local piece=job.pieces and job.pieces[k]
  if not piece or job.broken then return end
@@ -4204,7 +4703,7 @@ function scene.digCarvePiece(job)
  job.stageAhead=k
  table.insert(dig.csg,{generation=dig.generation,ids={},parts=piece.parts,queuedAt=os.clock()})
  table.insert(dig.stageParts,{ids=job.ids,parts=piece.parts})
- scene.digCarveLoop()
+ scene.digCarveLoop(dig)
 end
 -- `damage`: the work this job will surely take within the carve lead. When
 -- that reaches the next piece's share, carve it now.
@@ -4230,7 +4729,7 @@ end
 -- for a harder cell) and pops the cell in one hit; Needler streams darts
 -- that wear it down, then works on to a neighbour.
 function scene.digShotStep(d,p,job,dt)
- local dig=scene.dig;local style=job.style;local shot=style.shot
+ local dig=job.ch or scene.dig;local style=job.style;local shot=style.shot
  local goal=job.contact+Vector3.new(0,shot.hover,0)
  move(d,goal,dt)
  if not job.lockAt then
@@ -4278,7 +4777,7 @@ function scene.digShotStep(d,p,job,dt)
  end
  d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
  if job.hp<=0 then
-  d.digLastCell=job.ids[1]
+  d.digLastCell=job.ids[1];d.digLastChunk=dig
   scene.digBreak(job,d,p)
   return
  end
@@ -4305,7 +4804,7 @@ function scene.digSlamStep(d,p,job,dt)
  if not slam then slam={phase='Travel',phaseAt=now};job.slam=slam end
  local hover=job.contact+Vector3.new(0,cfg.hover,0)
  slam.impact=job.contact+Vector3.new(0,cfg.clear,0)
- local area=DigCube.chunkArea(scene.dig.cube,job.ids)
+ local area=DigCube.chunkArea((job.ch or scene.dig).cube,job.ids)
  local diameter=math.clamp(2*math.sqrt(area/math.pi),3,9)
  d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
  if slam.phase=='Travel' then
@@ -4376,7 +4875,7 @@ end
 -- Volley roles (Ramiel, Nomad) hover high over a cluster of exposed cells,
 -- charge one shot and break the whole cluster in one op (seed first).
 function scene.digVolleyStep(d,p,job,dt)
- local dig=scene.dig;local cube=dig.cube;local style=job.style;local v=style.volley
+ local dig=job.ch or scene.dig;local cube=dig.cube;local style=job.style;local v=style.volley
  local goal=job.contact+Vector3.new(0,v.hover,0)
  move(d,goal,dt)
  if not job.lockAt then
@@ -4461,7 +4960,7 @@ end
 -- seals. Ops: the break ('', E<sealed ids> or C<seq>), then one K per
 -- sealed cell. Returns how many cells sealed.
 function scene.digBreak(job,d,p)
- local dig=scene.dig;local cube=dig.cube
+ local dig=job.ch or scene.dig;local cube=dig.cube
  if job.broken then return 0 end
  job.broken=true
  if d.digJob==job then scene.digDrop(d);d.digPickAt=0;d.digProgress=0 end
@@ -4519,7 +5018,7 @@ function scene.digBreak(job,d,p)
   -- carved away (never a gem cell in practice) bursts out.
   if not dig.carved[g.id] then
    table.insert(sealed,g.id);sealedSet[g.id]=g.tier;live+=1
-   dig.geodes[g.id]={id=g.id,tier=g.tier,treasure=g.treasure,count=g.count,owner=d.owner,p=p,at=now,volume=volume}
+   dig.geodes[g.id]={id=g.id,tier=g.tier,treasure=g.treasure,count=g.count,owner=d.owner,p=p,at=now,volume=volume,ch=dig}
    cube.sealed=cube.sealed or {};cube.sealed[g.id]=true
   else
    -- Its cell is already cut: the gem bursts out right away.
@@ -4547,15 +5046,15 @@ function scene.digBreak(job,d,p)
   table.insert(dig.ops,DigCube.formatOp(ids,code,immediate,flag,arg))
  end
  for _,id in ipairs(sealed) do table.insert(dig.ops,DigCube.formatOp({id},code,sealedSet[id],'K')) end
- if #broken>0 then scene.digCollapse(broken,code,p,d.owner) end
- dig.dirty=true
- if #sealed>0 then scene.digPublishGeodes() end
+ if #broken>0 then scene.digCollapse(broken,code,p,d.owner,dig) end
+ scene.digMark(dig)
+ if #sealed>0 then scene.digPublishGeodes(dig) end
  -- The cut: whatever was not already carved ahead.
  local carve={}
  for _,id in ipairs(broken) do if dig.carved[id] then dig.carved[id]=nil else table.insert(carve,id) end end
  if #carve>0 then
   table.insert(dig.csg,{generation=dig.generation,ids=carve,queuedAt=os.clock()})
-  scene.digCarveLoop()
+  scene.digCarveLoop(dig)
  end
  for i=#dig.stageParts,1,-1 do
   local all=true
@@ -4571,7 +5070,7 @@ function scene.digBreak(job,d,p)
   -- Strikers and Chargers: rock comes out right away, bigger chunks drop
   -- more (less what the earlier stages already paid).
   local volume=job.volume or DigCube.volume(cube,job.ids)
-  scene.digRock(p,d.owner,cells,math.max(1,(job.rock or DigCube.rockDrops(volume))-(job.rockPaid or 0)),center)
+  scene.digRock(p,d.owner,cells,math.max(1,(job.rock or DigCube.rockDrops(volume))-(job.rockPaid or 0)),center,nil,dig)
  elseif #broken>0 then
   scene.digPayRock(d,p,job,DigCube.volume(cube,broken)*(1-(job.volFrac or 0)),center)
  end
@@ -4579,13 +5078,13 @@ function scene.digBreak(job,d,p)
   if style.brittle then scene.digBrittle(job,broken) end
   if style.chain and not job.link then scene.digChain(job,d,p,broken) end
  end
- if style.hints then scene.digHint(d,cells) end
+ if style.hints then scene.digHint(d,cells,dig) end
  return #sealed
 end
 -- Frostbite: the cells around and under a break turn brittle for a while
 -- (every drone cuts them for .6 of their HP, and prefers them).
 function scene.digBrittle(job,broken)
- local dig=scene.dig;local cube=dig.cube;local cfg=job.style.brittle
+ local dig=job.ch or scene.dig;local cube=dig.cube;local cfg=job.style.brittle
  for _,id in ipairs(broken) do
   for pass=1,2 do
    for _,n in ipairs(pass==1 and cube.cells[id].neighbors or DigCube.below(cube,id)) do
@@ -4599,11 +5098,11 @@ function scene.digBrittle(job,broken)
   table.sort(ids,function(a,b) local x,y=dig.brittle[a],dig.brittle[b];if x~=y then return x>y end;return a<b end)
   for i=cfg.max+1,#ids do dig.brittle[ids[i]]=nil end
  end
- scene.digPublishBrittle()
+ scene.digPublishBrittle(dig)
 end
 -- The holder's Brittle attribute: 'id;id;...' of the cells still brittle.
-function scene.digPublishBrittle()
- local dig=scene.dig;local ids={}
+function scene.digPublishBrittle(dig)
+ dig=dig or scene.dig;local ids={}
  for id,t in pairs(dig.brittle) do
   if t>now and not dig.cube.removed[id] then table.insert(ids,id) else dig.brittle[id]=nil end
  end
@@ -4614,7 +5113,7 @@ end
 -- Resonator: a break rings on into up to `links` small neighbours, one
 -- after another (scene.digChainStep breaks each as a C<n> op).
 function scene.digChain(job,d,p,broken)
- local dig=scene.dig;local cube=dig.cube;local cfg=job.style.chain
+ local dig=job.ch or scene.dig;local cube=dig.cube;local cfg=job.style.chain
  local seen,list={},{}
  for _,id in ipairs(broken) do
   for _,n in ipairs(cube.cells[id].neighbors) do
@@ -4632,7 +5131,7 @@ function scene.digChain(job,d,p,broken)
  dig.chainSerial=(dig.chainSerial or 0)+1
  for _,e in ipairs(list) do
   if n>=cfg.links then break end
-  local h=cube.cells[e.id].hp*scene.digHpMul(e.id)
+  local h=cube.cells[e.id].hp*scene.digHpMul(e.id,dig)
   if hp+h<=cfg.budget*job.maxHp and DigCube.diggable(cube,e.id,taken) then
    n+=1;hp+=h;taken[e.id]=true
    table.insert(dig.chains,{at=now+cfg.gap*n,id=e.id,d=d,p=p,n=n,group=dig.chainSerial})
@@ -4641,8 +5140,8 @@ function scene.digChain(job,d,p,broken)
 end
 -- Due chain links break as single-cell Resonator jobs, re-checked first; a
 -- link that seals a gem stops the rest of its chain.
-function scene.digChainStep()
- local dig=scene.dig;local cube=dig.cube
+function scene.digChainStep(dig)
+ dig=dig or scene.dig;local cube=dig.cube
  local i=1
  while i<=#dig.chains do
   local link=dig.chains[i]
@@ -4658,7 +5157,7 @@ function scene.digChainStep()
    end
    if ok then
     local style=DigCube.STYLES.Resonator;local c=cube.cells[id]
-    local job={ids={id},left={id},key=tostring(id),code=style.code,style=style,kernel='beam',cx=c.cx,cz=c.cz,hp=0,maxHp=c.hp,
+    local job={ch=dig,generation=dig.generation,ids={id},left={id},key=tostring(id),code=style.code,style=style,kernel='beam',cx=c.cx,cz=c.cz,hp=0,maxHp=c.hp,
      volume=DigCube.cellVolume(cube,id),volFrac=0,rock=0,rockPaid=0,seq=link.n,link=true}
     if scene.digBreak(job,d,link.p)>0 then
      for k=#dig.chains,1,-1 do if dig.chains[k].group==link.group then table.remove(dig.chains,k) end end
@@ -4671,8 +5170,8 @@ end
 -- Needler: its darts read the rock around a break. Gem cells within reach
 -- glint for the owner a while: the owner's DigHints Player attribute
 -- 'id:tier;...' (a Player attribute: other clients could read it; accepted).
-function scene.digHint(d,cells)
- local dig=scene.dig;local cube=dig.cube;local cfg=DigCube.STYLES.Needler.hints
+function scene.digHint(d,cells,dig)
+ dig=dig or scene.dig;local cube=dig.cube;local cfg=DigCube.STYLES.Needler.hints
  local hints=dig.hints[d.owner] or {};dig.hints[d.owner]=hints
  local count=0
  for _ in pairs(hints) do count+=1 end
@@ -4693,38 +5192,50 @@ function scene.digHint(d,cells)
  end
  scene.digPublishHints(d.owner)
 end
+-- The owner's DigHints: 'chunk:id:tier;...' over every chunk, at most the Needler's max.
 function scene.digPublishHints(owner)
- local dig=scene.dig;local p=profiles[owner]
- local hints=dig.hints[owner] or {}
- local ids={}
- for id in pairs(hints) do table.insert(ids,id) end
- table.sort(ids)
+ local F=scene.digField;local p=profiles[owner]
+ local keys={}
+ for key,ch in pairs(F.chunks) do if ch.hints[owner] then table.insert(keys,key) end end
+ table.sort(keys)
  local parts={}
- for i,id in ipairs(ids) do
-  if i>DigCube.STYLES.Needler.hints.max then break end
-  parts[i]=id..':'..hints[id].tier
+ local max=DigCube.STYLES.Needler.hints.max
+ for _,key in ipairs(keys) do
+  local hints=F.chunks[key].hints[owner]
+  local ids={}
+  for id in pairs(hints) do table.insert(ids,id) end
+  table.sort(ids)
+  for _,id in ipairs(ids) do
+   if #parts>=max then break end
+   table.insert(parts,key..':'..id..':'..hints[id].tier)
+  end
  end
  local s=table.concat(parts,';')
  if p and p.player.Parent and p.player:GetAttribute('DigHints')~=s then p.player:SetAttribute('DigHints',s) end
 end
 -- Every half second: expire hints (and hints whose gem is gone) and
--- brittle cells.
+-- brittle cells, on every chunk.
 function scene.digHintStep()
- local dig=scene.dig;local cube=dig.cube
- if now<(dig.hintAt or 0) then return end
- dig.hintAt=now+.5
- for owner,hints in pairs(dig.hints) do
-  local changed=false
-  for id,h in pairs(hints) do
-   if now>=h.untilAt or not dig.gems[id] or cube.removed[id] or (cube.sealed and cube.sealed[id]) then hints[id]=nil;changed=true end
+ local F=scene.digField
+ if now<(F.hintAt or 0) then return end
+ F.hintAt=now+.5
+ for _,dig in pairs(F.chunks) do
+  if dig.ready then
+   local cube=dig.cube
+   for owner,hints in pairs(dig.hints) do
+    local changed=false
+    for id,h in pairs(hints) do
+     if now>=h.untilAt or not dig.gems[id] or cube.removed[id] or (cube.sealed and cube.sealed[id]) then hints[id]=nil;changed=true end
+    end
+    if not profiles[owner] then dig.hints[owner]=nil elseif changed then scene.digPublishHints(owner) end
+   end
+   if next(dig.brittle) or (dig.holder:GetAttribute('Brittle') or '')~='' then scene.digPublishBrittle(dig) end
   end
-  if not profiles[owner] then dig.hints[owner]=nil elseif changed then scene.digPublishHints(owner) end
  end
- if next(dig.brittle) or (dig.holder:GetAttribute('Brittle') or '')~='' then scene.digPublishBrittle() end
 end
 -- Sealed gem cells, replicated as "id:tier:owner;..." on the cube holder.
-function scene.digPublishGeodes()
- local dig=scene.dig
+function scene.digPublishGeodes(dig)
+ dig=dig or scene.dig
  local list={}
  for id,g in pairs(dig.geodes) do table.insert(list,id..':'..g.tier..':'..g.owner..':'..(g.treasure and 1 or 0)) end
  table.sort(list)
@@ -4742,8 +5253,8 @@ local GEODE_LANDING=8 -- downward speed (studs/s) that counts as landing from a 
 -- the removed cells left with nothing under its middle breaks with them, in
 -- the same breaker's style (its rubble), pays its rock to the same player,
 -- and a secret gem in it bursts out to that player.
-function scene.digCollapse(seeds,code,p,owner)
- local dig=scene.dig;local cube=dig.cube
+function scene.digCollapse(seeds,code,p,owner,dig)
+ dig=dig or scene.dig;local cube=dig.cube
  local fallen=DigCube.collapse(cube,seeds)
  if #fallen==0 then return fallen end
  local tier=0
@@ -4766,67 +5277,70 @@ function scene.digCollapse(seeds,code,p,owner)
   end
  end
  table.insert(dig.ops,DigCube.formatOp(fallen,code,tier))
- dig.dirty=true
+ scene.digMark(dig)
  local carve={}
  for _,id in ipairs(fallen) do if dig.carved[id] then dig.carved[id]=nil else table.insert(carve,id) end end
  if #carve>0 then
   table.insert(dig.csg,{generation=dig.generation,ids=carve,queuedAt=os.clock()})
-  scene.digCarveLoop()
+  scene.digCarveLoop(dig)
  end
  if p and owner then
   local _,lx,lz=DigCube.chunkArea(cube,fallen)
   local _,floor=DigCube.contact(cube,fallen)
-  scene.digRock(p,owner,fallen,math.max(1,DigCube.rockDrops(DigCube.volume(cube,fallen))),dig.origin+Vector3.new(lx,floor+1,lz))
+  scene.digRock(p,owner,fallen,math.max(1,DigCube.rockDrops(DigCube.volume(cube,fallen))),dig.origin+Vector3.new(lx,floor+1,lz),nil,dig)
  end
  return fallen
 end
-function scene.digOpenGeode(id,g)
- local dig=scene.dig;local cube=dig.cube
+function scene.digOpenGeode(id,g,dig)
+ dig=dig or g.ch or scene.dig;local cube=dig.cube
  local c=cube.cells[id]
  dig.geodes[id]=nil
  if cube.sealed then cube.sealed[id]=nil end
  if DigCube.remove(cube,id) then dig.recent[id]=now end
  table.insert(dig.ops,DigCube.formatOp({id},nil,g.tier,g.treasure and 'X' or 'G'))
- dig.dirty=true
+ scene.digMark(dig)
  dig.carved[id]=nil
  table.insert(dig.csg,{generation=dig.generation,ids={id},queuedAt=os.clock()})
- scene.digCarveLoop()
+ scene.digCarveLoop(dig)
  local at=dig.origin+Vector3.new(c.cx,c.y1+.6,c.cz)
  for i=1,g.count or (g.treasure and DigCube.TREASURE_GEMS or 1) do
   table.insert(dig.pending,{at=now+GEODE_LAUNCH+(i-1)*.15,p=g.p,owner=g.owner,tier=g.tier,volume=g.volume,position=at+Vector3.new(0,i*.3,0),high=true})
  end
- scene.digPublishGeodes()
- scene.digCollapse({id},nil,g.p,g.owner)
+ scene.digPublishGeodes(dig)
+ scene.digCollapse({id},nil,g.p,g.owner,dig)
 end
 -- Is this root over the sealed cell (on it, or in a stage hole cut in it)?
-function scene.digOverGeode(hr,c,slack)
- local l=hr.Position-scene.dig.origin
+function scene.digOverGeode(hr,c,slack,dig)
+ local l=hr.Position-(dig or scene.dig).origin
  local above=l.Y-c.y1
  return math.sqrt((l.X-c.cx)^2+(l.Z-c.cz)^2)<=c.radius+1.2+slack and above>=1-(c.y1-c.y0)-slack and above<=5.5+slack
 end
 -- The owner's client asks to open a sealed cell it just landed on. Checked
 -- loosely (latency): its owner, standing over it.
 function scene.digRequestOpen(p,payload)
- local dig=scene.dig;local cube=dig.cube
+ local dig=scene.dig
+ if type(payload)=='table' and payload.chunk~=nil then dig=scene.digField.chunks[tostring(payload.chunk)] end
+ if not dig or not dig.ready then return end
+ local cube=dig.cube
  local id=type(payload)=='table' and tonumber(payload.id)
  local g=id and dig.geodes[id]
  local hr=characterRoot(p)
  if not g or (g.owner~=0 and g.p~=p) or not hr or cube.removed[id] then return end
- if scene.digOverGeode(hr,cube.cells[id],3) then
+ if scene.digOverGeode(hr,cube.cells[id],3,dig) then
   if g.owner==0 then g.owner=p.player.UserId;g.p=p end
-  scene.digOpenGeode(id,g)
+  scene.digOpenGeode(id,g,dig)
  end
 end
 -- Landing on it from a jump (owner, Nov 22: you actually have to jump;
 -- walking or standing on it does nothing).
-function scene.digLanded(hr,c)
+function scene.digLanded(hr,c,dig)
  local velocity=hr.AssemblyLinearVelocity
- return velocity~=nil and velocity.Y<=-GEODE_LANDING and scene.digOverGeode(hr,c,0)
+ return velocity~=nil and velocity.Y<=-GEODE_LANDING and scene.digOverGeode(hr,c,0,dig)
 end
 -- A geode goes public (owner 0) once its owner left or has not dug for 90 s;
 -- then anyone who lands on it (or asks with DigOpen) opens it and is paid.
-function scene.digGeodeStep()
- local dig=scene.dig;local cube=dig.cube
+function scene.digGeodeStep(dig)
+ dig=dig or scene.dig;local cube=dig.cube
  local changed=false
  for id,g in pairs(dig.geodes) do
   local c=cube.cells[id]
@@ -4838,22 +5352,22 @@ function scene.digGeodeStep()
    end
    local opener=nil
    if g.owner==0 then
-    for _,p in pairs(profiles) do local hr=characterRoot(p);if hr and scene.digLanded(hr,c) then opener=p;break end end
+    for _,p in pairs(profiles) do local hr=characterRoot(p);if hr and scene.digLanded(hr,c,dig) then opener=p;break end end
    else
     local hr=characterRoot(g.p)
-    if hr and scene.digLanded(hr,c) then opener=g.p end
+    if hr and scene.digLanded(hr,c,dig) then opener=g.p end
    end
    if opener then
     if g.owner==0 then g.owner=opener.player.UserId;g.p=opener end
-    scene.digOpenGeode(id,g);changed=false
+    scene.digOpenGeode(id,g,dig);changed=false
    end
   end
  end
- if changed then scene.digPublishGeodes() end
+ if changed then scene.digPublishGeodes(dig) end
 end
 -- Launch one cargo pickup in its arc and land it on the real rock surface.
 function scene.digLaunch(p,owner,cargo,material,stone,rareGem,position,color,nodeId,high)
- local dig=scene.dig;local profile=data(p)
+ local F=scene.digField;local profile=data(p)
  local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
  -- A gem out of a sealed cell flies much higher (owner, Nov 22).
  -- (Nov 22 follow-up: "much less tall" than the first x1.9+6; then
@@ -4863,9 +5377,9 @@ function scene.digLaunch(p,owner,cargo,material,stone,rareGem,position,color,nod
  -- The cube knows its own floor exactly; carving runs a moment behind, so a
  -- raycast would land drops on rock that is about to disappear (floating gems).
  local function floorAt(x,z)
-  local top=DigCube.surfaceAt(dig.cube,x-dig.origin.X,z-dig.origin.Z)
-  if top then return dig.origin.Y+top end
-  return scene.digFloorAt(x,z,dig.origin.Y+dig.cube.height+6)
+  local top=scene.digSurface(x,z)
+  if top then return top end
+  return scene.digFloorAt(x,z,DigCube.GROUND+6)
  end
  local arc=OreDrops.rawArc(position.X,position.Y,position.Z,vx,vy,vz,guess)
  local floor=floorAt(arc.landX,arc.landZ)
@@ -4873,7 +5387,7 @@ function scene.digLaunch(p,owner,cargo,material,stone,rareGem,position,color,nod
   arc=OreDrops.rawArc(position.X,position.Y,position.Z,vx,vy,vz,floor)
   floor=floorAt(arc.landX,arc.landZ) or floor
  end
- scene.spawnOrePickup(dig.template,{owner=owner,runId=profile.run.id,nodeId=nodeId,
+ scene.spawnOrePickup(F.template,{owner=owner,runId=profile.run.id,nodeId=nodeId,
   material=cargo,tierMaterial=material,value=Workshop.saleItem(cargo).cash,
   stone=stone,rareGem=rareGem,units=1,raw=true,oreArc=true,floor=(floor or guess)+.22,reachBonus=0,modifiers=0,geode=high==true},
   position,Vector3.new(vx,vy,vz),color)
@@ -4882,9 +5396,9 @@ end
 -- more). No physical pickups: the chunk leaves a little pile of glowing rock
 -- dust on the pit floor that flies into your bag once you come close.
 local DUST_RANGE=14
-function scene.digRock(p,owner,ids,count,position,collect)
+function scene.digRock(p,owner,ids,count,position,collect,dig)
  if not healthy(p) then return end
- local dig=scene.dig;local cube=dig.cube
+ dig=dig or scene.dig;local cube=dig.cube
  local first=cube.cells[ids[1]]
  local layer=first.layer
  local tierIndex=DigCube.layerTier(layer)
@@ -4900,12 +5414,12 @@ function scene.digRock(p,owner,ids,count,position,collect)
  part:SetAttribute('Owner',owner);part:SetAttribute('Count',count);part:SetAttribute('FloorY',dig.origin.Y+first.y0)
  part:SetAttribute('Color',Color3.fromRGB(c[1],c[2],c[3]));part:SetAttribute('Born',now)
  part.Parent=dig.dustFolder
- table.insert(dig.dust,{p=p,owner=owner,part=part,position=Vector3.new(position.X,dig.origin.Y+first.y0+.5,position.Z),
+ table.insert(scene.digField.dust,{ch=dig,p=p,owner=owner,part=part,position=Vector3.new(position.X,dig.origin.Y+first.y0+.5,position.Z),
   cargo=cargo,units=count,readyAt=now+(collect and collect.ready or DigCube.PAUSE*.6),expires=now+150,range=collect and collect.range or nil})
 end
 -- Rock dust flies into its owner's bag when they come within range.
 function scene.digDustStep()
- local dig=scene.dig
+ local dig=scene.digField
  if now<dig.dustAt then return end
  dig.dustAt=now+.1
  for i=#dig.dust,1,-1 do
@@ -4947,65 +5461,94 @@ function scene.digGem(p,owner,tier,volume,position,high)
  if not healthy(p) then return end
  local cargo,ore=scene.digGemCargo(tier,volume)
  if not cargo then return end
- scene.digLaunch(p,owner,cargo,ore.material,false,true,position,Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]),'dig:gem:'..#scene.dig.ops,high)
+ scene.digLaunch(p,owner,cargo,ore.material,false,true,position,Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]),'dig:gem:'..scene.digNextGem(),high)
  p.dirty=true;p.publishDirty=true
 end
 -- Replicate new ops at most thirty times a second, 64 per attribute so only
 -- the newest attribute changes. Called after the drones step, so a break
 -- reaches clients in the same tick as the drone's next chunk (DigOp).
 function scene.digFlushOps()
- local dig=scene.dig
- if not dig.dirty or now<dig.publishAt then return end
- dig.dirty=false;dig.publishAt=now+1/30
- local first=math.floor(dig.published/OPS_PER_ATTRIBUTE)+1
- local last=math.ceil(#dig.ops/OPS_PER_ATTRIBUTE)
- for i=first,last do
-  dig.holder:SetAttribute('Ops'..i,table.concat(dig.ops,';',(i-1)*OPS_PER_ATTRIBUTE+1,math.min(#dig.ops,i*OPS_PER_ATTRIBUTE)))
+ local F=scene.digField
+ local waiting=false
+ for _,dig in pairs(F.chunks) do
+  if dig.dirty then
+   if now<dig.publishAt then waiting=true
+   else
+    dig.dirty=false;dig.publishAt=now+1/30
+    local first=math.floor(dig.published/OPS_PER_ATTRIBUTE)+1
+    local last=math.ceil(#dig.ops/OPS_PER_ATTRIBUTE)
+    for i=first,last do
+     dig.holder:SetAttribute('Ops'..i,table.concat(dig.ops,';',(i-1)*OPS_PER_ATTRIBUTE+1,math.min(#dig.ops,i*OPS_PER_ATTRIBUTE)))
+    end
+    dig.published=#dig.ops
+    dig.holder:SetAttribute('OpCount',#dig.ops)
+   end
+  end
  end
- dig.published=#dig.ops
- dig.holder:SetAttribute('OpCount',#dig.ops)
+ F.dirty=waiting
+end
+function scene.digMark(dig)
+ dig.dirty=true;scene.digField.dirty=true
+end
+function scene.digNextGem()
+ local F=scene.digField
+ F.gemSerial+=1
+ return F.gemSerial
 end
 -- Carve latency report: the holder's CarveLag is the p90 seconds from a
 -- break to its cut, over the last 10 s (also printed in Studio).
 function scene.digCarveReport()
- local stats=scene.dig.stats
+ local F=scene.digField
+ local stats=F.stats
  if now<stats.at then return end
  stats.at=now+10
  local lags=stats.lags
  if #lags==0 then return end
  table.sort(lags)
  local p50,p90=lags[math.max(1,math.ceil(#lags*.5))],lags[math.max(1,math.ceil(#lags*.9))]
- scene.dig.holder:SetAttribute('CarveLag',p90)
+ F.folder:SetAttribute('CarveLag',p90)
  -- Carve that much ahead (plus replication), so the hole is there at the break.
- scene.dig.carveLead=math.clamp(p90+.3,.6,2.5)
+ F.carveLead=math.clamp(p90+.3,.6,2.5)
  if inStudio then print(string.format('[DigCube] carve jobs=%d calls=%d p50=%.2f p90=%.2f fails=%d',stats.jobs,stats.calls,p50,p90,stats.fails)) end
  stats.lags={};stats.jobs=0;stats.calls=0;stats.fails=0
 end
--- Start a fresh cube once it is mostly dug out or nothing is left to cut.
+-- The field's step: load and drop chunks, then each built chunk's gems,
+-- geodes and chains; a chunk starts over once it is mostly dug out or
+-- nothing is left to cut.
 function scene.digStep()
- local dig=scene.dig
- if not dig.cube then scene.digReset();return end
+ local F=scene.digField
+ local t0=os.clock()
+ scene.digFieldStep()
  scene.digDustStep()
- scene.digGeodeStep()
  scene.digCarveReport()
- scene.digChainStep()
- scene.digHintStep()
- for i=#dig.pending,1,-1 do
-  local gem=dig.pending[i]
-  if now>=gem.at then
-   table.remove(dig.pending,i)
-   if profiles[gem.owner]==gem.p then scene.digGem(gem.p,gem.owner,gem.tier,gem.volume,gem.position,gem.high) end
+ for _,dig in pairs(F.chunks) do
+  if dig.ready then
+   scene.digGeodeStep(dig)
+   scene.digChainStep(dig)
+   for i=#dig.pending,1,-1 do
+    local gem=dig.pending[i]
+    if now>=gem.at then
+     table.remove(dig.pending,i)
+     if profiles[gem.owner]==gem.p then scene.digGem(gem.p,gem.owner,gem.tier,gem.volume,gem.position,gem.high) end
+    end
+   end
+   if dig.resetAt then
+    if now>=dig.resetAt then scene.digReset(dig) end
+   elseif dig.rendered and now>=dig.checkAt then
+    dig.checkAt=now+3
+    local spent=dig.cube.removedCount>=#dig.cube.cells*.82
+    if spent or not DigCube.pick(dig.cube,{random=function() return .5 end}) then dig.resetAt=now+4 end
+   end
   end
  end
- if dig.resetAt then
-  if now>=dig.resetAt then scene.digReset() end
- elseif now>=dig.checkAt then
-  dig.checkAt=now+3
-  local spent=dig.cube.removedCount>=#dig.cube.cells*.82
-  if spent or not DigCube.pick(dig.cube,{random=function() return .5 end}) then dig.resetAt=now+4 end
- end
+ scene.digHintStep()
+ F.perf.stepTime=(F.perf.stepTime or 0)+os.clock()-t0
 end
-scene.digReset()
+for _,pin in ipairs(FIELD.PINNED) do
+ local ch=scene.digNewChunk(pin[1],pin[2])
+ scene.digReset(ch)
+ if not scene.dig then scene.dig=ch end
+end
 end
 local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end
@@ -5310,7 +5853,7 @@ local function snapshotDrone(d)
   PressFinish=d.pressJob and d.pressJob.finishAt or 0,
   BatteryPowered=scene.chargingStation~=nil and d.stats.batteryCapacity>0,
   HideBattery=scene.insideSquareField(d.pos) or profiles[d.owner].digging==true,
-  DigCell=d.digCell or 0,DigOp=d.digJob and ('c'..d.digJob.key..'~'..d.digJob.code) or '',DigChunkSize=d.digJob and d.digJob.size or '',DigPoint=d.digPoint or d.pos,DigProgress=d.digProgress or 0,
+  DigCell=d.digCell or 0,DigChunk=d.digJob and (d.digJob.ch or scene.dig).key or '',DigOp=d.digJob and ('c'..d.digJob.key..'~'..d.digJob.code) or '',DigChunkSize=d.digJob and d.digJob.size or '',DigPoint=d.digPoint or d.pos,DigProgress=d.digProgress or 0,
   DigMining=d.digJob~=nil and d.digJob.kernel=='beam' and d.mining==true and not profiles[d.owner].busy,
   InMiningPlot=profiles[d.owner].miningSquare~=nil and Mining.selectorContains(profiles[d.owner].miningSquare.center,profiles[d.owner].miningSquare.half,d.pos),
   BatteryWorking=(d.role=='Compactor' and d.state=='Press') or scene.committedWork(d) or combatId~='',
@@ -6787,7 +7330,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   -- Dig: publish this tick's breaks, then the drones that changed chunk,
   -- state or stage, so a break never reaches clients after the next DigOp.
   scene.digFlushOps()
-  if not scene.dig.dirty then
+  if not scene.digField.dirty then
    for _,d in pairs(drones) do if d.digDirty then d.digDirty=false;snapshotDrone(d) end end
   end
   scene.flushPlotQueues(C.Tick)
@@ -6803,7 +7346,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   local occupants
   -- A drone waiting on its post-flush snapshot goes out after the ops, never
   -- before them (a DigOp must not reach clients ahead of the break op).
-  for _,d in pairs(drones) do if not (d.digDirty and scene.dig and scene.dig.dirty) then snapshotDrone(d) end end
+  for _,d in pairs(drones) do if not (d.digDirty and scene.digField and scene.digField.dirty) then snapshotDrone(d) end end
   if scene.flatFields then
    for _,p in pairs(profiles) do
     local hr=characterRoot(p)

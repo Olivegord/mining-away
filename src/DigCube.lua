@@ -137,7 +137,7 @@ function D.layerColor(cube: any,L: number,x: number,z: number): {number}
  local a=hueAt(L)
  local b=mix(a,hueAt(L+1.5),D.LAYER_SHIFT) -- about one hue step deeper
  b=mix(b,{255,250,236},.08)
- local t=D.noise3(x/22,L*5.7,z/22,(cube and cube.seed or 1)%100000)
+ local t=D.noise3((x+(cube and cube.offsetX or 0))/22,L*5.7,(z+(cube and cube.offsetZ or 0))/22,(cube and (cube.colorSeed or cube.seed) or 1)%100000)
  t=math.clamp((t-.2)/.6,0,1)
  local c=mix(mix(a,b,t),STONE_TONE,D.LAYER_MUTE)
  local v=D.LAYER_VALUE
@@ -395,13 +395,26 @@ end
 local function bucketKey(ix: number,iz: number) return ix*4099+iz end
 local BUCKET=6
 
-function D.build(seed: number)
+-- opts (all optional; a field chunk passes D.chunkOptions):
+--  thick: layer thicknesses shared by every chunk, so strata and floors line
+--   up across chunk borders (the seed's own draws are still taken, unused)
+--  colorSeed, offsetX/offsetZ: the color noise reads world coordinates with
+--   one seed for the whole field, so layer tones run on across borders
+--  yield(): called between steps; a caller may pause there to spread the
+--   build over frames (the result does not depend on it)
+function D.build(seed: number,opts: any?)
+ local o=opts or {}
+ local yield: (() -> ())?=o.yield
  local W=D.WIDTH
  local R=D.rng(seed)
- local cube={seed=seed,width=W,layers={},cells={},removedCount=0}
+ local cube={seed=seed,width=W,layers={},cells={},removedCount=0,colorSeed=o.colorSeed or seed,offsetX=o.offsetX or 0,offsetZ=o.offsetZ or 0}
  local top=0
  local thick={}
  for L=1,D.LAYERS do thick[L]=R(3.6,5.2);top+=thick[L] end
+ if o.thick then
+  top=0
+  for L=1,D.LAYERS do thick[L]=o.thick[L];top+=thick[L] end
+ end
  -- Scale the layers to the fixed depth so the top always meets the ground.
  for L=1,D.LAYERS do thick[L]*=D.HEIGHT/top end
  top=D.HEIGHT
@@ -420,7 +433,9 @@ function D.build(seed: number)
    return size*(1+swing*(n*2-1))
   end
   local pts=poisson(R,W,radius,rmin,rmax)
+  if yield then yield() end
   local raw=voronoi(pts,W,rmax)
+  if yield then yield() end
   local layer={index=L,y0=y0,y1=y1,thickness=y1-y0,size=size,cells={},grid={},offset=#cube.cells}
   cube.layers[L]=layer
   for i,c in ipairs(raw) do
@@ -464,6 +479,7 @@ function D.build(seed: number)
    local hardness=1+D.HARDNESS_PER_LAYER*(L-1)
    cell.hp=math.max(2,cell.area*(y1-y0)*D.HP_SCALE*hardness)
   end
+  if yield then yield() end
  end
  -- Treasure pockets: a few cells deep in the rock pay a jackpot. Their
  -- sparkles on the surface above give players something to hunt for.
@@ -715,7 +731,9 @@ end
 --  falloff: studs of the focus preference (default D.FOCUS_FALLOFF)
 --  weight(id,cell,apex): an extra weight multiplier (0 rules a cell out)
 --  gone: {[cellId]=true} treated as removed (never picked, hold nothing up)
-function D.pick(cube: any,opts: any): number?
+-- Also returns the total weight, so a pick across several field chunks can
+-- choose a chunk in proportion to it (the same draw as one big cube).
+function D.pick(cube: any,opts: any): (number?,number)
  local total=0
  local choices,weights={},{}
  local random=opts.random or math.random
@@ -762,10 +780,10 @@ function D.pick(cube: any,opts: any): number?
    if w>0 then total+=w;table.insert(choices,id);table.insert(weights,w) end
   end
  end
- if total<=0 then return nil end
+ if total<=0 then return nil,0 end
  local roll=random()*total
- for i,id in ipairs(choices) do roll-=weights[i];if roll<=0 then return id end end
- return choices[#choices]
+ for i,id in ipairs(choices) do roll-=weights[i];if roll<=0 then return id,total end end
+ return choices[#choices],total
 end
 
 -- A chunk: the seed plus the closest cuttable same-layer neighbors until the
@@ -1533,4 +1551,89 @@ function D.sideNormal(side: number): (number,number)
  if side==-1 then return 0,-1 elseif side==-2 then return 1,0 elseif side==-3 then return 0,1 end
  return -1,0
 end
+
+-- The dig field (owner, Nov 23: "the entire map is now a dig cube ... only
+-- spawning chunks when they are needed"). The flat ground is tiled into
+-- cube-sized chunks; chunk (0,0) is the Plot 1 cube at D.CENTER. A chunk's
+-- seed comes from the world seed, its grid coordinates and its generation,
+-- so the server and every client build the same chunk. Layer thicknesses are
+-- shared by the whole field (strata and floors line up across borders) and
+-- the color noise runs in world coordinates (tones carry across borders).
+D.FIELD={
+ X0=D.CENTER[1]-D.WIDTH*.5,Z0=D.CENTER[3]-D.WIDTH*.5,
+ EXTENT=1024, -- the ground plates' half-extent; chunks lie wholly inside it
+ LOAD=40, -- studs: a chunk this close to a player or a digging drone is built and simulated
+ KEEP=110, -- untouched chunks farther than this from everyone are dropped after DROP_AFTER s
+ DROP_AFTER=8,
+ HEAL_AFTER=300, -- a dug chunk nobody comes within KEEP of for this long grows back
+ VIEW=64, -- client: effects, beams and gems of chunks this close to the character
+ HUB=50, -- fallback hub radius when the map has no SimpleFlatTestMap
+ PINNED={{0,0}}, -- always loaded and rendered (the Plot 1 cube players know)
+}
+function D.chunkKey(i: number,j: number): string return i..'_'..j end
+function D.parseChunkKey(s: any): (number?,number?)
+ if type(s)~='string' then return nil,nil end
+ local i,j=string.match(s,'^(%-?%d+)_(%-?%d+)$')
+ return tonumber(i),tonumber(j)
+end
+-- World x,z of a chunk's local origin (its minimum corner).
+function D.chunkCorner(i: number,j: number): (number,number)
+ return D.FIELD.X0+i*D.WIDTH,D.FIELD.Z0+j*D.WIDTH
+end
+function D.chunkAt(x: number,z: number): (number,number)
+ return math.floor((x-D.FIELD.X0)/D.WIDTH),math.floor((z-D.FIELD.Z0)/D.WIDTH)
+end
+-- Horizontal distance from a world point to a chunk's square (0 inside it).
+function D.chunkDistance(i: number,j: number,x: number,z: number): number
+ local x0,z0=D.chunkCorner(i,j)
+ local dx=math.max(x0-x,0,x-(x0+D.WIDTH))
+ local dz=math.max(z0-z,0,z-(z0+D.WIDTH))
+ return math.sqrt(dx*dx+dz*dz)
+end
+function D.inField(i: number,j: number): boolean
+ local x0,z0=D.chunkCorner(i,j)
+ local E=D.FIELD.EXTENT
+ return x0>=-E-1e-6 and z0>=-E-1e-6 and x0+D.WIDTH<=E+1e-6 and z0+D.WIDTH<=E+1e-6
+end
+-- Chunks of the field within r studs of a world point, nearest first.
+function D.chunksNear(x: number,z: number,r: number): {{number}}
+ local out={}
+ local i0,j0=D.chunkAt(x-r,z-r)
+ local i1,j1=D.chunkAt(x+r,z+r)
+ for i=i0,i1 do
+  for j=j0,j1 do
+   local d=D.chunkDistance(i,j,x,z)
+   if d<=r and D.inField(i,j) then table.insert(out,{i,j,d}) end
+  end
+ end
+ table.sort(out,function(a,b) if a[3]~=b[3] then return a[3]<b[3] end;if a[1]~=b[1] then return a[1]<b[1] end;return a[2]<b[2] end)
+ return out
+end
+-- Deterministic chunk seed in 1..2e9 from the world seed, grid coordinates and generation.
+function D.chunkSeed(worldSeed: number,i: number,j: number,generation: number?): number
+ local m=2147483647
+ local h=math.floor(math.abs(worldSeed))%m
+ for _,v in ipairs({i,j,generation or 1}) do
+  h=(h*48271+(v*7919+104729)%m)%m
+  h=(h*16807+12345)%m
+ end
+ return math.floor(D.rng(h)(1,2000000000))
+end
+-- Field-wide layer thicknesses (before scaling to D.HEIGHT).
+function D.fieldThickness(worldSeed: number): {number}
+ local R=D.rng(math.floor(math.abs(worldSeed))%2147483647+7)
+ local t={}
+ for L=1,D.LAYERS do t[L]=R(3.6,5.2) end
+ return t
+end
+function D.chunkOptions(worldSeed: number,i: number,j: number,yield: (() -> ())?): any
+ local x0,z0=D.chunkCorner(i,j)
+ return {thick=D.fieldThickness(worldSeed),colorSeed=math.floor(math.abs(worldSeed))%100000+1,offsetX=x0,offsetZ=z0,yield=yield}
+end
+function D.buildChunk(worldSeed: number,i: number,j: number,generation: number?,yield: (() -> ())?): any
+ local cube=D.build(D.chunkSeed(worldSeed,i,j,generation),D.chunkOptions(worldSeed,i,j,yield))
+ cube.chunkI=i;cube.chunkJ=j
+ return cube
+end
+
 return D
