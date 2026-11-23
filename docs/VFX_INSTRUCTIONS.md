@@ -23,6 +23,10 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Branch `codex/new-
 - **Preview:** `python3 tools/studio_strike_preview.py OUT_DIR` poses all three in shared Edit (temporary, non-archivable, removed after; holds the install lock). Stills in `docs/review/media/new-attacks/`. Motion, the feather trail and particles are not judged by stills. **Not seen in Play.**
 - Tests: dig cube, dig flow (14 roles incl. throughput band, star shots, pulses), fun FX, beam, geodes, mining flight pass; rock chunks passes every new check but fails the pre-existing Striker ripple-delay check (fails identically on the untouched integration commit).
 
+## November 22 — first pastel light restored (supersedes the lighting part below)
+
+Owner: "revert the FIRST instance of the pastel look. with the blue sky, bright sun, washed colors". `Fun.DARKEN` is gone; `Fun.colorPop` only adds the `53ebe40` grade (saturation −.16, contrast .03) over the authored washed daylight from `6ff08f1` (13:30, brightness 2.6, exposure .15, pale blue haze). Do not reintroduce client darkening without a request. The strata note below still applies.
+
 ## November 22 — pastel strata and midday sky reverted
 
 Owner: "fully revert the pastel colors and the blue sky". `d74413c` is reverted: `DigCube.LAYER_HUES` the cool pastel family again (`LAYER_MUTE` .14, `LAYER_VALUE` .86, stone (150,150,166)), and `FunFX.DARKEN` back to sun ×.72, ambient ×.8, outdoor ×.74, haze ×.7, density ×.9, clock 14.2, shadow .32, exposure −.12, contrast .08, saturation −.04 (the 13:30, haze ×.85 midday light gave the bright blue sky). Do not bring the rainbow strata or that midday light back without a request.

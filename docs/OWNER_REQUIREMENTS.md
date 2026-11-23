@@ -4,6 +4,10 @@
 
 # Owner requirements
 
+## November 22 — the FIRST pastel look back (blue sky, bright sun, washed colors)
+
+"revert the FIRST instance of the pastel look. with the blue sky, bright sun, washed colors. get that one back, not the many different iterations, but the first one when i was happy with it and did not ask for changes for a while". That is the authored washed daylight (`6ff08f1`) under the light play grade from `53ebe40` (saturation −.16, contrast .03), unchanged from 11:52 to 19:27. The client darkening `Fun.DARKEN` (every later iteration) is removed; `Fun.colorPop` only adds that grade. This supersedes the earlier "revert the pastel colors and the blue sky" lighting note. Rock strata colors were not changed.
+
 ## November 22 — thinner dig layers; no black split from the laser drones
 
 "overall teh map is getting really hard to navigate while digging! make it so that each layer is overall thinner. also sometiemes the laser drones STILL turn stuff completely black and cut it in half -> not good".

@@ -518,67 +518,17 @@ end
 -- the world and the drones sit a step below the authored saturation so the
 -- glowing things (beams, gems, the drones' bellies) are the most colorful on
 -- screen. Those are Neon or light-emitting, so they also carry the bloom.
--- Owner, Nov 22: "make the map overall darker. i like the pastel look, but
--- it was washing out too many of the brighter effects". The baseline is
--- darkened on the client: less sun and ambient light and haze dim every lit
--- surface, while Neon, beams, particles, lights and gems (emissive) keep
--- their full strength, so the drones' glows and the gems pop. Relative to
--- the authored values, applied once.
--- Owner follow-up: "even darker. ambient should be down ... revert the color
--- changes. so still pastel but very dark. sun at like sunset".
--- Then: "a little brighter again, more contrast with the lighting": a
--- stronger low sun over a low ambient and sharper shadows.
--- Then: "still reads as far too dark -> nighttime": late afternoon (a warm,
--- low but daytime sun) and only a moderate dimming, keeping the contrast.
--- Owner, Nov 22 (latest): "the lighting and textures are very ugly. it
--- looked better in pastel, but that was too bright." The late-afternoon
--- darkening made everything sepia. Back to the authored pastel daylight
--- (soft sun, cool blue shadows, pale haze), about a fifth dimmer: a lower
--- sun brightness and exposure and less fill, a neutral early-afternoon sun,
--- a little contrast so shapes read. Emissive things (beams, gems, glowing
--- parts) are unaffected, so they still pop.
-Fun.DARKEN={sun=.72,ambient=.8,outdoor=.74,haze=.7,density=.9,diffuse=.9,clock=14.2,shadow=.32,exposure=-.12,contrast=.08,saturation=-.04}
+-- Owner, Nov 22 (late): "revert the FIRST instance of the pastel look. with
+-- the blue sky, bright sun, washed colors". That is the authored washed
+-- daylight (6ff08f1: 13:30 sun, pale blue haze) with only this light grade
+-- (53ebe40), as it was 11:52-19:27 before any client darkening. The later
+-- darkening (Fun.DARKEN: dimmer sun/ambient/haze, clock 14.2, exposure -.12)
+-- is removed; do not bring it back without a request.
 function Fun.colorPop()
  local lighting=game:GetService('Lighting')
  if lighting:FindFirstChild('FunColorPop') then return end
- local d=Fun.DARKEN
- local function dim(c,k) return Color3.new(c.R*k,c.G*k,c.B*k) end
- pcall(function()
-  lighting.Ambient=dim(lighting.Ambient,d.ambient)
-  lighting.OutdoorAmbient=dim(lighting.OutdoorAmbient,d.outdoor)
-  lighting.EnvironmentDiffuseScale=lighting.EnvironmentDiffuseScale*d.diffuse
-  lighting.ShadowSoftness=d.shadow
-  lighting.ExposureCompensation=d.exposure
- end)
- -- The sun and the haze stay dimmed even if something sets them again
- -- (a replicated change becomes the new base). The pit lamp owns the
- -- ambient while you are down in the pit, so those are set once here.
- local function hold(object,property,k)
-  local written
-  local function apply()
-   local value=object[property]
-   if written~=nil and math.abs(value-written)<1e-4 then return end
-   written=value*k
-   object[property]=written
-  end
-  pcall(apply)
-  object:GetPropertyChangedSignal(property):Connect(function() pcall(apply) end)
- end
- pcall(hold,lighting,'Brightness',d.sun)
- pcall(function()
-  lighting.ClockTime=d.clock
-  lighting:GetPropertyChangedSignal('ClockTime'):Connect(function()
-   if math.abs(lighting.ClockTime-d.clock)>1e-3 then lighting.ClockTime=d.clock end
-  end)
- end)
- for _,air in ipairs(lighting:GetChildren()) do
-  if air:IsA('Atmosphere') then
-   pcall(hold,air,'Haze',d.haze)
-   pcall(function() air.Density=air.Density*d.density end)
-  end
- end
  local grade=Instance.new('ColorCorrectionEffect');grade.Name='FunColorPop'
- grade.Saturation=d.saturation;grade.Contrast=d.contrast;grade.Brightness=0;grade.Parent=lighting
+ grade.Saturation=-.16;grade.Contrast=.03;grade.Brightness=0;grade.Parent=lighting
 end
 -- Depth of field for play: sharp from the camera out well past the player,
 -- so the whole dig and the crew stay crisp, with only the far walls and

@@ -4,6 +4,10 @@ Shake is smaller everywhere; heavy shakes only for big attacks (slam, Ramiel, No
 
 # Shared project context
 
+## November 22 — first pastel light restored
+
+Owner request: bring back the first pastel look (blue sky, bright sun, washed colors), not the later iterations. Client lighting is again the authored washed daylight (`6ff08f1`) under the light `53ebe40` grade, as it was 11:52–19:27; `Fun.DARKEN` removed from `src/FunFX.lua`. Authored Lighting in the canonical file was not touched. Not seen in Play.
+
 ## November 22 — pastel strata and midday sky reverted
 
 Owner request: the rainbow pastel strata and brighter midday light (`d74413c`) are reverted to the cool strata and dimmer early-afternoon light. Not seen in Play.
