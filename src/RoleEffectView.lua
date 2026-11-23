@@ -262,7 +262,8 @@ local function drawStar(rays,position,right,up,angle,radius,scale,alpha)
  end
 end
 
-function View.ramielCharge(rig,charge,untilContact,reduced,beamHold)
+-- dim: the shot is a Dig Cube receipt, whose lights stay at brightness 1.6, range 7.
+function View.ramielCharge(rig,charge,untilContact,reduced,beamHold,dim)
  local field=rig.chargeField
  beamHold=beamHold or DroneCatalog.Types.Ramiel.BeamHold
  if reduced or charge<=0 or not untilContact or untilContact>2.70 or untilContact<=-beamHold then
@@ -334,7 +335,7 @@ function View.ramielCharge(rig,charge,untilContact,reduced,beamHold)
  end
  local white=smooth((radius-.13)/1.85)*bloom
  field.lamp.Enabled=white>.01
- field.lamp.Brightness=white*9
+ field.lamp.Brightness=white*(dim and 1.6 or 9);field.lamp.Range=dim and 7 or 23
  local rim=smooth((radius-.10)/.30)*launchFade
  PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
  local pressure=smooth((elapsed+.09)/.13)*(1-smooth((elapsed-.15)/.64))
@@ -382,7 +383,9 @@ local function clearLoad(self,r)
  r.load.root:Destroy();r.load=nil;self.loads-=1
 end
 
-local function gunCharge(self,r,origin,target,color,ball,q)
+-- scale grows the Ball's charge sphere (a Dig shot's Grade, .7-1.4).
+local function gunCharge(self,r,origin,target,color,ball,q,scale)
+ scale=scale or 1
  if not r.load then
   if self.loads>=12 then return end
   local camera=workspace.CurrentCamera;if not camera then return end
@@ -403,34 +406,37 @@ local function gunCharge(self,r,origin,target,color,ball,q)
  load.root.CFrame=frame*CFrame.new(0,0,-forward)
  load.core.CFrame=load.root.CFrame
  load.core.Color=color:Lerp(WHITE,.36+.55*build)
- load.core.Size=ball and Vector3.one*(.22+.62*focus) or Vector3.new(.19,.19,.54)*(.48+.70*focus)
+ load.core.Size=ball and Vector3.one*(.22+.62*focus)*scale or Vector3.new(.19,.19,.54)*(.48+.70*focus)
  load.core.Transparency=1-focus*.92
  if load.ring then
-  PlaneBurst.pose(load.ring,Vector3.zAxis,1.05-.54*smooth((q-.32)/.68),focus*.92,.13)
+  PlaneBurst.pose(load.ring,Vector3.zAxis,(1.05-.54*smooth((q-.32)/.68))*scale,focus*.92,.13)
  end
  for i,mote in ipairs(load.motes) do
   local time=smooth((q-.12-i*.10)/.55)
   local angle=i*math.pi*2/3+time*1.45
-  local radius=(1.27-.97*time)*(ball and 1 or .68)
+  local radius=(1.27-.97*time)*(ball and scale or .68)
   local point=load.root.CFrame:PointToWorldSpace(Vector3.new(math.cos(angle)*radius,math.sin(angle)*radius,-.72*(1-time)))
-  EnergyDisc.place(mote,point,(ball and .78 or .52)*(.7+.3*time),color:Lerp(WHITE,.25+.43*time),
+  EnergyDisc.place(mote,point,(ball and .78*scale or .52)*(.7+.3*time),color:Lerp(WHITE,.25+.43*time),
    smooth(time/.20)*(1-smooth((time-.72)/.28))*.58)
  end
 end
 
-local function addRibbon(part,color,ball)
+-- tail: the trail's end color (a cube drone's accent); the head stays the attack color.
+local function addRibbon(part,color,ball,tail)
  local a=Instance.new('Attachment');a.Position=Vector3.new(0,ball and -.26 or -.085,.08);a.Parent=part
  local b=Instance.new('Attachment');b.Position=Vector3.new(0,ball and .26 or .085,.08);b.Parent=part
  local trail=Instance.new('Trail');trail.Name=ball and 'EnergyWake' or 'NeedleTrace'
  trail.Attachment0=a;trail.Attachment1=b;trail.FaceCamera=true;trail.LightInfluence=0;trail.LightEmission=.88
  trail.Lifetime=ball and .26 or .14;trail.MinLength=.055;trail.MaxLength=ball and 7 or 4.8
- trail.Color=ColorSequence.new(color:Lerp(WHITE,.35),color)
+ trail.Color=ColorSequence.new(color:Lerp(WHITE,.35),tail or color)
  trail.WidthScale=NumberSequence.new(1,0)
  trail.Transparency=NumberSequence.new(.16,1);trail.Parent=part
  return trail
 end
 
-local function burst(self,from,direction,color,ball,impact,grade,at,lightContact)
+-- dim caps the contact light (Dig Cube receipts: brightness 1.6, range 7);
+-- tail colors the spark tails (a cube drone's accent).
+local function burst(self,from,direction,color,ball,impact,grade,at,lightContact,dim,tail)
  local camera=workspace.CurrentCamera
  if not camera or #self.bursts>=BURST_LIMIT or BeamVFX.reduced() or not BeamVFX.near(from,76) then return end
  local player=Players.LocalPlayer
@@ -445,7 +451,7 @@ local function burst(self,from,direction,color,ball,impact,grade,at,lightContact
  sparks.Color=ColorSequence.new({
   ColorSequenceKeypoint.new(0,lowFlash and color:Lerp(WHITE,.42) or WHITE),
   ColorSequenceKeypoint.new(.24,color:Lerp(WHITE,.30)),
-  ColorSequenceKeypoint.new(1,color:Lerp(Color3.new(0,0,0),.22)),
+  ColorSequenceKeypoint.new(1,(tail or color):Lerp(Color3.new(0,0,0),.22)),
  })
  sparks.Transparency=NumberSequence.new({
   NumberSequenceKeypoint.new(0,lowFlash and .55 or impact and .18 or .30),NumberSequenceKeypoint.new(.28,.42),
@@ -471,6 +477,7 @@ local function burst(self,from,direction,color,ball,impact,grade,at,lightContact
   if lamps<6 then
    lamp=Instance.new('PointLight');lamp.Name='ShotContactLight';lamp.Color=color
    lamp.Range=ball and 7 or 4;lamp.Brightness=(ball and 3.2 or 1.7)*grade
+   if dim then lamp.Range=math.min(lamp.Range,7);lamp.Brightness=math.min(lamp.Brightness,1.6) end
    lamp.Shadows=false;lamp.Parent=node
   end
  end
@@ -528,6 +535,10 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
  function self:step(now,droneIndex,resources)
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
+   -- Dig Cube shots (Dig==true): DigCubeView owns the break beat (camera, flash,
+   -- hold), so these draw dim lights, no screen grade and no camera beats.
+   local dig=kind=='MiningShot' and node:GetAttribute('Dig')==true
+   if RoleVisuals.setDim then RoleVisuals.setDim(dig and 1.6 or nil,dig and 7 or nil) end
    if not node.Parent then
     if not r.detached then
      r.detached=true
@@ -549,7 +560,9 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
     local windup=node:GetAttribute('Windup') or 0
     local age=(paused>0 and math.min(paused,now) or now)-at
     local progress=(age-windup)/duration
-    local drone=droneIndex and droneIndex[node:GetAttribute('Actor')]
+    local drone=droneIndex and droneIndex[tostring(node:GetAttribute('Actor'))]
+    -- A dig shot's tails take its cube drone's accent; its head keeps the role color.
+    local tail=dig and drone and drone.cubeLook and drone.cubeLook.accent or nil
     local contactAt=node:GetAttribute('ContactAt')
     local landed=contactAt and now>=contactAt
     local shape=node:GetAttribute('Shape')
@@ -563,8 +576,8 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if shape=='Nomad' then
-     if landed and holdNomad and holdNomad(contactAt) then continue end
-     NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onNomadImpact)
+     if landed and holdNomad and not dig and holdNomad(contactAt) then continue end
+     NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,not dig and onNomadImpact or nil)
      continue
     end
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
@@ -573,8 +586,10 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
     local ball=shape=='Ball'
     local color=node:GetAttribute('Color')
     if not color then continue end
+    -- A dig Ball's Grade (.7-1.4, from its charge) sizes the charge, round and contact.
+    local size=ball and dig and math.clamp(tonumber(node:GetAttribute('Grade')) or 1,.7,1.4) or 1
     if shape=='Prism' then
-     local aperture=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view:GetPivot().Position) or from
+     local aperture=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view and drone.view:GetPivot().Position) or from
      local point=node:GetAttribute('ContactPoint') or to
      local origin=node:GetAttribute('PrismFrom') or aperture
      local endpoint=node:GetAttribute('PrismEnd') or point
@@ -588,7 +603,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       local lowEffects=BeamVFX.reduced() or (player and player:GetAttribute('ReducedFlashing')==true)
       local strength=smooth((q-.12)/.16)*(.36+.64*q^2)
       drawPrismAim(r,camera,origin,endpoint,lowEffects and strength*.66 or strength,lowEffects)
-      if onPrismCharge and paused<=0 and q>.79 then onPrismCharge(origin,endpoint,smooth((q-.79)/.21),now) end
+      if onPrismCharge and not dig and paused<=0 and q>.79 then onPrismCharge(origin,endpoint,smooth((q-.79)/.21),now) end
      else clearPrismAim(r) end
      if audio and audio.setLoop then
       if firingAge and firingAge<hold then
@@ -618,25 +633,26 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       r.impacted=true
       if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(origin:Lerp(endpoint,.48),150) then
        RoleVisuals.setTime(contactAt)
-       local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
+       local reduced=BeamVFX.reduced() or (Players.LocalPlayer and Players.LocalPlayer:GetAttribute('ReducedFlashing')==true)
        local gap=math.min(travel.Magnitude*.14,1.22)
        local groundNormal=node:GetAttribute('PrismGroundNormal')
-       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .88 or 1.52,hold,'Prism',groundNormal)
+       -- A dig shot's contact is a cell that breaks a moment later: no ground scorch over the hole.
+       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .88 or 1.52,hold,'Prism',not dig and groundNormal or nil)
        if typeof(ground)=='Vector3' then RoleVisuals.PrismWave(ground,radius,hold) end
-       if onPrism then onPrism(origin,endpoint,contactAt,hold) end
+       if onPrism and not dig then onPrism(origin,endpoint,contactAt,hold) end
        if now-contactAt>=.18 then continue end
        local normal=node:GetAttribute('ContactNormal') or -travel.Unit
        RoleVisuals.PrismImpact(point,normal,ground)
        if not reduced then
         local camera=workspace.CurrentCamera
         local distance=camera and (camera.CFrame.Position-origin).Magnitude or math.huge
-        if distance<90 and now-contactAt<.14 then releaseLighting(self,contactAt,1-smooth((distance-31)/59)) end
-        burst(self,origin,travel.Unit,PRISM_RED,true,false,1.82,now)
-        burst(self,point+normal*.22,normal,PRISM_RED,true,true,1.60,now)
+        if not dig and distance<90 and now-contactAt<.14 then releaseLighting(self,contactAt,1-smooth((distance-31)/59)) end
+        burst(self,origin,travel.Unit,PRISM_RED,true,false,1.82,now,nil,dig,tail)
+        burst(self,point+normal*.22,normal,PRISM_RED,true,true,1.60,now,nil,dig,tail)
         for i=1,math.clamp(node:GetAttribute('PrismHits') or 0,0,3) do
          local contact=node:GetAttribute('PrismHit'..i)
          local surface=node:GetAttribute('PrismNormal'..i) or -travel.Unit
-         if contact then burst(self,contact+surface*.18,surface,PRISM_RED,true,true,1.23-(i-1)*.10,now) end
+         if contact then burst(self,contact+surface*.18,surface,PRISM_RED,true,true,1.23-(i-1)*.10,now,nil,dig,tail) end
         end
        end
        if audio then audio:play('prism_fire',origin);audio:play('coil_hit',point,{level=1.35,pitch=.68}) end
@@ -651,8 +667,8 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      if not landed and paused<=0 and age-windup<.12 then
       local origin=muzzle or from
       local travel=to-origin
-      if onCameraBeat then onCameraBeat(ball and 'BallFire' or 'NeedleFire',origin,now) end
-      if travel.Magnitude>.01 then burst(self,origin+travel.Unit*.17,travel.Unit,color,ball,false,1,now,true) end
+      if onCameraBeat and not dig then onCameraBeat(ball and 'BallFire' or 'NeedleFire',origin,now) end
+      if travel.Magnitude>.01 then burst(self,origin+travel.Unit*.17,travel.Unit,color,ball,false,size,now,true,dig,tail) end
       if audio then audio:play(ball and 'ballcaster_fire' or 'needle_fire',origin) end
      end
     end
@@ -663,7 +679,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
       if paused<=0 and age<.13 and audio then audio:play(ball and 'ballcaster_charge' or 'needle_cock',muzzle or from) end
      end
      if not BeamVFX.reduced() and BeamVFX.near(muzzle or from,95) then
-      gunCharge(self,r,muzzle or from,to,color,ball,q)
+      gunCharge(self,r,muzzle or from,to,color,ball,q,size)
      else clearLoad(self,r) end
     else
      clearLoad(self,r)
@@ -675,11 +691,12 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      if now-contactAt<.16 and travel.Magnitude>.01 then
       local normal=node:GetAttribute('ContactNormal') or -travel.Unit
       local fractured=node:GetAttribute('ContactFracture') or node:GetAttribute('ContactBroken')
-      local grade=fractured and 1.3 or (node:GetAttribute('ContactPowered') and 1.12 or .88)
-      burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now,true)
-      if ball then RoleVisuals.Pulse(point+normal*.42,color,.55,3.25*grade,.37,normal,1.5) end
-      if onCameraBeat then onCameraBeat(ball and 'BallHit' or 'NeedleHit',point,now,grade) end
-      if audio then audio:play(ball and 'ballcaster_impact' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
+      local level=fractured and 1.3 or (node:GetAttribute('ContactPowered') and 1.12 or .88)
+      local grade=level*size
+      burst(self,point+normal*(ball and .34 or .065)*size,normal,color,ball,true,grade,now,true,dig,tail)
+      if ball then RoleVisuals.Pulse(point+normal*.42*size,color,.55*size,3.25*grade,.37,normal,1.5) end
+      if onCameraBeat and not dig then onCameraBeat(ball and 'BallHit' or 'NeedleHit',point,now,grade) end
+      if audio then audio:play(ball and 'ballcaster_impact' or 'needle_hit',point,{level=level,pitch=fractured and .91 or 1}) end
      end
     end
     local resolved=landed or (not contactAt and (progress>1+.16/duration or (not target and progress>=1)))
@@ -691,12 +708,12 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      if not value and self.heads<SHOT_LIMIT then
       local camera=workspace.CurrentCamera
       if not camera then continue end
-      value=shotPart(camera,'MiningProjectile',ball and Vector3.one*.81 or Vector3.new(.15,.15,1.48),color:Lerp(WHITE,.53),ball)
-      r.projectile=value;self.heads+=1
-      if ball and not BeamVFX.reduced() then r.shell=shotPart(value,'EnergyShell',Vector3.one*1.07,color,true,.47) end
+      value=shotPart(camera,'MiningProjectile',ball and Vector3.one*.81*size or Vector3.new(.15,.15,1.48),color:Lerp(WHITE,.53),ball)
+      r.projectile=value;self.heads+=1;r.size=size
+      if ball and not BeamVFX.reduced() then r.shell=shotPart(value,'EnergyShell',Vector3.one*1.07*size,tail and color:Lerp(tail,.4) or color,true,.47) end
       r.launchFrom=muzzle or from
       if self.trails<TRAIL_LIMIT and not BeamVFX.reduced() then
-       r.trail=addRibbon(value,color,ball);self.trails+=1
+       r.trail=addRibbon(value,color,ball,tail);self.trails+=1
       end
      end
      from=r.launchFrom or from
@@ -707,10 +724,10 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      local t=math.clamp(progress,0,1)
      local lead=t*(.52+.48*(2*t-t*t))
      local stretch=1+(ball and .36 or .31)*smooth(t/.21)*(1-smooth((t-.26)/.58))
-     value.Size=ball and Vector3.new(.81,.81,.81*stretch) or Vector3.new(.15,.15,1.48*stretch)
+     value.Size=ball and Vector3.new(.81,.81,.81*stretch)*(r.size or 1) or Vector3.new(.15,.15,1.48*stretch)
      local center=from:Lerp(to,lead)-direction*(value.Size.Z*.5)
      value.CFrame=CFrame.lookAt(center,center+direction,math.abs(direction.Y)>.95 and Vector3.zAxis or Vector3.yAxis)
-     if r.shell then r.shell.CFrame=value.CFrame;r.shell.Size=Vector3.new(1.06,1.06,1.06*stretch) end
+     if r.shell then r.shell.CFrame=value.CFrame;r.shell.Size=Vector3.new(1.06,1.06,1.06*stretch)*(r.size or 1) end
     end
    elseif kind=='Orbital' then
     local at=node:GetAttribute('ContactAt');local position=node:GetAttribute('Position');local ended=node:GetAttribute('EndedAt')
@@ -782,7 +799,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
   end
   stepBursts(self,now)
   stepReleaseLighting(self,now)
-  RoleVisuals.setTime(nil);RoleVisuals.step(now)
+  RoleVisuals.setTime(nil);if RoleVisuals.setDim then RoleVisuals.setDim(nil) end;RoleVisuals.step(now)
  end
  function self:destroy()
   stepReleaseLighting(self,math.huge)

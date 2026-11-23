@@ -15,6 +15,22 @@ local pulseCount=0
 local eventAt=nil
 local function clock() return eventAt or workspace:GetServerTimeNow() end
 function Effects.setTime(at) eventAt=at end
+-- Dig Cube receipts dim every light their effects make (owner: no flashbang).
+-- Like setTime, setDim marks the receipt being drawn; registered lights are
+-- clamped after each step, so per-frame flashes can never exceed the cap.
+local dimming:{cap:number?,range:number?,lights:{[any]:{number}}}={cap=nil,range=nil,lights=setmetatable({},{__mode='k'})}
+function Effects.setDim(cap: number?,range: number?) dimming.cap=cap;dimming.range=range end
+local function dimLights(root: any)
+ if not dimming.cap or not root then return end
+ local function add(light)
+  if light:IsA('PointLight') then
+   dimming.lights[light]={dimming.cap,dimming.range or light.Range}
+   light.Brightness=math.min(light.Brightness,dimming.cap);light.Range=math.min(light.Range,dimming.range or light.Range)
+  end
+ end
+ add(root)
+ for _,child in ipairs(root:GetDescendants()) do add(child) end
+end
 local function animate(value,duration,style,direction,properties)
  local initial={};for key in pairs(properties) do initial[key]=value[key] end
  animations[value]={at=clock(),duration=duration,style=style,direction=direction,initial=initial,goal=properties}
@@ -201,6 +217,13 @@ function Effects.step(now)
    if t>=1 then animations[value]=nil end
   end
  end
+ for light,cap in pairs(dimming.lights) do
+  if not light.Parent then dimming.lights[light]=nil
+  else
+   if light.Brightness>cap[1] then light.Brightness=cap[1] end
+   if light.Range>cap[2] then light.Range=cap[2] end
+  end
+ end
 end
 local MAX_LIVE = 256
 local live = 0
@@ -261,6 +284,7 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body,
 	  spill=prism and prismSpill(rig.root,from,to,color,groundNormal) or nil,
 	  surface=prism and HeavyBeamFX.surface(rig.root,false) or nil}
+	 dimLights(rig.root)
 	elseif now-at<duration then
 	 -- Saturated cosmetic budget retains a simple readable shot.
 	 local value=part();if not value then return end
@@ -274,7 +298,13 @@ end
 
 function Effects.PrismImpact(point: Vector3,normal: Vector3,ground: Vector3?)
  local at=clock()
- if workspace:GetServerTimeNow()-at<.18 then HeavyBeamFX.impact(folder(),point,normal,.94,at,false,ground) end
+ if workspace:GetServerTimeNow()-at>=.18 then return end
+ local parent=folder()
+ -- The impact artwork owns its light; find what this call added to dim it.
+ local before=dimming.cap and {} or nil
+ if before then for _,child in ipairs(parent:GetChildren()) do before[child]=true end end
+ HeavyBeamFX.impact(parent,point,normal,.94,at,false,ground)
+ if before then for _,child in ipairs(parent:GetChildren()) do if not before[child] then dimLights(child) end end end
 end
 
 function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, endSize: number?, lifetime: number?, normal: Vector3?, stroke: number?)
@@ -419,14 +449,17 @@ local specialistHits={
  Frostbite={color=Color3.fromRGB(166,226,255),cue='crystal_snap',pitch=1.31,scale=.8,radius=2.25,tail=.21},
  Resonator={color=Color3.fromRGB(249,165,255),cue='coil_hit',pitch=1.19,scale=.63,radius=3.15,tail=.39},
 }
-function Effects.SpecialistContact(kind: string,point: Vector3,normal: Vector3,depleted: boolean,audio: any)
+-- color (optional) overrides the role's ring and particle color, e.g. a Dig
+-- Cube break in the role's primary attack color.
+function Effects.SpecialistContact(kind: string,point: Vector3,normal: Vector3,depleted: boolean,audio: any,color: Color3?)
  local hit=specialistHits[kind];if not hit then return end
+ local tint=color or hit.color
  local scale=depleted and 1.25 or 1
  local plane=(kind=='Halver' or kind=='Resonator' or kind=='Starforge') and Vector3.yAxis or normal
  local closing=kind=='Singularity'
- Effects.Pulse(point+normal*.08,hit.color,closing and hit.radius*scale or .22,closing and .18 or hit.radius*scale,hit.tail,plane,kind=='Halver' and .62 or 1.25)
- Effects.ImpactParticles(point,hit.color,hit.scale*scale,kind,normal)
- audio:play(hit.cue,point,{pitch=hit.pitch,level=depleted and .85 or .62})
+ Effects.Pulse(point+normal*.08,tint,closing and hit.radius*scale or .22,closing and .18 or hit.radius*scale,hit.tail,plane,kind=='Halver' and .62 or 1.25)
+ Effects.ImpactParticles(point,tint,hit.scale*scale,kind,normal)
+ if audio then audio:play(hit.cue,point,{pitch=hit.pitch,level=depleted and .85 or .62}) end
 end
 
 function Effects.PrismWave(position: Vector3,radius: number,duration: number)

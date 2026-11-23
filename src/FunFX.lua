@@ -58,40 +58,59 @@ local function muted(c)
  local l=c.R*.3+c.G*.59+c.B*.11
  return c:Lerp(Color3.new(l,l,l),.45)
 end
-function Fun.paintCube(view,body,id)
+-- Fun.rolePrimary(role) -> Color3 and Fun.roleStyle(role) -> DigCube style are
+-- installed by the client controller from the DigCubeView statics (nil until then).
+-- A drone's secondary color: its palette color, unless that sits too close to
+-- the role's primary (hue within 35 degrees) or the primary is nearly gray;
+-- then the palette hue turns a third of the wheel (same saturation/value).
+function Fun.accentFor(primary,palette)
+ if not primary then return palette end
+ local ph,ps=primary:ToHSV()
+ local h,s,v=palette:ToHSV()
+ local gap=math.abs(ph-h)%1
+ gap=math.min(gap,1-gap)*360
+ if gap<35 or ps<.25 then return Color3.fromHSV((h+1/3)%1,s,v) end
+ return palette
+end
+-- primary (optional) is the role's attack color: the glowing belly and its
+-- light. The body, cap, trail and motes take the accent, so two drones of one
+-- role still read apart. Without a primary the palette color does both.
+function Fun.paintCube(view,body,id,primary)
  local color=Fun.colorFor(id)
+ local accent=primary and Fun.accentFor(primary,color) or color
+ primary=primary or color
  -- Render the cube smaller than its 3.4-stud gameplay hull so the fleet frames
  -- the action instead of covering it. The emitter moves up to the new belly.
  body.Size=body.Size*Fun.CUBE_VIEW_SCALE
  local s=body.Size
  local emitter=view:FindFirstChild('Emmiter')
  if emitter and emitter:IsA('BasePart') then emitter.CFrame=body.CFrame*CFrame.new(0,-s.Y*.5,0) end
- body.Color=muted(color);body.Material=Enum.Material.SmoothPlastic;body.Reflectance=0
+ body.Color=muted(accent);body.Material=Enum.Material.SmoothPlastic;body.Reflectance=0
  -- A lighter cap gives the cube a lit top and a darker underside: instant depth.
- local cap=bare(view,'FunCap',Vector3.new(s.X*.86,.08,s.Z*.86),muted(color):Lerp(WHITE,.45))
+ local cap=bare(view,'FunCap',Vector3.new(s.X*.86,.08,s.Z*.86),muted(accent):Lerp(WHITE,.45))
  attach(cap,body,CFrame.new(0,s.Y*.5+.035,0))
- -- The glowing belly the laser comes out of.
- local glow=bare(view,'FunGlow',Vector3.new(s.X*.62,.06,s.Z*.62),color:Lerp(WHITE,.25),Enum.Material.Neon)
+ -- The glowing belly the laser comes out of, in the role's attack color.
+ local glow=bare(view,'FunGlow',Vector3.new(s.X*.62,.06,s.Z*.62),primary:Lerp(WHITE,.25),Enum.Material.Neon)
  attach(glow,body,CFrame.new(0,-s.Y*.5-.025,0))
- local light=Instance.new('PointLight');light.Name='FunLight';light.Color=color;light.Range=7;light.Brightness=.2
+ local light=Instance.new('PointLight');light.Name='FunLight';light.Color=primary;light.Range=7;light.Brightness=.2
  light.Shadows=false;light.Parent=glow
- -- A ribbon trail in the cube's color while it cruises.
+ -- A ribbon trail in the cube's own color while it cruises.
  local a0=Instance.new('Attachment');a0.Name='FunTrailTop';a0.Position=Vector3.new(0,s.Y*.32,s.Z*.5);a0.Parent=body
  local a1=Instance.new('Attachment');a1.Name='FunTrailBottom';a1.Position=Vector3.new(0,-s.Y*.32,s.Z*.5);a1.Parent=body
  local trail=Instance.new('Trail');trail.Name='FunTrail';trail.Attachment0=a0;trail.Attachment1=a1
- trail.Color=ColorSequence.new(color:Lerp(WHITE,.35),color);trail.LightEmission=.6;trail.LightInfluence=.2
+ trail.Color=ColorSequence.new(accent:Lerp(WHITE,.35),accent);trail.LightEmission=.6;trail.LightInfluence=.2
  trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(1,1)})
  trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(1,.1)})
  trail.Lifetime=.32;trail.MinLength=.1;trail.FaceCamera=true;trail.Enabled=false;trail.Parent=body
  -- Little sparkles shed from the belly while lasering.
  local motes=Instance.new('ParticleEmitter');motes.Name='FunMotes';motes.Texture=SPARKLE
- motes.Color=ColorSequence.new(color:Lerp(WHITE,.5),color);motes.LightEmission=.7;motes.LightInfluence=0
+ motes.Color=ColorSequence.new(accent:Lerp(WHITE,.5),accent);motes.LightEmission=.7;motes.LightInfluence=0
  motes.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(1,0)})
  motes.Transparency=NumberSequence.new(.1,1);motes.Lifetime=NumberRange.new(.5,.9);motes.Rate=0
  motes.Speed=NumberRange.new(1.5,3.5);motes.SpreadAngle=Vector2.new(70,70);motes.EmissionDirection=Enum.NormalId.Bottom
  motes.Acceleration=Vector3.new(0,2,0);motes.Drag=2;motes.Rotation=NumberRange.new(0,360);motes.RotSpeed=NumberRange.new(-120,120)
  motes.Parent=glow
- return {color=color,glow=glow,light=light,trail=trail,motes=motes,glowBase=glow.Color}
+ return {color=color,primary=primary,accent=accent,glow=glow,light=light,trail=trail,motes=motes,glowBase=glow.Color}
 end
 -- Called every render frame for a cube. speed in studs/s.
 function Fun.stepCube(record,speed,working,hidden,now)
