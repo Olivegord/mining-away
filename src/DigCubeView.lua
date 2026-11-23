@@ -76,10 +76,10 @@ local ROLE_FX={
  B={proxy={tone=C3(25,12,45),cap=.55,src='progress',tremble=.03,mesh={charge=.25,tremble=.05}},carve=true,
   rubble={per=4,min=2,max=4,up={24,34},out={2,5},spin={10,18},dark={.3,.4},near=.6,dcap=.9,scorch=C3(38,18,58),pattern='column'},
   sounds={{cue='crystal_split',pitch=.9}},hold='split',lift=1.4,speed=1},
- N={proxy={jitter={.01,.04},mesh={hits=true}},carve=true,
+ N={proxy={cap=.15,mesh={hits=true}},carve=true,
   rubble={per=.9,min=2,max=6,up={0,2},out={0,1},spin={1,3},dark={.05,.1},near=.15,dcap=.3,pattern='crumble'},
   sounds={{cue='crystal_split',pitch=1.25,level=.7}},hold='piece',lift=1,speed=1},
- U={proxy={cap=.1,lift={.1,.4},ball=true,mesh={ripple={amp=.07,len=3,speed=2.5,glow=.4},bulge=.3}},
+ U={proxy={cap=.1,ball=true,mesh={ripple={amp=.07,len=3,speed=2.5,glow=.4},bulge=.3}},
   rubble={per=2.2,min=1,max=5,up={4,6},out={1,3},spin={2,4},dark={.02,.06},near=.1,dcap=.2,scorch=C3(200,240,245),float=.7},
   contact='Bubbler',sounds={{cue='crystal_split',pitch=.8}},light=true,hold='split',lift=1,speed=.8},
  H={proxy={halves=true,mesh={ripple={amp=.08,len=2,speed=5.5,glow=.5}}},
@@ -91,13 +91,13 @@ local ROLE_FX={
  Y={proxy={tone=C3(20,8,40),cap=.55,compress=.1,mesh={ripple={amp=.1,len=2.2,speed=-4.5,glow=.6}}},
   rubble={per=2.2,min=1,max=6,up={14,20},out={1,3},spin={6,10},dark={.2,.3},near=.6,dcap=.9,scorch=C3(20,8,32),implode=.12},
   contact='Singularity',sounds={{cue='crystal_impact',pitch=.76}},light=true,hold='heavy',lift=1.3,speed=.6},
- M={proxy={tone=C3(255,120,40),cap=.6,pow=1.5,light=true,mesh={ripple={amp=.07,len=2.8,speed=3,glow=.85,beat=1.4}}},
+ M={proxy={tone=C3(255,120,40),cap=0,pow=1.5,light=true,mesh={ripple={amp=.07,len=2.8,speed=3,glow=.85,beat=1.4}}},
   rubble={per=2.2,min=1,max=5,up={22,30},out={1,3},spin={2,4},dark={.06,.2},near=.6,dcap=.85,molten=C3(255,150,60),pattern='fountain'},
   contact='Starforge',sounds={{cue='tool_sizzle',pitch=.87}},light=true,hold='split',lift=.8,speed=1},
- I={proxy={tone=C3(190,235,255),cap=1,pow=1,ice=.5,mesh={ripple={amp=.06,len=2.6,speed=2.2,glow=.5,beat=1.2}}},
+ I={proxy={tone=C3(190,235,255),cap=0,pow=1,mesh={ripple={amp=.06,len=2.6,speed=2.2,glow=.5,beat=1.2}}},
   rubble={per=.6,min=3,max=10,count=34,up={8,12},out={12,20},spin={14,24},dark={.3,.4},near=0,dcap=.4,scorch=C3(190,235,255),glass=true,friction=.05,pattern='shatter'},
   contact='Frostbite',sounds={{cue='crystal_snap',pitch=1.31},{cue='crystal_split',pitch=1.15}},light=true,hold='split',lift=1,speed=1.2},
- V={proxy={vibrate={.01,.06},mesh={ripple={amp=.12,len=1.6,speed=7,glow=.6,beat=4}}},
+ V={proxy={vibrate={.01,.09},mesh={ripple={amp=.12,len=1.6,speed=7,glow=.6,beat=4}}},
   rubble={per=2.2,min=1,max=5,up={13,17},out={1,3},spin={1,2},dark={.06,.2},near=.6,dcap=.85,jitter=.12,pattern='waves'},
   contact='Resonator',sounds={{cue='coil_hit',pitch=1.19,seq=.12}},light=true,hold='split',lift=1,speed=1},
  P={proxy={tone=C3(12,6,10),cap=.9,src='late',mesh={charge=.45,tremble=.06}},carve=true,
@@ -111,6 +111,8 @@ local ROLE_FX={
   sounds={{cue='crystal_split',pitch=1.1}},hold='split',lift=1.1,speed=1.1},
 }
 V.ROLE_FX=ROLE_FX
+-- Each type's own way of breaking the rock (filled in below, by V.BURST).
+local SIG={} :: {[string]:any}
 -- SpecialistContact plays its own cue; the break's sounds come from ROLE_FX.
 local MUTE={play=function() end}
 local function fxPart(parent: Instance,name: string,color: Color3,class: string?): BasePart
@@ -984,9 +986,10 @@ function V:buildProxy(piece: any,owned: boolean,chunk: {number},code: string?): 
  local proxy={parts={},ids=ids,pivot=pivot,step=0,shade=0,joltAt=-10,model=model,core=core,highlight=highlight,since=os.clock(),outline=highlight and highlight.OutlineColor,
   turn=self.random:NextNumber(.7,1)*(self.random:NextInteger(0,1)*2-1),tipAxis=self.random:NextNumber(0,math.pi*2),
   fx=pfx,code=code,tone=pfx.tone or BLACK,seed=self.random:NextNumber(1,100),scale=1,progress=0,within=0,owned=owned,
-  primary=V.primaryColor(code),hit=Vector3.zero,pops=0,
+  primary=V.primaryColor(code),hit=Vector3.zero,pops=0,sig=SIG[code or 'L'],
   vibAxis=CFrame.Angles(0,self.random:NextNumber(0,math.pi*2),0).LookVector,
-  normal=plane and Vector3.new(plane.nx,0,plane.nz) or nil,radius=math.sqrt(area/math.pi),thick=top-bottom}
+  normal=plane and Vector3.new(plane.nx,0,plane.nz) or nil,radius=math.sqrt(area/math.pi),thick=top-bottom,
+  planeAt=plane and o+Vector3.new(plane.cx,top+.08,plane.cz) or nil}
  if pfx.ball then
   -- Bubbler: a glassy bubble grows inside the piece as it is worked.
   local ball=fxPart(aux,'DigBubble',V.primaryColor(code),'Part')
@@ -1010,13 +1013,15 @@ function V:buildProxy(piece: any,owned: boolean,chunk: {number},code: string?): 
   table.insert(meshShapes,{poly=poly,y0=o.Y+c.y0+.02-pivot.Y,y1=o.Y+c.y1+.03-pivot.Y,color=c.stone,side=c.side})
  end
  local random=function() return self.random:NextNumber() end
- local rec=RockChunks.build(meshShapes,DigCube.voronoiSplit,random)
+ local sig=proxy.sig
+ local rec=RockChunks.build(meshShapes,DigCube.voronoiSplit,random,sig and sig.tileArea,sig and sig.maxTiles)
  if rec then
   proxy.mesh=rec;rec.model.Parent=model
   proxy.shade=-1
  else
   self:proxyWedges(proxy,shapes)
  end
+ if sig and sig.build then sig.build(self,proxy) end
  return proxy
 end
 -- Where the piece sits at its current stage (plus the pop after a crack),
@@ -1032,6 +1037,10 @@ function V:poseProxy(proxy: any,now: number)
  local lift,turn,tip=CRACK_LIFT[s]+pop,CRACK_TURN[s]*proxy.turn,CRACK_TIP[s]
  local progress=math.clamp(proxy.progress or 0,0,1)
  if fx.flat then lift=s>1 and -.06 or 0;turn=0;tip=0 end
+ -- A signature type moves its own chunks (SIG); the piece itself only
+ -- rises if that type floats it (the Bubbler), never the shared crack pop.
+ local sig=proxy.sig
+ if sig then lift=sig.lift and sig.lift(progress) or 0;turn=0;tip=0 end
  if fx.lift then lift+=fx.lift[1]+(fx.lift[2]-fx.lift[1])*progress end
  if fx.slam and proxy.slamAt then
   local u=now-proxy.slamAt
@@ -1042,10 +1051,10 @@ function V:poseProxy(proxy: any,now: number)
   if u>=0 and u<.12 then lift-=.1*math.sin(math.pi*u/.12) end
  end
  -- The mesh pops its own chunks, so the whole piece lifts a little less.
- if proxy.mesh then lift*=.55 end
+ if proxy.mesh and not sig then lift*=.55 end
  local shake=Vector3.zero
  if not self:reduced() then
-  local amp=s>1 and .035*math.clamp(proxy.within or 0,0,1) or 0
+  local amp=(s>1 and not sig) and .035*math.clamp(proxy.within or 0,0,1) or 0
   if fx.jitter then amp+=fx.jitter[1]+(fx.jitter[2]-fx.jitter[1])*progress end
   if fx.tremble then amp+=fx.tremble*math.clamp((progress-.7)/.3,0,1) end
   if amp>0 then
@@ -1061,7 +1070,7 @@ function V:poseProxy(proxy: any,now: number)
   *CFrame.Angles(math.cos(proxy.tipAxis)*tip,0,math.sin(proxy.tipAxis)*tip)
  local scale=proxy.scale or 1
  local slide=0
- if proxy.normal and s>1 then slide=.18*(1-(1-math.clamp(t,0,1))^2) end
+ if proxy.normal and s>1 and not sig then slide=.18*(1-(1-math.clamp(t,0,1))^2) end
  proxy.slideVec=slide>0 and proxy.normal*slide or nil
  proxy.core.CFrame=pose
  if proxy.mesh then
@@ -1108,9 +1117,242 @@ local BURST={
  Z={count=2,strength=1,mode='pry',ring=.22,speed=20,width=.8,glow=.85},
 }
 V.BURST=BURST
+-- Every drone type breaks the rock its own way (owner, Nov 22: "all drones
+-- do the same progression of damage, and look the exact same"). Before,
+-- every type darkened its piece, popped it loose at 85% and broke it out
+-- in terrace stages; only small parameters differed. Now each type has one
+-- process that reads from the play camera, driven by its chunk's progress.
+-- These types work their whole chunk as one piece (DigCube.STYLES pieces
+-- 'none') and the server cuts the cells as soon as the drone is on station
+-- (STYLES early), so whatever sinks, leans or flies away shows the hole:
+--  C Charger     stamp    each slam drives the rock down into a bowl; the rim tips out
+--  N Needler     chip     each dart knocks one small bit clean out of the rock
+--  B Ballcaster  swell    the cell swells and shivers, darkening, until the ball pops it
+--  U Bubbler     float    the rock lifts out of its bed and drifts apart inside a bubble
+--  H Halver      halve    a seam glows across it and the two halves lean apart
+--  G Gridcutter  dice     a grid sweeps across it; each square drops as it is cut
+--  Y Singularity implode  the rock spirals in toward the middle and sinks
+--  M Starforge   melt     a molten front spreads from the beam and the rock sags
+--  I Frostbite   freeze   ice spreads from the beam, then the frozen rock shivers
+--  V Resonator   rattle   the rock shakes harder and harder, rings running out
+--  Z Lancer      drill    every pulse punches the hole under the lance deeper
+-- The Striker keeps the classic terrace cut (pits stepping down, ripple,
+-- crack pops); Ramiel and Nomad keep their charge pops.
+do
+ local ICE=Color3.fromRGB(214,240,255)
+ local MOLTEN=Color3.fromRGB(255,122,36)
+ local WHITEHOT=Color3.fromRGB(255,228,160)
+ local function ease(t: number): number t=math.clamp(t,0,1);return t*t*(3-2*t) end
+ local function dist(tile: any,h: Vector3): number return math.sqrt((tile.cx-h.X)^2+(tile.cz-h.Z)^2) end
+ -- The chunks nearest the hit first, fixed once so the process is steady.
+ local function order(proxy: any,rec: any): {any}
+  if proxy.order then return proxy.order end
+  local h=proxy.hit or Vector3.zero
+  local key={}
+  local list=table.clone(rec.tiles)
+  for _,t in ipairs(list) do key[t]=dist(t,h)+math.random()*.7 end
+  table.sort(list,function(a,b) return key[a]<key[b] end)
+  proxy.order=list
+  return list
+ end
+ local function neon(parent: Instance,name: string,color: Color3): BasePart
+  local p=fxPart(parent,name,color);p.Material=Enum.Material.Neon;p.Transparency=1
+  return p
+ end
+ SIG.C={ring={amp=.4,speed=16,width=1.5,glow=.35},tiles=function(self,proxy,rec,p)
+  local R=math.max(rec.radius,1)
+  local depth=math.min(1.8,proxy.thick*.45)*p
+  local tilt=math.rad(28)*p
+  return function(tile)
+   local r=math.sqrt(tile.cx*tile.cx+tile.cz*tile.cz)
+   local k=math.clamp(r/R,0,1)
+   local ux,uz=1,0
+   if r>1e-3 then ux,uz=tile.cx/r,tile.cz/r end
+   return Vector3.new(0,-depth*(1-.7*k),0),CFrame.fromAxisAngle(Vector3.new(-uz,0,ux),tilt*k)
+  end
+ end}
+ SIG.N={tileArea=1.3,maxTiles=12,tiles=function(self,proxy,rec,p,now)
+  local list=order(proxy,rec)
+  local gone=math.floor(p*#list*.92+.001)
+  proxy.goneAt=proxy.goneAt or {}
+  for i=1,math.min(gone,#list) do if not proxy.goneAt[list[i]] then proxy.goneAt[list[i]]=now end end
+  return function(tile)
+   local at=proxy.goneAt[tile]
+   if not at then return nil end
+   local u=(now-at)/.22
+   if u>=1 then return nil,nil,nil,true end
+   -- Knocked out: up and away from the middle, tumbling.
+   local r=math.max(.3,math.sqrt(tile.cx*tile.cx+tile.cz*tile.cz))
+   return Vector3.new(tile.cx/r*1.3*u,1.5*u-1.1*u*u,tile.cz/r*1.3*u),CFrame.Angles(2.4*u,0,1.5*u)
+  end
+ end}
+ SIG.B={tiles=function(self,proxy,rec,p)
+  local e=p*p
+  return function(tile) return Vector3.new(tile.cx*.16*e,.55*e,tile.cz*.16*e) end
+ end}
+ SIG.U={lift=function(p: number): number return 1.8*ease(p) end,tiles=function(self,proxy,rec,p,now)
+  local e=ease(p)
+  return function(tile,i)
+   return Vector3.new(tile.cx*.22*e,math.sin(now*2.4+i*1.7)*.16*e,tile.cz*.22*e),CFrame.Angles(.14*e*math.sin(i),0,.14*e*math.cos(i))
+  end
+ end}
+ SIG.H={build=function(self,proxy)
+  proxy.seam=neon(proxy.model,'HalverSeam',proxy.primary:Lerp(Color3.new(1,1,1),.35))
+ end,tiles=function(self,proxy,rec,p)
+  local n=proxy.normal
+  if not n then return nil end
+  local e=ease(p)
+  local d=Vector3.yAxis:Cross(n)
+  return function(tile)
+   if not tile.side then return nil end
+   return n*(tile.side*.85*e)-Vector3.yAxis*(.2*e),CFrame.fromAxisAngle(d,tile.side*math.rad(17)*e)
+  end
+ end,extra=function(self,proxy,rec,p)
+  local seam=proxy.seam
+  if not seam or not proxy.normal or not proxy.planeAt then return end
+  local len=2.1*math.max(rec.radius,1)*ease(math.min(1,p*1.4))
+  seam.Transparency=len>.05 and .15 or 1
+  seam.Size=Vector3.new(.16,.08,math.max(.05,len))
+  -- Size Z runs along the seam (the frame's Z axis is normal x up).
+  seam.CFrame=CFrame.fromMatrix(proxy.planeAt,proxy.normal,Vector3.yAxis)
+ end}
+ SIG.G={build=function(self,proxy)
+  proxy.bars={}
+  local R=math.max(proxy.radius,1)
+  for axis=1,2 do
+   for k=1,5 do
+    local at=-R+(k-.5)*(2*R/5)
+    if math.abs(at)<R*.95 then
+     table.insert(proxy.bars,{part=neon(proxy.model,'GridLine',proxy.primary:Lerp(Color3.new(1,1,1),.3)),axis=axis,at=at,chord=2*math.sqrt(R*R-at*at),start=(at+R)/(2*R)})
+    end
+   end
+  end
+ end,tiles=function(self,proxy,rec,p)
+  if not proxy.sweepSet then
+   proxy.sweepSet=true
+   local lo,hi=math.huge,-math.huge
+   for _,t in ipairs(rec.tiles) do local s=t.cx+t.cz*.3;lo=math.min(lo,s);hi=math.max(hi,s) end
+   for _,t in ipairs(rec.tiles) do t.sweepAt=hi>lo and ((t.cx+t.cz*.3)-lo)/(hi-lo)*.8 or 0 end
+  end
+  return function(tile)
+   local u=math.clamp((p-(tile.sweepAt or 0))/.14,0,1)
+   if u<=0 then return nil end
+   return Vector3.new(0,-.45*u,0),nil,tile.stone:Lerp(proxy.primary,.22*u):Lerp(Color3.new(0,0,0),.16*u)
+  end
+ end,extra=function(self,proxy,rec,p)
+  local top=proxy.pivot+Vector3.yAxis*.07
+  for _,b in ipairs(proxy.bars or {}) do
+   -- Lines along one axis sweep in first, then the cross lines.
+   local u=math.clamp((p*(b.axis==1 and 1.5 or 1.2)-(b.axis==1 and 0 or .3)-b.start*.5)/.4,0,1)
+   local len=b.chord*u
+   b.part.Transparency=len>.05 and .2 or 1
+   if b.axis==1 then
+    b.part.Size=Vector3.new(.08,.06,math.max(.05,len));b.part.CFrame=CFrame.new(top+Vector3.new(b.at,0,0))
+   else
+    b.part.Size=Vector3.new(math.max(.05,len),.06,.08);b.part.CFrame=CFrame.new(top+Vector3.new(0,0,b.at))
+   end
+  end
+ end}
+ SIG.Y={tiles=function(self,proxy,rec,p)
+  local e=ease(p)
+  local spin=1.4*e
+  local pull=.62*e
+  local R=math.max(rec.radius,1)
+  local c,s=math.cos(spin),math.sin(spin)
+  return function(tile)
+   local x,z=tile.cx,tile.cz
+   local nx,nz=(x*c-z*s)*(1-pull),(x*s+z*c)*(1-pull)
+   local r=math.sqrt(x*x+z*z)/R
+   return Vector3.new(nx-x,-.9*e*(1-.5*r),nz-z),CFrame.Angles(0,-spin,0)
+  end
+ end}
+ SIG.M={tiles=function(self,proxy,rec,p)
+  local h=proxy.hit or Vector3.zero
+  local front=(rec.radius+1.2)*p^.85
+  local e=ease(p)
+  return function(tile)
+   local d=dist(tile,h)
+   local heat=math.clamp((front-d)/1.8,0,1)
+   if heat<=0 then return nil end
+   local col=tile.stone:Lerp(MOLTEN,.6*heat)
+   if d<1.3 then col=col:Lerp(WHITEHOT,.4*heat) end
+   return Vector3.new(0,-.6*heat*e,0),CFrame.Angles(.06*heat*math.sin(tile.cx*3),0,.06*heat*math.cos(tile.cz*3)),col
+  end
+ end}
+ SIG.I={tiles=function(self,proxy,rec,p,now)
+  local h=proxy.hit or Vector3.zero
+  local front=(rec.radius+.8)*math.min(1,p*1.25)
+  local shiver=math.clamp((p-.75)/.25,0,1)
+  local frame=math.floor(now*8)
+  return function(tile,i)
+   if dist(tile,h)>front then return nil end
+   local off=nil
+   if shiver>0 then
+    local q=frame*1.7+i*2.3
+    off=Vector3.new(math.noise(q,i,.1),math.noise(i,q,.4)*.5,math.noise(q,.5,i))*(.12*shiver)
+   end
+   return off,nil,tile.stone:Lerp(ICE,.62),nil,Enum.Material.Ice
+  end
+ end}
+ SIG.V={every=.42,ring={amp=.24,speed=14,width=.9,glow=.45},tiles=function(self,proxy,rec,p,now)
+  local a=.02+.18*p^1.4
+  local frame=math.floor(now*8)
+  return function(tile,i)
+   local q=frame*.91+i*3.7
+   return Vector3.new(math.noise(q,i,.2),math.noise(i,q,.6)*.6,math.noise(.3,i,q))*(a*2)
+  end
+ end}
+ SIG.Z={ring={amp=.3,speed=20,width=.8,glow=.5},tiles=function(self,proxy,rec,p,now)
+  local h=proxy.hit or Vector3.zero
+  local n=proxy.hits or 0
+  local reach=.9+.45*n
+  local deep=math.min(2.4,.45*n)
+  local flash=math.clamp(1-(now-(proxy.hitAt or -9))/.16,0,1)
+  return function(tile)
+   local k=math.clamp(1-dist(tile,h)/reach,0,1)
+   if k<=0 then return nil end
+   return Vector3.new(0,-deep*k,0),nil,flash>0 and tile.color:Lerp(proxy.primary,.5*flash*k) or nil
+  end
+ end}
+end
+V.SIG=SIG
+-- A signature type's piece: its hits ring the rock, its process runs on
+-- the stop-motion grid with the rest of the chunk work.
+function V:stepSignature(proxy: any,rec: any,now: number,cutting: boolean?)
+ local def=proxy.sig
+ local reduced=self:reduced()
+ local function hit()
+  proxy.hits=(proxy.hits or 0)+1;proxy.hitAt=now
+  local r=def.ring
+  if r and not reduced then RockChunks.ring(rec,now,proxy.hit,r.amp,r.speed,r.width,r.glow) end
+ end
+ if proxy.slamAt and proxy.slamAt~=proxy.meshSlam then proxy.meshSlam=proxy.slamAt;hit() end
+ if proxy.pulseAt and proxy.pulseAt~=proxy.meshPulse then proxy.meshPulse=proxy.pulseAt;hit() end
+ if def.every and cutting and not reduced and now-(proxy.ringAt or -9)>=def.every then
+  proxy.ringAt=now
+  local r=def.ring
+  RockChunks.ring(rec,now,proxy.hit,r.amp,r.speed,r.width,r.glow)
+ end
+ if now-(proxy.meshAt or -1)<(proxy.owned and 1/31 or 1/12) then return end
+ proxy.meshAt=now
+ local p=math.clamp(proxy.progress or 0,0,1)
+ local fn=def.tiles(self,proxy,rec,p,now)
+ if fn and reduced then
+  -- Reduced Motion: the colors and the result, less of the motion.
+  local inner=fn
+  fn=function(tile,i,t)
+   local off,turn,col,hide,mat=inner(tile,i,t)
+   return off and off*.4 or nil,nil,col,hide,mat
+  end
+ end
+ if def.extra then def.extra(self,proxy,rec,p) end
+ local tremble=(proxy.code=='B' and not reduced) and .015+.08*p*p or nil
+ RockChunks.step(rec,now,{glowColor=proxy.primary:Lerp(Color3.new(1,1,1),.25),sig=fn,tremble=tremble})
+end
 function V:stepMesh(proxy: any,now: number,cutting: boolean?)
  local rec=proxy.mesh
  if not rec or proxy.dead then return end
+ if proxy.sig then self:stepSignature(proxy,rec,now,cutting);return end
  local reduced=self:reduced()
  local m=proxy.fx.mesh or MESH_DEFAULT
  local progress=math.clamp(proxy.progress or 0,0,1)
@@ -1234,7 +1476,7 @@ function V:crackStage(key: string,progress: number,now: number,tint: Color3,owne
  elseif fx.src=='late' then amount=math.clamp((progress-.7)/.3,0,1)
  else amount=math.clamp(within,0,1)^(fx.pow or .88) end
  self:shadeProxy(proxy,(fx.cap or CRACK_SHADE)*amount)
- if proxy.light then proxy.light.Brightness=.9*math.clamp(within,0,1)^1.5 end
+ if proxy.light then proxy.light.Brightness=proxy.sig and 2.2*progress or .9*math.clamp(within,0,1)^1.5 end
  if fx.ice and progress>=fx.ice and not proxy.iced then
   proxy.iced=true
   for _,e in ipairs(proxy.parts) do e.part.Material=Enum.Material.Ice end
@@ -1264,6 +1506,11 @@ end
 function V:crackHit(proxy: any,step: number,k: number,hit: any)
  local point=proxy.pivot+Vector3.yAxis*(CRACK_LIFT[step+1]+.1)
  local volume=hit.owned and 1 or .55
+ if proxy.sig then
+  -- A signature type's process is its own feedback; the crack is heard.
+  if self.ctx.audio then self.ctx.audio:play('crystal_impact',point,{pitch=.8+self.random:NextNumber(-.03,.03),level=volume*.4}) end
+  return
+ end
  if proxy.mesh then
   local now=os.clock()
   local burst=BURST[proxy.code or 'L'] or BURST.L
@@ -1480,7 +1727,7 @@ end
 -- The break's sparks (primary to accent), from a box the size of each broken
 -- cell, so they start exactly in the rock that broke. The spinning
 -- rectangles are gone: the 3D streaks (burst) are the one lingering layer.
-local CLOUD_CELLS=8
+local CLOUD_CELLS=4 -- fewer, so a break reads as one beat, not a cloud
 function V:breakCloud(op: any,e: any,big: boolean)
  if self:reduced() or (self.clouds or 0)>=8 then return end
  local o=self.origin
@@ -1531,7 +1778,7 @@ function V:breakCloud(op: any,e: any,big: boolean)
   sparks.Lifetime=NumberRange.new(.4,.8);sparks.Speed=NumberRange.new(14,28);sparks.SpreadAngle=Vector2.new(70,70)
   sparks.EmissionDirection=Enum.NormalId.Top;sparks.Acceleration=Vector3.new(0,-30,0);sparks.Drag=1.5
   if self.ctx.styleParticle and e.role then pcall(self.ctx.styleParticle,sparks,e.role) end
-  sparks:Emit(count(8+3*bulk))
+  sparks:Emit(count(4+1.5*bulk))
  end
  task.delay(1.2,function() holder:Destroy() end)
 end
@@ -1796,7 +2043,7 @@ function V:buildGeode(id: number,tier: number)
  local top=o+Vector3.new(c.cx,c.y1+.1,c.cz)
  local anchor=fxPart(model,'GeodeTop',color);anchor.Transparency=1
  anchor.Size=Vector3.new(math.max(.5,c.radius*1.4),.2,math.max(.5,c.radius*1.4));anchor.CFrame=CFrame.new(top)
- local motes,rays,haloImage
+ local motes,rays,haloImage,glintsMade
  if not self:reduced() then
   motes=Instance.new('ParticleEmitter');motes.Name='GeodeMotes'
   motes.Texture='rbxasset://textures/particles/sparkles_main.dds'
@@ -1808,7 +2055,7 @@ function V:buildGeode(id: number,tier: number)
   motes.Rotation=NumberRange.new(0,360);motes.RotSpeed=NumberRange.new(-90,90)
   motes.Shape=Enum.ParticleEmitterShape.Box;motes.Rate=24;motes.Parent=anchor
   -- Quick bright glints popping out of the cracks (owner, Nov 22: more glow).
-  local glints=Instance.new('ParticleEmitter');glints.Name='GeodeGlints'
+  glintsMade=Instance.new('ParticleEmitter');local glints=glintsMade;glints.Name='GeodeGlints'
   EnergyDisc.configure(glints,.28,.05,1,0,.3)
   glints.LightEmission=1;glints.LightInfluence=0;glints.Brightness=2
   glints.Color=ColorSequence.new(color:Lerp(Color3.new(1,1,1),.6),color)
@@ -1835,13 +2082,27 @@ function V:buildGeode(id: number,tier: number)
  end
  local center=o+Vector3.new(c.cx,c.y1+.05,c.cz)
  model.Parent=self.fx
- self.geodes[id]={model=model,pieces=pieces,rays=rays,core=core,halo=haloImage,born=os.clock(),center=center,radius=c.radius,color=color}
+ self.geodes[id]={model=model,pieces=pieces,rays=rays,core=core,halo=haloImage,motes=motes,glints=glintsMade,born=os.clock(),center=center,radius=c.radius,color=color}
 end
+-- Owner, Nov 22 (latest): too much on screen. A sealed gem you are not
+-- near sits calm (its glowing cracks, a soft halo, a few motes); the god
+-- rays, glints and the full shimmer come on as you get close, so they
+-- point you to the one you are heading for instead of lighting up the pit.
+local GEODE_NEAR=20
 function V:stepGeodes(now: number)
  local still=self:reduced()
+ local character=Players.LocalPlayer and Players.LocalPlayer.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ local me=root and (root :: any).Position or nil
  for id,g in pairs(self.geodes) do
   if g.leftAt and now-g.leftAt>GEODE_WAIT then self:dropGeode(id);continue end
   if g.opening or self:landedOn(id,g) then continue end
+  local near=me==nil or (me-g.center).Magnitude<GEODE_NEAR
+  if near~=g.near then
+   g.near=near
+   if g.motes then g.motes.Rate=near and 24 or 4 end
+   if g.glints then g.glints.Rate=near and 10 or 0 end
+  end
   local age=now-g.born
   -- A fast, tight shiver (owner, Nov 22: less displacement, faster), a
   -- little stronger the longer it waits.
@@ -1856,8 +2117,9 @@ function V:stepGeodes(now: number)
   end
   local glow=.3-.15*math.sin(now*3.1)
   for _,part in ipairs(g.core) do part.Transparency=glow end
-  if g.halo then g.halo.ImageTransparency=.6-.2*math.sin(now*3.1) end
+  if g.halo then g.halo.ImageTransparency=(near and .6 or .78)-.15*math.sin(now*3.1) end
   for _,ray in ipairs(g.rays or {}) do
+   if not near then ray.beam.Enabled=false;ray.born=-10;ray.life=1;continue end
    local u=(now-ray.born)/ray.life
    if u>=1 then
     -- A new ray: any direction from flat out to straight up, from a point
@@ -2225,7 +2487,7 @@ function V:newBeam(color: Color3,mine: boolean,role: string?)
  sparks.Color=ColorSequence.new(color:Lerp(BEAM_CORE,.3),color)
  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(65,65)
  sparks.Speed=NumberRange.new(6,13);sparks.Lifetime=NumberRange.new(.2,.42);sparks.Drag=2
- sparks.Acceleration=Vector3.new(0,-26,0);sparks.Rate=mine and 14 or 4;sparks.Enabled=false;sparks.Parent=b
+ sparks.Acceleration=Vector3.new(0,-26,0);sparks.Rate=mine and 7 or 3;sparks.Enabled=false;sparks.Parent=b
  -- The drone type's own particle look (FunFX.ROLE_PARTICLE).
  if self.ctx.styleParticle then pcall(self.ctx.styleParticle,sparks,role) end
  return {root=root,a=a,b=b,core=core,glow=glow,gui=gui,halo=halo,dot=dot,sparks=sparks,mine=mine,tint=color,edge=color,on=false}
@@ -2571,8 +2833,10 @@ end
 -- the authored daylight is restored when the player climbs out (and on
 -- teardown). A dim warm lamp on the player keeps the walls near them from
 -- going flat.
-local PIT_FILL=.55 -- ambient light kept at full depth
-local PIT_EXPOSURE=-.35 -- exposure change at full depth
+-- Gentler than before (owner: the pastel look, not a dark hole): the pit
+-- still dims a little so glowing things stand out down there.
+local PIT_FILL=.72 -- ambient light kept at full depth
+local PIT_EXPOSURE=-.18 -- exposure change at full depth
 function V:stepPitLight(depth: number,dt: number)
  local lighting=game:GetService('Lighting')
  local was=self.pitDepth or 0
@@ -2811,54 +3075,83 @@ function V:update()
  self:stepShowcase(now)
 end
 
--- Rock mesh test area (owner, Nov 22: "add them to a test area where they
--- play so i can see them"): a row of display rocks on the open ground west
--- of the dig cube, on the walk from home, each looping one RockChunks effect
--- with its name above it. Local only: no drones, rewards or collisions. If
--- meshes are unavailable the sign says so, with the error.
+-- The drone gallery (replaces the Nov 22 rock mesh test area, whose big
+-- overlapping signs showed from the whole dig): a row of display rocks on
+-- the open ground west of the dig cube, each looping one drone type's own
+-- way of breaking rock (the same SIG process the real pieces run), with a
+-- small sign readable only from beside it. Local only: no drones, rewards
+-- or collisions.
 local SHOWCASE={
- {name='LASER RIPPLE',sub='Striker beam',code='L',kind='ripple'},
- {name='INWARD RIPPLE',sub='Singularity beam',code='Y',kind='ripple'},
- {name='SQUARE RIPPLE',sub='Gridcutter beam',code='G',kind='ripple'},
- {name='FAST RIPPLE',sub='Resonator beam',code='V',kind='ripple'},
- {name='CRACK POPS',sub='every beam: chunks pry up',code='L',kind='crack'},
- {name='SLAM',sub='Charger: ring + chunks lift',code='C',kind='slam'},
- {name='PULSE',sub='Lancer: ring + chunk pries',code='Z',kind='pulse'},
- {name='CHARGE',sub='Ballcaster: shiver + pops',code='B',kind='charge'},
- {name='DARTS',sub='Needler: one chunk per hit',code='N',kind='darts'},
+ {code='L',name='STRIKER',sub='cuts terraced pits'},
+ {code='C',name='CHARGER',sub='stamps a crater'},
+ {code='Z',name='LANCER',sub='drills a hole'},
+ {code='N',name='NEEDLER',sub='chips bits out'},
+ {code='B',name='BALLCASTER',sub='swells, then pops'},
+ {code='U',name='BUBBLER',sub='floats it out'},
+ {code='H',name='HALVER',sub='splits it in two'},
+ {code='G',name='GRIDCUTTER',sub='dices a grid'},
+ {code='Y',name='SINGULARITY',sub='spirals it in'},
+ {code='M',name='STARFORGE',sub='melts it'},
+ {code='I',name='FROSTBITE',sub='freezes it'},
+ {code='V',name='RESONATOR',sub='rattles it'},
 }
-local SHOW_PERIOD=4.5
+local SHOW_PERIOD=4.4
+local SHOW_WORK=3.2 -- seconds of work; the rest holds the result
+V.SHOWCASE=SHOWCASE
 function V:buildShowcase()
  local o=self.origin
  local ground=o.Y+self.cube.height
- local root=Instance.new('Folder');root.Name='RockChunksShowcase';root.Parent=self.fx
+ local root=Instance.new('Folder');root.Name='DroneGallery';root.Parent=self.fx
  self.showcase={root=root,stations={}}
  local stone=self:colorAt(self.cube.height-.01)
  for i,def in ipairs(SHOWCASE) do
-  local at=Vector3.new(o.X-9,ground,o.Z-14+(i-1)*8.5)
-  local plinth=fxPart(root,'ShowcasePlinth',Color3.fromRGB(52,50,58));plinth.Size=Vector3.new(6.6,1,6.6)
+  local at=Vector3.new(o.X-9,ground,o.Z-16+(i-1)*7.2)
+  local plinth=fxPart(root,'GalleryPlinth',Color3.fromRGB(96,98,112));plinth.Size=Vector3.new(6.2,1,6.2)
   plinth.CFrame=CFrame.new(at+Vector3.new(0,.5,0));plinth.CastShadow=true
   local pivot=at+Vector3.new(0,2.6,0)
-  local sign=Instance.new('BillboardGui');sign.Name='ShowcaseSign';sign.Adornee=plinth;sign.Size=UDim2.fromOffset(220,64)
-  sign.StudsOffsetWorldSpace=Vector3.new(0,5.4,0);sign.MaxDistance=90;sign.LightInfluence=0;sign.Parent=plinth
-  local title=Instance.new('TextLabel');title.BackgroundTransparency=1;title.Size=UDim2.new(1,0,.55,0);title.Font=Enum.Font.GothamBold
-  title.TextScaled=true;title.TextColor3=V.primaryColor(def.code):Lerp(Color3.new(1,1,1),.35);title.TextStrokeTransparency=.4;title.Text=def.name;title.Parent=sign
-  local sub=Instance.new('TextLabel');sub.BackgroundTransparency=1;sub.Position=UDim2.fromScale(0,.55);sub.Size=UDim2.new(1,0,.45,0);sub.Font=Enum.Font.Gotham
-  sub.TextScaled=true;sub.TextColor3=Color3.fromRGB(230,232,240);sub.TextStrokeTransparency=.5;sub.Text=def.sub;sub.Parent=sign
-  local station={def=def,pivot=pivot,sub=sub,at=-1,pops=0,model=nil}
+  local sign=Instance.new('BillboardGui');sign.Name='GallerySign';sign.Adornee=plinth;sign.Size=UDim2.fromOffset(150,38)
+  sign.StudsOffsetWorldSpace=Vector3.new(0,4.6,0);sign.MaxDistance=34;sign.LightInfluence=0;sign.Parent=plinth
+  local title=Instance.new('TextLabel');title.BackgroundTransparency=1;title.Size=UDim2.new(1,0,.58,0);title.Font=Enum.Font.GothamBold
+  title.TextScaled=true;title.TextColor3=V.primaryColor(def.code):Lerp(Color3.new(1,1,1),.3);title.TextStrokeTransparency=.55;title.Text=def.name;title.Parent=sign
+  local sub=Instance.new('TextLabel');sub.BackgroundTransparency=1;sub.Position=UDim2.fromScale(0,.58);sub.Size=UDim2.new(1,0,.42,0);sub.Font=Enum.Font.GothamMedium
+  sub.TextScaled=true;sub.TextColor3=Color3.fromRGB(240,242,248);sub.TextStrokeTransparency=.6;sub.Text=def.sub;sub.Parent=sign
+  local station={def=def,pivot=pivot}
   table.insert(self.showcase.stations,station)
-  -- An octagon of rock in three pieces, like a small dug chunk.
+  -- An octagon of rock, like a small dug chunk (two halves for the Halver).
   local poly={}
   for k=0,7 do local a=k*math.pi/4+math.pi/8;table.insert(poly,{math.cos(a)*2.7,math.sin(a)*2.7}) end
   local random=Random.new(i*977)
   local rnd=function() return random:NextNumber() end
   local shapes={}
-  for n,q in ipairs(DigCube.voronoiSplit(poly,3,rnd)) do
-   table.insert(shapes,{poly=q,y0=-1.6,y1=0,color=stone:Lerp(Color3.new(0,0,0),.06*(n-1)),side=def.code=='H' and (n%2*2-1) or nil})
+  if def.code=='H' then
+   for side=-1,1,2 do table.insert(shapes,{poly=cutPoly(poly,0,0,-side,0),y0=-1.6,y1=0,color=stone,side=side}) end
+  else
+   for n,q in ipairs(DigCube.voronoiSplit(poly,3,rnd)) do
+    table.insert(shapes,{poly=q,y0=-1.6,y1=0,color=stone:Lerp(Color3.new(0,0,0),.05*(n-1))})
+   end
   end
-  local rec=RockChunks.build(shapes,DigCube.voronoiSplit,rnd)
-  if rec then rec.model.Parent=root;RockChunks.setPose(rec,CFrame.new(pivot));station.rec=rec end
+  local sig=SIG[def.code]
+  local rec=RockChunks.build(shapes,DigCube.voronoiSplit,rnd,sig and sig.tileArea,sig and sig.maxTiles)
+  if rec then
+   rec.model.Parent=root;RockChunks.setPose(rec,CFrame.new(pivot));station.rec=rec
+   if sig then
+    -- A stand-in for a worked piece, so the gallery runs the real process.
+    station.proxy={code=def.code,sig=sig,hit=Vector3.zero,thick=1.6,radius=2.7,primary=V.primaryColor(def.code),model=root,
+     pivot=pivot,owned=true,mesh=rec,normal=def.code=='H' and Vector3.xAxis or nil,planeAt=pivot+Vector3.new(0,.08,0)}
+    if sig.build then sig.build(self,station.proxy) end
+   end
+  end
  end
+end
+-- Progress over one loop, the way each type's work actually arrives:
+-- slams and pulses in steps, darts in small steps, beams smoothly.
+local function showProgress(code: string,t: number): number
+ local u=math.clamp(t/SHOW_WORK,0,1)
+ if code=='C' then return math.min(1,math.floor(t/.75)*.25)
+ elseif code=='Z' then return math.min(1,math.floor(t/.6)*.2)
+ elseif code=='N' then return math.min(1,math.floor(t/.25)*.08)
+ end
+ return u
 end
 function V:stepShowcase(now: number)
  if not self.cube then return end
@@ -2875,53 +3168,46 @@ function V:stepShowcase(now: number)
  local reduced=self:reduced()
  for _,st in ipairs(self.showcase.stations) do
   local rec=st.rec
-  if rec and not rec.dead and (not camera or (camera.CFrame.Position-st.pivot).Magnitude<160) then
+  if rec and not rec.dead and (not camera or (camera.CFrame.Position-st.pivot).Magnitude<80) then
    local def=st.def
    local t=now%SHOW_PERIOD
    local cycle=math.floor(now/SHOW_PERIOD)
-   if cycle~=st.cycle then st.cycle=cycle;st.fired={};st.pops=0;RockChunks.reset(rec) end
+   if cycle~=st.cycle then
+    st.cycle=cycle;st.fired={};RockChunks.reset(rec)
+    local proxy=st.proxy
+    if proxy then
+     proxy.order=nil;proxy.goneAt=nil;proxy.hits=0;proxy.hitAt=nil;proxy.sweepSet=nil;proxy.ringAt=nil
+     proxy.slamAt=nil;proxy.pulseAt=nil;proxy.meshSlam=nil;proxy.meshPulse=nil;proxy.meshAt=nil
+    end
+   end
    local function once(key: string,at: number): boolean
     if t>=at and not st.fired[key] then st.fired[key]=true;return true end
     return false
    end
-   local mfx=(ROLE_FX[def.code] and ROLE_FX[def.code].proxy.mesh) or MESH_DEFAULT
-   local state={glowColor=V.primaryColor(def.code):Lerp(Color3.new(1,1,1),.25)}
-   local random=self.random
-   if def.kind=='ripple' and t<3.6 and not reduced then
-    local r=mfx.ripple or MESH_DEFAULT.ripple
-    local beat=.7+.3*math.sin(now*math.pi*2*(r.beat or 2.2))
-    state.ripple={amp=r.amp*1.4*beat,len=r.len,speed=r.speed,square=r.square,glow=r.glow,center=Vector3.zero}
-    local burst=BURST[def.code] or BURST.L
-    if once('b1',1.2) then RockChunks.burst(rec,now,Vector3.zero,burst,random,.7) end
-    if once('b2',2.4) then RockChunks.burst(rec,now,Vector3.zero,burst,random,.7) end
-    if once('pop',3.6) then RockChunks.burst(rec,now,Vector3.zero,burst,random,1.4);RockChunks.hop(rec,now,random,1) end
-   elseif def.kind=='crack' then
-    -- crack pops with the stage jump-and-twist
-    if once('a',.6) then RockChunks.burst(rec,now,Vector3.zero,BURST.L,random,1);RockChunks.hop(rec,now,random,.7) end
-    if once('b',1.8) then RockChunks.burst(rec,now,Vector3.zero,BURST.L,random,1.3);RockChunks.hop(rec,now,random,1) end
-    if once('c',3) then RockChunks.burst(rec,now,Vector3.zero,BURST.L,random,1.4);RockChunks.hop(rec,now,random,1) end
-   elseif def.kind=='slam' then
-    for k,at in ipairs({.5,1.9,3.3}) do
-     if once('s'..k,at) then RockChunks.burst(rec,now,Vector3.zero,BURST.C,random,1.3) end
+   local proxy=st.proxy
+   if proxy then
+    local p=showProgress(def.code,t)
+    if p~=proxy.progress and (def.code=='C' or def.code=='Z') and p>0 then
+     if def.code=='C' then proxy.slamAt=now else proxy.pulseAt=now end
     end
-   elseif def.kind=='pulse' then
-    for k=1,5 do
-     if once('p'..k,.3+(k-1)*.7) then RockChunks.burst(rec,now,Vector3.zero,BURST.Z,random,1) end
+    proxy.progress=p
+    local lift=proxy.sig.lift and proxy.sig.lift(p) or 0
+    RockChunks.setPose(rec,CFrame.new(st.pivot+Vector3.yAxis*lift))
+    self:stepSignature(proxy,rec,now,t<SHOW_WORK)
+   else
+    -- The Striker: the classic ripple and crack pops, with the stage jump.
+    local random=self.random
+    if t<SHOW_WORK and not reduced then
+     local r=MESH_DEFAULT.ripple
+     local beat=.7+.3*math.sin(now*math.pi*2*2.2)
+     RockChunks.step(rec,now,{ripple={amp=r.amp*1.4*beat,len=r.len,speed=r.speed,glow=r.glow,center=Vector3.zero},glowColor=V.primaryColor('L')})
+    else
+     RockChunks.step(rec,now,{})
     end
-   elseif def.kind=='charge' then
-    local progress=math.clamp(t/3.4,0,1)
-    state.tremble=(mfx.tremble or .05)*progress*progress*1.5
-    local want=math.floor(math.clamp((progress-.25)/.75,0,1)*#rec.tiles*.5)
-    if want>st.pops then st.pops+=1;RockChunks.burst(rec,now,Vector3.zero,BURST.B,random,.6+.6*progress) end
-   elseif def.kind=='darts' then
-    for k=1,12 do
-     if once('d'..k,.2+(k-1)*.28) then
-      local a=random:NextNumber(0,math.pi*2);local r=random:NextNumber(0,2.2)
-      RockChunks.burst(rec,now,Vector3.zero,BURST.N,random,1,Vector3.new(math.cos(a)*r,0,math.sin(a)*r))
-     end
-    end
+    if once('a',.8) then RockChunks.burst(rec,now,Vector3.zero,BURST.L,random,1);RockChunks.hop(rec,now,random,.7) end
+    if once('b',2) then RockChunks.burst(rec,now,Vector3.zero,BURST.L,random,1.3);RockChunks.hop(rec,now,random,1) end
+    if once('c',3.1) then RockChunks.burst(rec,now,Vector3.zero,BURST.L,random,1.4);RockChunks.hop(rec,now,random,1) end
    end
-   RockChunks.step(rec,now,state)
   end
  end
 end

@@ -52,8 +52,13 @@ D.TILE=11 -- intact stretches render as one block per tile
 -- texture, but keep the surface relief and shine: the authored MaterialVariant
 -- ROCK_VARIANT (no color map; a normal and a roughness map) when the place
 -- has it, else plain SmoothPlastic.
-D.ROCK_VARIANT='DigRock_Relief'
+-- Owner, after the relief variant: "the lighting and textures are very ugly.
+-- it looked better in pastel". No variant: clean matte rock in the pastel
+-- strata below (set ROCK_VARIANT to an authored MaterialVariant name to
+-- bring a surface back).
+D.ROCK_VARIANT=''
 function D.rockLook(): (Enum.Material,string)
+ if D.ROCK_VARIANT=='' then return Enum.Material.SmoothPlastic,'' end
  local ok,material,variant=pcall(function()
   local v=game:GetService('MaterialService'):FindFirstChild(D.ROCK_VARIANT)
   if v and v:IsA('MaterialVariant') then return v.BaseMaterial,v.Name end
@@ -88,14 +93,19 @@ local ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 -- tone, so a single layer reads as a gradient rather than a flat slab. The
 -- hues are muted toward stone and lowered in value (LAYER_MUTE, LAYER_VALUE):
 -- at full strength the rock was brighter than the effects on top of it.
+-- Owner, Nov 22: everything read as one tan-and-gold mush (tan rock, gold
+-- beams, amber gems). The strata are now one cool pastel family, pale
+-- lilac at the top deepening through periwinkle and powder blue to slate
+-- violet at the bottom: depth reads at a glance, the palette stays calm
+-- (not candyland), and the warm beams and ores pop against it.
 D.LAYER_HUES={
- {238,208,142},{242,170,92},{228,122,86},{216,106,130},{180,110,192},
- {122,126,216},{88,162,216},{80,184,168},{126,198,114},{204,208,98},
+ {236,228,242},{220,216,240},{204,210,238},{188,208,232},{174,200,220},
+ {164,184,216},{152,162,208},{142,142,194},{128,122,176},{112,104,152},
 }
 D.LAYER_SHIFT=.5 -- how far a layer's second tone leans toward the next hue
-D.LAYER_MUTE=.5 -- share of neutral stone mixed into every hue (the rock stays below the beams and gems)
-D.LAYER_VALUE=.8 -- overall brightness of the rock
-local STONE_TONE={132,124,120}
+D.LAYER_MUTE=.14 -- share of neutral stone mixed into every hue (the rock stays below the beams and gems)
+D.LAYER_VALUE=.9 -- overall brightness of the rock
+local STONE_TONE={150,150,166}
 local function mix(a: {number},b: {number},t: number): {number}
  return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t}
 end
@@ -146,28 +156,34 @@ end
 -- beam = BeamVFX style published as MiningStyle while digging (nil = no laser).
 -- kernel: 'beam' | 'shot' | 'slam' | 'volley' | 'pulse'. size: CHUNK_SIZES key | nil (Striker slot) | 'cell' | 'line' | 'cluster'.
 -- pieces: 'terrace' (D.pieces today) | 'none' (one final piece). rockCarry nil = true.
+-- pieces: 'terrace' (the Striker's classic stepped pit) or 'none' (the
+-- chunk is worked as one piece). early: the cells are cut as soon as the
+-- drone is on station, so its own way of breaking the rock (DigCubeView
+-- SIG: sinking, chipping, splitting, spiralling...) shows the hole under
+-- the piece instead of solid rock (owner, Nov 22: every drone did the same
+-- progression of damage).
 D.STYLES={
  Striker={code='L',kernel='beam',pick='cone',pieces='terrace',power=1,color={255,159,24},beam='Cutter',rockCarry=false},
- Charger={code='C',kernel='slam',pick='cone',size='huge',pieces='terrace',power=1,color={255,92,40},rockCarry=false,
+ Charger={code='C',kernel='slam',pick='cone',size='huge',pieces='none',early=true,power=1,color={255,92,40},rockCarry=false,
   slam={hover=7,lift=9,windup=.55,dive=.28,hold=.2,recover=.45,clear=1.05},quake={share=.08,radius=10,every=.5}},
  Ballcaster={code='B',kernel='shot',pick='small',size='cell',pieces='none',power=1,color={150,84,255},shape='Ball',carveAhead=true,hintBias=4,
   shot={hover=7,chargeMin=.35,chargeMax=2,chargeDiv=1.4,rested=.4,flight=.26,recover=.15}},
  Needler={code='N',kernel='shot',pick='near',size='cell',pieces='none',power=1,color={200,255,60},shape='Dart',carveAhead=true,
   shot={hover=4.5,first=.25,rested=.6,interval=.2,windup=.05,flight=.04,adjacent=.25,deepPower=1.25,deepLayer=3,maxLive=2},
   near={radius=7,falloff=5,adjacent=6,exposed=2},hints={radius=6,max=12,life=8}},
- Bubbler={code='U',kernel='beam',pick='cone',size='large',pieces='terrace',power=.95,color={60,232,212},beam='Repair',collect={ready=.25,range=1e6}},
- Halver={code='H',kernel='beam',pick='wall',size='medium',pieces='terrace',power=.8,color={80,100,255},beam='Lance',rockMul=1.5,wall={edge=4,other=.3}},
- Gridcutter={code='G',kernel='beam',pick='cone',size='line',pieces='none',power=.9,color={255,60,170},beam='Gridcutter',line={min=3,max=6,width=2}},
- Singularity={code='Y',kernel='beam',pick='deep',size='huge',pieces='terrace',power=1,color={205,60,255},beam='Singularity',depthPow=2,lead=3},
- Starforge={code='M',kernel='beam',pick='cone',size='large',pieces='terrace',power=.85,color={255,214,110},beam='Starforge',forge=.4,hintBias=3},
- Frostbite={code='I',kernel='beam',pick='cone',size='small',pieces='none',power=1,color={150,230,255},beam='Sentry',brittle={life=10,mul=.6,max=48}},
- Resonator={code='V',kernel='beam',pick='cone',size='medium',pieces='terrace',power=.85,color={80,255,140},beam='Resonance',chain={links=3,budget=.4,maxArea=22,gap=.15}},
+ Bubbler={code='U',kernel='beam',pick='cone',size='large',pieces='none',early=true,power=.95,color={60,232,212},beam='Repair',collect={ready=.25,range=1e6}},
+ Halver={code='H',kernel='beam',pick='wall',size='medium',pieces='none',early=true,power=.8,color={80,100,255},beam='Lance',rockMul=1.5,wall={edge=4,other=.3}},
+ Gridcutter={code='G',kernel='beam',pick='cone',size='line',pieces='none',early=true,power=.9,color={255,60,170},beam='Gridcutter',line={min=3,max=6,width=2}},
+ Singularity={code='Y',kernel='beam',pick='deep',size='huge',pieces='none',early=true,power=1,color={205,60,255},beam='Singularity',depthPow=2,lead=3},
+ Starforge={code='M',kernel='beam',pick='cone',size='large',pieces='none',early=true,power=.85,color={255,214,110},beam='Starforge',forge=.4,hintBias=3},
+ Frostbite={code='I',kernel='beam',pick='cone',size='small',pieces='none',early=true,power=1,color={150,230,255},beam='Sentry',brittle={life=10,mul=.6,max=48}},
+ Resonator={code='V',kernel='beam',pick='cone',size='medium',pieces='none',early=true,power=.85,color={80,255,140},beam='Resonance',chain={links=3,budget=.4,maxArea=22,gap=.15}},
  Ramiel={code='P',kernel='volley',pick='ore',size='cluster',pieces='none',power=1,color={249,22,60},shape='Prism',carveAhead=true,oreBias=6,
   volley={hover=10,charge=2.6,flight=.06,beamHold=.42,breakDelay=.12,recover=.5,budget=3.3,radius=9,maxCells=6,preferOre=true}},
  Nomad={code='A',kernel='volley',pick='cone',size='cluster',pieces='none',power=1,color={70,160,255},shape='Nomad',carveAhead=true,
   volley={hover=16,charge=2.2,flight=.95,breakDelay=0,recover=.4,budget=3.4,radius=5.5,maxCells=7,preferOre=false,blastRadius=4}},
  -- Pulse laser (owner's reference video): short punchy pulses, each bites a big piece out.
- Lancer={code='Z',kernel='pulse',pick='cone',size='medium',pieces='terrace',power=1,color={255,236,170},pulse={charge=.45,interval=.7,bite=.36,hover=7}},
+ Lancer={code='Z',kernel='pulse',pick='cone',size='medium',pieces='none',early=true,power=1,color={255,236,170},pulse={charge=.45,interval=.7,bite=.36,hover=7}},
 } :: {[string]:any}
 D.STYLES_BY_CODE={} :: {[string]:any} -- code -> style; each style also gets .role=<key>
 for role,style in pairs(D.STYLES) do

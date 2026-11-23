@@ -4191,6 +4191,8 @@ end
 -- that reaches the next piece's share, carve it now.
 function scene.digAhead(job,damage)
  if job.broken or not job.pieces or job.maxHp<=0 then return end
+ -- An early type's cells go as soon as it is on station (DigCube.STYLES).
+ if job.style and job.style.early then scene.digCarvePiece(job);return end
  local piece=job.pieces[job.stage+1]
  if not piece then return end
  local hpAt=job.maxHp*(1-math.min(1,piece.at))

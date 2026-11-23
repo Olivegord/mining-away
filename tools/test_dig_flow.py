@@ -668,7 +668,9 @@ for _,role in ipairs({'Striker','Charger','Lancer','Singularity'}) do
  end
  local seen=#dig.ops
  local stages,finals,early,leads=0,0,0,{}
- for _=1,1800 do
+ -- One-piece types (pieces 'none') break once per chunk: run longer.
+ local terrace=style.pieces=='terrace'
+ for _=1,(terrace and 1800 or 4200) do
   tick(1);scanRecords(nil)
   while seen<#dig.ops do
    seen+=1
@@ -691,7 +693,7 @@ for _,role in ipairs({'Striker','Charger','Lancer','Singularity'}) do
  local total=stages+finals
  table.sort(leads)
  local median=leads[math.max(1,math.ceil(#leads/2))] or 0
- assert(total>=4,role..' breaks something: '..total)
+ assert(total>=(terrace and 4 or 2),role..' breaks something: '..total)
  assert(early>=total*.9,string.format('%s: %d/%d breaks carved ahead',role,early,total))
  assert(median>=.45,string.format('%s: median carve lead %.2f s',role,median))
  print(string.format('  %-12s %2d stages %2d finals, %d carved ahead, median lead %.2f s',role,stages,finals,early,median))

@@ -43,18 +43,21 @@ end
 
 -- shapes: {{poly,y0,y1,color,side?}} pivot-local prisms; split(poly,n,random)
 -- cuts a convex polygon into about n convex chunks (DigCube.voronoiSplit).
-function M.build(shapes: {any},split: any,random: () -> number): any?
+function M.build(shapes: {any},split: any,random: () -> number,tileArea: number?,maxTiles: number?): any?
  local wedges=M.wedges
  if not wedges or #shapes==0 then return nil end
  local total=0
  for _,s in ipairs(shapes) do total+=area(s.poly) end
- local scale=math.min(1,M.MAX_TILES/math.max(1,total/M.TILE_AREA))
+ -- tileArea/maxTiles: a role can cut its piece finer (the Needler chips
+ -- small bits off one at a time).
+ local tileSize=tileArea or M.TILE_AREA
+ local scale=math.min(1,(maxTiles or M.MAX_TILES)/math.max(1,total/tileSize))
  local model=Instance.new('Model');model.Name='DigRockChunks'
  local rec={model=model,tiles={},rings={},parts={},pose=CFrame.new(),radius=.5,dirty=true}
  for _,s in ipairs(shapes) do
   local a=area(s.poly)
   if a>.02 then
-   local n=math.clamp(math.floor(a/M.TILE_AREA*scale+.5),1,6)
+   local n=math.clamp(math.floor(a/tileSize*scale+.5),1,8)
    for _,q in ipairs(n>1 and split(s.poly,n,random) or {s.poly}) do
     if #q>=3 and area(q)>.01 then
      local cx,cz=centroid(q)
@@ -92,7 +95,12 @@ end
 -- Back to whole rock: every chunk down, no rings (the showcase loops).
 function M.reset(rec: any)
  if not rec or rec.dead then return end
- for _,tile in ipairs(rec.tiles) do tile.lift=0;tile.angle=0;tile.hinge=nil;tile.anim=nil;tile.popped=false end
+ for _,tile in ipairs(rec.tiles) do
+  tile.lift=0;tile.angle=0;tile.hinge=nil;tile.anim=nil;tile.popped=false
+  if tile.hidden then tile.hidden=false;for _,e in ipairs(tile.parts) do e.part.Transparency=0 end end
+  if tile.material then tile.material=nil;for _,e in ipairs(tile.parts) do e.part.Material=M.material or Enum.Material.SmoothPlastic end end
+  tile.sweepAt=nil
+ end
  table.clear(rec.rings)
  rec.dirty=true
 end
@@ -261,7 +269,11 @@ function M.step(rec: any,now: number,s: any)
  local tremble=s.tremble or 0
  local scale=s.scale or 1
  local slide=s.slide
- local active=ripple~=nil or #rings>0 or (s.bulge or 0)>0 or tremble>0
+ -- s.sig(tile,i,now) -> offset?, turn? (about the chunk's top middle),
+ -- color?, hidden?, material?: a role's own way of breaking the rock down
+ -- (DigCubeView SIGNATURE), on top of everything else.
+ local sig=s.sig
+ local active=ripple~=nil or #rings>0 or (s.bulge or 0)>0 or tremble>0 or sig~=nil
  if not (active or animating or rec.dirty or rec.colorDirty or rec.wasActive or scale~=(rec.lastScale or 1) or slide~=rec.lastSlide) then return end
  rec.wasActive=active;rec.lastScale=scale;rec.lastSlide=slide
  local glowColor=s.glowColor or Color3.new(1,1,1)
@@ -299,7 +311,26 @@ function M.step(rec: any,now: number,s: any)
    local q=math.floor(now*36)*.71+i*3.1
    offset+=Vector3.new(math.noise(q,i,.3),math.noise(i,q,.9)*.4,math.noise(.5,i,q))*tremble
   end
+  local turn,sigColor=nil,nil
+  if sig then
+   local off,rot,col,hide,mat=sig(tile,i,now)
+   if off then offset+=off end
+   turn=rot;sigColor=col
+   hide=hide==true
+   if hide~=(tile.hidden==true) then
+    tile.hidden=hide
+    for _,e in ipairs(tile.parts) do e.part.Transparency=hide and 1 or 0 end
+   end
+   if mat and mat~=tile.material then
+    tile.material=mat
+    for _,e in ipairs(tile.parts) do e.part.Material=mat end
+   end
+  end
   local f=CFrame.new(offset)
+  if turn then
+   local c=Vector3.new(tile.cx,tile.y1,tile.cz)
+   f=f*CFrame.new(c)*turn*CFrame.new(-c)
+  end
   local hop=tile.hop
   if hop then
    local e=math.sin(math.pi*math.clamp((now-hop.at)/hop.dur,0,1))
@@ -311,7 +342,8 @@ function M.step(rec: any,now: number,s: any)
    f=f*CFrame.new(h.a)*CFrame.fromAxisAngle(h.dir,tile.angle*h.sign)*CFrame.new(-h.a)
   end
   tile.frame=f
-  local color=glow>0 and tile.color:Lerp(glowColor,math.min(M.TINT_MAX,glow)) or tile.color
+  local base=sigColor or tile.color
+  local color=glow>0 and base:Lerp(glowColor,math.min(M.TINT_MAX,glow)) or base
   if color~=tile.shown then
    tile.shown=color
    for _,e in ipairs(tile.parts) do e.part.Color=color end

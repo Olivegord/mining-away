@@ -1549,8 +1549,12 @@ local function renderDrone(d,dt,now)
     local lx,lz=d.leanThrust.X,d.leanThrust.Z
     lx=math.abs(lx)<6 and 0 or lx-math.sign(lx)*6
     lz=math.abs(lz)<6 and 0 or lz-math.sign(lz)*6
-    desiredBank=math.clamp(-lx*.0045,-math.rad(6),math.rad(6))
-    desiredPitch=math.clamp(-lz*.0055,-math.rad(5),math.rad(5))
+    -- Each type leans its own amount (FunFX.MOTION): the Needler banks
+    -- hard, the Gridcutter stays flat as a plate, the Charger barely moves.
+    local feel=Presentation.Fun.MOTION[role]
+    local k=feel and feel.lean or 1
+    desiredBank=math.clamp(-lx*.0045*k,-math.rad(6*k),math.rad(6*k))
+    desiredPitch=math.clamp(-lz*.0055*k,-math.rad(5*k),math.rad(5*k))
    else
     desiredBank=math.clamp(-thrust.X*.0032,-math.rad(5),math.rad(5))
     desiredPitch=math.clamp(-thrust.Z*.0042,-math.rad(7),math.rad(7))
@@ -1566,7 +1570,10 @@ local function renderDrone(d,dt,now)
  local seed=s:GetAttribute('PhaseSeed') or 0
  local hover=cube and not motionPaused and not CrystalImpactView.reducedMotion() and (state=='Follow' or state=='Return' or state=='Idle' or state=='Travel' or state=='Waiting')
  -- A slow, shallow bob; the faster second wave read as jitter and was removed.
- local drift=hover and math.sin(now*(.8+seed%7*.07)+seed)*.12 or state=='Thinking' and not motionPaused and not CrystalImpactView.reducedMotion() and math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*.08 or (mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
+ -- Each type floats its own way (FunFX.MOTION): the Bubbler drifts on
+ -- a deep slow bob, the Charger hangs heavy, the Needler hovers twitchy.
+ local feel=cube and Presentation.Fun.MOTION[role] or nil
+ local drift=hover and (feel and (math.sin(now*math.pi*2*feel.hz+seed)*feel.bob+(feel.jitter and math.noise(now*9,seed)*feel.jitter or 0)) or math.sin(now*(.8+seed%7*.07)+seed)*.12) or state=='Thinking' and not motionPaused and not CrystalImpactView.reducedMotion() and math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*.08 or (mass or referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
  -- Reading server time makes every observer see the same hop, and late joins

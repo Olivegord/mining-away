@@ -23,9 +23,9 @@ assert(sa~='','a type has its own parts: '..sa)
 local roles={'Striker','Charger','Ballcaster','Needler','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Ramiel','Nomad','Lancer'}
 local shapes,accents={},{}
 for i,role in ipairs(roles) do
- assert(FunFX.LOOKS[role],'a look for '..role)
- local v=Instance.new('Model');local b=Instance.new('Part');b.Size=Vector3.one*3.4;b.CFrame=CFrame.new(0,10,0);b.Parent=v
- FunFX.LOOKS[role](v,b,orange,orange)  -- called directly: errors surface here
+ assert(FunFX.BODIES[role],'a body for '..role)
+ local v=Instance.new('Model');local b=Instance.new('Part');b.Size=Vector3.one*1.9;b.CFrame=CFrame.new(0,10,0);b.Parent=v
+ FunFX.BODIES[role](v,b,1.9,orange,orange,orange,{})  -- called directly: errors surface here
  local l,_,silhouette=paint(tostring(i),role,orange)
  assert(silhouette~='','parts for '..role)
  assert(not shapes[silhouette],role..' shares a silhouette with '..tostring(shapes[silhouette]))
@@ -34,12 +34,29 @@ for i,role in ipairs(roles) do
 end
 local look,_,_=paint('3',nil,nil)
 assert(look.accent and look.color,'an unknown type still paints')
+-- No trails or sparkles on drones any more (owner: effects show things);
+-- the small light under the body is on only while it works.
+assert(look.trail==nil and look.motes==nil,'drones carry no trail or sparkle emitter')
 FunFX.stepCube(look,20,false,false,1)
-assert(look.trail.Enabled and look.motes.Rate==0,'cruising shows the trail without mining sparkles')
+assert(look.light.Brightness==0,'no light while cruising')
 FunFX.stepCube(look,0,true,false,1.1)
-assert(not look.trail.Enabled and look.motes.Rate>0,'mining sheds sparkles and drops the trail')
+assert(look.light.Brightness>0,'a small light while it works')
 FunFX.stepCube(look,30,true,true,1.2)
-assert(not look.trail.Enabled and look.motes.Rate==0 and look.light.Brightness==0,'hidden drones show nothing')
+assert(look.light.Brightness==0,'hidden drones show nothing')
+-- Moving parts: the Singularity's ring turns; the Halver's halves part while it cuts.
+do
+ local ring=paint('5','Singularity',orange)
+ local seg=ring.anim[1].part
+ FunFX.stepCube(ring,0,false,false,1);local a=seg.CFrame.Position
+ FunFX.stepCube(ring,0,false,false,2);local b=seg.CFrame.Position
+ assert((a-b).Magnitude>.01,'the Singularity ring turns')
+ local halves=paint('6','Halver',orange)
+ local half=halves.anim[1].part
+ FunFX.stepCube(halves,0,false,false,1);local closed=half.CFrame.Position
+ for k=1,30 do FunFX.stepCube(halves,0,true,false,1+k/30) end
+ assert((half.CFrame.Position-closed).Magnitude>.1,'the Halver halves part while it cuts')
+ for role,m in pairs(FunFX.MOTION) do assert(m.bob and m.hz,'a hover for '..role) end
+end
 assert(FunFX.mineralColor('RunRuby')==FunFX.ZoneColors[2] and FunFX.mineralColor('Nope')==nil)
 local cleanup=nil;local spawn=task.spawn;task.spawn=function(f) cleanup=f end
 FunFX.confetti(root,Vector3.new(0,1,0),FunFX.ZoneColors[1],1.5)

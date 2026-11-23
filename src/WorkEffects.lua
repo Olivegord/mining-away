@@ -129,7 +129,9 @@ function W:energyBloom()
  -- A little under the original (.5, 20, 1.25): cut much lower, bright effects went flat.
  -- Threshold above the lit world, below Neon gems and light-emitting beams,
  -- so only the glowing things glow.
- bloom.Enabled=true;bloom.Intensity=.55;bloom.Size=20;bloom.Threshold=1.2;bloom.Parent=lighting
+ -- Owner, Nov 22: glare on top of the authored bloom read as clutter; a
+ -- softer second bloom keeps glowing things glowing without haloing the screen.
+ bloom.Enabled=true;bloom.Intensity=.38;bloom.Size=16;bloom.Threshold=1.3;bloom.Parent=lighting
  self.bloom=bloom;self.ownsBloom=existing==nil
 end
 function W:burst(position,normal,color,count,now)
@@ -373,7 +375,11 @@ function W:flight(drone,record,dt,now)
   fx={objects={},trails={},position=root.Position,life=source:GetAttribute('Life')};record.flight=fx
   local role=source:GetAttribute('Role')
   local span=role=='Medic' and .25 or role=='Courier' and .48 or math.max(.25,root.Size.X*.34)
-  for _,side in ipairs({-1,1}) do
+  -- The dig fleet's bodies carry no flight trails or wisps (owner, Nov 22:
+  -- effects should show something, not decorate everything); a moving
+  -- drone already reads as moving.
+  local plain=drone.cubeLook~=nil
+  for _,side in ipairs(plain and {} or {-1,1}) do
    local a=Instance.new('Attachment');a.Name='FlightTrailTop';a.Position=Vector3.new(side*span,-.03,span*.65);a.Parent=root
    local b=Instance.new('Attachment');b.Name='FlightTrailBottom';b.Position=a.Position-Vector3.new(0,.065,0);b.Parent=root
    local trail=Instance.new('Trail');trail.Name='DroneFlightTrail';trail.Attachment0=a;trail.Attachment1=b
@@ -383,7 +389,7 @@ function W:flight(drone,record,dt,now)
    trail.Enabled=false;trail.Parent=root
    table.insert(fx.objects,a);table.insert(fx.objects,b);table.insert(fx.objects,trail);table.insert(fx.trails,trail)
   end
-  if self.flightCount<self.maxFlightParticles then
+  if not plain and self.flightCount<self.maxFlightParticles then
    local a=Instance.new('Attachment');a.Name='HoverExhaust'
    a.Position=(role~='Medic' and role~='Courier' and drone.beam and drone.beam.origin.Position) or Vector3.zero;a.Parent=drone.emitter
    local wisp=particle(a,'FlightWisp',drone.emitter.Color)
