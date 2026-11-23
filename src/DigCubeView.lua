@@ -20,6 +20,8 @@
 --    (ROLE_FX below); the Lancer fires short pulse lasers (pulseShot)
 -- Nothing here uses Neon.
 local DigCube=require('./DigCube')
+-- The painted attacks live in RoleEffectView (bundled before this view).
+local StrikeArt=RoleEffectView and RoleEffectView.StrikeArt or nil
 local RockChunks=require('./RockChunks')
 RockChunks.wedges=DigCube.polyWedges
 local ROCK,ROCK_VARIANT=DigCube.rockLook()
@@ -66,6 +68,9 @@ end
 --  contact: the own-break contact (nil = the projectile/pulse effect carries
 --   it); sounds; light; hold class; streak lift/speed multipliers.
 local C3=Color3.fromRGB
+-- Pulse-kernel roles and who draws them: the Lancer (pulseShot), the
+-- Crescent's slash and the Stormcaller's bolt (StrikeArt).
+local PULSE_CODES={Z=true,G=true,V=true}
 local ROLE_FX={
  -- The Striker (the starter miner) brings back the field rocks' break
  -- (owner, Nov 22: "the rock turns black, then splits in half with an
@@ -95,21 +100,32 @@ local ROLE_FX={
  H={proxy={halves=true,mesh={ripple={amp=.08,len=2,speed=5.5,glow=.5}}},
   rubble={halves=true,per=5,min=1,max=3,up={8,11},out={6,10},spin={3,5},dark={.06,.2},near=.6,dcap=.85},
   contact='Halver',sounds={{cue='crystal_split'}},light=true,hold='heavy',lift=.9,speed=1.1},
- G={proxy={flat=true,mesh={ripple={amp=.08,len=1.8,speed=4,square=true,glow=.6}}},
-  rubble={grid=1.8,up={9,13},out={2,5},spin={1,3},dark={.1,.2},near=.3,dcap=.5,pattern='rows'},
-  contact='Gridcutter',sounds={{cue='crystal_electric',pitch=.85,seq=.06}},light=true,hold='piece',lift=1,speed=1},
+ -- Crescent: every slash shears the rock along its cut; the last one
+ -- throws the sheared pieces off along the slash with a few pastel stars.
+ G={proxy={pulse=true,mesh={}},
+  rubble={per=2.2,min=1,max=5,up={7,11},out={14,22},spin={3,6},dark={.04,.1},near=.3,dcap=.5,scorch=C3(150,120,200),pattern='jet'},
+  spray={{color={C3(255,240,214),C3(226,150,230)},tr={0,1},size={.16,0},speed={5,12},life={.5,1},drag=2,accel=2,spread=120,count=14,light=1}},
+  sounds={{cue='tool_slice',pitch=1.15},{cue='crystal_split',pitch=1.05}},hold='split',lift=1,speed=1.1},
  Y={proxy={tone=C3(20,8,40),cap=.55,compress=.1,mesh={ripple={amp=.1,len=2.2,speed=-4.5,glow=.6}}},
   rubble={per=2.2,min=1,max=6,up={14,20},out={1,3},spin={6,10},dark={.2,.3},near=.6,dcap=.9,scorch=C3(20,8,32),implode=.12},
   contact='Singularity',sounds={{cue='crystal_impact',pitch=.76}},light=true,hold='heavy',lift=1.3,speed=.6},
- M={proxy={tone=C3(255,120,40),cap=0,pow=1.5,light=true,mesh={ripple={amp=.07,len=2.8,speed=3,glow=.85,beat=1.4}}},
-  rubble={per=2.2,min=1,max=5,up={22,30},out={1,3},spin={2,4},dark={.06,.2},near=.6,dcap=.85,molten=C3(255,150,60),pattern='fountain'},
-  contact='Starforge',sounds={{cue='tool_sizzle',pitch=.87}},light=true,hold='split',lift=.8,speed=1},
+ -- Starfall: nothing touches the rock until the star lands (the projectile
+ -- carries the contact); then a pressure strike throws it up and out, the
+ -- pieces trailing faint blue sparkle.
+ M={proxy={cap=0,mesh={}},carve=true,
+  rubble={per=2.4,min=1,max=5,up={18,26},out={6,12},spin={4,8},dark={.1,.2},near=.5,dcap=.7,scorch=C3(40,50,110),pattern='ring',
+   trail={{color={C3(220,236,255),C3(80,120,255)},tr={0,1},size={.12,0},speed={.5,1.5},life={.3,.6},rate=14,accel=-2,most=8,stop=.9,light=1}}},
+  spray={{color={C3(236,244,255),C3(90,130,255)},tr={0,1},size={.2,0},speed={8,18},life={.4,.9},drag=2.5,accel=-6,spread=90,count=22,light=1}},
+  sounds={{cue='crystal_split',pitch=.95}},hold='heavy',lift=1.3,speed=1.2},
  I={proxy={tone=C3(190,235,255),cap=0,pow=1,mesh={ripple={amp=.06,len=2.6,speed=2.2,glow=.5,beat=1.2}}},
   rubble={per=.6,min=3,max=10,count=34,up={8,12},out={12,20},spin={14,24},dark={.3,.4},near=0,dcap=.4,scorch=C3(190,235,255),glass=true,friction=.05,pattern='shatter'},
   contact='Frostbite',sounds={{cue='crystal_snap',pitch=1.31},{cue='crystal_split',pitch=1.15}},light=true,hold='split',lift=1,speed=1.2},
- V={proxy={vibrate={.01,.09},mesh={ripple={amp=.12,len=1.6,speed=7,glow=.6,beat=4}}},
-  rubble={per=2.2,min=1,max=5,up={13,17},out={1,3},spin={1,2},dark={.06,.2},near=.6,dcap=.85,jitter=.12,pattern='waves'},
-  contact='Resonator',sounds={{cue='coil_hit',pitch=1.19,seq=.12}},light=true,hold='split',lift=1,speed=1},
+ -- Stormcaller: each strike scorches and jolts the rock where it bites;
+ -- the break jumps apart, crackling, with violet sparks.
+ V={proxy={pulse=true,mesh={}},
+  rubble={per=2.2,min=1,max=5,up={13,17},out={2,5},spin={2,4},dark={.15,.3},near=.6,dcap=.85,jitter=.12,scorch=C3(40,24,70),pattern='waves'},
+  spray={{color={C3(255,240,255),C3(170,70,255)},tr={0,1},size={.14,0},speed={12,24},life={.2,.5},drag=4,accel=-18,spread=100,count=20,light=1}},
+  sounds={{cue='coil_hit',pitch=1.19,seq=.12},{cue='crystal_electric',pitch=1.1}},hold='split',lift=1,speed=1},
  P={proxy={tone=C3(12,6,10),cap=.9,src='late',mesh={charge=.45,tremble=.06}},carve=true,
   -- A giant laser (owner, Nov 22): the burnt rock is blown far out of the
   -- hit, smoking and shedding embers, and a spray of hot embers flies far.
@@ -149,7 +165,7 @@ end
 
 function V.new(ctx: any)
  local self=setmetatable({ctx=ctx,beams={},splits={},frags={},banners={},dust={},puffs=0,mine={},cellColor={},cellCode={},cellAccent={},cutStage={},flashes={},pending={},floors={},cracks={},crackCells={},sinks={},cube=nil,origin=Vector3.zero,
-  generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={},localOpened={},sealedIds={},chains={},frost={},hints={},shots={}},V)
+  generation=-1,applied=0,random=Random.new(),connections={},tapAt=0,geodes={},geodeOwner={},localOpened={},sealedIds={},chains={},frost={},hints={},shots={},slashes={},bolts={}},V)
  local fx=Instance.new('Folder');fx.Name='DigCubeFX';fx.Parent=workspace
  self.fx=fx
  self:watch()
@@ -1438,11 +1454,11 @@ local BURST={
  N={count=1,strength=.8,mode='pry',ring=.08,speed=10,width=.6},
  U={count=2,strength=.8,mode='lift',ring=.18,speed=6,width=1.3},
  H={count=2,strength=1.35,mode='pry',ring=.22,speed=13},
- G={count=2,strength=.9,mode='lift',ring=.16,speed=12},
+ G={count=2,strength=1,mode='pry',ring=.12,speed=16,width=.6},
  Y={count=2,strength=1.4,mode='pry',ring=.24,speed=-10},
- M={count=2,strength=1,mode='lift',ring=.2,speed=8,glow=.95},
+ M={count=3,strength=1.3,mode='lift',ring=.26,speed=14,glow=.7},
  I={count=3,strength=1.5,mode='pry',ring=.18,speed=16,width=.6},
- V={count=3,strength=.9,mode='pry',ring=.2,speed=18,width=.7},
+ V={count=2,strength=1.1,mode='pry',ring=.16,speed=22,width=.6,glow=.8},
  P={count=2,strength=1.4,mode='pry',ring=.26,speed=14},
  A={count=2,strength=1.5,mode='lift',ring=.3,speed=12},
  Z={count=2,strength=1,mode='pry',ring=.22,speed=20,width=.8,glow=.85},
@@ -1461,11 +1477,11 @@ V.BURST=BURST
 --  B Ballcaster  swell    the cell swells and shivers, darkening, until the ball pops it
 --  U Bubbler     float    the rock lifts out of its bed and drifts apart inside a bubble
 --  H Halver      halve    a seam glows across it and the two halves lean apart
---  G Gridcutter  dice     a grid sweeps across it; each square drops as it is cut
+--  G Crescent    shear    each slash cuts a line across it; one side slides off along the cut
 --  Y Singularity implode  the rock spirals in toward the middle and sinks
---  M Starforge   melt     a molten front spreads from the beam and the rock sags
+--  M Starfall    strike   untouched until the star lands; then thrown up and out
 --  I Frostbite   freeze   ice spreads from the beam, then the frozen rock shivers
---  V Resonator   rattle   the rock shakes harder and harder, rings running out
+--  V Stormcaller scorch   each strike chars and jolts the rock around its bite
 --  Z Lancer      drill    every pulse punches the hole under the lance deeper
 -- The Striker keeps the classic terrace cut (pits stepping down, ripple,
 -- crack pops); Ramiel and Nomad keep their charge pops.
@@ -1547,41 +1563,31 @@ do
   -- Size Z runs along the seam (the frame's Z axis is normal x up).
   seam.CFrame=CFrame.fromMatrix(proxy.planeAt,proxy.normal,Vector3.yAxis)
  end}
- SIG.G={build=function(self,proxy)
-  proxy.bars={}
-  local R=math.max(proxy.radius,1)
-  for axis=1,2 do
-   for k=1,5 do
-    local at=-R+(k-.5)*(2*R/5)
-    if math.abs(at)<R*.95 then
-     table.insert(proxy.bars,{part=neon(proxy.model,'GridLine',proxy.primary:Lerp(Color3.new(1,1,1),.3)),axis=axis,at=at,chord=2*math.sqrt(R*R-at*at),start=(at+R)/(2*R)})
-    end
-   end
-  end
- end,tiles=function(self,proxy,rec,p)
-  if not proxy.sweepSet then
-   proxy.sweepSet=true
-   local lo,hi=math.huge,-math.huge
-   for _,t in ipairs(rec.tiles) do local s=t.cx+t.cz*.3;lo=math.min(lo,s);hi=math.max(hi,s) end
-   for _,t in ipairs(rec.tiles) do t.sweepAt=hi>lo and ((t.cx+t.cz*.3)-lo)/(hi-lo)*.8 or 0 end
+ -- Crescent: each slash leaves a cut line across the piece (along the
+ -- slash); the rock on one side of it slides off along the cut and sinks a
+ -- little, and the cut glows pale pink for a moment. Cuts add up.
+ SIG.G={tiles=function(self,proxy,rec,p,now)
+  proxy.cuts=proxy.cuts or {}
+  local n=proxy.hits or 0
+  local R=math.max(rec.radius,1)
+  while #proxy.cuts<n do
+   local k=#proxy.cuts+1
+   local d=proxy.cutDirs and proxy.cutDirs[k] or Vector3.new(math.cos(k*2.1),0,math.sin(k*2.1))
+   d=Vector3.new(d.X,0,d.Z);d=d.Magnitude>1e-3 and d.Unit or Vector3.xAxis
+   table.insert(proxy.cuts,{d=d,n=Vector3.new(-d.Z,0,d.X),off=(math.random()-.5)*R*.7,at=proxy.hitAt or now,side=k%2==0 and 1 or -1})
   end
   return function(tile)
-   local u=math.clamp((p-(tile.sweepAt or 0))/.14,0,1)
-   if u<=0 then return nil end
-   return Vector3.new(0,-.45*u,0),nil,tile.stone:Lerp(proxy.primary,.22*u):Lerp(Color3.new(0,0,0),.16*u)
-  end
- end,extra=function(self,proxy,rec,p)
-  local top=proxy.pivot+Vector3.yAxis*.07
-  for _,b in ipairs(proxy.bars or {}) do
-   -- Lines along one axis sweep in first, then the cross lines.
-   local u=math.clamp((p*(b.axis==1 and 1.5 or 1.2)-(b.axis==1 and 0 or .3)-b.start*.5)/.4,0,1)
-   local len=b.chord*u
-   b.part.Transparency=len>.05 and .2 or 1
-   if b.axis==1 then
-    b.part.Size=Vector3.new(.08,.06,math.max(.05,len));b.part.CFrame=CFrame.new(top+Vector3.new(b.at,0,0))
-   else
-    b.part.Size=Vector3.new(math.max(.05,len),.06,.08);b.part.CFrame=CFrame.new(top+Vector3.new(0,0,b.at))
+   local off,col=Vector3.zero,nil
+   for _,c in ipairs(proxy.cuts) do
+    local s=tile.cx*c.n.X+tile.cz*c.n.Z-c.off
+    -- three stop-motion steps to slide, then it rests
+    local u=math.floor(math.clamp((now-c.at)/.12,0,1)*3+.001)/3
+    if s*c.side>0 then off+=c.d*(.38*u*c.side)+Vector3.new(0,-.14*u,0)+c.n*(.06*u*c.side) end
+    local glow=1-math.clamp((now-c.at)/.45,0,1)
+    if glow>0 and math.abs(s)<.5 then col=(col or tile.stone):Lerp(Color3.fromRGB(255,216,240),.55*glow) end
    end
+   if off.Magnitude<1e-3 and not col then return nil end
+   return off,nil,col
   end
  end}
  SIG.Y={tiles=function(self,proxy,rec,p)
@@ -1597,17 +1603,15 @@ do
    return Vector3.new(nx-x,-.9*e*(1-.5*r),nz-z),CFrame.Angles(0,-spin,0)
   end
  end}
- SIG.M={tiles=function(self,proxy,rec,p)
-  local h=proxy.hit or Vector3.zero
-  local front=(rec.radius+1.2)*p^.85
-  local e=ease(p)
+ -- Starfall: nothing reacts before the star lands (owner: a rock reacts
+ -- only once something touches it); the impact does the rest.
+ SIG.M={tiles=function(self,proxy,rec,p,now)
+  if p<1 then proxy.landAt=nil;return nil end
+  -- landed: the strike heaves the rock up and out in two quick steps
+  proxy.landAt=proxy.landAt or now
+  local u=math.floor(math.clamp((now-proxy.landAt)/.2,0,1)*2+.001)/2
   return function(tile)
-   local d=dist(tile,h)
-   local heat=math.clamp((front-d)/1.8,0,1)
-   if heat<=0 then return nil end
-   local col=tile.stone:Lerp(MOLTEN,.52*heat)
-   if d<1.3 then col=col:Lerp(WHITEHOT,.4*heat) end
-   return Vector3.new(0,-.6*heat*e,0),CFrame.Angles(.06*heat*math.sin(tile.cx*3),0,.06*heat*math.cos(tile.cz*3)),col
+   return Vector3.new(tile.cx*.22*u,.55*u,tile.cz*.22*u),nil,tile.stone:Lerp(Color3.fromRGB(40,50,110),.3*u)
   end
  end}
  SIG.I={tiles=function(self,proxy,rec,p,now)
@@ -1625,12 +1629,25 @@ do
    return off,nil,tile.stone:Lerp(ICE,.62),nil,Enum.Material.Ice
   end
  end}
- SIG.V={every=.42,ring={amp=.24,speed=14,width=.9,glow=.45},tiles=function(self,proxy,rec,p,now)
-  local a=.02+.18*p^1.4
-  local frame=math.floor(now*8)
+ -- Stormcaller: each strike scorches the rock around its bite (wider with
+ -- every strike) and jolts it, flickering violet, for a moment.
+ SIG.V={ring={amp=.2,speed=22,width=.6,glow=.5},tiles=function(self,proxy,rec,p,now)
+  local h=proxy.hit or Vector3.zero
+  local n=proxy.hits or 0
+  local reach=1.1+.5*n
+  local jolt=math.clamp(1-(now-(proxy.hitAt or -9))/.3,0,1)
+  local frame=math.floor(now*12)
   return function(tile,i)
-   local q=frame*.91+i*3.7
-   return Vector3.new(math.noise(q,i,.2),math.noise(i,q,.6)*.6,math.noise(.3,i,q))*(a*2)
+   local k=math.clamp(1-dist(tile,h)/reach,0,1)
+   if k<=0 then return nil end
+   local off=nil
+   if jolt>0 then
+    local q=frame*1.3+i*2.1
+    off=Vector3.new(math.noise(q,i,.1),math.noise(i,q,.3)*.8,math.noise(.2,q,i))*(.18*jolt*k)
+   end
+   local col=tile.stone:Lerp(Color3.fromRGB(30,20,52),.6*k)
+   if jolt>0 then col=col:Lerp(Color3.fromRGB(222,176,255),.5*jolt*k) end
+   return off,nil,col
   end
  end}
  -- Ramiel: the prism beam chars the cluster from the hit outward while it
@@ -1928,6 +1945,15 @@ function V:split(op: any,now: number)
  local link=op.flag=='C' and style.code=='V'
  if link and not owned then owned=self:ownChainLink(op.cells[1],now)
  elseif style.code=='V' and owned and op.flag~='C' and not op.partial and not op.geode then self:markChain(op.cells,now) end
+ -- Stormcaller: a chain link is struck by a small arc from the last break.
+ if style.code=='V' then
+  local at=o+Vector3.new(cx,top,cz)
+  local last=self.stormAt
+  if link and last and os.clock()-last.at<1.6 and (last.point-at).Magnitude<18 then
+   self:boltShot(last.point+Vector3.yAxis*.4,at,owned,.45)
+  end
+  if not op.partial and not op.geode then self.stormAt={at=os.clock(),point=at} end
+ end
  local strength=math.clamp(bulk*.36,.9,2.45)
  local heavy=owned and strength>=1.35
  local hold=0
@@ -2967,7 +2993,7 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
  local slam=beam.impactSerial~=nil and impactSerial~=beam.impactSerial and code=='C' and recent
  beam.impactSerial=impactSerial
  local pulseSerial=source:GetAttribute('MinePulseSerial') or 0
- local pulse=beam.pulseSerial~=nil and pulseSerial~=beam.pulseSerial and code=='Z' and recent
+ local pulse=beam.pulseSerial~=nil and pulseSerial~=beam.pulseSerial and PULSE_CODES[code]==true and recent
   and workspace:GetServerTimeNow()-(source:GetAttribute('MinePulseAt') or 0)<.5
  beam.pulseSerial=pulseSerial
  if ids and not moved and (slam or pulse) then
@@ -2976,6 +3002,12 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
   if job then
    if slam then job.slamAt=clock end
    if pulse then job.pulseAt=clock end
+   if pulse and code=='G' then
+    -- each slash crosses the last at a new angle
+    beam.cuts=(beam.cuts or 0)+1
+    beam.cutDir=Vector3.new(math.cos(beam.cuts*2.2+(beam.seed or 0)),0,math.sin(beam.cuts*2.2+(beam.seed or 0)))
+    job.cutDirs=job.cutDirs or {};table.insert(job.cutDirs,beam.cutDir)
+   end
   end
  end
  -- Every slam lands heavy; one that broke its chunk leaves the big wave to the break.
@@ -3000,7 +3032,11 @@ function V:droneBeam(source: Instance,from: Vector3,now: number,accent: Color3?)
   beam.tip=hit and hit.Position or Vector3.new(from.X,self.origin.Y,from.Z)
  end
  local tip=Vector3.new(from.X,beam.tip.Y,from.Z)
- if pulse then self:pulseShot(from,hitPoint or tip,primary,edge,beam.mine) end
+ if pulse then
+  if code=='G' then self:slashShot(hitPoint or tip,beam.cutDir,beam.mine)
+  elseif code=='V' then self:boltShot(from-Vector3.yAxis*.6,hitPoint or tip,beam.mine,1)
+  else self:pulseShot(from,hitPoint or tip,primary,edge,beam.mine) end
+ end
  if from.Y-tip.Y<.4 then self:hideBeam(beam);return end
  local locked=ids~=nil
  local cutting=locked and digMining
@@ -3206,6 +3242,46 @@ function V:stepShots(now: number)
  for _,rig in ipairs(self.shots) do
   if not rig.idle then self:stepShot(rig,now) end
  end
+ if StrikeArt then
+  for _,rig in ipairs(self.slashes) do if not rig.idle then StrikeArt.stepSlash(rig,now) end end
+  for _,rig in ipairs(self.bolts) do if not rig.idle then StrikeArt.stepBolt(rig,now) end end
+ end
+end
+-- A free rig from a pool (at most `max`; when all are busy the oldest
+-- fires again).
+local function pooled(list: {any},max: number,make: () -> any): any
+ for _,r in ipairs(list) do if r.idle then return r end end
+ if #list<max then local r=make();table.insert(list,r);return r end
+ local oldest=list[1]
+ for _,r in ipairs(list) do if r.at<oldest.at then oldest=r end end
+ return oldest
+end
+-- The Crescent's slash (owner reference): a painted crescent sheet turning
+-- through a tilted plane at the hit, its seam glowing on the rock.
+function V:slashShot(hit: Vector3,dir: Vector3?,owned: boolean?,quiet: boolean?)
+ if not StrikeArt or not self.cube or self:reduced() then return end
+ StrikeArt.prepare()
+ local rig=pooled(self.slashes,5,function() return StrikeArt.newSlash(self.fx) end)
+ local d=dir or Vector3.new(math.cos(os.clock()*3),0,math.sin(os.clock()*3))
+ local tilt=math.rad(14+self.random:NextNumber(0,18))*(self.random:NextNumber()<.5 and -1 or 1)
+ StrikeArt.fireSlash(rig,hit,d,tilt,7.2,os.clock(),owned)
+ if self.ctx.audio and not quiet then
+  self.ctx.audio:play('tool_slice',hit,{pitch=1.12+self.random:NextNumber(-.05,.05),level=owned and 1 or .55})
+  self.ctx.audio:play('crystal_snap',hit,{pitch=1.45,level=owned and .45 or .25})
+ end
+ if owned and self.ctx.beat then self.ctx.beat('Hit',hit,workspace:GetServerTimeNow(),.8) end
+end
+-- The Stormcaller's living lightning from the drone to its bite.
+function V:boltShot(from: Vector3,to: Vector3,owned: boolean?,scale: number?,quiet: boolean?)
+ if not StrikeArt or not self.cube or self:reduced() or (from-to).Magnitude<.5 then return end
+ StrikeArt.prepare()
+ local rig=pooled(self.bolts,4,function() return StrikeArt.newBolt(self.fx) end)
+ StrikeArt.fireBolt(rig,from,to,os.clock(),owned,scale)
+ if self.ctx.audio and (scale or 1)>.6 and not quiet then
+  self.ctx.audio:play('coil_fire',from,{pitch=1.25,level=owned and .8 or .45})
+  self.ctx.audio:play('crystal_electric',to,{pitch=1.05+self.random:NextNumber(-.06,.06),level=owned and 1 or .5})
+ end
+ if owned and (scale or 1)>.6 and self.ctx.beat then self.ctx.beat('Hit',to,workspace:GetServerTimeNow(),.9) end
 end
 
 -- Rock to collect: the server leaves a (hidden) Dust part where a piece
@@ -3523,8 +3599,12 @@ local SHOWCASE={
  {code='B',name='BALLCASTER',sub='swells, then pops'},
  {code='I',name='FROSTBITE',sub='freezes it'},
  {code='P',name='RAMIEL',sub='chars, lifts, blasts'},
+ {code='G',name='CRESCENT',sub='slashes it apart'},
+ {code='M',name='STARFALL',sub='a star bursts on it'},
+ {code='V',name='STORMCALLER',sub='lightning scorches it'},
 }
 local SHOW_PERIOD=4.4
+local SHOW_STAR={charge=.9,flight=.72,land=1.62}
 local SHOW_WORK=3.2 -- seconds of work; the rest holds the result
 V.SHOWCASE=SHOWCASE
 function V:buildShowcase()
@@ -3578,6 +3658,9 @@ local function showProgress(code: string,t: number): number
  local u=math.clamp(t/SHOW_WORK,0,1)
  if code=='C' then return math.min(1,math.floor(t/.75)*.25)
  elseif code=='Z' then return math.min(1,math.floor(t/.6)*.2)
+ elseif code=='G' then return math.min(1,math.floor(t/.8)*.25)
+ elseif code=='V' then return math.min(1,math.floor(t/1.05)*.34)
+ elseif code=='M' then return t>=SHOW_STAR.land and 1 or 0
  elseif code=='N' then return math.min(1,math.floor(t/.25)*.08)
  end
  return u
@@ -3607,6 +3690,7 @@ function V:stepShowcase(now: number)
     if proxy then
      proxy.order=nil;proxy.goneAt=nil;proxy.hits=0;proxy.hitAt=nil;proxy.sweepSet=nil;proxy.ringAt=nil
      proxy.slamAt=nil;proxy.pulseAt=nil;proxy.meshSlam=nil;proxy.meshPulse=nil;proxy.meshAt=nil
+     proxy.cuts=nil;proxy.cutDirs=nil
     end
    end
    local function once(key: string,at: number): boolean
@@ -3616,8 +3700,27 @@ function V:stepShowcase(now: number)
    local proxy=st.proxy
    if proxy then
     local p=showProgress(def.code,t)
-    if p~=proxy.progress and (def.code=='C' or def.code=='Z') and p>0 then
+    if p~=proxy.progress and (def.code=='C' or PULSE_CODES[def.code]) and p>0 then
      if def.code=='C' then proxy.slamAt=now else proxy.pulseAt=now end
+     -- the new attacks draw their own strike on the display rock
+     if not reduced and def.code=='G' then
+      local k=(proxy.hits or 0)+1
+      local d=Vector3.new(math.cos(k*2.2),0,math.sin(k*2.2))
+      proxy.cutDirs=proxy.cutDirs or {};proxy.cutDirs[k]=d
+      self:slashShot(st.pivot+Vector3.yAxis*.9,d,false,true)
+     elseif not reduced and def.code=='V' then
+      self:boltShot(st.pivot+Vector3.new(1.5,9,0),st.pivot+Vector3.yAxis*.9+Vector3.new(math.random()-.5,0,math.random()-.5),false,.8,true)
+     end
+    end
+    if def.code=='M' and StrikeArt and not reduced then
+     -- a star charges above the rock, wanders down and bursts on it
+     StrikeArt.prepare()
+     st.star=st.star or StrikeArt.newStar(self.showcase.root)
+     local from,to=st.pivot+Vector3.new(2,8,-1),st.pivot+Vector3.yAxis*.9
+     if t<SHOW_STAR.land then StrikeArt.stepStar(st.star,from,to,t,SHOW_STAR.charge,SHOW_STAR.flight,cycle%7+.5,now)
+     else StrikeArt.hideStar(st.star) end
+     if once('star',SHOW_STAR.land) then StrikeArt.starImpact(self.showcase.root,to-Vector3.yAxis*.9,os.clock(),.8) end
+     StrikeArt.stepImpacts(os.clock())
     end
     proxy.progress=p
     local lift=proxy.sig.lift and proxy.sig.lift(p) or 0

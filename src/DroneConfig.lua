@@ -163,11 +163,11 @@ DroneConfig.TypeOrder = { "Dart", "Striker", "Medic", "Charger", "Courier", "Orb
 local specialDefinitions: {[string]: {description: string, color: {number}, duration: number, health: number}} = {
  Bubbler={description='Pressure vessels pull loose chips into a buoyant bubble, then pop it. Repeats until the rock breaks.',color={120,225,255},duration=2.8,health=80},
  Halver={description='Wide articulated jaws shear off a seam and ring-grind its chips. Hard rocks need repeated cuts.',color={190,140,255},duration=3.6,health=110},
- Gridcutter={description='A rectangular scanning gantry scores and ejects one layer of mineral cubes per pass.',color={255,100,130},duration=2.5,health=80},
+ Gridcutter={description='Crescent: cuts the rock with angled crescent slashes that shear pieces loose.',color={196,150,255},duration=2.5,health=80},
  Singularity={description='A tilted containment ring feeds a small gravity well that strips a bounded chunk per pulse.',color={155,100,255},duration=2,health=100},
- Starforge={description='A tall furnace focuses solar heat into a seam, releasing a short stream of molten chips.',color={255,170,60},duration=3,health=80},
+ Starforge={description='Starfall: launches a wandering star that bursts on the rock.',color={110,150,255},duration=3,health=80},
  Frostbite={description='Long cryogenic tanks freeze a surface layer, then a sharp pressure pulse cracks it away.',color={150,255,245},duration=2.4,health=80},
- Resonator={description='Three tuning forks build a coherent vibration, then snap off one resonant mineral chunk.',color={125,255,160},duration=2.6,health=80},
+ Resonator={description='Stormcaller: calls down living lightning that arcs into neighbouring cells.',color={170,90,255},duration=2.6,health=80},
 }
 local specialOrder = {'Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator'}
 for _,name in ipairs(specialOrder) do

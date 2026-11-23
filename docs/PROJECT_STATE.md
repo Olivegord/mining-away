@@ -27,6 +27,10 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Built on `codex/ro
 - **Rule for every drone:** reactions follow the attack's physics (mass, heat, puncture, charge, pulse, cold, prism); the table is in the VFX instructions.
 - Not seen in Play.
 
+## November 22 — three new attacks: Crescent, Starfall, Stormcaller
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md); details in [VFX instructions](VFX_INSTRUCTIONS.md). Branch `codex/new-attacks`, merged into the integration branch and installed by `tools/studio_apply.py` (see `docs/studio-installed.json`). Not published. Dormant Gridcutter/Starforge/Resonator slots become Crescent (angled crescent slashes), Starfall (wandering star, blue Pressure Strike impact) and Stormcaller (living lightning); active roster now ten. Checked by Edit stills only; not seen in Play.
+
 ## November 22 — distinct drones, pastel light, less clutter, a dig loop that pays off
 
 Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Built on `codex/distinct-drones`, merged into the integration branch and installed by `tools/studio_apply.py` (last install `ec70fb3`, Team Create save 508 or later; see `docs/studio-installed.json`). Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md).

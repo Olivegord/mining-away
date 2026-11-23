@@ -123,6 +123,19 @@ def module_bundle(names):
   if name=='DigCubeView':
    code=code.replace("require('./DigCube')",'(function()\n'+(ROOT/'src/DigCube.lua').read_text()+'\nend)()')
    code=code.replace("require('./RockChunks')",'(function()\n'+(ROOT/'src/RockChunks.lua').read_text().replace('--!strict\n','')+'\nend)()')
+  if name in ('StrikeArt','RoleEffectView'):
+   # The painted attacks (StrikeArt) live inside RoleEffectView (the client
+   # bundle is at Luau's 200-local limit); DigCubeView reaches them through
+   # RoleEffectView.StrikeArt. Starfall's impact is the VERSION 2 Pressure
+   # Strike in a cool blue palette.
+   art=code if name=='StrikeArt' else (ROOT/'src/StrikeArt.lua').read_text()
+   strike=(ROOT/'tools/vfx_version2/PressureStrikeV2.lua').read_text()
+   for a,b in (('Color3.fromRGB(255, 251, 228)','Color3.fromRGB(214, 232, 255)'),('Color3.fromRGB(244, 234, 204)','Color3.fromRGB(170, 200, 255)'),
+               ('Color3.fromRGB(190, 190, 178)','Color3.fromRGB(140, 160, 215)'),('Color3.fromRGB(78, 80, 73)','Color3.fromRGB(60, 72, 120)'),('Color3.fromRGB(33, 35, 32)','Color3.fromRGB(28, 34, 70)')):
+    assert a in strike;strike=strike.replace(a,b,1)
+   art=art.replace("require('./PressureStrikeStar')",'(function()\n'+strike+'\nend)()')
+   if name=='StrikeArt': code=art
+   else: code=code.replace("require('./StrikeArt')",'(function()\n'+art+'\nend)()')
   if name=='CrewView':
    code=code.replace("require('./CrewAbilities')",'(function()\n'+(ROOT/'src/CrewAbilities.lua').read_text()+'\nend)()')
   if name=='SaleView':

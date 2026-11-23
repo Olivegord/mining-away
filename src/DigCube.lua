@@ -176,11 +176,23 @@ D.STYLES={
   near={radius=7,falloff=5,adjacent=6,exposed=2},hints={radius=6,max=12,life=8}},
  Bubbler={code='U',kernel='beam',pick='cone',size='large',pieces='none',early=true,power=.95,color={60,232,212},beam='Repair',collect={ready=.25,range=1e6}},
  Halver={code='H',kernel='beam',pick='wall',size='medium',pieces='none',early=true,power=.8,color={80,100,255},beam='Lance',rockMul=1.5,wall={edge=4,other=.3}},
- Gridcutter={code='G',kernel='beam',pick='cone',size='line',pieces='none',early=true,power=.9,color={255,60,170},beam='Gridcutter',line={min=3,max=6,width=2}},
+ -- Owner references, Nov 22: three painted attacks (StrikeArt) in the
+ -- slots of dormant types (saved fleets keep the kind names).
+ -- Crescent (Gridcutter slot): angled crescent slashes, each one shears a
+ -- piece of the chunk loose.
+ Gridcutter={code='G',kernel='pulse',pick='cone',size='medium',pieces='none',early=true,power=.9,color={196,150,255},
+  pulse={charge=.55,interval=.8,bite=.3,hover=8}},
  Singularity={code='Y',kernel='beam',pick='deep',size='huge',pieces='none',early=true,power=1,color={205,60,255},beam='Singularity',depthPow=2,lead=3},
- Starforge={code='M',kernel='beam',pick='cone',size='large',pieces='none',early=true,power=.85,color={255,214,110},beam='Starforge',forge=.4,hintBias=3},
+ -- Starfall (Starforge slot): charges a star that meanders down on a
+ -- feathery trail and lands in a small blue pressure strike; it can still
+ -- raise a gem a tier.
+ Starforge={code='M',kernel='shot',pick='cone',size='small',pieces='none',power=.9,color={110,150,255},shape='Star',carveAhead=true,forge=.4,hintBias=3,
+  shot={hover=9,chargeMin=.45,chargeMax=1.8,chargeDiv=1.3,rested=.4,flight=.72,recover=.2}},
  Frostbite={code='I',kernel='beam',pick='cone',size='small',pieces='none',early=true,power=1,color={150,230,255},beam='Sentry',brittle={life=10,mul=.6,max=48}},
- Resonator={code='V',kernel='beam',pick='cone',size='medium',pieces='none',early=true,power=.85,color={80,255,140},beam='Resonance',chain={links=3,budget=.4,maxArea=22,gap=.15}},
+ -- Stormcaller (Resonator slot): living lightning strikes; each break
+ -- still arcs on into a few small neighbours.
+ Resonator={code='V',kernel='pulse',pick='cone',size='medium',pieces='none',early=true,power=.85,color={170,90,255},chain={links=3,budget=.4,maxArea=22,gap=.15},
+  pulse={charge=.6,interval=1.05,bite=.38,hover=10}},
  -- Ramiel charges on its original 4.94 s clock (the glass rig's filmed beats);
  -- the bigger budget keeps its rate (cycle 3.7 s -> 6.0 s).
  Ramiel={code='P',kernel='volley',pick='ore',size='cluster',pieces='none',power=1,color={249,22,60},shape='Prism',carveAhead=true,oreBias=6,

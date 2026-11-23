@@ -66,8 +66,8 @@ end
 -- its attack comes from; nothing else on a drone glows or sheds particles.
 Fun.ROLE_SECONDARY={
  Striker=rgb(255,236,200),Charger=rgb(255,214,90),Ballcaster=rgb(255,120,214),Needler=rgb(255,238,176),
- Bubbler=rgb(200,240,255),Halver=rgb(232,236,255),Gridcutter=rgb(70,226,255),Singularity=rgb(255,96,206),
- Starforge=rgb(255,220,120),Frostbite=rgb(244,252,255),Resonator=rgb(240,255,120),Ramiel=rgb(255,176,186),
+ Bubbler=rgb(200,240,255),Halver=rgb(232,236,255),Gridcutter=rgb(255,226,214),Singularity=rgb(255,96,206),
+ Starforge=rgb(206,224,255),Frostbite=rgb(244,252,255),Resonator=rgb(232,200,255),Ramiel=rgb(255,176,186),
  Nomad=rgb(255,112,64),Lancer=rgb(255,70,86),
 }
 local NEUTRAL=rgb(150,160,172)
@@ -353,11 +353,11 @@ Fun.ROLE_PARTICLE={
  Needler={shape='needle',squash=2.6,scale=.55,motion='burst',drag=10,kick=2.2},
  Bubbler={shape='circle',grow=true,scale=1.9,motion='float',rise=2.4},
  Halver={shape='bar',squash=1.4,scale=1.1,motion='burst',drag=6,kick=1.4},
- Gridcutter={shape='square',spin=0,scale=.6,motion='float',rise=0},
+ Gridcutter={shape='star',spin=60,scale=.7,motion='float',rise=1},
  Singularity={shape='diamond',spin=320,scale=.9,motion='float',rise=-.4},
  Starforge={shape='star',spin=120,scale=1.25,motion='float',rise=2},
  Frostbite={shape='diamond',squash=1.2,scale=.75,motion='float',rise=-1.2},
- Resonator={shape='circle',pulse=true,scale=1.2,motion='burst',drag=5},
+ Resonator={shape='needle',squash=2,scale=.8,motion='burst',drag=7,kick=1.6},
  Ramiel={shape='diamond',spin=90,scale=1.6,motion='float',rise=.3},
  Nomad={shape='square',spin=420,scale=1.4,motion='burst',drag=8,kick=2},
  Lancer={shape='needle',squash=3.4,scale=1,motion='burst',drag=7,kick=1.6},

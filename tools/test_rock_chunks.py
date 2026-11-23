@@ -409,11 +409,11 @@ local SIGROLES={
  {'B',.6,function(f) return math.min(1,f/50) end},
  {'U',1.4,function(f) return .6 end},
  {'H',1,function(f) return .6 end},
- {'G',.85,function(f) return .6 end},
+ {'G',.85,function(f) return .6 end,function(self,key,f) local j=self.cracks[key];if j and (f==10 or f==30) then j.pulseAt=fakeClock end end},
  {'Y',1.9,function(f) return .6 end},
  {'M',1.4,function(f) return .6 end},
  {'I',.85,function(f) return .6 end},
- {'V',1,function(f) return .8 end},
+ {'V',1,function(f) return .8 end,function(self,key,f) local j=self.cracks[key];if j and (f==10 or f==55) then j.pulseAt=fakeClock end end},
  {'Z',1,function(f) return .5 end,function(self,key,f) local j=self.cracks[key];if j and (f==10 or f==30) then j.pulseAt=fakeClock end end},
 }
 local seen={}
@@ -437,22 +437,22 @@ for _,spec in ipairs(SIGROLES) do
   assert(apart>.3,'Halver halves lean apart: '..apart)
   assert(job.proxy.seam and job.proxy.seam.Transparency<1,'Halver seam glows')
  elseif code=='G' then
-  assert(f.sink<-.05,'Gridcutter squares drop as the grid sweeps')
-  local lit=0;for _,b in ipairs(job.proxy.bars) do if b.part.Transparency<1 then lit+=1 end end
-  assert(lit>=2,'Gridcutter grid lines show')
+  assert(job.proxy.cuts and #job.proxy.cuts==2,'Crescent: each slash leaves a cut')
+  assert(f.sink<-.02,'Crescent: the rock past each cut slides off and sinks: '..f.sink)
  elseif code=='Y' then assert(f.spread<-.2 and f.sink<-.1,'Singularity pulls the rock in')
- elseif code=='M' then assert(f.shift>.15 and f.sink<0,'Starforge melts from the beam')
+ elseif code=='M' then assert(f.shift<.02 and math.abs(f.sink)<.02,'Starfall: the rock waits, untouched, until the star lands')
  elseif code=='I' then assert(f.ice>=1,'Frostbite freezes the chunks')
  elseif code=='V' then
   local a={};for i,t in ipairs(job.proxy.mesh.tiles) do a[i]=t.frame.Position end
   for k=1,8 do fakeClock+=1/60;self:crackStage(DigCube.key(job.ids),.8,fakeClock,V.primaryColor('V'),true,true,'V',nil) end
   local moved=0;for i,t in ipairs(job.proxy.mesh.tiles) do moved=math.max(moved,(t.frame.Position-a[i]).Magnitude) end
-  assert(moved>.05,'Resonator rattles the rock: '..moved)
+  assert(f.shift>.1,'Stormcaller scorches the rock around its bites: '..f.shift)
+  assert(moved>.01,'Stormcaller jolts the rock as it strikes: '..moved)
  elseif code=='Z' then assert(job.proxy.hits==2 and f.sink<-.05,'Lancer pulses drill the hole deeper')
  end
  self:clearCracks()
 end
-print('PASS each type breaks the rock its own way: stamp, chip, swell, float, halve, dice, implode, melt, freeze, rattle, drill')
+print('PASS each type breaks the rock its own way: stamp, chip, swell, float, halve, shear, implode, wait-for-the-star, freeze, scorch, drill')
 do -- big breaks spread their effects; stages make the next piece hop
  local self=view()
  local small=chunkFor(self,.6)
@@ -504,7 +504,7 @@ do -- the drone gallery
  local self=view()
  fakeClock=1000
  self:stepShowcase(fakeClock)
- assert(#self.showcase.stations==7,'seven display rocks, one per active type')
+ assert(#self.showcase.stations==10,'ten display rocks, one per active type')
  local moved={}
  for f=1,300 do
   fakeClock=1000+f/60
@@ -520,7 +520,7 @@ do -- the drone gallery
  assert(old.dead,'rebuilt once per cube')
  for _,st in ipairs(self.showcase.stations) do RockChunks.destroy(st.rec) end
  for _,st in ipairs(self.showcase.stations) do assert(st.def.code=='L' or (st.proxy and st.proxy.sig==V.SIG[st.def.code]),st.def.name..' runs its real digging style') end
- print('PASS drone gallery: all seven display rocks run their type\'s digging style; rebuilt per cube')
+ print('PASS drone gallery: all ten display rocks run their type\'s digging style; rebuilt per cube')
 end
 do -- jumping on a sealed gem: brighter, long bolts, longer rays, combo crack after the pause
  local self=view()

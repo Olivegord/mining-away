@@ -474,7 +474,9 @@ for _,role in ipairs({'Lancer','Charger','Ballcaster','Needler','Bubbler','Halve
   assert((s.breakers.Windup or 0)>0 and (s.breakers.Dive or 0)>0,'Charger emits Windup and Dive beats')
   assert((s.breakers.Impact or 0)==0 and (s.breakers.Hold or 0)==0 and (s.breakers.Recover or 0)==0,'Charger never emits Impact/Hold/Recover records in the dig')
  elseif role=='Gridcutter' then
-  assert(s.consecutive,'Gridcutter breaks its line in sequence: C1, C2...')
+  assert(s.pulses>=3,'Crescent (Gridcutter) slashes as pulses (MinePulseSerial): '..s.pulses)
+ elseif role=='Resonator' then
+  assert(s.pulses>=2,'Stormcaller (Resonator) strikes as pulses (MinePulseSerial): '..s.pulses)
  elseif role=='Frostbite' then
   assert(s.brittle,'Frostbite leaves brittle cells (holder Brittle)')
  elseif role=='Needler' then
@@ -501,7 +503,7 @@ do
   assert(ratio>=.45 and ratio<=1.8,role..' rock volume/min is '..string.format('%.2f',ratio)..'x the medium Striker (band .45-1.8)')
  end
 end
-print('PASS 14 roles: own op codes, Dig shots released cleanly, Charger dive without Impact records, Gridcutter sequence, Frostbite brittle, Needler hints, Lancer pulses, volume/min within .45-1.8x')
+print('PASS 14 roles: own op codes, Dig shots released cleanly, Charger dive without Impact records, Crescent/Stormcaller pulses, Starfall star shots, Frostbite brittle, Needler hints, Lancer pulses, volume/min within .45-1.8x')
 
 -- ===== Replay with every role at work (spec 7.2.5) =====
 freshCube()

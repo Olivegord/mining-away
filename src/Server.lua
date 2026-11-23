@@ -350,7 +350,7 @@ local function roleTestFleet(p: any,starterOnly: boolean?,digCrew: any)
   -- A small random crew for the Dig Cube (owner, Nov 22: all 14 at once was
   -- far too confusing): the real first miner plus 3 different dig roles.
   -- Only the active types for now (owner: 6 drones or less, DroneCatalog.ACTIVE).
-  local pool={'Lancer','Charger','Ballcaster','Needler','Frostbite','Ramiel'}
+  local pool={'Lancer','Charger','Ballcaster','Needler','Frostbite','Ramiel','Gridcutter','Starforge','Resonator'}
   order={'Striker'}
   if type(digCrew)=='table' then for _,name in ipairs(digCrew) do if name~='Striker' then table.insert(order,name) end end
   else for _=1,3 do table.insert(order,table.remove(pool,math.random(1,#pool))) end end
@@ -4237,11 +4237,11 @@ function scene.digShotStep(d,p,job,dt)
   if (d.pos-goal).Magnitude>1 then d.state='Travel';d.mining=false;d.warmAt=nil;return end
   job.lockAt=now
   local rested=now-(d.lastBeamAt or -math.huge)>scene.FIRST_CHARGE_REST
-  if style.shape=='Ball' then
+  if style.shape=='Ball' or style.shape=='Star' then
    job.charge=math.clamp(job.hp/(d.stats.miningDPS*shot.chargeDiv),shot.chargeMin,shot.chargeMax)+(rested and shot.rested or 0)
    job.from=d.pos-Vector3.new(0,1.1,0)
    d.warmAt=now;d.digWarmFor=job.charge
-   scene.digTrack(job,RoleEffects.Projectile('Ball',job.from,job.contact,scene.digColor(style),now,job.charge,shot.flight,d.id,''),
+   scene.digTrack(job,RoleEffects.Projectile(style.shape,job.from,job.contact,scene.digColor(style),now,job.charge,shot.flight,d.id,''),
     job.charge+shot.flight+3,math.clamp(job.charge/1.2,.7,1.4))
   else
    job.nextDart=now+(rested and shot.rested or shot.first);job.darts={}
@@ -4249,7 +4249,7 @@ function scene.digShotStep(d,p,job,dt)
   end
  end
  if not job.carveChecked and now>=job.lockAt+.25 then job.carveChecked=true;scene.digCarveAhead(job) end
- if style.shape=='Ball' then
+ if style.shape=='Ball' or style.shape=='Star' then
   local launchAt=job.lockAt+job.charge
   -- The rock does not react to a charge (owner, Nov 22: rocks were slowly
   -- breaking while the drone charged): nothing touches it until the ball lands.

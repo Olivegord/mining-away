@@ -6,11 +6,11 @@ local Catalog = {
   Laser = {Name='Miner',Price=60,Duration=0,Color={90,230,255},Description='One more permanent mining drone. Works a second rock and stays after prestige. Each additional Miner costs more.'},
   Bubbler = {Name='Bubbler',Price=1800,Duration=2.8,Impact=.68,Power=1.1,Chunk=.25,Yield=1.25,Color={120,225,255},Description='Captures and pops a mineral chunk per bubble cycle. Up to 25% rock health per hit; 1.25× ore on completion.'},
   Halver = {Name='Halver',Price=900,Duration=3.6,Impact=.68,Power=1.25,Chunk=.25,Yield=1.5,Color={190,140,255},Description='Clamps, splits and grinds a chunk each cycle. Up to 25% rock health per hit; 1.5× ore on completion.'},
-  Gridcutter = {Name='Gridcutter',Price=1400,Duration=2.5,Impact=.68,Power=1.2,Chunk=.25,Yield=1.2,Color={255,100,130},Description='Cross-scans and shears a small cube lattice. Up to 25% rock health per hit; 1.2× ore on completion.'},
+  Gridcutter = {Name='Crescent',Price=1400,Duration=2.5,Impact=.68,Power=1.2,Chunk=.25,Yield=1.2,Color={196,150,255},Description='Cuts the rock with angled crescent slashes; each slash shears a piece loose. 1.2× ore on completion.'},
   Singularity = {Name='Singularity',Price=6500,Duration=2,Impact=.68,Power=1.5,Chunk=.25,Yield=1.5,Color={155,100,255},Description='Tears a chunk into a contained gravity well. Up to 25% rock health per hit; 1.5× ore on completion.'},
-  Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
+  Starforge = {Name='Starfall',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={110,150,255},Description='Launches a wandering star that bursts on the rock; gems it finds can rise a tier. 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
-  Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
+  Resonator = {Name='Stormcaller',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={170,90,255},Description='Calls down living lightning; every break arcs on into small neighbouring cells. 1.3× ore on completion.'},
   Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=.42,BlackPause=.055,BeamRange=64,BeamStation=32,BeamTargets=4,BlastRadius=11,CorePower=1,Color={93,203,255},Description='Blackens crystals near the beam impact, then shatters them together for 35% extra ore.'},
   Nomad = {Name='Nomad',Duration=3,CycleDuration=9.20,Impact=5/9.20,Power=4,Chunk=1,Yield=1,Projectile='Nomad',Windup=4.05,Flight=.95,StationHeight=38,BlastRadius=13,BlastTargets=5,Color={101,194,255},Description='Sweeps the field from high above and drops a tiny rocket that shatters up to five nearby crystals.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
@@ -30,12 +30,12 @@ Catalog.PrestigeRewards={
  {kind='Ballcaster',name='Ballcaster',tier=1,weight=14,job='Charges one ball and pops a small cell in one hit'},
  {kind='Needler',name='Needler',tier=1,weight=10,job='Dart streams that spot hidden gems nearby'},
  {kind='Bubbler',name='Bubbler',tier=2,weight=10,job='Bubble cuts with 25% more ore'},
- {kind='Gridcutter',name='Gridcutter',tier=2,weight=8,job='Quick passes with 20% more ore'},
+ {kind='Gridcutter',name='Crescent',tier=2,weight=8,job='Angled crescent slashes that shear pieces loose'},
  {kind='Frostbite',name='Frostbite',tier=2,weight=7,job='Freezes the rock around each cut so the crew breaks it faster'},
- {kind='Resonator',name='Resonator',tier=2,weight=6,job='Each break rings on into small neighbouring cells'},
+ {kind='Resonator',name='Stormcaller',tier=2,weight=6,job='Living lightning; each break arcs into small neighbouring cells'},
  {kind='Lancer',name='Lancer',tier=2,weight=6,job='Short laser pulses that bite big pieces out of the rock'},
  {kind='Halver',name='Halver',tier=3,weight=4,job='Heavy cuts with 50% more ore'},
- {kind='Starforge',name='Starforge',tier=3,weight=3,job='Molten cuts that can raise a gem a tier'},
+ {kind='Starforge',name='Starfall',tier=3,weight=3,job='A wandering star that bursts on the rock and can raise a gem a tier'},
  {kind='Singularity',name='Singularity',tier=4,weight=2,job='Fast gravity pulses with 50% more ore'},
 }
 function Catalog.prestigeReward(seed,index)
@@ -54,7 +54,9 @@ end
 -- offered for now; the rest stay in the code, dormant. Saved fleets keep
 -- whatever they already own.
 -- Owner follow-up: "keep ramiel for now".
-Catalog.ACTIVE={Blue=true,Red=true,Lancer=true,Needler=true,Ballcaster=true,Frostbite=true,Ramiel=true}
+-- Owner, Nov 22 (references): Crescent, Starfall and Stormcaller join,
+-- replacing the dormant Gridcutter, Starforge and Resonator ideas.
+Catalog.ACTIVE={Blue=true,Red=true,Lancer=true,Needler=true,Ballcaster=true,Frostbite=true,Ramiel=true,Gridcutter=true,Starforge=true,Resonator=true}
 function Catalog.prestigeChoices(seed,index,owned)
  local prime=2147483647
  local state=(seed%prime*48271+index%prime*69621)%prime

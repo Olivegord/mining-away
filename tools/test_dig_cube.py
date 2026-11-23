@@ -260,7 +260,7 @@ do
  check(codes==n,'codes are unique: '..codes..' codes for '..n..' styles')
  check(D.style('Nobody')==D.STYLES.Striker and D.style(nil)==D.STYLES.Striker,'unknown roles dig like a Striker')
  check(D.STYLES.Lancer.code=='Z' and D.STYLES.Lancer.kernel=='pulse' and D.STYLES.Lancer.pulse.bite==.36,'Lancer is the pulse laser')
- check(D.STYLES.Ramiel.volley.preferOre==true and D.STYLES.Gridcutter.line.max==6 and D.STYLES.Charger.slam.dive==.2 and D.STYLES.Charger.slam.windup==1.1,'nested style tables')
+ check(D.STYLES.Ramiel.volley.preferOre==true and D.STYLES.Gridcutter.pulse.interval==.8 and D.STYLES.Starforge.shape=='Star' and D.STYLES.Resonator.kernel=='pulse' and D.STYLES.Charger.slam.dive==.2 and D.STYLES.Charger.slam.windup==1.1,'nested style tables')
 end
 -- 7.1.2 Op grammar v2: format/parse round trip and the cells each flag removes.
 do

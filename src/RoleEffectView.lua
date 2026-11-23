@@ -1,6 +1,10 @@
 -- Observe server-authored receipts. Every client renders locally, regardless
 -- of ownership. State records also cover late joins and canceled abilities.
 local View={}
+-- The painted attacks (Crescent, Starfall, Stormcaller); DigCubeView uses
+-- them through View.StrikeArt.
+local StrikeArt=require('./StrikeArt')
+View.StrikeArt=StrikeArt
 local Players=game:GetService('Players')
 local Lighting=game:GetService('Lighting')
 local WHITE=Color3.fromRGB(255,248,231)
@@ -533,6 +537,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
  local root=workspace:FindFirstChild('DroneRoleState');if root then attach(root) end
  self.connections[#self.connections+1]=workspace.ChildAdded:Connect(function(node) if node.Name=='DroneRoleState' then attach(node) end end)
  function self:step(now,droneIndex,resources)
+  if StrikeArt then StrikeArt.stepImpacts(os.clock()) end
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    -- Dig Cube shots (Dig==true): DigCubeView owns the break beat (flash, hold),
@@ -551,6 +556,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
      if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
      if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
     end
+    if r.star then r.star.part:Destroy();r.star=nil end
     if NomadView.detach(r,now) and (not r.after or now>=r.afterUntil) then
      clearProjectile(self,r,now,false);self.records[node]=nil
     end
@@ -580,6 +586,39 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNom
     if shape=='Nomad' then
      if landed and holdNomad and not dig and holdNomad(contactAt) then continue end
      NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,not dig and onNomadImpact or nil)
+     continue
+    end
+    if shape=='Star' then
+     -- Starfall (owner reference): the star charges under the drone,
+     -- wanders down on its feathery trail and bursts in a small blue
+     -- pressure strike (StrikeArt).
+     if StrikeArt and not BeamVFX.reduced() and BeamVFX.near(from,140) then
+      StrikeArt.prepare()
+      local flying=age>=0 and not landed and progress<1
+      if flying then
+       if not r.star then
+        local folder=workspace:FindFirstChild('DroneRoleClientEffects') or workspace.CurrentCamera
+        r.star=StrikeArt.newStar(folder)
+       end
+       StrikeArt.stepStar(r.star,from,to,age,windup,duration,at%7,os.clock())
+       if not r.loaded and paused<=0 and age<.15 then r.loaded=true;if audio then audio:play('ballcaster_charge',from,{pitch=1.4,level=.7}) end end
+       if progress>=0 and not r.fired then
+        r.fired=true
+        if audio and age-windup<.12 then audio:play('coil_fire',from,{pitch=1.5,level=.6}) end
+        if onCameraBeat and age-windup<.12 then onCameraBeat('BallFire',from,now) end
+       end
+      elseif r.star then StrikeArt.hideStar(r.star) end
+      if landed and not r.impacted then
+       r.impacted=true
+       local point=node:GetAttribute('ContactPoint') or to
+       if now-contactAt<.3 then
+        local folder=workspace:FindFirstChild('DroneRoleClientEffects') or workspace.CurrentCamera
+        StrikeArt.starImpact(folder,point,os.clock(),1)
+        if audio then audio:play('ballcaster_impact',point,{pitch=1.3,level=1});audio:play('crystal_electric',point,{pitch=1.2,level=.5}) end
+        if onCameraBeat then onCameraBeat('BallHit',point,now,1.1) end
+       end
+      end
+     elseif r.star then StrikeArt.hideStar(r.star) end
      continue
     end
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then

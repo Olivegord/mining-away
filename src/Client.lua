@@ -716,7 +716,7 @@ openFleet=function()
   local fill=button(body,UDim2.fromOffset(half+15,109),UDim2.fromOffset(half,40),'Fill backpack',function() command:FireServer('DevFillBag');modal.Visible=false end,palette.accent)
   fill.Name='DevFillBag'
   local choices={{'Striker','+ Miner'},{'Courier','+ Courier'},{'Medic','+ Healer'},{'Dart','+ Grower'},{'Charger','+ Smasher'},{'Orbiter','+ Orbital'},{'Ramiel','+ Ramiel'},{'Scrapper','+ Swarm'},{'Nomad','+ Nomad'},
-   {'Ballcaster','+ Ballcaster'},{'Needler','+ Needler'},{'Bubbler','+ Bubbler'},{'Halver','+ Halver'},{'Gridcutter','+ Gridcutter'},{'Singularity','+ Singularity'},{'Starforge','+ Starforge'},{'Frostbite','+ Frostbite'},{'Resonator','+ Resonator'},{'Lancer','+ Lancer'}}
+   {'Ballcaster','+ Ballcaster'},{'Needler','+ Needler'},{'Bubbler','+ Bubbler'},{'Halver','+ Halver'},{'Gridcutter','+ Crescent'},{'Singularity','+ Singularity'},{'Starforge','+ Starfall'},{'Frostbite','+ Frostbite'},{'Resonator','+ Stormcaller'},{'Lancer','+ Lancer'}}
   local columns=width>=560 and 4 or 2;local gap=8;local cell=(width-gap*(columns-1))/columns
   for index,choice in ipairs(choices) do
    local b=button(body,UDim2.fromOffset(3+((index-1)%columns)*(cell+gap),157+math.floor((index-1)/columns)*46),UDim2.fromOffset(cell,38),choice[2],function()
