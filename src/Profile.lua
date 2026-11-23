@@ -10,7 +10,8 @@ local excessStarters={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','H
 local oversizedStarterCount=1+#excessStarters+#Workshop.STARTER_SPECIALISTS
 local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true,[crystalStarterCount]=true,[oversizedStarterCount]=true}
 local types={'Blue','Red','Green'}
-local specialTypes={Ramiel=true,Nomad=true,Orbiter=true,Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
+local specialTypes={Ramiel=true,Nomad=true,Orbiter=true,Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true,
+ Needler=true,Ballcaster=true,Lancer=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
 local starterTypes={Dart=true,Orbiter=true,Scrapper=true,Needler=true,Ballcaster=true,Vacuum=true,Compactor=true}
@@ -642,6 +643,11 @@ local function prestigeChoices(p)
  local owned={}
  for _,d in ipairs(p.fleet) do owned[d.role or d.type]=true;owned[d.type]=true end
  local choices=DroneCatalog.prestigeChoices(p.seed,p.run.index,owned)
+ -- The first prestige always offers the Ballcaster first (a new way to dig).
+ if p.run.index==1 and not owned.Ballcaster then
+  for i=2,#choices do if choices[i].kind=='Ballcaster' then choices[i]=choices[1];break end end
+  choices[1]={kind='Ballcaster',name='Ballcaster',tier=1,job='Charges one ball and pops a small cell in one hit'}
+ end
  -- Keep the opening choices, then give each missing flagship a clear route
  -- through the ordinary one-of-three permanent selection.
  if p.run.index>1 then

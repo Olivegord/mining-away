@@ -23,6 +23,7 @@ local definitions={
  Resonator={job='Resonance extractor',worker=true,combat=true,special='Resonator'},
  Needler={job='Dart thrower',worker=true,special='Needler'},
  Ballcaster={job='Energy ball thrower',worker=true,special='Ballcaster'},
+ Lancer={job='Pulse laser',worker=true,miner=true,special='Lancer'},
  Vacuum={job='Collects loose ore'},
  Compactor={job='Merges two loose rocks of the same size'},
 }

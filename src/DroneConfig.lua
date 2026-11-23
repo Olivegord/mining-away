@@ -187,6 +187,12 @@ local fieldTestRoles={
 for name,role in pairs(fieldTestRoles) do
  DroneConfig.Types[name]={DisplayName=role.label,Description=role.detail,Color=role.color,Accent=role.color:Lerp(Color3.new(1,1,1),.5),Scale=.9,MaxHealth=80,Speed=26,FlightHeight=3.2,AttackStyle='Special',AttackRange=20,AttackCooldown=1,Damage=12,Weight=1}
 end
+-- Lancer, the pulse laser (owner's reference video): in the Dig Cube it fires
+-- short punchy pulses (DigCube.STYLES.Lancer); on the fields it mines like a Striker.
+DroneConfig.Types.Lancer={DisplayName='Lancer',Description='Pulse laser. Fires short, punchy laser pulses: each pulse bites a big piece out of the rock.',
+ Color=Color3.fromRGB(255,236,170),Accent=Color3.fromRGB(255,236,170):Lerp(Color3.new(1,1,1),.5),Scale=.9,MaxHealth=85,Speed=24,FlightHeight=3.4,
+ AttackStyle='Bolt',AttackRange=24,AttackCooldown=.9,Damage=12,Weight=1}
+table.insert(DroneConfig.TypeOrder,'Lancer')
 
 -- The active place retains its original elapsed-time motion and mining equations.
 -- These runtime traits preserve the prior Studio role tuning and never enter saved fleets.
@@ -206,6 +212,7 @@ end
 for name in pairs(fieldTestRoles) do
  DroneConfig.StudioRoles[name]={height=3.2,base={miningDPS=30,combatDPS=12,maxHealth=80,maxStep60=.43,warmup=.065,range=20,shotInterval=1}}
 end
+DroneConfig.StudioRoles.Lancer={height=3.4,base={miningDPS=30,combatDPS=12,maxHealth=85,maxStep60=.38,warmup=.8,range=24,shotInterval=.8}}
 
 DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold=.55,LaunchHold=.25,UnloadHold=.65}
 DroneConfig.PressSockets = {Vector3.new(-1.07,-1.32,-.18),Vector3.new(1.07,-1.32,-.18)}
@@ -628,7 +635,7 @@ DroneConfig.Prominent={
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
 DroneConfig.DownwardGunDepth={Needler=1.35,Ballcaster=1.54}
-DroneConfig.HullSpans={Striker=2.15,Needler=2.68,Ballcaster=2.73,Vacuum=2.65,Compactor=2.75,Courier=2.72,Medic=2.5,Charger=2.75}
+DroneConfig.HullSpans={Striker=2.15,Lancer=2.4,Needler=2.68,Ballcaster=2.73,Vacuum=2.65,Compactor=2.75,Courier=2.72,Medic=2.5,Charger=2.75}
 
 -- Each slit is cut into a fixed part of Nomad's underside. The endpoints
 -- also serve as projector apertures on the visible model.
@@ -899,6 +906,15 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
    hardware('CoilFork',Vector3.new(.24,.38,.83),gun*CFrame.new(side*.54,0,-.70),dark,metal,nil,'BallSlide')
   end
   hardware('LoadedOrb',Vector3.one*.70,gun*CFrame.new(0,0,-.92),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
+ elseif role=='Lancer' then
+  -- A round hull over one long downward emitter barrel: the pulse laser.
+  pod('LancerHull',1.9,.44,.06,painted,slate)
+  pod('CapacitorRing',1.62,.16,-.22,dark,metal)
+  pod('EmitterBarrel',.52,.78,-.62,dark,metal)
+  lens('PulseLens',Vector3.new(0,-1.03,0),color,.36)
+  for _,side in ipairs({-1,1}) do
+   hardware('CapacitorFin',Vector3.new(.14,.42,.9),CFrame.new(side*.86,.12,0),pale,metal)
+  end
  elseif role=='Vacuum' then
   pod('VacuumHull',1.81,.55,.18,painted,slate)
   hardware('IntakeTurbine',Vector3.new(.13,.65,.65),CFrame.new(0,-.26,0)*vertical,color,Enum.Material.Neon,cylinder,'Intake')

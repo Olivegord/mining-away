@@ -16,15 +16,27 @@ local Catalog = {
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.165,Impact=.55,Power=1.12,Chunk=.10,Projectile='Dart',Windup=.05,Flight=.04,Recovery=.025,CorePower=1.25,Color={255,195,94},Description='Fires a rapid stream of light darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
+  -- Pulse laser (owner's reference video). Earned through prestige, not in
+  -- the shop Order; Impact/Power/Chunk only keep the field chunk scoring
+  -- (DroneCatalog.cycle) defined: on the fields it mines like a Striker.
+  Lancer = {Name='Lancer',Price=1500,Duration=.7,Impact=.5,Power=1,Chunk=.25,Color={255,236,170},Description='Fires short, punchy laser pulses: each pulse bites a big piece out of the rock.'},
  },
 }
+-- Every worker role can be earned (weights total 100). Each digs the Dig
+-- Cube its own way (DigCube.STYLES).
 Catalog.PrestigeRewards={
- {kind='Blue',name='Laser Miner',tier=1,weight=45,job='Steady crystal cutting'},
- {kind='Red',name='Breaker',tier=1,weight=25,job='Heavy hits on hard outer layers'},
- {kind='Bubbler',name='Bubbler',tier=2,weight=15,job='Bubble cuts with 25% more ore'},
- {kind='Gridcutter',name='Gridcutter',tier=2,weight=9,job='Quick passes with 20% more ore'},
- {kind='Halver',name='Halver',tier=3,weight=5,job='Heavy cuts with 50% more ore'},
- {kind='Singularity',name='Singularity',tier=4,weight=1,job='Fast gravity pulses with 50% more ore'},
+ {kind='Blue',name='Laser Miner',tier=1,weight=16,job='Steady crystal cutting'},
+ {kind='Red',name='Breaker',tier=1,weight=14,job='Heavy hits on hard outer layers'},
+ {kind='Ballcaster',name='Ballcaster',tier=1,weight=14,job='Charges one ball and pops a small cell in one hit'},
+ {kind='Needler',name='Needler',tier=1,weight=10,job='Dart streams that spot hidden gems nearby'},
+ {kind='Bubbler',name='Bubbler',tier=2,weight=10,job='Bubble cuts with 25% more ore'},
+ {kind='Gridcutter',name='Gridcutter',tier=2,weight=8,job='Quick passes with 20% more ore'},
+ {kind='Frostbite',name='Frostbite',tier=2,weight=7,job='Freezes the rock around each cut so the crew breaks it faster'},
+ {kind='Resonator',name='Resonator',tier=2,weight=6,job='Each break rings on into small neighbouring cells'},
+ {kind='Lancer',name='Lancer',tier=2,weight=6,job='Short laser pulses that bite big pieces out of the rock'},
+ {kind='Halver',name='Halver',tier=3,weight=4,job='Heavy cuts with 50% more ore'},
+ {kind='Starforge',name='Starforge',tier=3,weight=3,job='Molten cuts that can raise a gem a tier'},
+ {kind='Singularity',name='Singularity',tier=4,weight=2,job='Fast gravity pulses with 50% more ore'},
 }
 function Catalog.prestigeReward(seed,index)
  local prime=2147483647

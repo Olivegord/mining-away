@@ -340,14 +340,19 @@ local function includePurchasedSpecials(p: any,fleet: any)
  end
  return fleet
 end
-local function roleTestFleet(p: any,starterOnly: boolean?)
+local function roleTestFleet(p: any,starterOnly: boolean?,digCrew: boolean?)
  p.testRoll=(p.testRoll or 0)+1
  local fleet,counts={},{}
  local names={Striker='Miner',Courier='Emptier',Medic='Healer',Dart='Grower',Charger='Breaker',Orbiter='Orbital',Scrapper='Swarm'}
  local order={'Striker','Courier','Courier','Medic','Dart','Charger','Orbiter','Scrapper'}
  local optional={Starforge=true,Frostbite=true,Resonator=true,Ramiel=true,Nomad=true}
- for _,name in ipairs(DroneCatalog.Order) do if name~='Laser' and (not starterOnly or not optional[name]) then table.insert(order,name) end end
- if scene.runStart and not starterOnly then table.insert(order,'Needler');table.insert(order,'Ballcaster') end
+ if digCrew then
+  -- One of every worker role for the Dig Cube, the real first miner first.
+  order={'Striker','Lancer','Charger','Ballcaster','Needler','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Ramiel','Nomad'}
+ else
+  for _,name in ipairs(DroneCatalog.Order) do if name~='Laser' and (not starterOnly or not optional[name]) then table.insert(order,name) end end
+  if (scene.runStart or scene.flatFields) and not starterOnly then table.insert(order,'Needler');table.insert(order,'Ballcaster') end
+ end
  for i,name in ipairs(order) do
   counts[name]=(counts[name] or 0)+1
   local role=RoleConfig.StudioRoles[name]
@@ -357,6 +362,7 @@ local function roleTestFleet(p: any,starterOnly: boolean?)
  end
  -- Keep the real first miner's identity so named cards also work in this test.
  local miner=Pro.clone(data(p).fleet[1]);miner.role='Striker';miner.name='Miner';fleet[1]=miner
+ if digCrew then p.player:SetAttribute('MA_TestLoadoutLabel','Dig crew');return fleet end
  if not starterOnly then
   local ink=Pro.clone(miner);ink.id=string.format('test:%d:%d:%d',p.player.UserId,p.testRoll,#fleet+1)
   ink.name='Inkbeam';ink.type='Blue';ink.beamVariant='Inkbeam';table.insert(fleet,ink)
@@ -413,7 +419,7 @@ local function spawnDrone(p,owned,slot,origin)
  drones[d.id]=d;table.insert(p.drones,d);return d
 end
 local function rebuildFleet(p,origin)
- for _,d in ipairs(p.drones) do release(d);spend(d);drones[d.id]=nil;d.model:Destroy() end
+ for _,d in ipairs(p.drones) do if d.digJob then scene.digDrop(d) end;release(d);spend(d);drones[d.id]=nil;d.model:Destroy() end
  p.drones={};p.vacuum=nil;p.vacuumTarget=nil;p.compactor=nil
  p.nextEmptierPlan=nil
  local fleet=scene.runtimeFleet(p)
@@ -2663,7 +2669,7 @@ local function move(d,goal,dt)
   goal,descentProgress=Feel.descentGoal(d.descentOrigin,d.pos,goal)
   if descentProgress>=1 then d.descentOrigin=nil end
  end
- local settling=d.target~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant' or d.state=='Intake'
+ local settling=d.target~=nil or d.digJob~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant' or d.state=='Intake'
   or d.state=='HoldSelector' or d.state=='Waiting' or d.state=='StorageFull' and d.deployedCarrier
  local weight=d.state=='Thinking' and 0 or (d.state=='Recover' or d.state=='Vacuum' and (goal-d.pos).Magnitude<1) and 0
   or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
@@ -2674,14 +2680,15 @@ local function move(d,goal,dt)
  if flock then desired=Vector3.new(desired.X,0,desired.Z) end
  d.flightSteering=weight==0 and Vector3.zero or Feel.smoothSwarm(d.flightSteering,desired,dt)
  d.goal=goal
- local work=d.target~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach' or d.state=='Intake'
+ local work=d.target~=nil or d.digJob~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach' or d.state=='Intake'
  local speed=travelSpeed(d)
  local flight=RoleConfig.Prominent[d.role]
  local response=d.orePickupId and d.state=='Collect' and Workshop.COURIER_APPROACH_RESPONSE or flight and flight.response
   or 1
  if d.state=='Follow' then response+=.28*scene.followAgility(d) end
- if scene.flatFields and not d.target then
+ if scene.flatFields and not d.target and not d.digJob then
   -- Softer, floatier thrust while cruising; each drone reacts at its own pace.
+  -- (A dig job travels like a committed field job.)
   d.swarmTraits=d.swarmTraits or Feel.swarmTraits(d.id)
   response*=.45+.35*(d.swarmTraits.rate-.68)/.64
  end
@@ -3490,7 +3497,7 @@ do
  local template=Instance.new('Part');template.Name='DigGem';template.Size=Vector3.new(1,1,1)
  scene.dig={origin=origin,holder=holder,template=template,generation=0,recent={},random=Random.new(),
   dirty=false,publishAt=0,resetAt=nil,checkAt=0,claimed={},ops={},published=0,pending={},csg={},blocks={},dust={},dustAt=0,geodes={},
-  stats={jobs=0,calls=0,lags={},fails=0,at=0}}
+  stats={jobs=0,calls=0,lags={},fails=0,at=0},gems={},carved={},stageParts={},hints={},brittle={},chains={}}
  -- Collision groups for the clients' loose rubble: it lands on an invisible
  -- floor at the bottom of each hole and touches nothing else (players, the
  -- rock still being carved).
@@ -3510,14 +3517,33 @@ do
 end
 function scene.digReset()
  local dig=scene.dig
+ -- Sealed gems left in the old cube are paid to owners still here (the
+ -- same gem cargo a geode would have thrown).
+ for _,g in pairs(dig.geodes) do
+  local p=g.p
+  if p and profiles[g.owner]==p and healthy(p) then
+   local cargo=scene.digGemCargo(g.tier,g.volume)
+   local profile=data(p)
+   if cargo and Pro.addCargo(profile,cargo,g.count or 1,Ca.capacity(profile,previewPerks(p)))>0 then p.dirty=true;p.publishDirty=true end
+  end
+ end
+ -- Shots in flight and every job go with the old cube.
+ for _,d in pairs(drones) do
+  if d.digJob then scene.digDropNodes(d.digJob,true);if d.breaker==d.digJob.slam then d.breaker=nil end end
+  d.digJob=nil;d.digCell=nil;d.digWarm=nil;d.digHoldUntil=nil;d.digLastCell=nil
+ end
  dig.generation+=1
  local seedValue=dig.random:NextInteger(1,2000000000)
  dig.cube=DigCube.build(seedValue);dig.recent={};dig.claimed={};dig.pending={};dig.resetAt=nil;dig.dirty=false;dig.csg={};dig.deepest=1
+ -- Secret gems per cell, from the server's own Random (never the public seed).
+ dig.gems=DigCube.placeGems(dig.cube,function() return dig.random:NextNumber() end)
+ dig.carved={};dig.stageParts={};dig.brittle={};dig.chains={}
+ for owner in pairs(dig.hints) do local p=profiles[owner];if p and p.player.Parent then p.player:SetAttribute('DigHints','') end end
+ dig.hints={}
  dig.stats={jobs=0,calls=0,lags={},fails=0,at=now+10}
- dig.geodes={};dig.holder:SetAttribute('Geodes','')
+ dig.geodes={};dig.holder:SetAttribute('Geodes','');dig.holder:SetAttribute('Brittle','')
  for _,dust in ipairs(dig.dust) do dust.part:Destroy() end
  dig.dust={}
- for _,d in pairs(drones) do d.digJob=nil;d.digCell=nil;d.digWarm=nil end
  local holder=dig.holder
  for i=1,math.ceil(#dig.ops/OPS_PER_ATTRIBUTE) do holder:SetAttribute('Ops'..i,nil) end
  dig.ops={};dig.published=0
@@ -3667,10 +3693,23 @@ function scene.digRebuildBlock(block,stageParts,depth)
    Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
   table.insert(negatives,p)
  end
- for id in pairs(cube.removed) do
-  local c=cube.cells[id]
-  if hi.X>c.minX-.5 and lo.X<c.maxX+.5 and hi.Y>c.y0+.05 and lo.Y<c.y1-.05 and hi.Z>c.minZ-.5 and lo.Z<c.maxZ+.5 then
-   for _,w in ipairs(DigCube.prismWedges(cube,{id})) do add(w) end
+ -- Every dug cell, every cell carved ahead of its break, and every stage pit
+ -- of a chunk not yet broken (dig.stageParts), so a rebuild never refills them.
+ for pass=1,2 do
+  for id in pairs(pass==1 and cube.removed or dig.carved) do
+   local c=cube.cells[id]
+   if (pass==1 or not cube.removed[id]) and hi.X>c.minX-.5 and lo.X<c.maxX+.5 and hi.Y>c.y0+.05 and lo.Y<c.y1-.05 and hi.Z>c.minZ-.5 and lo.Z<c.maxZ+.5 then
+    for _,w in ipairs(DigCube.prismWedges(cube,{id})) do add(w) end
+   end
+  end
+ end
+ for _,entry in ipairs(dig.stageParts) do
+  for _,part in ipairs(entry.parts) do
+   local x0,x1,z0,z1=math.huge,-math.huge,math.huge,-math.huge
+   for _,v in ipairs(part.poly) do x0=math.min(x0,v[1]);x1=math.max(x1,v[1]);z0=math.min(z0,v[2]);z1=math.max(z1,v[2]) end
+   if hi.X>x0-.5 and lo.X<x1+.5 and hi.Y>part.y0+.05 and lo.Y<part.y1-.05 and hi.Z>z0-.5 and lo.Z<z1+.5 then
+    for _,w in ipairs(DigCube.partWedges(cube,{part})) do add(w) end
+   end
   end
  end
  for _,sp in ipairs(stageParts or {}) do
@@ -3763,21 +3802,46 @@ function scene.digActive(p)
 end
 function scene.digRelease(p)
  for _,d in ipairs(p.drones) do
-  scene.digDrop(d);d.digging=false
-  if d.state=='Mine' or d.state=='Warmup' or d.state=='Travel' then d.state='Follow';d.mining=false end
+  scene.digDrop(d);d.digging=false;d.digHoldUntil=nil
+  local s=d.state
+  if s=='Mine' or s=='Warmup' or s=='Travel' or s=='SpecialMine' or string.sub(s,1,7)=='Breaker' then d.state='Follow';d.mining=false end
  end
 end
--- Forget a drone's chunk and its cell claims.
+-- Destroy a job's shot records (MiningShot) that never made contact; with
+-- `all`, every one (a new cube).
+function scene.digDropNodes(job,all)
+ for _,node in ipairs(job.nodes or {}) do
+  if node.Parent and (all or not node:GetAttribute('ContactAt')) then node:Destroy() end
+ end
+ job.nodes={};job.node=nil
+end
+-- Forget a drone's chunk, its cell claims and its uncontacted shots. A
+-- committed job (its cells already carved ahead) is finished, never dropped.
 function scene.digDrop(d)
  local dig=scene.dig;local job=d.digJob
- if job then for _,id in ipairs(job.ids) do if dig.claimed[id]==d.id then dig.claimed[id]=nil end end end
- d.digJob=nil;d.digCell=nil;d.digWarm=nil;d.digProgress=nil;d.digWarmFor=nil
+ if job then
+  for _,id in ipairs(job.ids) do if dig.claimed[id]==d.id then dig.claimed[id]=nil end end
+  scene.digDropNodes(job,false)
+ end
+ d.digJob=nil;d.digCell=nil;d.digWarm=nil;d.digProgress=nil;d.digWarmFor=nil;d.breaker=nil
  if d.digging then d.warmAt=nil end
+ if job and job.committed and not job.broken then scene.digBreak(job,d,profiles[d.owner]) end
 end
--- Pick a seed cell, then grow this drone's chunk around it right now: its
--- size comes from the drone (DigCube.chunkScale) times cut-size upgrades.
+-- A brittle cell (Frostbite) takes .6 of its HP for every drone.
+function scene.digHpMul(id)
+ local t=scene.dig.brittle[id]
+ return t and t>now and DigCube.STYLES.Frostbite.brittle.mul or 1
+end
+function scene.digColor(style)
+ return Color3.fromRGB(style.color[1],style.color[2],style.color[3])
+end
+-- Pick a seed cell the way this drone's role digs (DigCube.STYLES: pick),
+-- then its shape (size): a chunk grown around the seed, one small cell, a
+-- Gridcutter line or a volley cluster. Brittle cells draw every drone; a
+-- role with hintBias prefers the cells its owner's Needler found gems near.
 function scene.digPick(d,p)
  local dig=scene.dig;local cube=dig.cube
+ local style=DigCube.style(d.role)
  local taken,points={},{}
  for id,droneId in pairs(dig.claimed) do
   local worker=drones[droneId]
@@ -3787,7 +3851,7 @@ function scene.digPick(d,p)
   else dig.claimed[id]=nil end
  end
  -- Sealed gem cells wait for their owner; no drone cuts them.
- for id in pairs(dig.geodes or {}) do taken[id]=true end
+ for id in pairs(dig.geodes) do taken[id]=true end
  local hr=characterRoot(p)
  if not hr then return nil end
  -- Drones only cut near their player: a tapped spot steers the crater only
@@ -3796,28 +3860,85 @@ function scene.digPick(d,p)
  local tapped=p.digFocus and now<(p.digFocusUntil or 0) and p.digFocus
  if tapped and Vector3.new(tapped.X-point.X,0,tapped.Z-point.Z).Magnitude<=DigCube.MINE_RADIUS then point=tapped end
  local random=function() return dig.random:NextNumber() end
- local opts={taken=taken,takenPoints=points,recent=dig.recent,now=now,random=random,
-  anchorX=hr.Position.X-dig.origin.X,anchorZ=hr.Position.Z-dig.origin.Z}
+ local lx,lz=hr.Position.X-dig.origin.X,hr.Position.Z-dig.origin.Z
+ -- Claimed cells also count as gone for support (two jobs never float a cell).
+ local opts={taken=taken,gone=taken,takenPoints=points,recent=dig.recent,now=now,random=random,anchorX=lx,anchorZ=lz}
  opts.focusX=math.clamp(point.X-dig.origin.X,0,DigCube.WIDTH);opts.focusZ=math.clamp(point.Z-dig.origin.Z,0,DigCube.WIDTH)
+ local mode=style.pick
+ local hints=dig.hints[d.owner]
+ local dx,dz=d.pos.X-dig.origin.X,d.pos.Z-dig.origin.Z
+ if mode=='near' then opts.radius=style.near.radius;opts.falloff=style.near.falloff
+ elseif mode=='deep' then opts.depthPow=style.depthPow;opts.lead=style.lead end
+ opts.weight=function(id,c,apex)
+  local w=1
+  if mode=='small' then
+   -- Small cells right under the drone.
+   w=math.clamp((16/c.area)^2,.1,6)*math.exp(-math.sqrt((c.cx-dx)^2+(c.cz-dz)^2)/8)
+  elseif mode=='near' then
+   -- Stay on the face it is working: next to its last cell, at exposed edges.
+   if d.digLastCell and table.find(c.neighbors,d.digLastCell) then w*=style.near.adjacent end
+   for _,o in ipairs(c.neighbors) do if cube.removed[o] then w*=style.near.exposed;break end end
+  elseif mode=='wall' then
+   -- Shear the crater walls: cells above the floor with an open side.
+   local edge=false
+   if c.layer<apex-1 then for _,o in ipairs(c.neighbors) do if cube.removed[o] then edge=true;break end end end
+   w=edge and style.wall.edge or style.wall.other
+  elseif mode=='ore' and c.ore>0 then w=style.oreBias end
+  local frozen=dig.brittle[id]
+  if frozen and frozen>now then w*=DigCube.BRITTLE_BIAS end
+  if style.hintBias and hints and hints[id] then w*=style.hintBias end
+  return w
+ end
  local seed=DigCube.pick(cube,opts)
  if not seed then return nil end
- local scale=DigCube.chunkScale(d.role,d.id,d.slot)*(d.stats.cutSize or 1)
- local ids=DigCube.chunk(cube,seed,scale,taken,random)
+ local size=style.size
+ local cutSize=d.stats.cutSize or 1
+ local mul=scene.digHpMul
+ local ids,cut,queue
+ if size=='cell' then ids={seed}
+ elseif size=='line' then
+  -- Gridcutter: a line across the player's view (the axis more
+  -- perpendicular to seed - player), cut one cell after another.
+  local s=cube.cells[seed];local line=style.line
+  queue=DigCube.line(cube,seed,{axis=math.abs(s.cx-lx)>=math.abs(s.cz-lz) and 'z' or 'x',sign=random()<.5 and -1 or 1,
+   min=line.min,max=math.min(line.max,3+math.floor(cutSize*2)),width=line.width,taken=taken})
+  ids={queue[1]}
+ elseif size=='cluster' then
+  local v=style.volley
+  ids=DigCube.cluster(cube,seed,{radius=v.radius,maxCells=v.maxCells,budget=v.budget*d.stats.miningDPS*style.power,taken=taken,preferOre=v.preferOre,mul=mul})
+ else
+  size=size or DigCube.chunkSize(d.role,d.id,d.slot)
+  cut=DigCube.CHUNK_SIZES[size]*cutSize
+  ids=DigCube.chunk(cube,seed,cut,taken,random)
+ end
  for _,id in ipairs(ids) do dig.claimed[id]=d.id end
+ local kernel=style.kernel
+ -- Work: a Striker's bigger slot chunks move more rock per second (today's
+ -- rule, chunkHp over the chunk scale); a role's own chunk size is only its
+ -- shape, so its work follows the cells' HP (over cut-size upgrades alone).
+ local hpCut=style.size==nil and cut or cutSize
+ local hp=0
+ if kernel=='beam' or kernel=='slam' or kernel=='pulse' then hp=DigCube.chunkHp(cube,ids,hpCut,mul)
+ else for _,id in ipairs(ids) do hp+=cube.cells[id].hp*mul(id) end end
  local _,cx,cz=DigCube.chunkArea(cube,ids)
- local hp=DigCube.chunkHp(cube,ids,scale)
- -- The chunk comes away in pieces from its middle outward; the beam works
- -- on the next piece to go.
- local job={ids=ids,left=table.clone(ids),key=DigCube.key(ids),cx=cx,cz=cz,hp=hp,maxHp=hp,
-  pieces=DigCube.pieces(cube,ids),stage=0,rock=DigCube.rockDrops(DigCube.volume(cube,ids)),rockPaid=0}
+ local volume=DigCube.volume(cube,ids)
+ -- A terrace chunk comes away in pieces from its middle outward; the beam
+ -- works on the next piece to go. Shots and volleys break whole cells.
+ local job={ids=ids,left=table.clone(ids),key=DigCube.key(ids),code=style.code,style=style,kernel=kernel,size=size,cx=cx,cz=cz,hp=hp,maxHp=hp,
+  pieces=DigCube.pieces(cube,ids,style.pieces),stage=0,volume=volume,volFrac=0,rock=DigCube.rockDrops(volume),rockPaid=0,cut=hpCut,
+  queue=queue,seq=queue and 1 or nil,nodes={}}
  scene.digAim(job)
  return job
 end
 -- Point the beam at the chunk's center (DigCube.chunkCenter), where every
 -- nested stage grows from: the rock surface there, below any stage already
--- carved out. The drone hovers straight above it.
+-- carved out. The drone hovers straight above it. A volley aims at its seed.
 function scene.digAim(job)
  local dig=scene.dig
+ if job.kernel=='volley' then
+  local c=dig.cube.cells[job.ids[1]]
+  job.contact=dig.origin+Vector3.new(c.cx,c.y1,c.cz);return
+ end
  local cx,cz,id=DigCube.chunkCenter(dig.cube,job.ids)
  local c=dig.cube.cells[id]
  local carved=job.pieces and job.pieces[job.stage]
@@ -3825,8 +3946,14 @@ function scene.digAim(job)
  local depth=carved and carved.centerDepth or 0
  job.contact=dig.origin+Vector3.new(cx,c.y1-depth,cz)
 end
--- One piece of a chunk breaks off before the rest: it leaves the rock now
--- (ops flag P: no gem roll yet) and pays its share of the chunk's rock.
+-- Rock for every role but Strikers and Chargers: a fractional carry per
+-- drone (one rock per ROCK_PER_UNIT cubic studs), so one-cell roles do not
+-- get a whole rock for every small cell.
+function scene.digPayRock(d,p,job,volume,position)
+ d.digRockCarry=(d.digRockCarry or 0)+volume*(job.style.rockMul or 1)/DigCube.ROCK_PER_UNIT
+ local n=math.floor(d.digRockCarry)
+ if n>0 then d.digRockCarry-=n;scene.digRock(p,d.owner,job.ids,n,position,job.style.collect) end
+end
 -- One nested stage of a chunk breaks out (a Voronoi cell around its middle,
 -- shallower than the layer): it is carved now, the cells themselves stay
 -- until the final break (ops flag S<stage>; every client recomputes the
@@ -3835,18 +3962,27 @@ function scene.digChip(job,d,p)
  local dig=scene.dig;local cube=dig.cube
  job.stage+=1
  local piece=job.pieces[job.stage]
- table.insert(dig.ops,'c'..DigCube.key(job.ids)..'|0|S'..job.stage)
+ table.insert(dig.ops,DigCube.formatOp(job.ids,job.code,0,'S',job.stage))
  dig.dirty=true
  table.insert(dig.csg,{generation=dig.generation,ids={},parts=piece.parts,queuedAt=os.clock()})
+ -- Remembered until its cells go, so a rebuilt block keeps this pit.
+ table.insert(dig.stageParts,{ids=job.ids,parts=piece.parts})
  scene.digCarveLoop()
- local share=math.floor(job.rock*piece.at)-job.rockPaid
- if share>0 then
-  job.rockPaid+=share
-  local _,px,pz=DigCube.chunkArea(cube,job.ids)
-  local floor=piece.parts[1] and piece.parts[1].y0 or cube.cells[job.ids[1]].y0
-  scene.digRock(p,d.owner,job.ids,share,dig.origin+Vector3.new(px,floor+1,pz))
+ local _,px,pz=DigCube.chunkArea(cube,job.ids)
+ local floor=piece.parts[1] and piece.parts[1].y0 or cube.cells[job.ids[1]].y0
+ local at=dig.origin+Vector3.new(px,floor+1,pz)
+ if job.style.rockCarry==false then
+  local share=math.floor(job.rock*piece.at)-job.rockPaid
+  if share>0 then job.rockPaid+=share;scene.digRock(p,d.owner,job.ids,share,at) end
+ else
+  scene.digPayRock(d,p,job,job.volume*math.max(0,piece.at-job.volFrac),at);job.volFrac=piece.at
  end
  scene.digAim(job)
+end
+-- Break off every terrace stage the chunk's damage has reached.
+function scene.digChips(job,d,p)
+ local progress=math.clamp(1-job.hp/job.maxHp,0,1)
+ while job.hp>0 and job.stage<#job.pieces-1 and progress>=job.pieces[job.stage+1].at do scene.digChip(job,d,p) end
 end
 -- One drone's dig step. A change of chunk, state or stage marks the drone
 -- for a snapshot in this same tick (after the ops publish, scene.digFlushOps).
@@ -3866,11 +4002,14 @@ function scene.digWork(d,p,dt)
  end
  local job=d.digJob
  if job and (cube.removed[job.left[1]] or dig.claimed[job.left[1]]~=d.id) then scene.digDrop(d);job=nil end
- -- Walked away: let go of chunks left behind so the crew follows you.
+ -- Walked away: let go of chunks left behind so the crew follows you (a
+ -- committed shot still lands: scene.digDrop finishes it).
  if job and hr then
   local lx,lz=hr.Position.X-dig.origin.X,hr.Position.Z-dig.origin.Z
   if math.sqrt((job.cx-lx)^2+(job.cz-lz)^2)>DigCube.MINE_RADIUS+8 then scene.digDrop(d);job=nil end
  end
+ -- A shot's recovery: hold the firing station a moment before the next pick.
+ if not job and now<(d.digHoldUntil or 0) then d.mining=false;move(d,d.digHoldAt or d.pos,dt);return end
  if not job and now>=(d.digPickAt or 0) then
   d.digPickAt=now+.2;d.digWarm=nil;d.digProgress=0
   job=scene.digPick(d,p)
@@ -3880,93 +4019,563 @@ function scene.digWork(d,p,dt)
   d.state='Follow';d.mining=false
   move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt);return
  end
- local top=job.contact
- -- Straight above the chunk's center, so the beam drops vertically onto it.
- local goal=top+Vector3.new(0,6.5,0)
- d.digPoint=top
+ d.digPoint=job.contact
  d.digging=true
+ local kernel=job.kernel
+ if kernel=='shot' then scene.digShotStep(d,p,job,dt)
+ elseif kernel=='slam' then scene.digSlamStep(d,p,job,dt)
+ elseif kernel=='volley' then scene.digVolleyStep(d,p,job,dt)
+ elseif kernel=='pulse' then scene.digPulseStep(d,p,job,dt)
+ else scene.digBeamStep(d,p,job,dt) end
+end
+-- A yielding save freezes dig work: shift the job's clocks so no charge,
+-- shot or pulse skips ahead (the slam's phase clock is d.breaker's).
+function scene.digPause(d,dt)
+ local job=d.digJob
+ if d.digWarm then d.digWarm+=dt end
+ if d.digHoldUntil then d.digHoldUntil+=dt end
+ if not job then return end
+ for _,key in ipairs({'lockAt','nextDart','nextPulse','contactAt'}) do if job[key] then job[key]+=dt end end
+ for _,dart in ipairs(job.darts or {}) do dart.at+=dt end
+end
+-- Hold still at the firing station for a moment after a shot breaks.
+function scene.digRecover(d,seconds)
+ d.digHoldUntil=now+seconds;d.digHoldAt=d.pos;d.digPickAt=now+seconds
+end
+-- Beam roles (today's laser): hover over the chunk, charge, then cut it
+-- down; terrace stages break off on the way.
+function scene.digBeamStep(d,p,job,dt)
+ local goal=job.contact+Vector3.new(0,6.5,0)
  if (d.pos-goal).Magnitude>2.4 then d.state='Travel';d.mining=false;d.digWarm=nil;d.warmAt=nil;move(d,goal,dt);return end
  move(d,goal,dt)
  -- The field drones' charge-up: the published warmup start and length drive
- -- the same beam startup on every client.
- -- Long enough to see the charge (the owner asked for it back): about the
- -- drone's own warmup per chunk, longer for the first shot after a rest.
+ -- the same beam startup on every client. Long enough to see the charge
+ -- (the owner asked for it back): about the drone's own warmup per chunk,
+ -- longer for the first shot after a rest. A Gridcutter running on along
+ -- its line keeps its beam lit (job.hot).
  if not d.digWarm then
   d.digWarm=now
   local rested=now-(d.lastBeamAt or -math.huge)>scene.FIRST_CHARGE_REST
-  d.digWarmFor=rested and 1.3 or math.clamp(d.stats.warmup or .8,.7,1.1)
+  d.digWarmFor=job.hot and 0 or (rested and 1.3 or math.clamp(d.stats.warmup or .8,.7,1.1))
  end
  if not d.mining then d.warmAt=d.digWarm end
  if now-d.digWarm<d.digWarmFor then d.state='Warmup';d.mining=false;return end
  if not d.mining then d.beamSince=now end
  d.state='Mine';d.mining=true;d.lastBeamAt=now
- job.hp-=d.stats.miningDPS*dt
+ job.hp-=d.stats.miningDPS*job.style.power*dt
  d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
- while job.hp>0 and job.stage<#job.pieces-1 and d.digProgress>=job.pieces[job.stage+1].at do scene.digChip(job,d,p) end
+ scene.digChips(job,d,p)
+ if job.hp<=0 then
+  scene.digBreak(job,d,p)
+  if job.queue then scene.digNextLine(d,p,job) end
+ end
+end
+-- Gridcutter: the beam runs on to the next cell of its line, if it is still
+-- free and cuttable (sequence ops C1, C2...).
+function scene.digNextLine(d,p,job)
+ local dig=scene.dig;local cube=dig.cube
+ local id=job.queue[(job.seq or 1)+1]
+ if not id or cube.removed[id] or (cube.sealed and cube.sealed[id]) or dig.claimed[id] or dig.geodes[id] then return end
+ local taken={}
+ for cid in pairs(dig.claimed) do taken[cid]=true end
+ for gid in pairs(dig.geodes) do taken[gid]=true end
+ if not DigCube.diggable(cube,id,taken) then return end
+ local c=cube.cells[id]
+ job.seq=(job.seq or 1)+1;job.ids={id};job.left={id};job.key=tostring(id);job.cx=c.cx;job.cz=c.cz
+ job.hp=DigCube.chunkHp(cube,job.ids,job.cut,scene.digHpMul);job.maxHp=job.hp
+ job.pieces=DigCube.pieces(cube,job.ids,job.style.pieces);job.stage=0
+ job.volume=DigCube.volume(cube,job.ids);job.volFrac=0;job.rock=DigCube.rockDrops(job.volume);job.rockPaid=0
+ job.broken=nil;job.committed=nil;job.hot=true;job.nodes={}
+ dig.claimed[id]=d.id
+ scene.digAim(job)
+ d.digJob=job;d.digCell=id;d.digPickAt=0
+end
+-- Carve ahead (shot and volley jobs): once a shot is committed, its non-gem
+-- cells go to the CSG queue before the break, so the hole is there when the
+-- rubble flies. A committed job always finishes (scene.digDrop).
+function scene.digCarveAhead(job)
+ local dig=scene.dig
+ local ids={}
+ for _,id in ipairs(job.ids) do if not dig.gems[id] and not dig.carved[id] then table.insert(ids,id) end end
+ if #ids==0 then return end
+ for _,id in ipairs(ids) do dig.carved[id]=true end
+ job.committed=true
+ table.insert(dig.csg,{generation=dig.generation,ids=ids,queuedAt=os.clock()})
+ scene.digCarveLoop()
+end
+-- A job's MiningShot record: marked as a dig shot, with a Debris safety net.
+function scene.digTrack(job,node,life,grade)
+ if not node then return nil end
+ node:SetAttribute('Dig',true)
+ if grade then node:SetAttribute('Grade',grade) end
+ Debris:AddItem(node,life)
+ job.nodes=job.nodes or {};table.insert(job.nodes,node);job.node=node
+ return node
+end
+-- Shot roles hover low over one cell. Ballcaster charges one ball (longer
+-- for a harder cell) and pops the cell in one hit; Needler streams darts
+-- that wear it down, then works on to a neighbour.
+function scene.digShotStep(d,p,job,dt)
+ local dig=scene.dig;local style=job.style;local shot=style.shot
+ local goal=job.contact+Vector3.new(0,shot.hover,0)
+ move(d,goal,dt)
+ if not job.lockAt then
+  if (d.pos-goal).Magnitude>1 then d.state='Travel';d.mining=false;d.warmAt=nil;return end
+  job.lockAt=now
+  local rested=now-(d.lastBeamAt or -math.huge)>scene.FIRST_CHARGE_REST
+  if style.shape=='Ball' then
+   job.charge=math.clamp(job.hp/(d.stats.miningDPS*shot.chargeDiv),shot.chargeMin,shot.chargeMax)+(rested and shot.rested or 0)
+   job.from=d.pos-Vector3.new(0,1.1,0)
+   d.warmAt=now;d.digWarmFor=job.charge
+   scene.digTrack(job,RoleEffects.Projectile('Ball',job.from,job.contact,scene.digColor(style),now,job.charge,shot.flight,d.id,''),
+    job.charge+shot.flight+3,math.clamp(job.charge/1.2,.7,1.4))
+  else
+   job.nextDart=now+(rested and shot.rested or shot.first);job.darts={}
+   d.warmAt=now;d.digWarmFor=job.nextDart-now
+  end
+ end
+ if not job.carveChecked and now>=job.lockAt+.25 then job.carveChecked=true;scene.digCarveAhead(job) end
+ if style.shape=='Ball' then
+  local launchAt=job.lockAt+job.charge
+  if now<launchAt then d.state='Warmup';d.mining=false;d.digProgress=math.clamp((now-job.lockAt)/job.charge,0,1);return end
+  d.state='SpecialMine';d.mining=false;d.digProgress=1;d.lastBeamAt=now
+  if not job.launched then
+   job.launched=true
+   local impulse=Feel.gunImpulse('Ballcaster',job.from,job.contact,d.flightMass)
+   d.velocity+=impulse
+   d.model:SetAttribute('FlightImpulse',impulse);d.model:SetAttribute('FlightImpulseAt',now)
+  end
+  if now<launchAt+shot.flight then return end
+  if job.node then RoleEffects.ProjectileContact(job.node,job.contact,Vector3.yAxis,true,true,false,now) end
+  job.hp=0
+  scene.digBreak(job,d,p)
+  scene.digRecover(d,shot.recover)
+  return
+ end
+ -- Needler: resolve the darts that reach the rock this tick, oldest first.
+ local layer=dig.cube.cells[job.ids[1]].layer
+ while job.darts[1] and now>=job.darts[1].at do
+  local dart=table.remove(job.darts,1)
+  job.hp-=d.stats.miningDPS*shot.interval*style.power*(layer>=shot.deepLayer and shot.deepPower or 1)
+  if dart.node then RoleEffects.ProjectileContact(dart.node,dart.point,Vector3.yAxis,true,job.hp<=0,false,now) end
+  if job.hp<=0 then break end
+ end
+ d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
+ if job.hp<=0 then
+  d.digLastCell=job.ids[1]
+  scene.digBreak(job,d,p)
+  return
+ end
+ if now>=job.nextDart and #job.darts<shot.maxLive then
+  job.fired=true;d.lastBeamAt=now
+  local from=d.pos-Vector3.new(0,.6,0)
+  local point=job.contact+Vector3.new((dig.random:NextNumber()-.5)*.7,0,(dig.random:NextNumber()-.5)*.7)
+  local node=scene.digTrack(job,RoleEffects.Projectile('Dart',from,point,scene.digColor(style),now,shot.windup,shot.flight,d.id,''),shot.windup+shot.flight+3)
+  table.insert(job.darts,{at=now+shot.windup+shot.flight,node=node,point=point})
+  local impulse=Feel.gunImpulse('Needler',from,point,d.flightMass)
+  d.velocity+=impulse
+  d.model:SetAttribute('FlightImpulse',impulse);d.model:SetAttribute('FlightImpulseAt',now)
+  job.nextDart=math.max(job.nextDart+shot.interval,now+shot.interval*.5)
+ end
+ d.mining=false;d.state=job.fired and 'SpecialMine' or 'Warmup'
+end
+-- Charger: hover, wind up, power-dive into the chunk, hold, recover; each
+-- slam takes a big bite and shakes loose a share of nearby crewmates' cuts.
+-- Only the Windup and Dive beats are emitted (an Impact record would spawn
+-- the field crater stand-in).
+function scene.digSlamStep(d,p,job,dt)
+ local style=job.style;local cfg=style.slam
+ local slam=job.slam
+ if not slam then slam={phase='Travel',phaseAt=now};job.slam=slam end
+ local hover=job.contact+Vector3.new(0,cfg.hover,0)
+ slam.impact=job.contact+Vector3.new(0,cfg.clear,0)
+ local area=DigCube.chunkArea(scene.dig.cube,job.ids)
+ local diameter=math.clamp(2*math.sqrt(area/math.pi),3,9)
+ d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
+ if slam.phase=='Travel' then
+  d.state='Travel';d.mining=false;move(d,hover,dt)
+  if (d.pos-hover).Magnitude>1.5 then return end
+  slam.phase='Windup';slam.phaseAt=now;d.breaker=slam;d.state='BreakerWindup'
+  d.warmAt=now;d.digWarmFor=cfg.windup
+  publishBreakerPhase(d,slam)
+  RoleEffects.BreakerPhase(d.pos,job.contact,'Windup',diameter)
+  return
+ end
+ d.breaker=slam;d.mining=false
+ if slam.phase=='Windup' then
+  d.state='BreakerWindup';move(d,job.contact+Vector3.new(0,cfg.lift,0),dt)
+  if now-slam.phaseAt<cfg.windup then return end
+  slam.phase='Dive';slam.phaseAt=now;slam.diveStart=d.pos;d.state='BreakerDive'
+  publishBreakerPhase(d,slam)
+  RoleEffects.BreakerPhase(d.pos,job.contact,'Dive',diameter)
+  return
+ end
+ if slam.phase=='Dive' then
+  d.state='BreakerDive';d.goal=slam.impact;d.intentGoal=slam.impact
+  d.pos,d.velocity=Feel.powerDive(slam.diveStart,slam.impact,now-slam.phaseAt,cfg.dive)
+  if now-slam.phaseAt<cfg.dive then return end
+  d.pos=slam.impact;d.velocity=Vector3.zero
+  slam.phase='Impact';slam.phaseAt=now;d.state='BreakerImpact';d.lastBeamAt=now
+  d.contactSerial=(d.contactSerial or 0)+1;d.contactAt=now;d.impactSerial=(d.impactSerial or 0)+1;d.impactAt=now
+  publishBreakerPhase(d,slam)
+  -- One slam does a whole cycle's work (windup+dive+hold+recover).
+  job.hp-=d.stats.miningDPS*style.power*(cfg.windup+cfg.dive+cfg.hold+cfg.recover)
+  scene.digQuake(d,p,job)
+  scene.digChips(job,d,p)
+  d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
+  if job.hp<=0 then
+   scene.digBreak(job,d,p)
+   scene.digRecover(d,cfg.hold)
+  end
+  return
+ end
+ if slam.phase=='Impact' then
+  d.state='BreakerImpact';d.pos=slam.impact;d.velocity=Vector3.zero;d.goal=slam.impact;d.intentGoal=slam.impact
+  if now-slam.phaseAt<cfg.hold then return end
+  slam.phase='Recover';slam.phaseAt=now;d.state='BreakerRecover'
+  publishBreakerPhase(d,slam)
+  return
+ end
+ d.state='BreakerRecover';move(d,hover,dt)
+ if now-slam.phaseAt>=cfg.recover then slam.phase='Travel';slam.phaseAt=now;publishBreakerPhase(d,slam) end
+end
+-- Charger quake: a slam shakes a share of the work off every crewmate's
+-- beam or slam cut nearby (at most once per `every` seconds each).
+function scene.digQuake(d,p,job)
+ local q=job.style.quake
+ for _,o in ipairs(p.drones) do
+  local other=o.digJob
+  if o~=d and other and (other.kernel=='beam' or other.kernel=='slam') and now>=(other.quakeAt or 0) and other.contact and (other.contact-job.contact).Magnitude<=q.radius then
+   other.hp-=q.share*other.maxHp;other.quakeAt=now+q.every
+  end
+ end
+end
+-- Volley roles (Ramiel, Nomad) hover high over a cluster of exposed cells,
+-- charge one shot and break the whole cluster in one op (seed first).
+function scene.digVolleyStep(d,p,job,dt)
+ local dig=scene.dig;local cube=dig.cube;local style=job.style;local v=style.volley
+ local goal=job.contact+Vector3.new(0,v.hover,0)
+ move(d,goal,dt)
+ if not job.lockAt then
+  if (d.pos-goal).Magnitude>1.5 then d.state='Travel';d.mining=false;d.warmAt=nil;return end
+  job.lockAt=now;job.from=d.pos
+  d.warmAt=now;d.digWarmFor=v.charge
+  local node
+  if style.shape=='Prism' then
+   node=RoleEffects.Projectile('Prism',job.from,job.contact,scene.digColor(style),now,v.charge,v.flight,d.id,'',nil,v.beamHold)
+  else
+   node=RoleEffects.Projectile('Nomad',job.from,job.contact,scene.digColor(style),now,v.charge,v.flight,d.id,'',nil,nil,nil,job.contact.Y)
+  end
+  scene.digTrack(job,node,v.charge+v.flight+(v.beamHold or 0)+3)
+ end
+ if not job.carveChecked and now>=job.lockAt+.25 then job.carveChecked=true;scene.digCarveAhead(job) end
+ local launchAt=job.lockAt+v.charge
+ if now<launchAt then d.state='Warmup';d.mining=false;d.digProgress=math.clamp((now-job.lockAt)/v.charge,0,1);return end
+ d.state='SpecialMine';d.mining=false;d.digProgress=1;d.lastBeamAt=now
+ if now<launchAt+v.flight then return end
+ if not job.contactAt then
+  job.contactAt=now
+  if style.shape=='Prism' then
+   local seed=cube.cells[job.ids[1]]
+   local hits,reach={},3
+   for i,id in ipairs(job.ids) do
+    local c=cube.cells[id]
+    reach=math.max(reach,math.sqrt((c.cx-seed.cx)^2+(c.cz-seed.cz)^2)+c.radius)
+    if i>1 and #hits<3 then table.insert(hits,{point=dig.origin+Vector3.new(c.cx,c.y1,c.cz),normal=Vector3.yAxis}) end
+   end
+   RoleEffects.PrismContact(job.node,job.from,job.contact,{point=job.contact,normal=Vector3.yAxis},hits,now,Vector3.yAxis,job.contact,math.min(reach,v.radius))
+  else
+   RoleEffects.NomadContact(job.node,job.contact,job.contact,v.blastRadius,now)
+  end
+ end
+ if now<job.contactAt+v.breakDelay then return end
+ job.hp=0
+ scene.digBreak(job,d,p)
+ scene.digRecover(d,v.recover)
+end
+-- Lancer (the owner's pulse-laser reference): hover, charge, then a short
+-- punchy pulse every interval; each pulse bites a fixed share of the chunk
+-- (published as MinePulseSerial/MinePulseAt; no continuous beam).
+function scene.digPulseStep(d,p,job,dt)
+ local cfg=job.style.pulse
+ local goal=job.contact+Vector3.new(0,cfg.hover,0)
+ move(d,goal,dt)
+ if not job.lockAt then
+  if (d.pos-goal).Magnitude>1.5 then d.state='Travel';d.mining=false;d.warmAt=nil;return end
+  job.lockAt=now
+  local rested=now-(d.lastBeamAt or -math.huge)>scene.FIRST_CHARGE_REST
+  job.nextPulse=now+cfg.charge+(rested and .4 or 0)
+  d.warmAt=now;d.digWarmFor=job.nextPulse-now
+ end
+ d.mining=false;d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
+ if now<job.nextPulse then d.state=job.pulses and 'Mine' or 'Warmup';return end
+ job.nextPulse=math.max(job.nextPulse+cfg.interval,now+cfg.interval*.5)
+ job.pulses=(job.pulses or 0)+1
+ d.state='Mine';d.lastBeamAt=now
+ d.minePulseSerial+=1;d.minePulseAt=now;d.minePulseTargetId='dig:'..job.key;d.digDirty=true
+ job.hp-=job.maxHp*cfg.bite
+ scene.digChips(job,d,p)
+ d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
  if job.hp<=0 then scene.digBreak(job,d,p) end
 end
--- The last piece of a chunk breaks (job.left; earlier pieces already left
--- the rock). The gem roll covers the whole chunk.
+-- The last piece of a job breaks. Gems (spec §2): the cells breaking now
+-- that hold a secret gem reveal it; a gem cell seals (stays, cracked and
+-- glowing, until its owner jumps on it) up to SEAL_PER_BREAK per break and
+-- SEAL_LIVE per owner, otherwise it bursts out at once. Treasure always
+-- seals. Ops: the break ('', E<sealed ids> or C<seq>), then one K per
+-- sealed cell. Returns how many cells sealed.
 function scene.digBreak(job,d,p)
  local dig=scene.dig;local cube=dig.cube
- scene.digDrop(d);d.digPickAt=0;d.digProgress=0
- local last=job.left or job.ids
- -- The gamble: is there a gem in this chunk? (Rolled before anything leaves.)
- local tier=DigCube.gemRoll(cube,job.ids,function() return dig.random:NextNumber() end)
- local layer=cube.cells[job.ids[1]].layer
- -- Jackpots: a treasure pocket pays several rare gems; the first chunk into
- -- each new layer pays a guaranteed gem of that layer's tier.
- local treasure=DigCube.hasTreasure(cube,job.ids)
- local milestone=layer>(dig.deepest or 1)
- if milestone then dig.deepest=layer end
- local flag=''
- if treasure then
-  tier=math.max(tier,3,math.min(#DigCube.ORES,DigCube.layerTier(layer)+1));flag='|T'
- elseif milestone then
-  tier=math.max(tier,DigCube.layerTier(layer));flag='|D'..layer
+ if job.broken then return 0 end
+ job.broken=true
+ if d.digJob==job then scene.digDrop(d);d.digPickAt=0;d.digProgress=0 end
+ local style=job.style or DigCube.style(d.role)
+ local code=job.code or style.code
+ local cells={}
+ for _,id in ipairs(job.left or job.ids) do
+  if not cube.removed[id] and not (cube.sealed and cube.sealed[id]) then table.insert(cells,id) end
  end
- -- A gem stays sealed in its cell (owner, Nov 22): that one cell is kept,
- -- cracked and glowing, until its owner jumps on it (scene.digGeodeStep).
- local sealed=nil
- if tier>0 then
-  local cx,cz=DigCube.chunkCenter(cube,last)
-  local best,score=nil,-math.huge
-  for _,id in ipairs(last) do
-   local c=cube.cells[id]
-   -- Its ore cell if it has one; else the cell farthest from the middle,
-   -- which the nested stages hollowed least.
-   local value=(c.ore or 0)*1000+((c.cx-cx)^2+(c.cz-cz)^2)
-   if not cube.removed[id] and value>score then best,score=id,value end
+ if #cells==0 then return 0 end
+ local layer=cube.cells[cells[1]].layer
+ local cx,cz=DigCube.chunkCenter(cube,cells)
+ local found={}
+ for _,id in ipairs(cells) do
+  local g=dig.gems[id]
+  if g then table.insert(found,{id=id,tier=g.tier,count=g.count or 1,treasure=g.treasure==true}) end
+ end
+ -- The first break into a new layer always pays: its farthest cell (not
+ -- already carved ahead) holds a gem of that layer's tier.
+ if layer>(dig.deepest or 1) then
+  dig.deepest=layer
+  if #found==0 then
+   local best,score=cells[1],-math.huge
+   for _,id in ipairs(cells) do
+    local c=cube.cells[id]
+    local s=(c.cx-cx)^2+(c.cz-cz)^2-(dig.carved[id] and 1e9 or 0)
+    if s>score then best,score=id,s end
+   end
+   table.insert(found,{id=best,tier=DigCube.layerTier(layer),count=1,treasure=false})
   end
-  sealed=best
+ end
+ -- Starforge: a chance at one tier up for every gem it finds.
+ if style.forge then
+  for _,g in ipairs(found) do if dig.random:NextNumber()<style.forge then g.tier=math.min(#DigCube.ORES,g.tier+1) end end
+ end
+ table.sort(found,function(a,b)
+  if a.treasure~=b.treasure then return a.treasure end
+  if a.tier~=b.tier then return a.tier>b.tier end
+  return a.id<b.id
+ end)
+ local live=0
+ for _,g in pairs(dig.geodes) do if g.owner==d.owner then live+=1 end end
+ local sealed,sealedSet,immediate={},{},0
+ for _,g in ipairs(found) do
+  dig.gems[g.id]=nil
+  local c=cube.cells[g.id]
+  local volume=DigCube.cellVolume(cube,g.id)
+  if not dig.carved[g.id] and (g.treasure or (#sealed<DigCube.SEAL_PER_BREAK and live<DigCube.SEAL_LIVE)) then
+   table.insert(sealed,g.id);sealedSet[g.id]=g.tier;live+=1
+   dig.geodes[g.id]={id=g.id,tier=g.tier,treasure=g.treasure,count=g.count,owner=d.owner,p=p,at=now,volume=volume}
+   cube.sealed=cube.sealed or {};cube.sealed[g.id]=true
+  else
+   -- Over the cap: the gem bursts out right away, in a normal arc.
+   immediate=math.max(immediate,g.tier)
+   local top=dig.origin+Vector3.new(c.cx,c.y1+.6,c.cz)
+   for k=1,g.count do
+    table.insert(dig.pending,{at=now+.1+(k-1)*.15,p=p,owner=d.owner,tier=g.tier,volume=volume,position=top+Vector3.new(0,k*.3,0),high=false})
+   end
+  end
  end
  local broken={}
- for _,id in ipairs(last) do
-  if id~=sealed then
+ for _,id in ipairs(cells) do
+  if not sealedSet[id] then
    table.insert(broken,id)
    if DigCube.remove(cube,id) then dig.recent[id]=now end
   end
  end
+ local ids=#cells==#job.ids and job.ids or cells
  if #broken>0 then
-  table.insert(dig.ops,'c'..DigCube.key(broken)..'|'..(sealed and 0 or tier)..(sealed and '' or flag))
-  dig.dirty=true
-  table.insert(dig.csg,{generation=dig.generation,ids=broken,queuedAt=os.clock()})
+  local flag,arg=nil,nil
+  if #sealed>0 then
+   local list=table.clone(sealed);table.sort(list)
+   flag,arg='E',DigCube.key(list)
+  elseif job.seq then flag,arg='C',job.seq end
+  table.insert(dig.ops,DigCube.formatOp(ids,code,immediate,flag,arg))
+ end
+ for _,id in ipairs(sealed) do table.insert(dig.ops,DigCube.formatOp({id},code,sealedSet[id],'K')) end
+ dig.dirty=true
+ if #sealed>0 then scene.digPublishGeodes() end
+ -- The cut: whatever was not already carved ahead.
+ local carve={}
+ for _,id in ipairs(broken) do if dig.carved[id] then dig.carved[id]=nil else table.insert(carve,id) end end
+ if #carve>0 then
+  table.insert(dig.csg,{generation=dig.generation,ids=carve,queuedAt=os.clock()})
   scene.digCarveLoop()
  end
- scene.crewBreak(d.owner)
- local volume=DigCube.volume(cube,job.ids)
- local _,lx,lz=DigCube.chunkArea(cube,#broken>0 and broken or last)
- local _,floor=DigCube.contact(cube,#broken>0 and broken or last)
- local center=dig.origin+Vector3.new(lx,floor+1,lz)
- -- Rock comes out right away: bigger chunks drop more (less what the
- -- earlier pieces already paid).
- scene.digRock(p,d.owner,last,math.max(1,(job.rock or DigCube.rockDrops(volume))-(job.rockPaid or 0)),center)
- if sealed then
-  dig.geodes[sealed]={id=sealed,tier=tier,treasure=treasure,owner=d.owner,p=p,volume=volume,at=now}
-  -- A sealed cell may float: the crew can dig under it.
-  cube.sealed=cube.sealed or {};cube.sealed[sealed]=true
-  scene.digPublishGeodes()
+ for i=#dig.stageParts,1,-1 do
+  local all=true
+  for _,id in ipairs(dig.stageParts[i].ids) do if not cube.removed[id] then all=false;break end end
+  if all then table.remove(dig.stageParts,i) end
  end
+ scene.crewBreak(d.owner)
+ local rest=#broken>0 and broken or cells
+ local _,lx,lz=DigCube.chunkArea(cube,rest)
+ local _,floor=DigCube.contact(cube,rest)
+ local center=dig.origin+Vector3.new(lx,floor+1,lz)
+ if style.rockCarry==false then
+  -- Strikers and Chargers: rock comes out right away, bigger chunks drop
+  -- more (less what the earlier stages already paid).
+  local volume=job.volume or DigCube.volume(cube,job.ids)
+  scene.digRock(p,d.owner,cells,math.max(1,(job.rock or DigCube.rockDrops(volume))-(job.rockPaid or 0)),center)
+ elseif #broken>0 then
+  scene.digPayRock(d,p,job,DigCube.volume(cube,broken)*(1-(job.volFrac or 0)),center)
+ end
+ if #broken>0 then
+  if style.brittle then scene.digBrittle(job,broken) end
+  if style.chain and not job.link then scene.digChain(job,d,p,broken) end
+ end
+ if style.hints then scene.digHint(d,cells) end
+ return #sealed
+end
+-- Frostbite: the cells around and under a break turn brittle for a while
+-- (every drone cuts them for .6 of their HP, and prefers them).
+function scene.digBrittle(job,broken)
+ local dig=scene.dig;local cube=dig.cube;local cfg=job.style.brittle
+ for _,id in ipairs(broken) do
+  for pass=1,2 do
+   for _,n in ipairs(pass==1 and cube.cells[id].neighbors or DigCube.below(cube,id)) do
+    if not cube.removed[n] and not (cube.sealed and cube.sealed[n]) then dig.brittle[n]=now+cfg.life end
+   end
+  end
+ end
+ local ids={}
+ for id in pairs(dig.brittle) do table.insert(ids,id) end
+ if #ids>cfg.max then
+  table.sort(ids,function(a,b) local x,y=dig.brittle[a],dig.brittle[b];if x~=y then return x>y end;return a<b end)
+  for i=cfg.max+1,#ids do dig.brittle[ids[i]]=nil end
+ end
+ scene.digPublishBrittle()
+end
+-- The holder's Brittle attribute: 'id;id;...' of the cells still brittle.
+function scene.digPublishBrittle()
+ local dig=scene.dig;local ids={}
+ for id,t in pairs(dig.brittle) do
+  if t>now and not dig.cube.removed[id] then table.insert(ids,id) else dig.brittle[id]=nil end
+ end
+ table.sort(ids)
+ local s=table.concat(ids,';')
+ if dig.holder:GetAttribute('Brittle')~=s then dig.holder:SetAttribute('Brittle',s) end
+end
+-- Resonator: a break rings on into up to `links` small neighbours, one
+-- after another (scene.digChainStep breaks each as a C<n> op).
+function scene.digChain(job,d,p,broken)
+ local dig=scene.dig;local cube=dig.cube;local cfg=job.style.chain
+ local seen,list={},{}
+ for _,id in ipairs(broken) do
+  for _,n in ipairs(cube.cells[id].neighbors) do
+   local c=cube.cells[n]
+   if not seen[n] and not cube.removed[n] and not (cube.sealed and cube.sealed[n]) and not dig.claimed[n] and c.area<=cfg.maxArea then
+    seen[n]=true;table.insert(list,{id=n,d=(c.cx-job.cx)^2+(c.cz-job.cz)^2})
+   end
+  end
+ end
+ table.sort(list,function(a,b) if a.d~=b.d then return a.d<b.d end return a.id<b.id end)
+ local taken={}
+ for id in pairs(dig.claimed) do taken[id]=true end
+ for id in pairs(dig.geodes) do taken[id]=true end
+ local n,hp=0,0
+ dig.chainSerial=(dig.chainSerial or 0)+1
+ for _,e in ipairs(list) do
+  if n>=cfg.links then break end
+  local h=cube.cells[e.id].hp*scene.digHpMul(e.id)
+  if hp+h<=cfg.budget*job.maxHp and DigCube.diggable(cube,e.id,taken) then
+   n+=1;hp+=h;taken[e.id]=true
+   table.insert(dig.chains,{at=now+cfg.gap*n,id=e.id,d=d,p=p,n=n,group=dig.chainSerial})
+  end
+ end
+end
+-- Due chain links break as single-cell Resonator jobs, re-checked first; a
+-- link that seals a gem stops the rest of its chain.
+function scene.digChainStep()
+ local dig=scene.dig;local cube=dig.cube
+ local i=1
+ while i<=#dig.chains do
+  local link=dig.chains[i]
+  if now<link.at then i+=1 else
+   table.remove(dig.chains,i)
+   local id,d=link.id,link.d
+   local ok=drones[d.id]==d and d.hp>0 and not cube.removed[id] and not (cube.sealed and cube.sealed[id]) and not dig.claimed[id] and not dig.geodes[id]
+   if ok then
+    local taken={}
+    for cid in pairs(dig.claimed) do taken[cid]=true end
+    for gid in pairs(dig.geodes) do taken[gid]=true end
+    ok=DigCube.diggable(cube,id,taken)
+   end
+   if ok then
+    local style=DigCube.STYLES.Resonator;local c=cube.cells[id]
+    local job={ids={id},left={id},key=tostring(id),code=style.code,style=style,kernel='beam',cx=c.cx,cz=c.cz,hp=0,maxHp=c.hp,
+     volume=DigCube.cellVolume(cube,id),volFrac=0,rock=0,rockPaid=0,seq=link.n,link=true}
+    if scene.digBreak(job,d,link.p)>0 then
+     for k=#dig.chains,1,-1 do if dig.chains[k].group==link.group then table.remove(dig.chains,k) end end
+     i=1
+    end
+   end
+  end
+ end
+end
+-- Needler: its darts read the rock around a break. Gem cells within reach
+-- glint for the owner a while: the owner's DigHints Player attribute
+-- 'id:tier;...' (a Player attribute: other clients could read it; accepted).
+function scene.digHint(d,cells)
+ local dig=scene.dig;local cube=dig.cube;local cfg=DigCube.STYLES.Needler.hints
+ local hints=dig.hints[d.owner] or {};dig.hints[d.owner]=hints
+ local count=0
+ for _ in pairs(hints) do count+=1 end
+ local c0=cube.cells[cells[1]]
+ local y0=(c0.y0+c0.y1)*.5
+ local list={}
+ for id,g in pairs(dig.gems) do
+  local c=cube.cells[id]
+  local dist=math.sqrt((c.cx-c0.cx)^2+((c.y0+c.y1)*.5-y0)^2+(c.cz-c0.cz)^2)
+  if dist<=cfg.radius and not hints[id] and not cube.removed[id] and not (cube.sealed and cube.sealed[id]) and DigCube.visible(cube,id) then
+   table.insert(list,{id=id,d=dist,tier=g.tier})
+  end
+ end
+ table.sort(list,function(a,b) if a.d~=b.d then return a.d<b.d end return a.id<b.id end)
+ for _,e in ipairs(list) do
+  if count>=cfg.max then break end
+  hints[e.id]={tier=e.tier,untilAt=now+cfg.life};count+=1
+ end
+ scene.digPublishHints(d.owner)
+end
+function scene.digPublishHints(owner)
+ local dig=scene.dig;local p=profiles[owner]
+ local hints=dig.hints[owner] or {}
+ local ids={}
+ for id in pairs(hints) do table.insert(ids,id) end
+ table.sort(ids)
+ local parts={}
+ for i,id in ipairs(ids) do
+  if i>DigCube.STYLES.Needler.hints.max then break end
+  parts[i]=id..':'..hints[id].tier
+ end
+ local s=table.concat(parts,';')
+ if p and p.player.Parent and p.player:GetAttribute('DigHints')~=s then p.player:SetAttribute('DigHints',s) end
+end
+-- Every half second: expire hints (and hints whose gem is gone) and
+-- brittle cells.
+function scene.digHintStep()
+ local dig=scene.dig;local cube=dig.cube
+ if now<(dig.hintAt or 0) then return end
+ dig.hintAt=now+.5
+ for owner,hints in pairs(dig.hints) do
+  local changed=false
+  for id,h in pairs(hints) do
+   if now>=h.untilAt or not dig.gems[id] or cube.removed[id] or (cube.sealed and cube.sealed[id]) then hints[id]=nil;changed=true end
+  end
+  if not profiles[owner] then dig.hints[owner]=nil elseif changed then scene.digPublishHints(owner) end
+ end
+ if next(dig.brittle) or (dig.holder:GetAttribute('Brittle') or '')~='' then scene.digPublishBrittle() end
 end
 -- Sealed gem cells, replicated as "id:tier:owner;..." on the cube holder.
 function scene.digPublishGeodes()
@@ -3990,12 +4599,13 @@ function scene.digOpenGeode(id,g)
  dig.geodes[id]=nil
  if cube.sealed then cube.sealed[id]=nil end
  if DigCube.remove(cube,id) then dig.recent[id]=now end
- table.insert(dig.ops,'c'..id..'|'..g.tier..'|'..(g.treasure and 'X' or 'G'))
+ table.insert(dig.ops,DigCube.formatOp({id},nil,g.tier,g.treasure and 'X' or 'G'))
  dig.dirty=true
+ dig.carved[id]=nil
  table.insert(dig.csg,{generation=dig.generation,ids={id},queuedAt=os.clock()})
  scene.digCarveLoop()
  local at=dig.origin+Vector3.new(c.cx,c.y1+.6,c.cz)
- for i=1,g.treasure and DigCube.TREASURE_GEMS or 1 do
+ for i=1,g.count or (g.treasure and DigCube.TREASURE_GEMS or 1) do
   table.insert(dig.pending,{at=now+GEODE_LAUNCH+(i-1)*.15,p=g.p,owner=g.owner,tier=g.tier,volume=g.volume,position=at+Vector3.new(0,i*.3,0),high=true})
  end
  scene.digPublishGeodes()
@@ -4013,23 +4623,42 @@ function scene.digRequestOpen(p,payload)
  local id=type(payload)=='table' and tonumber(payload.id)
  local g=id and dig.geodes[id]
  local hr=characterRoot(p)
- if not g or g.p~=p or not hr or cube.removed[id] then return end
- if scene.digOverGeode(hr,cube.cells[id],3) then scene.digOpenGeode(id,g) end
+ if not g or (g.owner~=0 and g.p~=p) or not hr or cube.removed[id] then return end
+ if scene.digOverGeode(hr,cube.cells[id],3) then
+  if g.owner==0 then g.owner=p.player.UserId;g.p=p end
+  scene.digOpenGeode(id,g)
+ end
 end
+-- Landing on it from a jump (owner, Nov 22: you actually have to jump;
+-- walking or standing on it does nothing).
+function scene.digLanded(hr,c)
+ local velocity=hr.AssemblyLinearVelocity
+ return velocity~=nil and velocity.Y<=-GEODE_LANDING and scene.digOverGeode(hr,c,0)
+end
+-- A geode goes public (owner 0) once its owner left or has not dug for 90 s;
+-- then anyone who lands on it (or asks with DigOpen) opens it and is paid.
 function scene.digGeodeStep()
  local dig=scene.dig;local cube=dig.cube
  local changed=false
  for id,g in pairs(dig.geodes) do
-  local p=profiles[g.owner]
-  local hr=p and p==g.p and characterRoot(p)
   local c=cube.cells[id]
   if cube.removed[id] then dig.geodes[id]=nil;changed=true
-  elseif hr and c then
-   -- Landing on it from a jump (owner, Nov 22: you actually have to jump;
-   -- walking or standing on it does nothing).
-   local velocity=hr.AssemblyLinearVelocity
-   local falling=velocity~=nil and velocity.Y<=-GEODE_LANDING
-   if falling and scene.digOverGeode(hr,c,0) then scene.digOpenGeode(id,g) end
+  elseif c then
+   if g.owner~=0 then
+    local p=profiles[g.owner]
+    if p~=g.p or (p and not p.digging and now-(p.digLeftAt or now)>90) then g.owner=0;g.p=nil;changed=true end
+   end
+   local opener=nil
+   if g.owner==0 then
+    for _,p in pairs(profiles) do local hr=characterRoot(p);if hr and scene.digLanded(hr,c) then opener=p;break end end
+   else
+    local hr=characterRoot(g.p)
+    if hr and scene.digLanded(hr,c) then opener=g.p end
+   end
+   if opener then
+    if g.owner==0 then g.owner=opener.player.UserId;g.p=opener end
+    scene.digOpenGeode(id,g);changed=false
+   end
   end
  end
  if changed then scene.digPublishGeodes() end
@@ -4039,8 +4668,9 @@ function scene.digLaunch(p,owner,cargo,material,stone,rareGem,position,color,nod
  local dig=scene.dig;local profile=data(p)
  local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
  -- A gem out of a sealed cell flies much higher (owner, Nov 22).
- -- (Nov 22 follow-up: "much less tall" than the first x1.9+6.)
- if high then vx*=.8;vz*=.8;vy=vy*1.25+2 end
+ -- (Nov 22 follow-up: "much less tall" than the first x1.9+6; then
+ -- "make gem arcs shorter": x1.1+2.)
+ if high then vx*=.8;vz*=.8;vy=vy*1.1+2 end
  local guess=position.Y-1
  -- The cube knows its own floor exactly; carving runs a moment behind, so a
  -- raycast would land drops on rock that is about to disappear (floating gems).
@@ -4064,7 +4694,7 @@ end
 -- more). No physical pickups: the chunk leaves a little pile of glowing rock
 -- dust on the pit floor that flies into your bag once you come close.
 local DUST_RANGE=14
-function scene.digRock(p,owner,ids,count,position)
+function scene.digRock(p,owner,ids,count,position,collect)
  if not healthy(p) then return end
  local dig=scene.dig;local cube=dig.cube
  local first=cube.cells[ids[1]]
@@ -4083,7 +4713,7 @@ function scene.digRock(p,owner,ids,count,position)
  part:SetAttribute('Color',Color3.fromRGB(c[1],c[2],c[3]));part:SetAttribute('Born',now)
  part.Parent=dig.dustFolder
  table.insert(dig.dust,{p=p,owner=owner,part=part,position=Vector3.new(position.X,dig.origin.Y+first.y0+.5,position.Z),
-  cargo=cargo,units=count,readyAt=now+DigCube.PAUSE*.6,expires=now+150})
+  cargo=cargo,units=count,readyAt=now+(collect and collect.ready or DigCube.PAUSE*.6),expires=now+150,range=collect and collect.range or nil})
 end
 -- Rock dust flies into its owner's bag when they come within range.
 function scene.digDustStep()
@@ -4097,7 +4727,7 @@ function scene.digDustStep()
    dust.part:Destroy();table.remove(dig.dust,i)
   elseif now>=dust.readyAt and healthy(p) then
    local hr=characterRoot(p)
-   if hr and (hr.Position-dust.position).Magnitude<=math.max(DUST_RANGE,p.cargoReach or 0) then
+   if hr and (hr.Position-dust.position).Magnitude<=math.max(dust.range or DUST_RANGE,p.cargoReach or 0) then
     local accepted=Pro.addCargo(data(p),dust.cargo,dust.units,Ca.capacity(data(p),previewPerks(p)))
     if accepted>0 then
      dust.units-=accepted;p.dirty=true;p.publishDirty=true
@@ -4117,14 +4747,18 @@ function scene.digDustStep()
   end
  end
 end
-function scene.digGem(p,owner,tier,volume,position,high)
- if not healthy(p) then return end
+-- A gem's cargo: its value from the volume of the cell that held it.
+function scene.digGemCargo(tier,volume)
  local ore=DigCube.ORES[tier]
  local material=ore and Workshop.CRYSTAL_BY_MATERIAL[ore.material]
- if not material then return end
- local size=math.clamp(volume/250,.6,3)
- local value=math.clamp(math.floor(8*material.value*size+.5),1,1000000)
- local cargo=Workshop.saleCargo(ore.material,value,false,100,0,0,'Original')
+ if not material then return nil,nil end
+ local value=math.clamp(math.floor(8*material.value*DigCube.gemSize(volume or DigCube.GEM_VOL)+.5),1,1000000)
+ return Workshop.saleCargo(ore.material,value,false,100,0,0,'Original'),ore
+end
+function scene.digGem(p,owner,tier,volume,position,high)
+ if not healthy(p) then return end
+ local cargo,ore=scene.digGemCargo(tier,volume)
+ if not cargo then return end
  scene.digLaunch(p,owner,cargo,ore.material,false,true,position,Color3.fromRGB(ore.color[1],ore.color[2],ore.color[3]),'dig:gem:'..#scene.dig.ops,high)
  p.dirty=true;p.publishDirty=true
 end
@@ -4164,6 +4798,8 @@ function scene.digStep()
  scene.digDustStep()
  scene.digGeodeStep()
  scene.digCarveReport()
+ scene.digChainStep()
+ scene.digHintStep()
  for i=#dig.pending,1,-1 do
   local gem=dig.pending[i]
   if now>=gem.at then
@@ -4185,6 +4821,7 @@ local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end
  if d.specialRecovery and not d.specialPausedAt and (not d.specialRecovery.part.Parent or now>=d.specialRecovery.startedAt+d.specialRecovery.duration+1.15) then d.specialRecovery=nil end
  if d.hp<=0 then
+  if d.digJob then scene.digDrop(d) end
   d.velocity=Vector3.zero
   d.state=now>=d.readyAt-C.Assembly and 'Reprinting' or 'Destroyed';d.pos=scene.printer.Position+Vector3.new((d.slot-1)%4*2,3,math.floor((d.slot-1)/4)*2);d.goal=d.pos
   if R.finishReprint(d,now,d.stats.maxHealth) then d.field=nil;d.commandOutAt=nil end
@@ -4201,6 +4838,7 @@ local function droneStep(d: any,dt: number)
   if d.unloadAt then d.unloadAt=d.unloadAt+dt end
   if d.repairChargeAt then d.repairChargeAt=d.repairChargeAt+dt end
   if d.breaker and d.breaker.phase~='Dive' then d.breaker.phaseAt+=dt end
+  if d.digJob or d.digWarm or d.digHoldUntil then scene.digPause(d,dt) end
   if d.growAt then d.growAt+=dt end
   if d.lingerUntil then d.lingerUntil+=dt end
   -- Storage freezes work, not safe flight. No profile, damage, reservation or
@@ -4243,7 +4881,7 @@ local function droneStep(d: any,dt: number)
  if scene.digActive(p) then
   if not p.digging then p.digging=true;p.player:SetAttribute('MA_Digging',true);leaveField(p) end
   scene.digDrone(d,p,dt);return
- elseif p.digging then p.digging=false;p.player:SetAttribute('MA_Digging',false);scene.digRelease(p) end
+ elseif p.digging then p.digging=false;p.digLeftAt=now;p.player:SetAttribute('MA_Digging',false);scene.digRelease(p) end
  if scene.chargingStation and not d.carrierId and d.stats.batteryCapacity>0 then
   local committed=scene.committedWork(d)
   if d.chargedPin and (d.chargedPin~=p.miningSquare or committed) then d.chargedPin=nil end
@@ -4383,7 +5021,7 @@ local function droneStep(d: any,dt: number)
     if field.junk then leaveDroneField(p,d) end
     d.mining=false;d.warmAt=nil;d.mineCharge=0;d.state='Follow'
     move(d,scene.followGoal(d,hr.Position,#p.drones,hr.AssemblyLinearVelocity,dt),dt)
-   elseif DroneCatalog.Types[d.role] then specialDrone(d,p,field,dt)
+   elseif DroneCatalog.Types[d.role] and not DroneRoles.isMiner(d.role) then specialDrone(d,p,field,dt)
    elseif d.role=='Charger' then breakerDrone(d,p,hr,field,dt)
    else mineDrone(d,p,field,dt) end
   else leaveDroneField(p,d) end
@@ -4476,8 +5114,8 @@ local function snapshotDrone(d)
   PressFinish=d.pressJob and d.pressJob.finishAt or 0,
   BatteryPowered=scene.chargingStation~=nil and d.stats.batteryCapacity>0,
   HideBattery=scene.insideSquareField(d.pos) or profiles[d.owner].digging==true,
-  DigCell=d.digCell or 0,DigOp=d.digJob and ('c'..d.digJob.key) or '',DigChunkSize=d.digJob and Config.DigCube.chunkSize(d.role,d.id,d.slot) or '',DigPoint=d.digPoint or d.pos,DigProgress=d.digProgress or 0,
-  DigMining=d.digCell~=nil and d.mining==true and not profiles[d.owner].busy,
+  DigCell=d.digCell or 0,DigOp=d.digJob and ('c'..d.digJob.key..'~'..d.digJob.code) or '',DigChunkSize=d.digJob and d.digJob.size or '',DigPoint=d.digPoint or d.pos,DigProgress=d.digProgress or 0,
+  DigMining=d.digJob~=nil and d.digJob.kernel=='beam' and d.mining==true and not profiles[d.owner].busy,
   InMiningPlot=profiles[d.owner].miningSquare~=nil and Mining.selectorContains(profiles[d.owner].miningSquare.center,profiles[d.owner].miningSquare.half,d.pos),
   BatteryWorking=(d.role=='Compactor' and d.state=='Press') or scene.committedWork(d) or combatId~='',
   PressWaiting=d.pressWaiting==true,
@@ -4486,7 +5124,7 @@ local function snapshotDrone(d)
   Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=d.flightSpeed or travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=d.digWarmFor or scene.miningWarmup(d,target),
   DoubleBeam=d.stats.doubleBeam==1,TwinThrusters=d.stats.twinThrusters==1,OreDuplicator=d.stats.oreDuplicator==1,
-  BeamVariant=d.owned.beamVariant,MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
+  BeamVariant=d.owned.beamVariant,MiningStyle=d.digging and (Config.DigCube.style(d.role).beam or 'None') or (DroneRoles.isMiner(d.role) and 'Cutter' or 'None'),MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
   RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,
   BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=DroneRoles.BREAKER.diveDuration,
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
@@ -5630,8 +6268,9 @@ local function commandPlayer(pl: any,action: any,payload: any)
   p.nextTestLoadout=now+RoleConfig.Settings.RandomizeCooldown;pl:SetAttribute('MA_TestReadyAt',p.nextTestLoadout)
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
-  RoleEffects.ClearAbility(pl.UserId);p.ability=nil;p.testFleet=action=='RoleLoadout' and roleTestFleet(p) or randomTestFleet(p);rebuildFleet(p);logistics:refresh(p)
-  notice(p,action=='RoleLoadout' and 'All drone types ready. Click a rock to start mining.' or 'Random test loadout ready — no saved fleet changed.')
+  RoleEffects.ClearAbility(pl.UserId);p.ability=nil
+  p.testFleet=action=='RoleLoadout' and roleTestFleet(p,nil,type(payload)=='table' and payload.dig==true) or randomTestFleet(p);rebuildFleet(p);logistics:refresh(p)
+  notice(p,action=='RoleLoadout' and (type(payload)=='table' and payload.dig==true and 'Dig crew ready: walk onto the Dig Cube to watch every digger.' or 'All drone types ready. Click a rock to start mining.') or 'Random test loadout ready — no saved fleet changed.')
  elseif action=='Recall' then
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
@@ -5867,7 +6506,7 @@ local function removePlayer(pl)
  p.leaving=true;RoleEffects.ClearAbility(pl.UserId);leaveField(p);if p.connection then p.connection:Disconnect() end
  if scene.fieldTools then scene.fieldTools:clear(p) end
  logistics:remove(p);packDelivery:clear(p)
- for _,d in ipairs(p.drones) do release(d);spend(d);d.model:Destroy();drones[d.id]=nil end
+ for _,d in ipairs(p.drones) do if d.digJob then scene.digDrop(d) end;release(d);spend(d);d.model:Destroy();drones[d.id]=nil end
  -- Wait for the one ordered economy operation, then final save/unlock. No default fallback.
  local deadline=os.clock()+12
  while p.busy and os.clock()<deadline do task.wait(.1) end
