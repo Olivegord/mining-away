@@ -1,6 +1,6 @@
 # Work together in the same project
 
-The shared project is **https://github.com/Olivegord/mining-away**. Its integration branch is **`codex/restore-feel-prestige`**. Work in that repository; there is no second GitHub project or separate friend version.
+The shared project is **https://github.com/Olivegord/mining-away**. Its integration branch is **`main`**. (Until Nov 23 it was `codex/restore-feel-prestige`; that branch is kept but no longer updated. A worktree branched from it should `git merge main` before installing.) Work in that repository; there is no second GitHub project or separate friend version.
 
 ## Open with Codex
 

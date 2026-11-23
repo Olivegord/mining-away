@@ -34,7 +34,7 @@ import time
 
 PLACE_ID = 124078027733625
 UNIVERSE_ID = 10774898335
-INTEGRATION = 'codex/restore-feel-prestige'
+INTEGRATION = 'main'  # was codex/restore-feel-prestige until Nov 23
 STUDIO_MCP = '/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP'
 HERE = pathlib.Path(__file__).resolve().parents[1]
 LEDGER = 'docs/studio-installed.json'

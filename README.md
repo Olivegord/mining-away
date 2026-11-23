@@ -1,6 +1,6 @@
 # DRONEREVOLUTION
 
-**One shared repository:** [Olivegord/mining-away](https://github.com/Olivegord/mining-away). The current integration branch is **`codex/restore-feel-prestige`**.
+**One shared repository:** [Olivegord/mining-away](https://github.com/Olivegord/mining-away). The integration branch is **`main`** (it replaced `codex/restore-feel-prestige` on Nov 23).
 
 **Normal test entry** is the existing shared **DRONEREVOLUTION** Studio Edit session. The latest verified Team Create save is 247. Its seven managed Sources match `studio/` and [`build/DRONE_GAME.rbxl`](build/DRONE_GAME.rbxl), the canonical map and recovery snapshot. See [project state](docs/PROJECT_STATE.md) for verification and publication status.
 
