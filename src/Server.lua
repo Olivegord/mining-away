@@ -3588,8 +3588,9 @@ function scene.digBuildRock()
     -- No cast shadows: the low morning sun would fill every pit with shadow.
     part.Anchored=true;part.CanTouch=false;part.CastShadow=false
     -- Real rock, not plastic (owner, Nov 22): the client pieces and rubble
-    -- use the same material (DigCube.ROCK_MATERIAL) so they match.
-    part.Material=Enum.Material[DigCube.ROCK_MATERIAL];part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+    -- use the same look (DigCube.rockLook) so they match.
+    local rockMaterial,rockVariant=DigCube.rockLook()
+    part.Material=rockMaterial;part.MaterialVariant=rockVariant;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
     part.Color=Color3.fromRGB(c[1],c[2],c[3])
     part.Size=Vector3.new(x1-x0,y1-y0,z1-z0)
     part.CFrame=CFrame.new(dig.origin+Vector3.new((x0+x1)*.5,(y0+y1)*.5,(z0+z1)*.5))
@@ -3662,7 +3663,7 @@ function scene.digCarve(job)
    if not ok and not string.find(tostring(result),'empty') then dig.stats.fails+=1 end
    if ok and result then
     result.Anchored=true;result.CanTouch=false;result.CastShadow=false;result.UsePartColor=true;result.Color=block.part.Color
-    result.Material=block.part.Material;result.Name='RockBlock'
+    result.Material=block.part.Material;result.MaterialVariant=block.part.MaterialVariant;result.Name='RockBlock'
     result.Parent=dig.rock
     block.part:Destroy();block.part=result
    elseif not ok and string.find(tostring(result),'empty') then
@@ -3697,7 +3698,7 @@ function scene.digRebuildBlock(block,stageParts,depth)
  if dig.carveFailures<=20 then (warn or print)('[DigCube] carve failed; rebuilding block '..tostring(lo)..' (depth '..depth..'): '..string.sub(dig.lastCarveError or '?',1,160)) end
  local box=Instance.new('Part');box.Name='RockBlock'
  box.Anchored=true;box.CanTouch=false;box.CastShadow=false
- box.Material=material;box.Color=color;box.TopSurface=Enum.SurfaceType.Smooth;box.BottomSurface=Enum.SurfaceType.Smooth
+ box.Material=material;box.MaterialVariant=block.part.MaterialVariant;box.Color=color;box.TopSurface=Enum.SurfaceType.Smooth;box.BottomSurface=Enum.SurfaceType.Smooth
  box.Size=hi-lo;box.CFrame=CFrame.new(o+(lo+hi)*.5)
  local negatives={}
  local function add(w)
@@ -4388,6 +4389,13 @@ function scene.digVolleyStep(d,p,job,dt)
  scene.digBreak(job,d,p)
  scene.digRecover(d,v.recover)
 end
+-- A Lancer pulse's bite: its share of the chunk, but never more than the
+-- drone's own mining power over the interval (so harder rock takes more
+-- pulses, owner Nov 22: "should not melt through them super fast").
+function scene.digPulseBite(job,d)
+ local cfg=job.style.pulse
+ return math.min(job.maxHp*cfg.bite,d.stats.miningDPS*job.style.power*cfg.interval*1.1)
+end
 -- Lancer (the owner's pulse-laser reference): hover, charge, then a short
 -- punchy pulse every interval; each pulse bites a fixed share of the chunk
 -- (published as MinePulseSerial/MinePulseAt; no continuous beam).
@@ -4404,7 +4412,7 @@ function scene.digPulseStep(d,p,job,dt)
  end
  do
   local due=math.max(0,math.floor((now+scene.digCarveLead()-job.nextPulse)/cfg.interval)+1)
-  scene.digAhead(job,job.maxHp*cfg.bite*due)
+  scene.digAhead(job,scene.digPulseBite(job,d)*due)
  end
  d.mining=false;d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
  if now<job.nextPulse then d.state=job.pulses and 'Mine' or 'Warmup';return end
@@ -4412,7 +4420,7 @@ function scene.digPulseStep(d,p,job,dt)
  job.pulses=(job.pulses or 0)+1
  d.state='Mine';d.lastBeamAt=now
  d.minePulseSerial+=1;d.minePulseAt=now;d.minePulseTargetId='dig:'..job.key;d.digDirty=true
- job.hp-=job.maxHp*cfg.bite
+ job.hp-=scene.digPulseBite(job,d)
  scene.digChips(job,d,p)
  d.digProgress=math.clamp(1-job.hp/job.maxHp,0,1)
  if job.hp<=0 then scene.digBreak(job,d,p) end

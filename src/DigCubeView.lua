@@ -22,8 +22,8 @@
 local DigCube=require('./DigCube')
 local RockChunks=require('./RockChunks')
 RockChunks.wedges=DigCube.polyWedges
-local ROCK=Enum.Material[DigCube.ROCK_MATERIAL]
-RockChunks.material=ROCK
+local ROCK,ROCK_VARIANT=DigCube.rockLook()
+RockChunks.material=ROCK;RockChunks.variant=ROCK_VARIANT
 local UIS=game:GetService('UserInputService')
 local Players=game:GetService('Players')
 local V={}
@@ -504,7 +504,7 @@ function V:shards(op: any,now: number,center: Vector3,rf: any?)
    local inverse=CFrame.new(mid):Inverse()
    local parts={}
    for _,w in ipairs(DigCube.polyWedges(poly,c.y0,c.y1)) do
-    local part=fxPart(self.fx,'DigShard',color,'WedgePart');part.CastShadow=true;part.Material=ROCK
+    local part=fxPart(self.fx,'DigShard',color,'WedgePart');part.CastShadow=true;part.Material=ROCK;part.MaterialVariant=ROCK_VARIANT
     if fx.glass then part.Material=Enum.Material.Glass end
     local size=Vector3.new(w.size[1],w.size[2],w.size[3])
     local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
@@ -918,7 +918,7 @@ function V:proxyWedges(proxy: any,shapes: {any})
  for _,c in ipairs(shapes) do
   for _,w in ipairs(DigCube.polyWedges(c.grown,c.y0+.02,c.y1+.03)) do
    local part=fxPart(proxy.model,'DigCrack',c.stone,'WedgePart')
-   part.CastShadow=true;part.Material=ROCK
+   part.CastShadow=true;part.Material=ROCK;part.MaterialVariant=ROCK_VARIANT
    part.Size=Vector3.new(w.size[1],w.size[2],w.size[3])
    part.CFrame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))
@@ -1770,7 +1770,7 @@ function V:buildGeode(id: number,tier: number)
   local inverse=CFrame.new(mid):Inverse()
   local parts={}
   for _,w in ipairs(DigCube.polyWedges(DigCube.grown(poly,.02),c.y0+.02,c.y1+.08)) do
-   local part=fxPart(model,'GeodePiece',stone,'WedgePart');part.CastShadow=true;part.Material=ROCK
+   local part=fxPart(model,'GeodePiece',stone,'WedgePart');part.CastShadow=true;part.Material=ROCK;part.MaterialVariant=ROCK_VARIANT
    local size=Vector3.new(w.size[1],w.size[2],w.size[3])
    local frame=CFrame.fromMatrix(o+Vector3.new(w.pos[1],w.pos[2],w.pos[3]),Vector3.new(w.right[1],w.right[2],w.right[3]),
     Vector3.new(w.up[1],w.up[2],w.up[3]),Vector3.new(w.back[1],w.back[2],w.back[3]))

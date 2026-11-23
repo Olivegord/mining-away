@@ -60,7 +60,7 @@ Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). Supersedes "the cu
     - star: Starforge
   - The look applies to the drone's motes, its dig contact sparks, its break spark cells, and every particle its break effects create (`Fun.withRole` around the break beat). Gem effects keep their own.
 - **Owner: "rocks read as plastic", "lots more randomness", "unique particles much larger", "breaking dynamics look different, not reskins":**
-  - **Material:** the dig rock is `Slate` (`DigCube.ROCK_MATERIAL`). That covers the server blocks (CSG results and rebuilds keep it), the worked chunks, the wedge fallback, the rubble and the sealed gem pieces, so a worked piece matches the rock around it. Frostbite still turns to Ice and its rubble to Glass.
+  - **Material:** first Slate. Then the owner asked to remove the rock texture but keep the normals and reflectiveness. The look is now `DigCube.rockLook()`: the authored MaterialVariant `DigRock_Relief` (base Slate, no color map, a normal and a roughness map copied from an existing variant in the place) when the place has it, else plain SmoothPlastic. Server blocks (CSG results and rebuilds keep the variant), worked chunks, wedge fallback, rubble and sealed gem pieces all use it, so they match. Frostbite still turns to Ice and its rubble to Glass.
   - **Randomness (`Fun.randomize`, every client particle as it appears, once):**
     - size envelope ±45%;
     - lifetime ×0.6–1.5 and speed ×0.55–1.45;

@@ -1,5 +1,13 @@
 # Shared project context
 
+## November 22 — harder dig rock
+
+Owner: "the first layer should be a lot hardier, and the others too; it should not melt through them super fast". `DigCube.HP_SCALE` goes from 0.2 to 0.5, and `HARDNESS_PER_LAYER` from 0.4 to 0.55 (the bottom layer is about 6× the top). A Lancer pulse now bites at most its drone's mining power over the interval, so it can no longer ignore hardness.
+
+Measured in `test_dig_flow.py` (API doubles), rock dug per minute:
+- medium Striker: 2859 → 1579;
+- every role: still 0.70–1.29× the Striker.
+
 ## November 22 — hole carved before the break, one look per drone type, deforming rock mesh
 
 Owner request above. Built on `codex/rock-mesh`, merged into the integration branch and installed by `tools/studio_apply.py` (see the install record). Not published. Details in [VFX instructions](VFX_INSTRUCTIONS.md).

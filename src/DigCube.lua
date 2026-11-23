@@ -37,14 +37,31 @@ D.HEIGHT=44 -- every cube is this deep; its layers vary in thickness inside it
 -- Bottom center in world space. The cube is sunk into a pit in the ground
 -- east of the hub, its top flush with the ground, so drones mine down into it.
 D.CENTER={140,D.GROUND-D.HEIGHT,20}
-D.HP_SCALE=.2
-D.HARDNESS_PER_LAYER=.4 -- the bottom layer takes about 4.6x the work of the top
+-- Owner, Nov 22: "the first layer should be a lot hardier, and the others
+-- too. it should not melt through them super fast": 2.5x the old first layer
+-- (was .2), and steeper with depth (was .4).
+D.HP_SCALE=.5
+D.HARDNESS_PER_LAYER=.55 -- the bottom layer takes about 6x the work of the top
 D.MINE_RADIUS=16 -- studs: drones only cut chunks this close to their player, so you move to keep digging
 D.BASE_CUT_AREA=48 -- square studs of top face in a chunk at cutSize 1 (about 8 studs across)
 D.MAX_CHUNK=40
 D.PAUSE=1.1 -- seconds between the split and the gem-or-nothing reveal
 D.TILE=11 -- intact stretches render as one block per tile
-D.ROCK_MATERIAL='Slate' -- the dig rock, its worked pieces, rubble and sealed gem pieces (owner: not plastic)
+-- The dig rock's look, shared by the server blocks and the client pieces,
+-- rubble and sealed gem pieces so they always match. Owner, Nov 22: no rock
+-- texture, but keep the surface relief and shine: the authored MaterialVariant
+-- ROCK_VARIANT (no color map; a normal and a roughness map) when the place
+-- has it, else plain SmoothPlastic.
+D.ROCK_VARIANT='DigRock_Relief'
+function D.rockLook(): (Enum.Material,string)
+ local ok,material,variant=pcall(function()
+  local v=game:GetService('MaterialService'):FindFirstChild(D.ROCK_VARIANT)
+  if v and v:IsA('MaterialVariant') then return v.BaseMaterial,v.Name end
+  return Enum.Material.SmoothPlastic,''
+ end)
+ if ok then return material,variant end
+ return Enum.Material.SmoothPlastic,''
+end
 D.GEM_CHANCE_ORE=.5 -- per hidden ore cell in a chunk
 D.GEM_CHANCE_STONE=.05 -- per plain cell: a lucky find anywhere
 D.ROCK_PER_UNIT=150 -- cubic studs of rock per rock drop (bigger chunks drop more)
