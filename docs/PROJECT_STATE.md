@@ -1,3 +1,12 @@
+## November 23 — flat map with a ring of eight plots; Dig Cube in Plot 1
+
+Owner request in [OWNER_REQUIREMENTS](OWNER_REQUIREMENTS.md). In shared Edit of DRONEREVOLUTION (place 124078027733625, universe 10774898335) and the canonical file, via `tools/studio_flat_plots.lua` + `tools/refresh_flat_plots.py` (scoped: 3 folders moved, 52 instances appended, 50 Sources byte-identical):
+- **Flat:** `Map.QuarryWorld.Terraces` (104 rim blocks up to y 47) and `Map.QuarryWorld.Mesas` (16 mesas up to y 120) moved to `ServerStorage.FlatMapArchive`. The ground is flat at y 3.8 out to ±1024; field beacons and station props are unchanged.
+- **Plot ring:** `Map.PlotRing.Plot1..8`, 88×88 outlines (1.5-stud strips, no collision or query) on a 160-stud ring around the hub, plot 1 due east, facing the hub. Attributes: `PlotIndex`, `Center`, `AngleDegrees`; ring `PlotCount`, `PlotSize`, `Radius`. No plot gameplay yet.
+- **Dig Cube moved into Plot 1:** `DigCube.CENTER` is now (160, ·, 0) (was 140, ·, 20). The old pit (`DigPit`, under `MiningAway` in Edit and under `Map` in the canonical file) is archived; `Map.PlotPit` is the same plates, shaft walls and floor cloned and refitted around the hole x 116..204, z −44..44. An Edit raycast grid over ±400 found solid ground everywhere but the hole and nothing blocking the hole.
+- **Still in place and overlapping plots:** the old five fields and their green `CrystalRun.FlatGround` (south-west plots) and the `VERSION 2` showcase stage (plot 3). They go when the chunked dig field replaces them.
+- Installed `d365c86` by `tools/studio_apply.py` (Team Create save 529, canonical sha256 `88c545dc…157e`). Edit screenshots: `docs/review/media/flat-plot-ring-overview.png`, `flat-plot-ring-plot1-pit.png`. Dig tests pass. **Not seen in Play**; not published.
+
 ## November 22 — shake retune, big-break pauses, char split, rubble never rests, Ramiel hull
 
 Shake is smaller everywhere; heavy shakes only for big attacks (slam, Ramiel, Nomad, Singularity), huge chunks and gems. Big dig breaks get a 2–6 frame light client pause. The Striker breaks with the field rocks' black hinged split; Nomad lifts and hurls its rubble. Rubble shrinks the moment its velocity stops. Ramiel's closed hull no longer draws over its animating slices. Details in [VFX instructions](VFX_INSTRUCTIONS.md). Not seen in Play.

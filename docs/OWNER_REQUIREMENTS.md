@@ -4,6 +4,10 @@
 
 # Owner requirements
 
+## November 23 — flat map: shops in the middle, eight plots, a flat expanse
+
+"shops in the middle, then the expanse there should be no elevation really anywhere", with "8 player plots where you can expand" around the hub; plots grow outward, and "the entire map is now a dig cube. this will require some optimization and only spawning chunks when they are needed". Direction discussed: a circular map, the shared field around the plots is effectively infinite and anyone can mine it, and a personal plot is a major upgrade. Built so far: the flat map and the ring (see PROJECT_STATE). Not built yet: the chunked whole-map dig field and any plot gameplay.
+
 ## November 22 — see what you are mining; keep the depth gradient
 
 "some blackening is still needed. its impossible to see what you are mining" and "also make sure the color gradient as you dig still exists". The piece being cut darkens as soon as cutting starts and deepens with the work (never black); the top-to-bottom color ramp stays.

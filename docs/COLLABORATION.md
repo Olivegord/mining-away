@@ -98,6 +98,8 @@ The [quarry motif pass](../tools/studio_quarry_motifs.lua) stages `scenery` and 
 
 The [courtyard pass](../tools/studio_quarry_courtyard.lua) stages `scenery`, `variants`, and `edits` at `shared.QuarryCourtyard.snapshot`. Run [the scoped saver](../tools/refresh_quarry_courtyard.py) with the export directory and `--baseline-sha256`. After checking the export, call `shared.QuarryCourtyard.apply()` in Edit, rerun the saver with `--write`, and verify the canonical file.
 
+The [flat plot ring pass](../tools/studio_flat_plots.lua) stages `plots`, `pit`, `archive` and `moves` at `shared.FlatPlots.snapshot`. Check with `python3 tools/refresh_flat_plots.py <export-directory> --baseline-sha256 <verified-sha256>`, call `shared.FlatPlots.apply()` in Edit (or `undo()`), then rerun with `--write`. It appends `ServerStorage.FlatMapArchive`, `Map.PlotPit` and `Map.PlotRing` and moves only the quarry terraces, mesas and the old `DigPit` into the archive.
+
 The [Toy World pass](../tools/studio_toy_world.lua) stages `scenery`, `archive`, `moves`, `edits`, `sky`, `air` and `lighting` at `shared.ToyWorld.snapshot`. Read each section in chunks into `<section>.b64`, then run `python3 tools/refresh_toy_world.py <export-directory> --baseline-sha256 <verified-sha256>` for the checked report. Call `shared.ToyWorld.apply()` in Edit (or `undo()` to revert), save, then rerun the saver with `--write`. It only appends `Map.ToyWorld`, `ServerStorage.ToyWorldArchive` and two Lighting children, moves an allowlist into the archive, recolors an allowlist of gameplay parts and sets five Lighting properties after checking their old values.
 
 ## Runtime gem API access
